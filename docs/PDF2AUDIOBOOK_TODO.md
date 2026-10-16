@@ -90,7 +90,7 @@
 - [ ] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
 - [ ] P3.05 Enforce remote-data opt-in (--allow-remote-content/config) and warning before sending book content.
   - [x] P3.05a Validate TLS/loopback rules; block accidental external HTTP upload.
-  - [ ] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
+  - [x] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
   - [x] P3.05c Ensure logs, crash reports and config show redact credentials and full text.
 - [ ] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting.
 - [ ] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
@@ -164,7 +164,7 @@
 | 2026-10-16 | d2950eeda8c2e7151484666241071b2b8d0aa24f | Added fail-closed pagination guards for repeated substantive margin prose and bracketed reference markers | Python CI 38938496225 passed | P1.04c remains open pending broader substantive-text false-positive acceptance |
 | 2026-10-16 | 2e34201c86a28c3bb82b0a5b0e3b8b04d13d8ed5 | Do not cache empty OCR as a successful result; retry and cache subsequent valid recognition | Python CI 38938669729 passed | Real OCR quality and Tesseract version qualification remain open |
 
-**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
+| 2026-10-16 | 3723056b87d6ed38b7e9c2458e745396af0f434d | P3.05b: JSON-escape untrusted PDF block records before LLM prompts; maintain separate system/user roles, no model tools, deterministic anchor verification and human review of edits. Also added pagination false-positive guards and special-material warnings | Python CI 38979811740, 38979921642, 38980054474, 38980313990 passed at respective exact heads | LLM can still misclassify legitimate headings; full P3.05 and P1.04c/P1.05 acceptance remain open |\n\n**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
 
 | 2026-10-16 | e4d1c3cecf05de75cf48407a9d763baad142dc14 | Added non-destructive extraction review warnings for suspicious OCR output and possible side-by-side reading order; offline tests cover normal and ambiguous cases | Python CI 38898782355 passed | Heuristics cannot substitute for engine OCR confidence or full two-column reconstruction |
 | 2026-10-16 | 9af6839fbaab155d866255afa80f2316d8836ea6 | P1.03: integrated conservative two-column ordering into embedded/OCR extraction, preserving span/block provenance; single-column and ambiguous layouts retain original order with review warnings. Bumped analysis fingerprint to v4 so stale manifests are not silently reused | Python CI runs 38959880545 and 38960031431 passed at exact respective heads; synthetic two-column extraction, OCR, single-column and existing reflow regression tests | Dense tables, sidebars and ambiguous multi-column pages remain review-required; approved manifests cannot be automatically rewritten |
