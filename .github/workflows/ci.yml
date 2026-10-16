@@ -15,13 +15,6 @@ jobs:
         with:
           enable-cache: true
           python-version: "3.11"
-      - name: Resolve reproducible uv lock snapshot
-        run: |
-          uv lock
-          echo UVLOCK-BEGIN
-          base64 -w 512 uv.lock
-          echo
-          echo UVLOCK-END
       - name: Install FFmpeg for chapter MP3 acceptance tests
         run: |
           sudo apt-get update -qq
