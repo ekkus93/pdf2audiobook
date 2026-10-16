@@ -215,13 +215,14 @@ def _cached_ocr_lines(
         try:
             parsed = json.loads(target.read_text(encoding="utf-8"))
             lines = _valid_cached_lines(parsed)
-            if lines is not None:
+            if lines:
                 return lines
         except (OSError, UnicodeError, ValueError, TypeError):
             pass
     lines = _ocr_page_lines(page, settings)
     verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
-    if verified is not None:
+    # Empty OCR is not a reusable success: a later retry may recover text.
+    if verified:
         write_json(target, {"schema_version": 1, "lines": verified})
     return lines
 

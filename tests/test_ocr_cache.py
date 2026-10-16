@@ -88,3 +88,29 @@ def test_ocr_cache_invalidation_and_corruption(monkeypatch, tmp_path: Path):
     # Explicitly disabling cache still performs OCR.
     extract_pdf(revised, cfg, ocr_cache_dir=None)
     assert len(calls) == 8
+
+
+def test_empty_ocr_is_retried_not_cached(monkeypatch, tmp_path: Path):
+    source = tmp_path / "blank-scan.pdf"
+    make_pdf(source)
+    cache = tmp_path / "ocr-cache"
+    calls = []
+
+    def transient_ocr(page, settings):
+        calls.append(page.number)
+        if len(calls) == 1:
+            return []
+        return [
+            {"text": "Recovered OCR text.", "bbox": (60, 100, 220, 114),
+             "size": 12.0, "font": "OCR"},
+        ]
+
+    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", transient_ocr)
+    first = extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
+    assert not first.spans
+    assert not list(cache.glob("*.json"))
+    second = extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
+    third = extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
+    assert len(calls) == 2
+    assert second.spans[0].text == third.spans[0].text == "Recovered OCR text."
+    assert len(list(cache.glob("*.json"))) == 1
