@@ -50,6 +50,43 @@ def _aligned_number_positions(first: float, second: float) -> bool:
 
 
 
+def _adjacent_body_line(
+    block: DocumentBlock,
+    page_blocks: list[DocumentBlock],
+    band: str,
+) -> bool:
+    """Treat close, horizontally aligned margin lines as possible body prose.
+
+    A repeated opening sentence, dialogue line or list marker can occur within
+    the nominal header/footer band. Without whitespace separating it from the
+    body, deletion is unsafe even when it repeats on multiple pages.
+    """
+    if block.bbox is None:
+        return False
+    x0, y0, x1, y1 = block.bbox
+    line_height = max(1.0, y1 - y0)
+    for other in page_blocks:
+        if other.id == block.id or other.bbox is None or not other.text.strip():
+            continue
+        ox0, oy0, ox1, oy1 = other.bbox
+        if band == "header":
+            gap = oy0 - y1
+        else:
+            gap = y0 - oy1
+        if not (-0.2 * line_height <= gap <= 1.6 * line_height):
+            continue
+        # A centered folio/title and left-aligned body line are separate
+        # regions. Matching indentation or substantial horizontal overlap
+        # is stronger evidence that the two lines form one body paragraph.
+        x_overlap = min(x1, ox1) - max(x0, ox0)
+        narrow = max(1.0, min(x1 - x0, ox1 - ox0))
+        if abs(ox0 - x0) <= max(18.0, 1.5 * line_height) or (
+            x_overlap >= 0.5 * narrow
+        ):
+            return True
+    return False
+
+
 def pagination_cleanup(
     blocks: list[DocumentBlock],
     sizes: list[tuple[float, float]],
@@ -71,6 +108,10 @@ def pagination_cleanup(
             "footer" if top > height * 0.88 else None
         )
         if not band:
+            continue
+        # Fail closed when the apparent margin element is continuous with
+        # nearby body text; repeated dialogue and list labels are not folios.
+        if _adjacent_body_line(block, blocks_by_page[block.page_index], band):
             continue
         val = " ".join(block.text.split()).casefold()
         raw = block.text.strip()
