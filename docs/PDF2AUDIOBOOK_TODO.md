@@ -45,7 +45,7 @@
   - [x] P1.02b Integrate Tesseract and verify system language packages/model availability.
   - [x] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings.
   - [x] P1.02d Detect suspicious OCR/extraction text and possible side-by-side reading-order cases; emit explicit review warnings (heuristics, not engine confidence).
-- [ ] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
+- [x] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
   - [x] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation.
   - [x] P1.03b Preserve dialogue, section breaks, legitimate line breaks and special content markers.
 - [ ] P1.04 Detect repeated headers, footers, Arabic/Roman page numbers and alternate-page layouts.
@@ -167,3 +167,4 @@
 **Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
 
 | 2026-10-16 | e4d1c3cecf05de75cf48407a9d763baad142dc14 | Added non-destructive extraction review warnings for suspicious OCR output and possible side-by-side reading order; offline tests cover normal and ambiguous cases | Python CI 38898782355 passed | Heuristics cannot substitute for engine OCR confidence or full two-column reconstruction |
+| 2026-10-16 | 9af6839fbaab155d866255afa80f2316d8836ea6 | P1.03: integrated conservative two-column ordering into embedded/OCR extraction, preserving span/block provenance; single-column and ambiguous layouts retain original order with review warnings. Bumped analysis fingerprint to v4 so stale manifests are not silently reused | Python CI runs 38959880545 and 38960031431 passed at exact respective heads; synthetic two-column extraction, OCR, single-column and existing reflow regression tests | Dense tables, sidebars and ambiguous multi-column pages remain review-required; approved manifests cannot be automatically rewritten |
