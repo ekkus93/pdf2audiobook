@@ -223,14 +223,64 @@ def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
         edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted
     }
     for chapter in manifest.chapters:
-        lines = [
-            replacements.get(block.id, block.text)
-            for block in manifest.blocks[chapter.start_block:chapter.end_block]
-        ]
-        content = ("\n".join(line for line in lines if line.strip()).strip() + "\n").encode(
-            "utf-8"
-        )
+        chapter_blocks = manifest.blocks[chapter.start_block:chapter.end_block]
+        content = reflow_narration_lines(chapter_blocks, replacements).encode("utf-8")
         path = folder / "chapters" / f"{chapter.number:03d}.txt"
         if not path.exists() or path.read_bytes() != content:
             atomic_write(path, content)
     write_json(folder / "coverage.json", report)
+
+
+
+def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
+    """Join nearby consecutive body lines only when geometry supports a soft wrap."""
+    if before.kind == "heading" or after.kind == "heading":
+        return False
+    if before.page_index != after.page_index or not before.bbox or not after.bbox:
+        return False
+    if not before.text.strip() or not after.text.strip():
+        return False
+    if after.text.lstrip().startswith(("“", '"', "—", "–", "•")):
+        return False
+    line_height = max(1.0, before.bbox[3] - before.bbox[1])
+    vertical_gap = after.bbox[1] - before.bbox[3]
+    left_shift = after.bbox[0] - before.bbox[0]
+    # Preserve indented paragraphs, section breaks and column transitions.
+    return (
+        -2 <= vertical_gap <= 0.8 * line_height
+        and abs(left_shift) <= max(12.0, line_height)
+    )
+
+
+def reflow_narration_lines(
+    blocks: list[DocumentBlock], replacements: dict[str, str] | None = None
+) -> str:
+    """Preserve headings and breaks while joining clear PDF soft-wrapped body lines.
+
+    No source blocks are mutated. Explicit ASCII hyphens are retained (they may
+    belong to a compound word); only Unicode soft hyphens are discarded at wraps.
+    """
+    replacements = replacements or {}
+    paragraphs: list[str] = []
+    current = ""
+    previous: DocumentBlock | None = None
+    for block in blocks:
+        text = replacements.get(block.id, block.text).strip()
+        if not text:
+            # An excluded running header/footer should not force a new paragraph.
+            continue
+        if current and previous is not None and _is_wrapped_line(previous, block):
+            if current.endswith("\u00ad"):
+                current = current[:-1] + text
+            elif current.endswith("-") and text[:1].islower():
+                current += text
+            else:
+                current += " " + text
+        else:
+            if current:
+                paragraphs.append(current)
+            current = text
+        previous = block
+    if current:
+        paragraphs.append(current)
+    return "\n\n".join(paragraphs).strip() + "\n"
