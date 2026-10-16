@@ -234,6 +234,7 @@ def convert(
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
     sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
     resume: bool | None = typer.Option(None, "--resume/--no-resume"),
+    force: bool = typer.Option(False, "--force", help="Regenerate selected chapter audio."),
     allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -278,7 +279,8 @@ def convert(
                  json_output)
         else:
             outputs = convert_book(
-                source, settings, chapter=chapter, chapter_range=selected_range
+                source, settings, chapter=chapter, chapter_range=selected_range,
+                force=force,
             )
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
