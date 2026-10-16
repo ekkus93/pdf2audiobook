@@ -11,17 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v6
         with:
+          enable-cache: true
           python-version: "3.11"
-      - name: Install
-        run: python -m pip install -e ".[dev]"
+      - name: Create uv environment and install project
+        run: uv sync --extra dev
       - name: Lint
-        run: ruff check .
+        run: uv run --extra dev ruff check .
       - name: Unit tests
-        run: pytest -q
+        run: uv run --extra dev pytest -q
       - name: CLI smoke
         run: |
-          pdf2audiobook --help
-          pdf2audiobook config show --json
-          pdf2audiobook doctor --json
+          uv run --extra dev pdf2audiobook --help
+          uv run --extra dev pdf2audiobook config show --json
+          uv run --extra dev pdf2audiobook doctor --json
