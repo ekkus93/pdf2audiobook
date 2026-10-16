@@ -42,7 +42,7 @@
   - [ ] P1.01b Handle rotation, empty pages, malformed files and password-protected files gracefully.
 - [ ] P1.02 Implement usable-text scoring per page/region; choose embedded extraction vs OCR in auto mode.
   - [x] P1.02a Support --ocr auto|always|never, OCR language and DPI settings.
-  - [ ] P1.02b Integrate Tesseract and verify system language packages/model availability.
+  - [x] P1.02b Integrate Tesseract and verify system language packages/model availability.
   - [ ] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings.
   - [ ] P1.02d Detect low-confidence OCR/reading-order cases and emit review warnings.
 - [ ] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
@@ -62,7 +62,7 @@
 
 - [ ] P2.01 Detect candidates from bookmarks, TOC/page offsets, typography, heading patterns and whitespace.
   - [ ] P2.01a Handle prologues, epilogues, front matter, multiple parts and mid-page starts.
-  - [ ] P2.01b Rank evidence and attach confidence/warnings to each boundary.
+  - [x] P2.01b Rank evidence and attach confidence/warnings to each boundary.
 - [x] P2.02 Build nonoverlapping stable chapter spans and enforce full prose coverage exactly once.
   - [x] P2.02a Reject overlapping/missing/empty chapter spans and source holes; emit a coverage report.
   - [x] P2.02b Require review for low-confidence/no-chapter books; allow explicit --allow-single-chapter.
@@ -153,5 +153,7 @@
 | 2026-10-16 | fcbb51d3bea71cc96641b649a13bc53188d8509a | Added provenance-validated cleanup edits, coverage.json, checksum-verified WAV/MP3 resume, and streaming input hashes; restored concise CI after uv lock generation check | Python CI runs 38891383049, 38891702908 and 38891853410 passed | uv.lock still uncommitted; real Kitten and LLM acceptance pending |
 | 2026-10-16 | 7519c7f9f0a0a989443ce8398df948cb12f6fc64 | Added schema-version rejection, atomic persistence and stage-fingerprint tests | Python CI run 38892375209 passed | Schema migration is intentionally rejected until a migration path is specified |
 | 2026-10-16 | 0dc41445cfd8066bb5f1d014dd08c26cc37794c5 | Added validated chapter ranges, dry-run, speed/sample rate CLI settings, LLM JSON-mode adaptation and retry controls, unapproved provenance-bound OCR cleanup proposals, and conservative PDF line-wrap reflow | Python CI runs 38895209653, 38895441231, 38895732178, 38896085092 passed | Full real Kitten and live LLM acceptance still pending; no uv.lock; two-column/footnote robustness incomplete |
+
+| 2026-10-16 | 92de84cb17dd72589d42ea4a749404cf49da90d7 | Combined verified PDF bookmarks with heading-pattern matches; persisted page labels, checked Tesseract language packs, and added secure encrypted-PDF password-env support | Python CI runs 38896503272, 38896830639, 38897284075 passed | More complex reading order, OCR caching, real Kitten/LLM acceptance and uv.lock still outstanding |
 
 **Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
