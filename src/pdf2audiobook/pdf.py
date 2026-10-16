@@ -1,6 +1,7 @@
 """PDF inspection and provenance-preserving embedded-text / OCR extraction."""
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -25,14 +26,19 @@ class ExtractedDocument:
     page_sizes: list[tuple[float, float]]
 
 
-def _open(source: Path) -> fitz.Document:
+def _open(source: Path, password_env: str | None = None) -> fitz.Document:
     if not source.is_file() or source.suffix.lower() != ".pdf":
         raise InputError(f"not a readable PDF file: {source}")
     try:
         document = fitz.open(source)
         if document.needs_pass:
-            document.close()
-            raise InputError("PDF requires a password; encrypted PDFs are not yet supported")
+            password = os.environ.get(password_env, "") if password_env else ""
+            if not password or not document.authenticate(password):
+                document.close()
+                raise InputError(
+                    "PDF requires a valid password; set --pdf-password-env "
+                    "to the name of an environment variable holding the password"
+                )
         return document
     except InputError:
         raise
@@ -40,8 +46,8 @@ def _open(source: Path) -> fitz.Document:
         raise InputError(f"cannot open PDF: {exc}") from exc
 
 
-def inspect_pdf(source: Path) -> dict:
-    with _open(source) as document:
+def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
+    with _open(source, password_env) as document:
         return {
             "title": document.metadata.get("title") or source.stem,
             "author": document.metadata.get("author") or None,
@@ -77,7 +83,7 @@ def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
     blocks: list[DocumentBlock] = []
     warnings: list[str] = []
     sizes: list[tuple[float, float]] = []
-    with _open(source) as document:
+    with _open(source, settings.password_env) as document:
         if len(document) == 0:
             raise ExtractionError("PDF has no pages")
         toc = document.get_toc()

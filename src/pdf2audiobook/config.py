@@ -26,6 +26,7 @@ class General(ConfigModel):
 class Pdf(ConfigModel):
     ocr: Literal["auto", "always", "never"] = "auto"
     ocr_language: str = "eng"
+    password_env: str | None = None
     ocr_dpi: int = Field(default=300, ge=72, le=600)
     remove_page_numbers: bool = True
     remove_headers: bool = True
@@ -106,6 +107,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_RESUME": ("general", "resume"),
     "PDF2AUDIOBOOK_OCR": ("pdf", "ocr"),
     "PDF2AUDIOBOOK_OCR_LANGUAGE": ("pdf", "ocr_language"),
+    "PDF2AUDIOBOOK_PDF_PASSWORD_ENV": ("pdf", "password_env"),
     "PDF2AUDIOBOOK_OCR_DPI": ("pdf", "ocr_dpi"),
     "PDF2AUDIOBOOK_LLM_ENABLED": ("llm", "enabled"),
     "PDF2AUDIOBOOK_LLM_PROVIDER": ("llm", "provider"),

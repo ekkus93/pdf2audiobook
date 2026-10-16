@@ -95,6 +95,9 @@ def doctor(
 @app.command()
 def inspect(
     source: Path = typer.Argument(..., help="PDF file or previously generated manifest.json"),
+    pdf_password_env: str | None = typer.Option(
+        None, "--pdf-password-env", help="Name of environment variable containing PDF password."
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     try:
@@ -113,7 +116,7 @@ def inspect(
         else:
             from pdf2audiobook.pdf import inspect_pdf
 
-            payload = inspect_pdf(source)
+            payload = inspect_pdf(source, password_env=pdf_password_env)
         emit(payload, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
         fail(exc)
@@ -164,6 +167,7 @@ def analyze(
     no_config: bool = typer.Option(False, "--no-config"),
     output: Path | None = typer.Option(None, "--output"),
     ocr: str | None = typer.Option(None, "--ocr"),
+    pdf_password_env: str | None = typer.Option(None, "--pdf-password-env"),
     no_llm: bool = typer.Option(False, "--no-llm"),
     llm_provider: str | None = typer.Option(None, "--llm-provider"),
     llm_model: str | None = typer.Option(None, "--llm-model"),
@@ -183,6 +187,8 @@ def analyze(
             selected = provider.replace("-", "_")
             if selected != "ollama" and llm_provider is None:
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
+        if pdf_password_env is not None:
+            overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import analyze_book
 
@@ -208,6 +214,7 @@ def convert(
     no_config: bool = typer.Option(False, "--no-config"),
     output: Path | None = typer.Option(None, "--output"),
     ocr: str | None = typer.Option(None, "--ocr"),
+    pdf_password_env: str | None = typer.Option(None, "--pdf-password-env"),
     llm_provider: str | None = typer.Option(None, "--llm-provider"),
     llm_model: str | None = typer.Option(None, "--llm-model"),
     llm_url: str | None = typer.Option(None, "--llm-url"),
@@ -243,6 +250,8 @@ def convert(
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
         if tts_provider is not None:
             overrides.setdefault("tts", {})["provider"] = tts_provider
+        if pdf_password_env is not None:
+            overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
         if speed is not None:
             overrides.setdefault("tts", {}).setdefault("kitten", {})["speed"] = speed
         if sample_rate is not None:
