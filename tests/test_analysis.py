@@ -44,6 +44,7 @@ def test_no_chapters_fails_unless_enabled(tmp_path: Path):
     pdf.close()
     settings = Settings()
     settings.pdf.ocr = "never"
+    settings.llm.enabled = False
     with pytest.raises(ExtractionError, match="No reliable"):
         analyze_book(pdf_file, settings)
     settings.chapters.allow_single_chapter = True
