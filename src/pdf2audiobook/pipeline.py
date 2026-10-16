@@ -39,16 +39,30 @@ def analyze_book(source: Path, settings: Settings) -> Path:
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
         chosen_provider.model, chosen_provider.base_url, "analysis-v3"
     )
-    if manifest_path.is_file() and settings.general.resume:
+    if manifest_path.is_file():
         existing = read_manifest(manifest_path)
-        if (existing.input_sha256 == book_hash
-                and existing.analysis_fingerprint == analysis_key
-                and all(
-                    (folder / "chapters" / f"{part.number:03d}.txt").is_file()
-                    for part in existing.chapters
-                )):
+        same_input = existing.input_sha256 == book_hash
+        same_analysis = existing.analysis_fingerprint == analysis_key
+        approved_content = (
+            existing.approved
+            or any(ch.manually_approved for ch in existing.chapters)
+            or any(
+                edit.accepted and edit.provider != "deterministic"
+                for edit in existing.edits
+            )
+        )
+        if same_input and same_analysis and settings.general.resume:
+            # Regenerate missing or stale derived texts without replacing user edits.
             render_chapter_texts(existing, folder)
             return manifest_path
+        if approved_content:
+            from pdf2audiobook.errors import ExtractionError
+
+            raise ExtractionError(
+                "This workspace contains manually approved chapter or cleanup edits. "
+                "A reanalysis would overwrite those decisions. Back up the manifest "
+                "and use a new --output directory for a fresh analysis."
+            )
 
     extracted = extract_pdf(source, settings.pdf)
     edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, settings.pdf)
