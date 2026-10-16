@@ -1,25 +1,146 @@
-"""PDF metadata inspection (page extraction follows separately)."""
+"""PDF inspection and provenance-preserving embedded-text / OCR extraction."""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import fitz
 
-from pdf2audiobook.errors import InputError
+from pdf2audiobook.config import Pdf as PdfSettings
+from pdf2audiobook.errors import ExtractionError, InputError
+from pdf2audiobook.models import DocumentBlock, SourceSpan
 
 
-def inspect_pdf(source: Path) -> dict:
+@dataclass
+class ExtractedDocument:
+    title: str
+    author: str | None
+    toc: list[list]
+    spans: list[SourceSpan]
+    blocks: list[DocumentBlock]
+    warnings: list[str]
+    page_sizes: list[tuple[float, float]]
+
+
+def _open(source: Path) -> fitz.Document:
     if not source.is_file() or source.suffix.lower() != ".pdf":
-        raise InputError(f"not a readable PDF: {source}")
+        raise InputError(f"not a readable PDF file: {source}")
     try:
-        with fitz.open(source) as pdf:
-            if pdf.needs_pass:
-                raise InputError("PDF is password protected")
-            return {
-                "title": pdf.metadata.get("title") or source.stem,
-                "author": pdf.metadata.get("author") or None,
-                "pages": len(pdf),
-                "outline": pdf.get_toc(),
-            }
+        document = fitz.open(source)
+        if document.needs_pass:
+            document.close()
+            raise InputError("PDF requires a password; encrypted PDFs are not yet supported")
+        return document
     except InputError:
         raise
     except Exception as exc:
-        raise InputError(f"could not read PDF: {exc}") from exc
+        raise InputError(f"cannot open PDF: {exc}") from exc
+
+
+def inspect_pdf(source: Path) -> dict:
+    with _open(source) as document:
+        return {
+            "title": document.metadata.get("title") or source.stem,
+            "author": document.metadata.get("author") or None,
+            "pages": len(document),
+            "outline": document.get_toc(),
+        }
+
+
+def _lines(page: fitz.Page, textpage: fitz.TextPage | None = None) -> list[dict]:
+    structure = page.get_text("dict", sort=True, textpage=textpage)
+    extracted = []
+    for region in structure["blocks"]:
+        if "lines" not in region:
+            continue
+        for line in region["lines"]:
+            spans = line.get("spans", [])
+            text = "".join(span.get("text", "") for span in spans).strip()
+            if not text:
+                continue
+            bbox = line.get("bbox")
+            largest = max((float(span.get("size", 0)) for span in spans), default=0)
+            font = spans[0].get("font") if spans else None
+            extracted.append(
+                {"text": text, "bbox": bbox, "font": font, "size": largest}
+            )
+    return extracted
+
+
+def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
+    """Extract all pages, using OCR only for pages lacking meaningful embedded text."""
+    spans: list[SourceSpan] = []
+    blocks: list[DocumentBlock] = []
+    warnings: list[str] = []
+    sizes: list[tuple[float, float]] = []
+    with _open(source) as document:
+        if len(document) == 0:
+            raise ExtractionError("PDF has no pages")
+        toc = document.get_toc()
+        title = document.metadata.get("title") or source.stem
+        author = document.metadata.get("author") or None
+        for page_index, page in enumerate(document):
+            sizes.append((float(page.rect.width), float(page.rect.height)))
+            page_lines = _lines(page)
+            readable = sum(len(line["text"]) for line in page_lines)
+            use_ocr = settings.ocr == "always" or (
+                settings.ocr == "auto" and readable < 24
+            )
+            origin = "embedded"
+            if use_ocr:
+                try:
+                    textpage = page.get_textpage_ocr(
+                        language=settings.ocr_language,
+                        dpi=settings.ocr_dpi,
+                        full=True,
+                    )
+                    page_lines = _lines(page, textpage=textpage)
+                except Exception as exc:
+                    raise ExtractionError(
+                        f"OCR failed on PDF page {page_index + 1}; verify Tesseract "
+                        f"and language '{settings.ocr_language}': {exc}"
+                    ) from exc
+                origin = "ocr"
+                if not page_lines:
+                    warnings.append(f"Page {page_index + 1}: OCR produced no text")
+            if not page_lines and not use_ocr:
+                warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
+            for line_index, line in enumerate(page_lines):
+                ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
+                bounds = line["bbox"]
+                bbox = tuple(float(n) for n in bounds) if bounds else None
+                spans.append(
+                    SourceSpan(
+                        id=ident,
+                        page_index=page_index,
+                        text=line["text"],
+                        bbox=bbox,
+                        origin=origin,
+                        font=line["font"],
+                        font_size=line["size"],
+                    )
+                )
+                blocks.append(
+                    DocumentBlock(
+                        id=ident,
+                        span_ids=[ident],
+                        text=line["text"],
+                        page_index=page_index,
+                        bbox=bbox,
+                        font_size=line["size"],
+                        order=len(blocks),
+                        kind="heading"
+                        if re.match(
+                            r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
+                            r"introduction|preface|part\s+[\divxlcdm]+)\b",
+                            line["text"],
+                            re.IGNORECASE,
+                        )
+                        else "unknown",
+                    )
+                )
+        return ExtractedDocument(
+            title=title, author=author, toc=toc, spans=spans,
+            blocks=blocks, warnings=warnings, page_sizes=sizes
+        )
