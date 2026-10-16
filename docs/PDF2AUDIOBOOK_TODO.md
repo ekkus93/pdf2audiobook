@@ -44,7 +44,7 @@
   - [x] P1.02a Support --ocr auto|always|never, OCR language and DPI settings.
   - [x] P1.02b Integrate Tesseract and verify system language packages/model availability.
   - [ ] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings.
-  - [ ] P1.02d Detect low-confidence OCR/reading-order cases and emit review warnings.
+  - [x] P1.02d Detect suspicious OCR/extraction text and possible side-by-side reading-order cases; emit explicit review warnings (heuristics, not engine confidence).
 - [ ] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
   - [ ] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation.
   - [ ] P1.03b Preserve dialogue, section breaks, legitimate line breaks and special content markers.
@@ -159,3 +159,5 @@
 | 2026-10-16 | 728538af578438a846a076d38dcade033aa2e5ad | Prevented automatic replacement of manually approved chapter/cleanup edits on changed-settings or no-resume reanalysis; automatically restored missing derived transcript files on unchanged analysis | Python CI run 38897766822 passed | Full approval-aware force/rebuild workflow remains for follow-up; live model acceptance and uv.lock still pending |
 
 **Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
+
+| 2026-10-16 | pending exact-head SHA | Added non-destructive extraction review warnings for suspicious OCR output and possible side-by-side reading order; offline tests cover normal and ambiguous cases | Awaiting exact-head Python CI | Heuristics cannot substitute for engine OCR confidence or full two-column reconstruction |

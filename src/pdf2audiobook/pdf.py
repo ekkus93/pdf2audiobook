@@ -77,6 +77,49 @@ def _lines(page: fitz.Page, textpage: fitz.TextPage | None = None) -> list[dict]
     return extracted
 
 
+
+def page_review_warnings(
+    lines: list[dict], *, page_number: int, origin: str
+) -> list[str]:
+    """Flag suspicious extraction without silently discarding any source text.
+
+    These are review heuristics, not Tesseract confidence scores. In particular,
+    horizontally separated text at matching heights may be two columns whose
+    reading order cannot be established reliably from sorted PDF lines alone.
+    """
+    warnings: list[str] = []
+    text = " ".join(line["text"] for line in lines)
+    if text.count("\\ufffd") >= 2 or sum(
+        ord(char) < 32 and char not in "\\t\\n\\r" for char in text
+    ) >= 2:
+        warnings.append(
+            f"Page {page_number}: suspicious replacement/control characters; "
+            "review extracted text against the PDF"
+        )
+    if origin == "ocr" and lines and len(text.strip()) < 24:
+        warnings.append(
+            f"Page {page_number}: OCR produced very little text; "
+            "verify recognition and page coverage"
+        )
+
+    aligned_separate_lines = 0
+    for first, second in zip(lines, lines[1:]):
+        left, right = first.get("bbox"), second.get("bbox")
+        if not left or not right:
+            continue
+        overlap = min(left[3], right[3]) - max(left[1], right[1])
+        shortest_height = min(left[3] - left[1], right[3] - right[1])
+        separated = left[2] + 8 < right[0] or right[2] + 8 < left[0]
+        if shortest_height > 0 and overlap > shortest_height * 0.5 and separated:
+            aligned_separate_lines += 1
+    if aligned_separate_lines >= 2:
+        warnings.append(
+            f"Page {page_number}: possible multi-column or side-by-side text; "
+            "verify reading order before narration"
+        )
+    return warnings
+
+
 def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
     """Extract all pages, using OCR only for pages lacking meaningful embedded text."""
     spans: list[SourceSpan] = []
@@ -115,6 +158,9 @@ def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
                     warnings.append(f"Page {page_index + 1}: OCR produced no text")
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
+            warnings.extend(
+                page_review_warnings(page_lines, page_number=page_index + 1, origin=origin)
+            )
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
                 bounds = line["bbox"]
