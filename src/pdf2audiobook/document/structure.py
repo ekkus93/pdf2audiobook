@@ -97,8 +97,14 @@ def pagination_cleanup(
     text_occurrences: dict[tuple[str, str], set[int]] = defaultdict(set)
     numbered: dict[str, list[tuple[int, int, float, str]]] = defaultdict(list)
     blocks_by_page: dict[int, list[DocumentBlock]] = defaultdict(list)
+    body_text: set[str] = set()
     for block in blocks:
         blocks_by_page[block.page_index].append(block)
+        if not block.bbox or block.page_index >= len(sizes):
+            continue
+        height = sizes[block.page_index][1]
+        if block.bbox[1] >= 0.12 * height and block.bbox[3] <= 0.88 * height:
+            body_text.add(" ".join(block.text.split()).casefold())
     for block in blocks:
         if not block.bbox or block.page_index >= len(sizes):
             continue
@@ -120,6 +126,14 @@ def pagination_cleanup(
         if block.kind in {"heading", "list", "table", "footnote", "caption"}:
             continue
         if raw.startswith(('"', "'", "“", "‘", "•", "—", "–", "(", "[")):
+            continue
+        # A closing quote or unfinished dialogue clause is also prose, not
+        # a title/folio, even when a short fragment repeats in a margin.
+        if raw.endswith(('"', "'", "”", "’", ",", ";", "—")):
+            continue
+        # A phrase appearing in the interior of any page is substantive text
+        # somewhere in the book; do not delete identical margin occurrences.
+        if val in body_text:
             continue
         # A full sentence or extended prose in the margin is not safe to
         # classify as a running title based on repetition alone.
