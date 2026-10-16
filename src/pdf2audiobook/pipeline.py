@@ -64,7 +64,11 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                 "and use a new --output directory for a fresh analysis."
             )
 
-    extracted = extract_pdf(source, settings.pdf)
+    extracted = extract_pdf(
+        source, settings.pdf,
+        ocr_cache_dir=(folder / ".cache" / "ocr") if settings.cache.enabled else None,
+        source_sha256=book_hash,
+    )
     edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, settings.pdf)
     omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
 
@@ -188,11 +192,3 @@ def convert_book(
             samples, provider.sample_rate, output,
             bitrate=settings.tts.bitrate, target_rate=settings.tts.sample_rate,
             title=item.title, artist=manifest.author, album=manifest.title,
-            track=item.number,
-        )
-        write_json(record, {
-            "fingerprint": identity,
-            "sha256": digest_file(output),
-            "bytes": output.stat().st_size,
-        })
-    return outputs

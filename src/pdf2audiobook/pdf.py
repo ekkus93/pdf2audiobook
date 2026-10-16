@@ -1,6 +1,8 @@
 """PDF inspection and provenance-preserving embedded-text / OCR extraction."""
 from __future__ import annotations
 
+import json
+import math
 import os
 import re
 import shutil
@@ -13,6 +15,7 @@ import fitz
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
+from pdf2audiobook.workspace import digest_file, fingerprint, write_json
 
 
 @dataclass
@@ -120,8 +123,89 @@ def page_review_warnings(
     return warnings
 
 
-def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
+def _ocr_page_lines(page: fitz.Page, settings: PdfSettings) -> list[dict]:
+    textpage = page.get_textpage_ocr(
+        language=settings.ocr_language, dpi=settings.ocr_dpi, full=True
+    )
+    return _lines(page, textpage=textpage)
+
+
+def _valid_cached_lines(data: object) -> list[dict] | None:
+    """Reject incomplete or malformed cache entries; never trust saved OCR blindly."""
+    if not isinstance(data, dict) or data.get("schema_version") != 1:
+        return None
+    lines = data.get("lines")
+    if not isinstance(lines, list) or len(lines) > 200000:
+        return None
+    checked = []
+    for line in lines:
+        if not isinstance(line, dict):
+            return None
+        text = line.get("text")
+        bbox = line.get("bbox")
+        font = line.get("font")
+        size = line.get("size")
+        if (
+            not isinstance(text, str)
+            or not text.strip()
+            or not isinstance(bbox, (list, tuple))
+            or len(bbox) != 4
+            or any(
+                not isinstance(num, (int, float)) or not math.isfinite(num)
+                for num in bbox
+            )
+            or not isinstance(size, (int, float))
+            or not math.isfinite(size)
+            or font is not None and not isinstance(font, str)
+        ):
+            return None
+        checked.append({
+            "text": text, "bbox": bbox, "font": font, "size": size
+        })
+    return checked
+
+
+def _cached_ocr_lines(
+    page: fitz.Page, settings: PdfSettings, *,
+    cache_dir: Path | None, input_sha256: str | None, page_index: int,
+) -> list[dict]:
+    """Cache OCR by exact source bytes, page index, language, DPI and engine version.
+
+    Cache files contain only local transcribed text. Invalid or unreadable data
+    triggers a fresh OCR and an atomic replacement, never silent empty output.
+    """
+    if cache_dir is None:
+        return _ocr_page_lines(page, settings)
+    if input_sha256 is None:
+        raise ValueError("OCR caching requires the source PDF SHA-256")
+    key = fingerprint(
+        "ocr-lines-v1", input_sha256, page_index,
+        settings.ocr_language, settings.ocr_dpi,
+        str(fitz.VersionBind), int(page.rotation),
+    )
+    target = cache_dir / (key + ".json")
+    if target.is_file():
+        try:
+            parsed = json.loads(target.read_text(encoding="utf-8"))
+            lines = _valid_cached_lines(parsed)
+            if lines is not None:
+                return lines
+        except (OSError, UnicodeError, ValueError, TypeError):
+            pass
+    lines = _ocr_page_lines(page, settings)
+    verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
+    if verified is not None:
+        write_json(target, {"schema_version": 1, "lines": verified})
+    return lines
+
+
+def extract_pdf(
+    source: Path, settings: PdfSettings, *,
+    ocr_cache_dir: Path | None = None, source_sha256: str | None = None,
+) -> ExtractedDocument:
     """Extract all pages, using OCR only for pages lacking meaningful embedded text."""
+    if ocr_cache_dir is not None and source_sha256 is None:
+        source_sha256 = digest_file(source)
     spans: list[SourceSpan] = []
     blocks: list[DocumentBlock] = []
     warnings: list[str] = []
@@ -142,12 +226,10 @@ def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
             origin = "embedded"
             if use_ocr:
                 try:
-                    textpage = page.get_textpage_ocr(
-                        language=settings.ocr_language,
-                        dpi=settings.ocr_dpi,
-                        full=True,
+                    page_lines = _cached_ocr_lines(
+                        page, settings, cache_dir=ocr_cache_dir,
+                        input_sha256=source_sha256, page_index=page_index,
                     )
-                    page_lines = _lines(page, textpage=textpage)
                 except Exception as exc:
                     raise ExtractionError(
                         f"OCR failed on PDF page {page_index + 1}; verify Tesseract "
