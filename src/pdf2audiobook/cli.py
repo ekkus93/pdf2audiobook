@@ -1,0 +1,203 @@
+"""Typer CLI for inspection, analysis, conversion and configuration."""
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+from typing import Any
+
+import typer
+from rich.console import Console
+
+from pdf2audiobook import __version__
+from pdf2audiobook.config import load_settings, settings_public
+from pdf2audiobook.errors import AudiobookError
+
+app = typer.Typer(no_args_is_help=True, help="Convert PDF books to chapter-based audiobooks.")
+config_app = typer.Typer(help="Inspect effective configuration.")
+app.add_typer(config_app, name="config")
+console = Console(stderr=True)
+
+
+def fail(exc: Exception) -> None:
+    console.print(f"[red]Error:[/red] {exc}")
+    raise typer.Exit(code=exc.exit_code if isinstance(exc, AudiobookError) else 1) from exc
+
+
+def emit(payload: dict[str, Any], json_output: bool) -> None:
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        console.print_json(data=payload)
+
+
+@app.callback()
+def entry(version: bool = typer.Option(False, "--version", help="Show version.")) -> None:
+    if version:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
+@config_app.command("show")
+def show_config(
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    sources: bool = typer.Option(False, "--sources"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    try:
+        settings, origin = load_settings(config, no_config=no_config)
+        payload = settings_public(settings)
+        if sources:
+            payload["_sources"] = origin
+        emit(payload, json_output)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc)
+
+
+@app.command()
+def doctor(
+    json_output: bool = typer.Option(False, "--json"),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+) -> None:
+    try:
+        settings, _ = load_settings(config, no_config=no_config)
+        try:
+            import kittentts  # noqa: F401
+
+            kitten_installed = True
+        except ImportError:
+            kitten_installed = False
+        emit(
+            {
+                "version": __version__,
+                "ffmpeg": bool(shutil.which("ffmpeg")),
+                "tesseract": bool(shutil.which("tesseract")),
+                "kitten_installed": kitten_installed,
+                "llm_provider": settings.llm.provider if settings.llm.enabled else "disabled",
+            },
+            json_output,
+        )
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc)
+
+
+@app.command()
+def inspect(
+    source: Path = typer.Argument(..., help="PDF file or previously generated manifest.json"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    try:
+        if source.suffix.lower() == ".json":
+            from pdf2audiobook.workspace import read_manifest
+
+            manifest = read_manifest(source)
+            payload = {
+                "title": manifest.title,
+                "chapters": [chapter.model_dump() for chapter in manifest.chapters],
+                "warnings": manifest.warnings,
+            }
+        else:
+            from pdf2audiobook.pdf import inspect_pdf
+
+            payload = inspect_pdf(source)
+        emit(payload, json_output)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc)
+
+
+def _overrides(
+    output: Path | None, ocr: str | None, no_llm: bool,
+    llm_provider: str | None, llm_model: str | None, llm_url: str | None,
+    allow_remote_content: bool, tts_model: str | None,
+    voice: str | None, bitrate: str | None, resume: bool | None,
+    allow_single_chapter: bool,
+) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    if output is not None:
+        value.setdefault("general", {})["output_dir"] = str(output)
+    if resume is not None:
+        value.setdefault("general", {})["resume"] = resume
+    if ocr is not None:
+        value.setdefault("pdf", {})["ocr"] = ocr
+    if llm_provider is not None:
+        value.setdefault("llm", {})["provider"] = llm_provider
+    if no_llm:
+        value.setdefault("llm", {})["enabled"] = False
+    if allow_remote_content:
+        value.setdefault("llm", {})["allow_remote_content"] = True
+    if llm_model is not None or llm_url is not None:
+        provider = (llm_provider or "ollama").replace("-", "_")
+        section = value.setdefault("llm", {}).setdefault(provider, {})
+        if llm_model is not None:
+            section["model"] = llm_model
+        if llm_url is not None:
+            section["base_url"] = llm_url
+    if tts_model:
+        value.setdefault("tts", {}).setdefault("kitten", {})["model"] = tts_model
+    if voice:
+        value.setdefault("tts", {}).setdefault("kitten", {})["voice"] = voice
+    if bitrate:
+        value.setdefault("tts", {})["bitrate"] = bitrate
+    if allow_single_chapter:
+        value.setdefault("chapters", {})["allow_single_chapter"] = True
+    return value
+
+
+@app.command()
+def analyze(
+    source: Path = typer.Argument(...),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    output: Path | None = typer.Option(None, "--output"),
+    ocr: str | None = typer.Option(None, "--ocr"),
+    no_llm: bool = typer.Option(False, "--no-llm"),
+    allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    try:
+        overrides = _overrides(
+            output, ocr, no_llm, None, None, None, False,
+            None, None, None, None, allow_single_chapter
+        )
+        settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        from pdf2audiobook.pipeline import analyze_book
+
+        emit({"manifest": str(analyze_book(source, settings))}, json_output)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc)
+
+
+@app.command()
+def convert(
+    source: Path = typer.Argument(...),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    output: Path | None = typer.Option(None, "--output"),
+    ocr: str | None = typer.Option(None, "--ocr"),
+    llm_provider: str | None = typer.Option(None, "--llm-provider"),
+    llm_model: str | None = typer.Option(None, "--llm-model"),
+    llm_url: str | None = typer.Option(None, "--llm-url"),
+    no_llm: bool = typer.Option(False, "--no-llm"),
+    allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
+    tts_model: str | None = typer.Option(None, "--tts-model"),
+    voice: str | None = typer.Option(None, "--voice"),
+    bitrate: str | None = typer.Option(None, "--bitrate"),
+    chapter: int | None = typer.Option(None, "--chapter", min=1),
+    resume: bool | None = typer.Option(None, "--resume/--no-resume"),
+    allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    try:
+        overrides = _overrides(
+            output, ocr, no_llm, llm_provider, llm_model, llm_url, allow_remote_content,
+            tts_model, voice, bitrate, resume, allow_single_chapter
+        )
+        settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        from pdf2audiobook.pipeline import convert_book
+
+        outputs = convert_book(source, settings, chapter=chapter)
+        emit({"mp3_files": [str(path) for path in outputs]}, json_output)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc)
