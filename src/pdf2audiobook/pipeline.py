@@ -134,7 +134,7 @@ def select_chapters(
 
 def convert_book(
     source: Path, settings: Settings, chapter: int | None = None,
-    chapter_range: tuple[int, int] | None = None,
+    chapter_range: tuple[int, int] | None = None, *, force: bool = False,
 ) -> list[Path]:
     manifest_path = analyze_book(source, settings)
     manifest = read_manifest(manifest_path)
@@ -155,7 +155,7 @@ def convert_book(
         )
         record = output.with_suffix(".cache.json")
         cached = False
-        if (settings.general.resume and output.is_file()
+        if (settings.general.resume and not force and output.is_file()
                 and output.stat().st_size > 0 and record.is_file()):
             try:
                 import json
@@ -182,7 +182,7 @@ def convert_book(
             voice=settings.tts.kitten.voice, speed=settings.tts.kitten.speed,
             pause_ms=settings.tts.pause_ms,
             cache=manifest_path.parent / ".cache" / "tts",
-            use_cache=settings.cache.enabled and settings.general.resume,
+            use_cache=settings.cache.enabled and settings.general.resume and not force,
         )
         encode_mp3(
             samples, provider.sample_rate, output,
