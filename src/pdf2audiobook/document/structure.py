@@ -5,7 +5,7 @@ Raw blocks are immutable. Cleanup decisions are stored as audited edits.
 from __future__ import annotations
 
 import re
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 from pdf2audiobook.config import Chapters as ChapterSettings
 from pdf2audiobook.config import Pdf as PdfSettings

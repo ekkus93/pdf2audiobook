@@ -4,7 +4,6 @@ import fitz
 import pytest
 
 from pdf2audiobook.config import Settings
-from pdf2audiobook.document.structure import chapter_text, pagination_cleanup
 from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.pipeline import analyze_book
 from pdf2audiobook.workspace import read_manifest
@@ -33,7 +32,7 @@ def test_end_to_end_text_pdf(tmp_path: Path):
     first_text = (manifest_file.parent / "chapters" / "001.txt").read_text()
     assert "Story line 1" in first_text
     assert "Story line 2" not in first_text
-    assert "1\n" not in first_text
+    assert first_text.splitlines()[-1] != "1"
 
 
 def test_no_chapters_fails_unless_enabled(tmp_path: Path):

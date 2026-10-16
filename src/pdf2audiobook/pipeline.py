@@ -12,7 +12,7 @@ from pdf2audiobook.document.structure import (
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.pdf import extract_pdf
-from pdf2audiobook.workspace import digest_bytes, read_manifest, write_manifest, atomic_write
+from pdf2audiobook.workspace import atomic_write, digest_bytes, read_manifest, write_manifest
 
 
 def analyze_book(source: Path, settings: Settings) -> Path:
