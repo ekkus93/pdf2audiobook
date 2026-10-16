@@ -31,7 +31,7 @@
 - [x] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation.
 - [ ] P0.05 Implement atomic output workspace/manifest schema, input hash, stable IDs and versioned per-stage caching.
   - [x] P0.05a Define SourceSpan, DocumentBlock, CleanupEdit, Chapter, NarrationChunk and BookManifest models.
-  - [ ] P0.05b Unit-test manifest schema migration/rejection, atomic file writes and stage fingerprints.
+  - [x] P0.05b Unit-test manifest schema migration/rejection, atomic file writes and stage fingerprints.
 
 **M0 gate:** installable CLI; --help/doctor/config work without a model; offline CI green.
 
@@ -150,4 +150,4 @@
 | 2026-10-16 | 84cd664 | Specification and TODO drafted; no implementation yet | Not run | None identified |
 | 2026-10-16 | 21954bae6b6fb012ccf86338858f6fb1dd3f454e | uv Python CLI, config, models, PDF/OCR, conservative pagination, chapter boundaries/overrides, LLM provider adapters, Kitten/MP3 chunk pipeline | Python CI run 38889941369 passed; mocked LLM/TTS, real FFmpeg, mixed scanned/text OCR | Real Kitten model and real LLM provider acceptance not yet run; lockfile unavailable from current local PyPI-restricted environment |
 
-| 2026-10-16 | fcbb51d3bea71cc96641b649a13bc53188d8509a | Added provenance-validated cleanup edits, coverage.json, checksum-verified WAV/MP3 resume, and streaming input hashes; restored concise CI after uv lock generation check | Python CI runs 38891383049, 38891702908 and 38891853410 passed | uv.lock still uncommitted; real Kitten and LLM acceptance pending |\n\n**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
+| 2026-10-16 | fcbb51d3bea71cc96641b649a13bc53188d8509a | Added provenance-validated cleanup edits, coverage.json, checksum-verified WAV/MP3 resume, and streaming input hashes; restored concise CI after uv lock generation check | Python CI runs 38891383049, 38891702908 and 38891853410 passed | uv.lock still uncommitted; real Kitten and LLM acceptance pending |\n\n| 2026-10-16 | 7519c7f9f0a0a989443ce8398df948cb12f6fc64 | Added schema-version rejection, atomic persistence and stage-fingerprint tests | Python CI run 38892375209 passed | Schema migration is intentionally rejected until a migration path is specified |\n\n**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
