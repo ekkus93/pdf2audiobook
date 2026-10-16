@@ -192,3 +192,11 @@ def convert_book(
             samples, provider.sample_rate, output,
             bitrate=settings.tts.bitrate, target_rate=settings.tts.sample_rate,
             title=item.title, artist=manifest.author, album=manifest.title,
+            track=item.number,
+        )
+        write_json(record, {
+            "fingerprint": identity,
+            "sha256": digest_file(output),
+            "bytes": output.stat().st_size,
+        })
+    return outputs
