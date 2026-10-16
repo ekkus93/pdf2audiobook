@@ -130,6 +130,26 @@ def page_review_warnings(
     return warnings
 
 
+def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
+    """Conservatively reject damaged text layers before choosing OCR in auto mode.
+
+    Quantity alone is insufficient: broken font mappings can yield long strings
+    of replacement glyphs or embedded controls. Do not replace a mostly valid
+    text layer because of a single isolated bad character.
+    """
+    text = " ".join(line["text"] for line in lines)
+    printable = sum(not char.isspace() for char in text)
+    if printable < 24:
+        return False, "too little selectable text"
+    damaged = sum(
+        char == "\ufffd" or (ord(char) < 32 and char not in "\t\n\r")
+        for char in text
+    )
+    if damaged >= max(2, math.ceil(printable * 0.05)):
+        return False, "damaged selectable-text mapping"
+    return True, None
+
+
 def _ocr_page_lines(page: fitz.Page, settings: PdfSettings) -> list[dict]:
     textpage = page.get_textpage_ocr(
         language=settings.ocr_language, dpi=settings.ocr_dpi, full=True
@@ -234,10 +254,15 @@ def extract_pdf(
                     f"Failed to extract embedded text from PDF page {page_index + 1}: "
                     f"{type(exc).__name__}"
                 ) from exc
-            readable = sum(len(line["text"]) for line in page_lines)
+            usable, quality_issue = _embedded_text_quality(page_lines)
             use_ocr = settings.ocr == "always" or (
-                settings.ocr == "auto" and readable < 24
+                settings.ocr == "auto" and not usable
             )
+            if settings.ocr == "auto" and quality_issue == "damaged selectable-text mapping":
+                warnings.append(
+                    f"Page {page_index + 1}: damaged embedded text layer; "
+                    "using OCR instead of unreliable selectable text"
+                )
             origin = "embedded"
             if use_ocr:
                 try:
