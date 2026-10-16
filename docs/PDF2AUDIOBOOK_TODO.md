@@ -39,7 +39,7 @@
 
 - [ ] P1.01 Inspect PDF, metadata, pages, page labels, outlines, TOC and embedded text using PyMuPDF.
   - [x] P1.01a Preserve page geometry, font/style and stable span/block provenance.
-  - [ ] P1.01b Handle rotation, empty pages, malformed files and password-protected files gracefully.
+  - [x] P1.01b Handle rotation, empty pages, malformed files and password-protected files gracefully.
 - [ ] P1.02 Implement usable-text scoring per page/region; choose embedded extraction vs OCR in auto mode.
   - [x] P1.02a Support --ocr auto|always|never, OCR language and DPI settings.
   - [x] P1.02b Integrate Tesseract and verify system language packages/model availability.
@@ -160,6 +160,6 @@
 
 | 2026-10-16 | 7374cf87f6290ccd5e2f7d467311d71a6e038389 | Added source/page/settings-keyed OCR cache, validation and corruption recovery; embedded-text pages bypass OCR in auto mode | Python CI run 38929486545 passed; deterministic OCR-cache regression tests | Real-model acceptance, two-column order, uv.lock still pending |
 
-**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
+| 2026-10-16 | a432fb828bc763a1461a863a1e1e3475b2ed9746 | P1.01b: normalized rotated-page text geometry for pagination, exposed inspection geometry, and added malformed/encrypted/blank-page regression coverage with actionable domain errors | Python CI run 38936953817 passed (exact head) | Broader multi-column reconstruction and real OCR/model acceptance remain open |\n\n**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
 
 | 2026-10-16 | e4d1c3cecf05de75cf48407a9d763baad142dc14 | Added non-destructive extraction review warnings for suspicious OCR output and possible side-by-side reading order; offline tests cover normal and ambiguous cases | Python CI 38898782355 passed | Heuristics cannot substitute for engine OCR confidence or full two-column reconstruction |
