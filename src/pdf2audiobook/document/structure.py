@@ -6,11 +6,12 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from pathlib import Path
 
 from pdf2audiobook.config import Chapters as ChapterSettings
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError
-from pdf2audiobook.models import Chapter, CleanupEdit, DocumentBlock
+from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, DocumentBlock
 
 HEADING = re.compile(
     r"^(?:(?:chapter|part)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|"
@@ -151,3 +152,40 @@ def chapter_text(
         block.text for block in blocks[chapter.start_block:chapter.end_block]
         if block.id not in omitted
     ).strip() + "\n"
+
+
+def validate_chapter_coverage(
+    blocks: list[DocumentBlock], chapters: list[Chapter]
+) -> None:
+    """Chapter boundaries are ordered, contiguous, nonempty, and cover every source block."""
+    if not chapters:
+        raise ExtractionError("Manifest does not contain any chapters")
+    expected = 0
+    for ordinal, chapter in enumerate(chapters, 1):
+        if chapter.number != ordinal:
+            raise ExtractionError("Manifest chapter numbers must be consecutive and 1-based")
+        if chapter.start_block != expected:
+            raise ExtractionError(
+                f"Manifest chapter {ordinal} overlaps or leaves an uncovered block range"
+            )
+        if chapter.end_block > len(blocks):
+            raise ExtractionError("Manifest chapter extends beyond source blocks")
+        expected = chapter.end_block
+    if expected != len(blocks):
+        raise ExtractionError("Manifest does not cover all original source blocks")
+
+
+def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
+    """Respect human-edited manifest boundaries and recreate derived transcript files."""
+    from pdf2audiobook.workspace import atomic_write
+
+    validate_chapter_coverage(manifest.blocks, manifest.chapters)
+    omitted = {
+        edit.block_id for edit in manifest.edits
+        if edit.accepted and edit.replacement == ""
+    }
+    for chapter in manifest.chapters:
+        content = chapter_text(manifest.blocks, chapter, omitted).encode("utf-8")
+        path = folder / "chapters" / f"{chapter.number:03d}.txt"
+        if not path.exists() or path.read_bytes() != content:
+            atomic_write(path, content)

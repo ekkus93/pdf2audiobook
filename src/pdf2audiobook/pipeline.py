@@ -5,14 +5,17 @@ from pathlib import Path
 
 from pdf2audiobook.audio import audio_output_path, encode_mp3, synthesize_chunks
 from pdf2audiobook.config import Settings
-from pdf2audiobook.document.structure import chapter_text, pagination_cleanup, propose_chapters
+from pdf2audiobook.document.structure import (
+    pagination_cleanup,
+    propose_chapters,
+    render_chapter_texts,
+)
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.llm import create_provider, detect_llm_headings
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
 from pdf2audiobook.workspace import (
-    atomic_write,
     digest_bytes,
     fingerprint,
     read_manifest,
@@ -44,6 +47,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                     (folder / "chapters" / f"{part.number:03d}.txt").is_file()
                     for part in existing.chapters
                 )):
+            render_chapter_texts(existing, folder)
             return manifest_path
 
     extracted = extract_pdf(source, settings.pdf)
@@ -73,17 +77,14 @@ def analyze_book(source: Path, settings: Settings) -> Path:
         analysis_fingerprint=analysis_key,
         warnings=extracted.warnings + warnings,
     )
+    render_chapter_texts(manifest, folder)
     write_manifest(manifest_path, manifest)
-    for chapter in chapters:
-        atomic_write(
-            folder / "chapters" / f"{chapter.number:03d}.txt",
-            chapter_text(extracted.blocks, chapter, omitted).encode("utf-8"),
-        )
     return manifest_path
 
 def convert_book(source: Path, settings: Settings, chapter: int | None = None) -> list[Path]:
     manifest_path = analyze_book(source, settings)
     manifest = read_manifest(manifest_path)
+    render_chapter_texts(manifest, manifest_path.parent)
     chosen = [
         item for item in manifest.chapters if chapter is None or item.number == chapter
     ]
