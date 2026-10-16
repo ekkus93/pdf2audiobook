@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -45,6 +47,7 @@ def inspect_pdf(source: Path) -> dict:
             "author": document.metadata.get("author") or None,
             "pages": len(document),
             "outline": document.get_toc(),
+            "page_label_rules": document.get_page_labels(),
         }
 
 
@@ -114,6 +117,7 @@ def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
                     SourceSpan(
                         id=ident,
                         page_index=page_index,
+                        page_label=page.get_label() or str(page_index + 1),
                         text=line["text"],
                         bbox=bbox,
                         origin=origin,
@@ -144,3 +148,30 @@ def extract_pdf(source: Path, settings: PdfSettings) -> ExtractedDocument:
             title=title, author=author, toc=toc, spans=spans,
             blocks=blocks, warnings=warnings, page_sizes=sizes
         )
+
+
+
+def tesseract_languages() -> list[str] | None:
+    """List installed Tesseract language packs without opening or exporting PDF text."""
+    if shutil.which("tesseract") is None:
+        return None
+    try:
+        run = subprocess.run(
+            ["tesseract", "--list-langs"],
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if run.returncode != 0:
+        return []
+    output = run.stdout + "\n" + run.stderr
+    return sorted({
+        line.strip() for line in output.splitlines()
+        if line.strip() and not line.startswith("List of available languages")
+    })
+
+
+def missing_ocr_languages(configured: str, installed: list[str] | None) -> list[str]:
+    if installed is None:
+        return [lang for lang in configured.split("+") if lang]
+    return sorted(set(configured.split("+")) - set(installed))

@@ -70,11 +70,19 @@ def doctor(
             kitten_installed = True
         except ImportError:
             kitten_installed = False
+        from pdf2audiobook.pdf import missing_ocr_languages, tesseract_languages
+
+        languages = tesseract_languages()
         emit(
             {
                 "version": __version__,
                 "ffmpeg": bool(shutil.which("ffmpeg")),
                 "tesseract": bool(shutil.which("tesseract")),
+                "ocr_requested_languages": settings.pdf.ocr_language,
+                "ocr_installed_languages": languages,
+                "ocr_missing_languages": missing_ocr_languages(
+                    settings.pdf.ocr_language, languages
+                ),
                 "kitten_installed": kitten_installed,
                 "llm_provider": settings.llm.provider if settings.llm.enabled else "disabled",
             },

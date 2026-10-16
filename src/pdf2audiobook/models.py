@@ -13,6 +13,7 @@ class StrictModel(BaseModel):
 class SourceSpan(StrictModel):
     id: str
     page_index: int = Field(ge=0)
+    page_label: str | None = None
     text: str
     bbox: tuple[float, float, float, float] | None = None
     origin: Literal["embedded", "ocr"] = "embedded"
