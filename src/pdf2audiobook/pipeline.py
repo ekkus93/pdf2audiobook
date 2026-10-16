@@ -7,33 +7,70 @@ from pdf2audiobook.audio import audio_output_path, encode_mp3, synthesize_chunks
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import chapter_text, pagination_cleanup, propose_chapters
 from pdf2audiobook.errors import AudioError
+from pdf2audiobook.llm import create_provider, detect_llm_headings
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
-from pdf2audiobook.workspace import atomic_write, digest_bytes, read_manifest, write_manifest
+from pdf2audiobook.workspace import (
+    atomic_write,
+    digest_bytes,
+    fingerprint,
+    read_manifest,
+    write_manifest,
+)
 
 
 def analyze_book(source: Path, settings: Settings) -> Path:
-    # Remote content is never transmitted by the deterministic PDF pipeline.
-    extracted = extract_pdf(source, settings.pdf)
-    edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, settings.pdf)
-    omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
-    chapters, warnings = propose_chapters(extracted.blocks, omitted, extracted.toc, settings.chapters)
+    from pdf2audiobook.errors import InputError
+
+    if not source.is_file():
+        raise InputError(f"PDF not found: {source}")
     book_hash = digest_bytes(source.read_bytes())
     root = Path(settings.general.output_dir).expanduser()
     folder = root / f"{source.stem}-{book_hash[:10]}"
     manifest_path = folder / "manifest.json"
+    chosen_provider = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
+    analysis_key = fingerprint(
+        book_hash, settings.pdf.model_dump(), settings.chapters.model_dump(),
+        settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
+        chosen_provider.model, chosen_provider.base_url, "analysis-v2"
+    )
     if manifest_path.is_file() and settings.general.resume:
         existing = read_manifest(manifest_path)
-        if existing.input_sha256 == book_hash:
+        if (existing.input_sha256 == book_hash
+                and existing.analysis_fingerprint == analysis_key
+                and all(
+                    (folder / "chapters" / f"{part.number:03d}.txt").is_file()
+                    for part in existing.chapters
+                )):
             return manifest_path
+
+    extracted = extract_pdf(source, settings.pdf)
+    edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, settings.pdf)
+    omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
+
+    llm_ids: set[str] = set()
+    warnings: list[str] = []
+    if settings.llm.enabled and settings.llm.structure:
+        # A provider cannot introduce new prose or unanchored chapter starts.
+        with create_provider(settings) as provider:
+            llm_ids, warnings = detect_llm_headings(
+                [block for block in extracted.blocks if block.id not in omitted],
+                provider,
+            )
+    chapters, chapter_warnings = propose_chapters(
+        extracted.blocks, omitted, extracted.toc, settings.chapters,
+        extra_heading_ids=llm_ids,
+    )
+    warnings.extend(chapter_warnings)
+    if settings.llm.enabled and not settings.llm.structure:
+        warnings.append("LLM structure analysis disabled in settings")
     manifest = BookManifest(
         input_sha256=book_hash, title=extracted.title, author=extracted.author,
         source_path=str(source.resolve()), spans=extracted.spans,
         blocks=extracted.blocks, edits=edits, chapters=chapters,
-        warnings=extracted.warnings + warnings
-        + (["LLM analysis not yet implemented; deterministic chapter heuristics used"]
-           if settings.llm.enabled else []),
+        analysis_fingerprint=analysis_key,
+        warnings=extracted.warnings + warnings,
     )
     write_manifest(manifest_path, manifest)
     for chapter in chapters:
@@ -42,7 +79,6 @@ def analyze_book(source: Path, settings: Settings) -> Path:
             chapter_text(extracted.blocks, chapter, omitted).encode("utf-8"),
         )
     return manifest_path
-
 
 def convert_book(source: Path, settings: Settings, chapter: int | None = None) -> list[Path]:
     manifest_path = analyze_book(source, settings)

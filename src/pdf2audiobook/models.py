@@ -81,6 +81,7 @@ class BookManifest(StrictModel):
     chunks: list[NarrationChunk] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     approved: bool = False
+    analysis_fingerprint: str | None = None
 
     @model_validator(mode="after")
     def check_version(self) -> "BookManifest":

@@ -81,6 +81,7 @@ def propose_chapters(
     omitted: set[str],
     toc: list[list],
     settings: ChapterSettings,
+    extra_heading_ids: set[str] | None = None,
 ) -> tuple[list[Chapter], list[str]]:
     """Segment by marked or formatted headings; require review if insufficient evidence."""
     warnings: list[str] = []
@@ -89,7 +90,7 @@ def propose_chapters(
         if block.id in omitted:
             continue
         text = block.text.strip()
-        if HEADING.match(text):
+        if HEADING.match(text) or block.id in (extra_heading_ids or set()):
             heading_indices.append(i)
     if not heading_indices and toc:
         # Bookmarks are 1-based page references; choose the first matching text block.

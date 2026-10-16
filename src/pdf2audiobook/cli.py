@@ -64,7 +64,7 @@ def doctor(
     try:
         settings, _ = load_settings(config, no_config=no_config)
         try:
-            import kittentts  # noqa: F401
+            import kittenml  # noqa: F401
 
             kitten_installed = True
         except ImportError:
@@ -153,14 +153,24 @@ def analyze(
     output: Path | None = typer.Option(None, "--output"),
     ocr: str | None = typer.Option(None, "--ocr"),
     no_llm: bool = typer.Option(False, "--no-llm"),
+    llm_provider: str | None = typer.Option(None, "--llm-provider"),
+    llm_model: str | None = typer.Option(None, "--llm-model"),
+    llm_url: str | None = typer.Option(None, "--llm-url"),
+    allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
     allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     try:
+        preliminary, _ = load_settings(config, no_config=no_config)
+        provider = llm_provider or preliminary.llm.provider
         overrides = _overrides(
-            output, ocr, no_llm, None, None, None, False,
+            output, ocr, no_llm, llm_provider, llm_model, llm_url, allow_remote_content,
             None, None, None, None, allow_single_chapter
         )
+        if llm_model is not None or llm_url is not None:
+            selected = provider.replace("-", "_")
+            if selected != "ollama" and llm_provider is None:
+                overrides["llm"][selected] = overrides["llm"].pop("ollama")
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import analyze_book
 
@@ -190,10 +200,16 @@ def convert(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     try:
+        preliminary, _ = load_settings(config, no_config=no_config)
+        provider = llm_provider or preliminary.llm.provider
         overrides = _overrides(
             output, ocr, no_llm, llm_provider, llm_model, llm_url, allow_remote_content,
             tts_model, voice, bitrate, resume, allow_single_chapter
         )
+        if llm_model is not None or llm_url is not None:
+            selected = provider.replace("-", "_")
+            if selected != "ollama" and llm_provider is None:
+                overrides["llm"][selected] = overrides["llm"].pop("ollama")
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import convert_book
 
