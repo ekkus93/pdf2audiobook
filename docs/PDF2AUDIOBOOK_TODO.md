@@ -160,4 +160,4 @@
 
 **Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
 
-| 2026-10-16 | pending exact-head SHA | Added non-destructive extraction review warnings for suspicious OCR output and possible side-by-side reading order; offline tests cover normal and ambiguous cases | Awaiting exact-head Python CI | Heuristics cannot substitute for engine OCR confidence or full two-column reconstruction |
+| 2026-10-16 | e4d1c3cecf05de75cf48407a9d763baad142dc14 | Added non-destructive extraction review warnings for suspicious OCR output and possible side-by-side reading order; offline tests cover normal and ambiguous cases | Python CI 38898782355 passed | Heuristics cannot substitute for engine OCR confidence or full two-column reconstruction |
