@@ -61,7 +61,7 @@
 ## Phase 2 — Chapter detection and inspection (M2)
 
 - [ ] P2.01 Detect candidates from bookmarks, TOC/page offsets, typography, heading patterns and whitespace.
-  - [ ] P2.01a Handle prologues, epilogues, front matter, multiple parts and mid-page starts.
+  - [x] P2.01a Handle prologues, epilogues, front matter, multiple parts and mid-page starts.
   - [x] P2.01b Rank evidence and attach confidence/warnings to each boundary.
 - [x] P2.02 Build nonoverlapping stable chapter spans and enforce full prose coverage exactly once.
   - [x] P2.02a Reject overlapping/missing/empty chapter spans and source holes; emit a coverage report.
