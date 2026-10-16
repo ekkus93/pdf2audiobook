@@ -51,7 +51,7 @@ def test_front_matter_prologue_multiple_parts_and_epilogue():
 def test_bookmark_boundary_mid_page_and_exact_coverage():
     blocks = [
         block(0, 0, "Chapter 1"),
-        block(1, 0, "Chapter one prose before a second heading."),
+        block(1, 0, "Opening prose continues before the next heading."),
         block(2, 0, "A New Beginning"),
         block(3, 0, "New chapter prose after a mid-page heading."),
     ]
