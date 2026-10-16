@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,7 @@ from rich.console import Console
 
 from pdf2audiobook import __version__
 from pdf2audiobook.config import load_settings, settings_public
-from pdf2audiobook.errors import AudiobookError
+from pdf2audiobook.errors import AudiobookError, ConfigError
 
 app = typer.Typer(no_args_is_help=True, help="Convert PDF books to chapter-based audiobooks.")
 config_app = typer.Typer(help="Inspect effective configuration.")
@@ -182,6 +183,16 @@ def analyze(
         fail(exc)
 
 
+def parse_chapter_range(value: str) -> tuple[int, int]:
+    """Parse inclusive, human-friendly 1-based A:B chapter selection."""
+    if re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", value) is None:
+        raise ConfigError("chapter range must be 1-based A:B, e.g. 2:5")
+    first, last = (int(value_part) for value_part in value.split(":"))
+    if last < first:
+        raise ConfigError("chapter range end must not precede start")
+    return first, last
+
+
 @app.command()
 def convert(
     source: Path = typer.Argument(...),
@@ -199,6 +210,14 @@ def convert(
     voice: str | None = typer.Option(None, "--voice"),
     bitrate: str | None = typer.Option(None, "--bitrate"),
     chapter: int | None = typer.Option(None, "--chapter", min=1),
+    chapter_range: str | None = typer.Option(
+        None, "--chapter-range", help="Inclusive 1-based start:end (e.g. 2:5)."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Analyze and plan chapter outputs without TTS synthesis."
+    ),
+    speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
+    sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
     resume: bool | None = typer.Option(None, "--resume/--no-resume"),
     allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
     json_output: bool = typer.Option(False, "--json"),
@@ -216,10 +235,34 @@ def convert(
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
         if tts_provider is not None:
             overrides.setdefault("tts", {})["provider"] = tts_provider
+        if speed is not None:
+            overrides.setdefault("tts", {}).setdefault("kitten", {})["speed"] = speed
+        if sample_rate is not None:
+            overrides.setdefault("tts", {})["sample_rate"] = sample_rate
+        if chapter is not None and chapter_range is not None:
+            raise ConfigError("--chapter and --chapter-range cannot be combined")
+        selected_range = parse_chapter_range(chapter_range) if chapter_range else None
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
-        from pdf2audiobook.pipeline import convert_book
+        from pdf2audiobook.pipeline import analyze_book, convert_book, select_chapters
+        from pdf2audiobook.workspace import read_manifest
+        from pdf2audiobook.audio import audio_output_path
 
-        outputs = convert_book(source, settings, chapter=chapter)
-        emit({"mp3_files": [str(path) for path in outputs]}, json_output)
+        if dry_run:
+            manifest_path = analyze_book(source, settings)
+            manifest = read_manifest(manifest_path)
+            chapters = select_chapters(
+                manifest, settings, chapter=chapter, chapter_range=selected_range
+            )
+            output_files = [
+                str(audio_output_path(manifest, item, manifest_path.parent))
+                for item in chapters
+            ]
+            emit({"dry_run": True, "chapters": len(chapters), "mp3_files": output_files},
+                 json_output)
+        else:
+            outputs = convert_book(
+                source, settings, chapter=chapter, chapter_range=selected_range
+            )
+            emit({"mp3_files": [str(path) for path in outputs]}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
         fail(exc)

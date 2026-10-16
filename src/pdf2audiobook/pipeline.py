@@ -81,13 +81,25 @@ def analyze_book(source: Path, settings: Settings) -> Path:
     write_manifest(manifest_path, manifest)
     return manifest_path
 
-def convert_book(source: Path, settings: Settings, chapter: int | None = None) -> list[Path]:
-    manifest_path = analyze_book(source, settings)
-    manifest = read_manifest(manifest_path)
-    render_chapter_texts(manifest, manifest_path.parent)
-    chosen = [
-        item for item in manifest.chapters if chapter is None or item.number == chapter
-    ]
+def select_chapters(
+    manifest: BookManifest, settings: Settings,
+    *, chapter: int | None = None, chapter_range: tuple[int, int] | None = None,
+) -> list:
+    """Validate chosen chapters before loading or downloading a speech model."""
+    if chapter is not None and chapter_range is not None:
+        raise AudioError("--chapter and --chapter-range cannot be combined")
+    count = len(manifest.chapters)
+    if chapter_range is not None:
+        first, last = chapter_range
+        if first < 1 or last < first or last > count:
+            raise AudioError(
+                f"Chapter range {first}:{last} is outside the book's 1:{count} chapters"
+            )
+        chosen = [c for c in manifest.chapters if first <= c.number <= last]
+    elif chapter is not None:
+        chosen = [c for c in manifest.chapters if c.number == chapter]
+    else:
+        chosen = list(manifest.chapters)
     if not chosen:
         raise AudioError(f"Chapter {chapter} does not exist")
     for item in chosen:
@@ -98,6 +110,17 @@ def convert_book(source: Path, settings: Settings, chapter: int | None = None) -
                 f"Chapter {item.number} has low boundary confidence; "
                 "review the manifest before synthesis"
             )
+    return chosen
+
+
+def convert_book(
+    source: Path, settings: Settings, chapter: int | None = None,
+    chapter_range: tuple[int, int] | None = None,
+) -> list[Path]:
+    manifest_path = analyze_book(source, settings)
+    manifest = read_manifest(manifest_path)
+    render_chapter_texts(manifest, manifest_path.parent)
+    chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
     # Audio identities include all audible and encoding settings, not merely the PDF hash.
     pending = []
     outputs = []
