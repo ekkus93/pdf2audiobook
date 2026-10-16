@@ -11,7 +11,7 @@ from pdf2audiobook.document.structure import (
     render_chapter_texts,
 )
 from pdf2audiobook.errors import AudioError
-from pdf2audiobook.llm import create_provider, detect_llm_headings
+from pdf2audiobook.llm import create_provider, detect_llm_headings, propose_llm_cleanup
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
@@ -37,7 +37,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
     analysis_key = fingerprint(
         book_hash, settings.pdf.model_dump(), settings.chapters.model_dump(),
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
-        chosen_provider.model, chosen_provider.base_url, "analysis-v2"
+        chosen_provider.model, chosen_provider.base_url, "analysis-v3"
     )
     if manifest_path.is_file() and settings.general.resume:
         existing = read_manifest(manifest_path)
@@ -56,13 +56,18 @@ def analyze_book(source: Path, settings: Settings) -> Path:
 
     llm_ids: set[str] = set()
     warnings: list[str] = []
-    if settings.llm.enabled and settings.llm.structure:
-        # A provider cannot introduce new prose or unanchored chapter starts.
+    if settings.llm.enabled and (settings.llm.structure or settings.llm.cleanup):
+        # Only anchored proposals are accepted. OCR cleanup requires manual approval.
+        source_blocks = [
+            block for block in extracted.blocks if block.id not in omitted
+        ]
         with create_provider(settings) as provider:
-            llm_ids, warnings = detect_llm_headings(
-                [block for block in extracted.blocks if block.id not in omitted],
-                provider,
-            )
+            if settings.llm.structure:
+                llm_ids, warnings = detect_llm_headings(source_blocks, provider)
+            if settings.llm.cleanup:
+                suggestions, edit_warnings = propose_llm_cleanup(source_blocks, provider)
+                edits.extend(suggestions)
+                warnings.extend(edit_warnings)
     chapters, chapter_warnings = propose_chapters(
         extracted.blocks, omitted, extracted.toc, settings.chapters,
         extra_heading_ids=llm_ids,
