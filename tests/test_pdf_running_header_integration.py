@@ -1,6 +1,8 @@
 """Real PDF fixture: repeated running titles must not erase prose."""
 from pathlib import Path
+
 import fitz
+
 from pdf2audiobook.config import Pdf
 from pdf2audiobook.document.structure import pagination_cleanup
 from pdf2audiobook.pdf import extract_pdf
