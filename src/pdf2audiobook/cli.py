@@ -93,10 +93,13 @@ def inspect(
             from pdf2audiobook.workspace import read_manifest
 
             manifest = read_manifest(source)
+            from pdf2audiobook.document.structure import chapter_coverage_report
+
             payload = {
                 "title": manifest.title,
                 "chapters": [chapter.model_dump() for chapter in manifest.chapters],
                 "warnings": manifest.warnings,
+                "coverage": chapter_coverage_report(manifest),
             }
         else:
             from pdf2audiobook.pdf import inspect_pdf

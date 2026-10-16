@@ -175,17 +175,62 @@ def validate_chapter_coverage(
         raise ExtractionError("Manifest does not cover all original source blocks")
 
 
-def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
-    """Respect human-edited manifest boundaries and recreate derived transcript files."""
-    from pdf2audiobook.workspace import atomic_write
-
+def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
+    """Validate provenance, cleanup anchors and exact-once block coverage."""
     validate_chapter_coverage(manifest.blocks, manifest.chapters)
-    omitted = {
-        edit.block_id for edit in manifest.edits
-        if edit.accepted and edit.replacement == ""
+    ids = [block.id for block in manifest.blocks]
+    if len(ids) != len(set(ids)):
+        raise ExtractionError("Duplicate source block IDs in manifest")
+    span_ids = [span.id for span in manifest.spans]
+    if len(span_ids) != len(set(span_ids)):
+        raise ExtractionError("Duplicate source span IDs in manifest")
+    known_spans = set(span_ids)
+    for block in manifest.blocks:
+        if not set(block.span_ids).issubset(known_spans):
+            raise ExtractionError(f"Block {block.id} references missing source spans")
+    by_id = {block.id: block for block in manifest.blocks}
+    accepted: dict[str, str] = {}
+    for edit in manifest.edits:
+        if edit.block_id not in by_id:
+            raise ExtractionError(f"Cleanup edit references missing block: {edit.block_id}")
+        if edit.original != by_id[edit.block_id].text:
+            raise ExtractionError(f"Cleanup edit original does not match block {edit.block_id}")
+        if edit.accepted:
+            if edit.block_id in accepted:
+                raise ExtractionError(f"Multiple accepted edits for block {edit.block_id}")
+            accepted[edit.block_id] = edit.replacement
+    return {
+        "valid": True,
+        "source_blocks": len(ids),
+        "source_spans": len(span_ids),
+        "covered_blocks": sum(ch.end_block - ch.start_block for ch in manifest.chapters),
+        "uncovered_blocks": 0,
+        "duplicate_blocks": 0,
+        "accepted_cleanup_blocks": len(accepted),
+        "narrated_blocks": sum(
+            1 for block in manifest.blocks if accepted.get(block.id, block.text).strip()
+        ),
+        "chapters": len(manifest.chapters),
+    }
+
+
+def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
+    """Regenerate derived text from source-linked, verified edits and manual boundaries."""
+    from pdf2audiobook.workspace import atomic_write, write_json
+
+    report = chapter_coverage_report(manifest)
+    replacements = {
+        edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted
     }
     for chapter in manifest.chapters:
-        content = chapter_text(manifest.blocks, chapter, omitted).encode("utf-8")
+        lines = [
+            replacements.get(block.id, block.text)
+            for block in manifest.blocks[chapter.start_block:chapter.end_block]
+        ]
+        content = ("\n".join(line for line in lines if line.strip()).strip() + "\n").encode(
+            "utf-8"
+        )
         path = folder / "chapters" / f"{chapter.number:03d}.txt"
         if not path.exists() or path.read_bytes() != content:
             atomic_write(path, content)
+    write_json(folder / "coverage.json", report)
