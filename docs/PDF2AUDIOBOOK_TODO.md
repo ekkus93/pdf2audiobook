@@ -43,7 +43,7 @@
 - [ ] P1.02 Implement usable-text scoring per page/region; choose embedded extraction vs OCR in auto mode.
   - [x] P1.02a Support --ocr auto|always|never, OCR language and DPI settings.
   - [x] P1.02b Integrate Tesseract and verify system language packages/model availability.
-  - [ ] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings.
+  - [x] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings.
   - [x] P1.02d Detect suspicious OCR/extraction text and possible side-by-side reading-order cases; emit explicit review warnings (heuristics, not engine confidence).
 - [ ] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
   - [ ] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation.
@@ -157,6 +157,8 @@
 | 2026-10-16 | 92de84cb17dd72589d42ea4a749404cf49da90d7 | Combined verified PDF bookmarks with heading-pattern matches; persisted page labels, checked Tesseract language packs, and added secure encrypted-PDF password-env support | Python CI runs 38896503272, 38896830639, 38897284075 passed | More complex reading order, OCR caching, real Kitten/LLM acceptance and uv.lock still outstanding |
 
 | 2026-10-16 | 728538af578438a846a076d38dcade033aa2e5ad | Prevented automatic replacement of manually approved chapter/cleanup edits on changed-settings or no-resume reanalysis; automatically restored missing derived transcript files on unchanged analysis | Python CI run 38897766822 passed | Full approval-aware force/rebuild workflow remains for follow-up; live model acceptance and uv.lock still pending |
+
+| 2026-10-16 | 7374cf87f6290ccd5e2f7d467311d71a6e038389 | Added source/page/settings-keyed OCR cache, validation and corruption recovery; embedded-text pages bypass OCR in auto mode | Python CI run 38929486545 passed; deterministic OCR-cache regression tests | Real-model acceptance, two-column order, uv.lock still pending |
 
 **Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
 
