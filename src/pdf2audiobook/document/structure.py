@@ -41,6 +41,24 @@ def pagination_cleanup(
         if not band:
             continue
         val = " ".join(block.text.split()).casefold()
+        raw = block.text.strip()
+        # Fail closed on standalone quotations, numbered list markers and
+        # headings. These can legitimately occur in a page's margin band.
+        if block.kind in {"heading", "list", "table", "footnote", "caption"}:
+            continue
+        if raw.startswith(('"', "'", "“", "‘", "•", "—", "–")):
+            continue
+        if re.match(r"^\\(?\\d{1,3}[.)]\\s", raw):
+            continue
+        # A lone numeric line at ordinary body indentation is not sufficient
+        # evidence of pagination, even if another page starts with "2".
+        if PAGE_NUMBER.fullmatch(raw):
+            width = sizes[block.page_index][0]
+            midpoint = (block.bbox[0] + block.bbox[2]) / 2
+            position = midpoint / width if width > 0 else 0.5
+            if not (position <= 0.09 or position >= 0.91 or
+                    0.38 <= position <= 0.62):
+                continue
         candidates[block.id] = (block, band)
         text_occurrences[(band, val)].add(block.page_index)
         if PAGE_NUMBER.fullmatch(block.text.strip()):
