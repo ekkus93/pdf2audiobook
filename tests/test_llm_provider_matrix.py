@@ -7,10 +7,7 @@ import httpx
 import pytest
 
 from pdf2audiobook.errors import LLMError
-from pdf2audiobook.llm import (
-    OpenAICompatibleProvider,
-    detect_llm_headings,
-)
+from pdf2audiobook.llm import OpenAICompatibleProvider, detect_llm_headings
 from pdf2audiobook.models import DocumentBlock
 
 
