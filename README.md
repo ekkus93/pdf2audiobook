@@ -68,3 +68,7 @@ uv run pdf2audiobook convert encrypted.pdf --no-llm --pdf-password-env BOOK_PDF_
 ~~~
 
 You can also configure `[pdf] password_env = "BOOK_PDF_PASSWORD"` in TOML. Never commit the password itself or pass it directly as a command-line argument. The raw password is neither persisted in the manifest nor included in configuration diagnostics. The `doctor` command lists installed Tesseract language packs and reports any missing languages requested by the configuration.
+
+## Protecting manual edits
+
+After reviewing a `manifest.json`, mark a chapter's `manually_approved` field or the book's `approved` field to preserve the approved boundaries. The app will regenerate missing derived chapter text from that manifest on resume, but will **reject a destructive reanalysis** when approved content would otherwise be overwritten (including when using `--no-resume` or changing analysis settings). To start a new analysis, back up the approved manifest and choose a fresh output directory.
