@@ -40,3 +40,19 @@ uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remo
 Install Tesseract separately for scanned pages. For synthesis, run `uv sync --extra kitten --extra dev` and install FFmpeg. The Kitten model alias `mini` resolves to the lightweight 0.8 mini model.
 
 **Limitations:** Chapter detection is provisional, especially for complex layouts. Tables, footnotes, OCR ambiguities and LLM-assisted text corrections remain in progress. Review chapter text before distributing audiobook files.
+
+## Chapter preview and selective conversion
+
+Use `--dry-run` to analyze a PDF and preview target MP3 paths without downloading or running the TTS model:
+
+~~~bash
+uv run pdf2audiobook convert book.pdf --no-llm --dry-run --json
+uv run pdf2audiobook convert book.pdf --no-llm --chapter-range 2:5
+uv run pdf2audiobook convert book.pdf --no-llm --chapter 3 --speed 1.15 --sample-rate 24000
+~~~
+
+Chapter ranges are **inclusive** and start at chapter 1. `--chapter` and `--chapter-range` cannot be combined. Dry-run still performs PDF extraction/OCR and may update local analysis files, but it produces no MP3 audio.
+
+When an LLM is enabled, any proposed OCR corrections are stored in the manifest as **unapproved** `CleanupEdit` entries. To apply an edit, inspect the original and replacement, then explicitly set its `accepted` field to true. Derived narration text will be regenerated from approved corrections, retaining the raw source spans for auditing.
+
+For the supported lightweight Kitten models, `kittenml` exposes `KittenTTS` and aliases `mini`, `micro` and `nano`. Actual model download and audio-listening acceptance are not covered by the offline CI tests.

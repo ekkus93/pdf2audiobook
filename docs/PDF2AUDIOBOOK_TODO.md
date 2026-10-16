@@ -68,7 +68,7 @@
   - [x] P2.02b Require review for low-confidence/no-chapter books; allow explicit --allow-single-chapter.
 - [ ] P2.03 Persist editable chapter manifest plus per-chapter UTF-8 text files and inspection report.
   - [x] P2.03a Implement manifest override validation and preserve user edits across reruns.
-  - [ ] P2.03b Support inspect, analyze, --dry-run, --json, --chapter and --chapter-range.
+  - [x] P2.03b Support inspect, analyze, --dry-run, --json, --chapter and --chapter-range.
 - [ ] P2.04 Test bookmark, no-TOC, TOC-offset, prose heading and chapter-mid-page fixtures.
 
 **M2 gate:** correct, auditable chapter boundaries; authoritatively editable pre-TTS analysis.
@@ -79,10 +79,10 @@
   - [x] P3.01a Implement OpenAI API adapter; load key only from OPENAI_API_KEY or designated env.
   - [x] P3.01b Implement Ollama adapter with configurable local base URL/model.
   - [x] P3.01c Implement llama-server adapter with configurable local base URL/model and optional auth.
-  - [ ] P3.01d Probe or adapt capabilities for JSON/schema response and provider-specific unsupported parameters.
+  - [x] P3.01d Probe or adapt capabilities for JSON/schema response and provider-specific unsupported parameters.
 - [ ] P3.02 Implement bounded prompt/context splitting with stable block references and schema versioning.
   - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries.
-  - [ ] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
+  - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
   - [ ] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
 - [ ] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
   - [ ] P3.03a Track accepted/rejected edits, evidence, confidence, review flags and provenance.
@@ -102,7 +102,7 @@
 
 - [ ] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
   - [ ] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
-  - [ ] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate.
+  - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate.
 - [ ] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
   - [ ] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
   - [x] P4.02b Handle oversized sentences and TTS failures without silently dropping text.
@@ -150,4 +150,8 @@
 | 2026-10-16 | 84cd664 | Specification and TODO drafted; no implementation yet | Not run | None identified |
 | 2026-10-16 | 21954bae6b6fb012ccf86338858f6fb1dd3f454e | uv Python CLI, config, models, PDF/OCR, conservative pagination, chapter boundaries/overrides, LLM provider adapters, Kitten/MP3 chunk pipeline | Python CI run 38889941369 passed; mocked LLM/TTS, real FFmpeg, mixed scanned/text OCR | Real Kitten model and real LLM provider acceptance not yet run; lockfile unavailable from current local PyPI-restricted environment |
 
-| 2026-10-16 | fcbb51d3bea71cc96641b649a13bc53188d8509a | Added provenance-validated cleanup edits, coverage.json, checksum-verified WAV/MP3 resume, and streaming input hashes; restored concise CI after uv lock generation check | Python CI runs 38891383049, 38891702908 and 38891853410 passed | uv.lock still uncommitted; real Kitten and LLM acceptance pending |\n\n| 2026-10-16 | 7519c7f9f0a0a989443ce8398df948cb12f6fc64 | Added schema-version rejection, atomic persistence and stage-fingerprint tests | Python CI run 38892375209 passed | Schema migration is intentionally rejected until a migration path is specified |\n\n**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
+| 2026-10-16 | fcbb51d3bea71cc96641b649a13bc53188d8509a | Added provenance-validated cleanup edits, coverage.json, checksum-verified WAV/MP3 resume, and streaming input hashes; restored concise CI after uv lock generation check | Python CI runs 38891383049, 38891702908 and 38891853410 passed | uv.lock still uncommitted; real Kitten and LLM acceptance pending |
+| 2026-10-16 | 7519c7f9f0a0a989443ce8398df948cb12f6fc64 | Added schema-version rejection, atomic persistence and stage-fingerprint tests | Python CI run 38892375209 passed | Schema migration is intentionally rejected until a migration path is specified |
+| 2026-10-16 | 0dc41445cfd8066bb5f1d014dd08c26cc37794c5 | Added validated chapter ranges, dry-run, speed/sample rate CLI settings, LLM JSON-mode adaptation and retry controls, unapproved provenance-bound OCR cleanup proposals, and conservative PDF line-wrap reflow | Python CI runs 38895209653, 38895441231, 38895732178, 38896085092 passed | Full real Kitten and live LLM acceptance still pending; no uv.lock; two-column/footnote robustness incomplete |
+
+**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
