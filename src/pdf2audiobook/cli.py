@@ -191,6 +191,7 @@ def convert(
     llm_url: str | None = typer.Option(None, "--llm-url"),
     no_llm: bool = typer.Option(False, "--no-llm"),
     allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
+    tts_provider: str | None = typer.Option(None, "--tts-provider"),
     tts_model: str | None = typer.Option(None, "--tts-model"),
     voice: str | None = typer.Option(None, "--voice"),
     bitrate: str | None = typer.Option(None, "--bitrate"),
@@ -210,6 +211,8 @@ def convert(
             selected = provider.replace("-", "_")
             if selected != "ollama" and llm_provider is None:
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
+        if tts_provider is not None:
+            overrides.setdefault("tts", {})["provider"] = tts_provider
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import convert_book
 

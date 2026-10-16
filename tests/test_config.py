@@ -46,3 +46,8 @@ def test_invalid_config(tmp_path: Path):
         load_settings(file, no_config=True)
     with pytest.raises(ConfigError):
         load_settings(no_config=True, overrides={"pdf": {"ocr": "magic"}}, environ={})
+
+
+def test_missing_explicit_config_is_error(tmp_path: Path):
+    with pytest.raises(ConfigError, match="not found"):
+        load_settings(tmp_path / "missing.toml", environ={})

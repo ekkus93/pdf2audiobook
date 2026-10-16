@@ -168,6 +168,8 @@ def load_settings(
     data = Settings().model_dump()
     sources = {key: "built-in" for key in _flatten(data)}
     path = config_path or user_config_path()
+    if config_path is not None and not path.is_file() and not no_config:
+        raise ConfigError(f"configuration file not found: {path}")
     if not no_config and path.exists():
         try:
             toml = tomllib.loads(path.read_text(encoding="utf-8"))

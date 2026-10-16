@@ -23,3 +23,20 @@ The `uv sync` command creates/manages `.venv` automatically. You can also explic
 The default LLM provider is local Ollama; OpenAI requires explicit consent before transmitting book contents. See the specification for privacy and audit requirements.
 
 **Lockfile:** `uv.lock` is not checked in yet and must be generated with `uv lock` in an environment with PyPI connectivity, then committed. CI currently resolves dependencies when running `uv sync --extra dev`.
+
+## CLI workflow
+
+~~~bash
+uv run pdf2audiobook doctor
+uv run pdf2audiobook config show --sources
+uv run pdf2audiobook inspect path/to/book.pdf
+uv run pdf2audiobook analyze path/to/book.pdf --no-llm
+uv run pdf2audiobook convert path/to/book.pdf --no-llm --allow-single-chapter
+uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
+~~~
+
+`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with Kitten TTS. Models are loaded on demand.
+
+Install Tesseract separately for scanned pages. For synthesis, run `uv sync --extra kitten --extra dev` and install FFmpeg. The Kitten model alias `mini` resolves to the lightweight 0.8 mini model.
+
+**Limitations:** Chapter detection is provisional, especially for complex layouts. Tables, footnotes, OCR ambiguities and LLM-assisted text corrections remain in progress. Review chapter text before distributing audiobook files.
