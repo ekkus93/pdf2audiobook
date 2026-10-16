@@ -16,6 +16,7 @@ from pdf2audiobook.workspace import (
     digest_bytes,
     fingerprint,
     read_manifest,
+    write_json,
     write_manifest,
 )
 
@@ -96,18 +97,37 @@ def convert_book(source: Path, settings: Settings, chapter: int | None = None) -
                 f"Chapter {item.number} has low boundary confidence; "
                 "review the manifest before synthesis"
             )
-    # Do not load the model if all requested valid outputs already exist.
+    # Audio identities include all audible and encoding settings, not merely the PDF hash.
     pending = []
+    outputs = []
     for item in chosen:
         output = audio_output_path(manifest, item, manifest_path.parent)
-        if output.is_file() and settings.general.resume and output.stat().st_size > 0:
-            continue
-        pending.append(item)
-    provider = KittenProvider(settings.tts.kitten.model) if pending else None
-    for item in pending:
-        assert provider is not None
+        outputs.append(output)
         text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
         text = text_file.read_text(encoding="utf-8")
+        identity = fingerprint(
+            text, settings.tts.kitten.model, settings.tts.kitten.voice,
+            settings.tts.kitten.speed, settings.tts.pause_ms,
+            settings.tts.bitrate, settings.tts.sample_rate, "mp3-v2"
+        )
+        record = output.with_suffix(".cache.json")
+        cached = False
+        if (settings.general.resume and output.is_file()
+                and output.stat().st_size > 0 and record.is_file()):
+            try:
+                import json
+
+                cached = json.loads(record.read_text(encoding="utf-8")) == {
+                    "fingerprint": identity,
+                }
+            except (OSError, ValueError):
+                cached = False
+        if not cached:
+            pending.append((item, output, text, record, identity))
+
+    provider = KittenProvider(settings.tts.kitten.model) if pending else None
+    for item, output, text, record, identity in pending:
+        assert provider is not None
         samples = synthesize_chunks(
             text, provider, model=settings.tts.kitten.model,
             voice=settings.tts.kitten.voice, speed=settings.tts.kitten.speed,
@@ -116,10 +136,10 @@ def convert_book(source: Path, settings: Settings, chapter: int | None = None) -
             use_cache=settings.cache.enabled and settings.general.resume,
         )
         encode_mp3(
-            samples, provider.sample_rate,
-            audio_output_path(manifest, item, manifest_path.parent),
+            samples, provider.sample_rate, output,
             bitrate=settings.tts.bitrate, target_rate=settings.tts.sample_rate,
-            title=item.title, artist=manifest.author,
-            album=manifest.title, track=item.number,
+            title=item.title, artist=manifest.author, album=manifest.title,
+            track=item.number,
         )
-    return [audio_output_path(manifest, item, manifest_path.parent) for item in chosen]
+        write_json(record, {"fingerprint": identity})
+    return outputs
