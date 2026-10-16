@@ -263,13 +263,21 @@ def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
 
 def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
     """Join nearby consecutive body lines only when geometry supports a soft wrap."""
-    if before.kind == "heading" or after.kind == "heading":
+    if before.kind in {"heading", "list", "table", "footnote", "caption"}:
+        return False
+    if after.kind in {"heading", "list", "table", "footnote", "caption"}:
         return False
     if before.page_index != after.page_index or not before.bbox or not after.bbox:
         return False
     if not before.text.strip() or not after.text.strip():
         return False
-    if after.text.lstrip().startswith(("“", '"', "—", "–", "•")):
+    next_text = after.text.lstrip()
+    markers = ("“", '"', "‘", "'", "—", "–", "•", "*", "§", "#")
+    if next_text.startswith(markers) or before.text.strip().startswith(("*", "§", "#")):
+        return False
+    if re.match(r"^(?:-\s+|\d+[.)]\s+|[A-Za-z][.)]\s+)", next_text):
+        return False
+    if next_text.isupper() and len(next_text.split()) <= 8:
         return False
     line_height = max(1.0, before.bbox[3] - before.bbox[1])
     vertical_gap = after.bbox[1] - before.bbox[3]
