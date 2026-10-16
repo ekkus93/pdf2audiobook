@@ -31,7 +31,7 @@ def test_short_embedded_heading_does_not_trigger_ocr_warning() -> None:
 
 def test_suspicious_unicode_replacement_requires_review() -> None:
     warnings = page_review_warnings(
-        [line("Bad \\ufffd\\ufffd glyphs")], page_number=7, origin="ocr"
+        [line("Bad \ufffd\ufffd glyphs")], page_number=7, origin="ocr"
     )
     assert any("replacement/control" in warning for warning in warnings)
 

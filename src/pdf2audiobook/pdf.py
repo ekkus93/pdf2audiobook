@@ -89,8 +89,8 @@ def page_review_warnings(
     """
     warnings: list[str] = []
     text = " ".join(line["text"] for line in lines)
-    if text.count("\\ufffd") >= 2 or sum(
-        ord(char) < 32 and char not in "\\t\\n\\r" for char in text
+    if text.count("\ufffd") >= 2 or sum(
+        ord(char) < 32 and char not in "\t\n\r" for char in text
     ) >= 2:
         warnings.append(
             f"Page {page_number}: suspicious replacement/control characters; "
