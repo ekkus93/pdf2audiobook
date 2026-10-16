@@ -4,6 +4,7 @@ from __future__ import annotations
 import ipaddress
 import json
 import os
+import time
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
@@ -61,10 +62,13 @@ class OpenAICompatibleProvider:
         provider: str, base_url: str, model: str, allow_remote: bool,
         api_key: str | None = None, timeout: float = 60.0,
         transport: httpx.BaseTransport | None = None,
+        temperature: float = 0.1, max_retries: int = 3,
     ):
         self.provider = provider
         self.base_url = validate_endpoint(base_url, allow_remote)
         self.model = model
+        self.temperature = temperature
+        self.max_retries = max_retries
         self._client = httpx.Client(
             timeout=timeout,
             transport=transport,
@@ -90,32 +94,74 @@ class OpenAICompatibleProvider:
         except (httpx.HTTPError, KeyError, ValueError, IndexError, TypeError) as exc:
             raise LLMError("Could not discover the served LLM model") from exc
 
+    @staticmethod
+    def _unsupported_json_mode(response: httpx.Response) -> bool:
+        """Fallback only when the server specifically rejects JSON response_format."""
+        if response.status_code != 400:
+            return False
+        try:
+            body = response.json()
+            detail = body.get("error", body) if isinstance(body, dict) else ""
+            if isinstance(detail, dict):
+                detail = str(detail.get("message", "")) + " " + str(detail.get("param", ""))
+            if not isinstance(detail, str):
+                return False
+        except (ValueError, TypeError):
+            return False
+        explanation = detail.casefold()
+        return (
+            "response_format" in explanation
+            and any(term in explanation for term in (
+                "not support", "unsupported", "unrecognized", "unknown", "invalid"
+            ))
+        )
+
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
-        # Never add tools or execution functionality; PDF text is untrusted data.
+        # The book is untrusted data; never send it as system instructions or as tools.
         payload = {
             "model": self._model(),
             "messages": [
                 {"role": "system", "content": instructions},
                 {"role": "user", "content": document_text},
             ],
-            "temperature": 0.1,
+            "temperature": self.temperature,
             "response_format": {"type": "json_object"},
         }
-        try:
-            response = self._client.post(
-                f"{self.base_url}/chat/completions", json=payload
-            )
-            response.raise_for_status()
-            message = response.json()["choices"][0]["message"]["content"]
-            decoded = json.loads(message)
-            if not isinstance(decoded, dict):
-                raise LLMError("Model response must be a JSON object")
-            return decoded
-        except LLMError:
-            raise
-        except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError) as exc:
-            # Do not surface server bodies: they might echo user content or credentials.
-            raise LLMError(f"{self.provider} LLM request or JSON decoding failed") from exc
+        format_fallback_used = False
+        retry_count = 0
+        while True:
+            try:
+                response = self._client.post(
+                    f"{self.base_url}/chat/completions", json=payload
+                )
+                if self._unsupported_json_mode(response) and not format_fallback_used:
+                    # Older OpenAI-compatible local servers sometimes lack JSON mode.
+                    # Output is still schema-validated by callers after decoding.
+                    payload.pop("response_format")
+                    format_fallback_used = True
+                    continue
+                if response.status_code in (429, 502, 503, 504):
+                    if retry_count < self.max_retries:
+                        time.sleep(min(0.2 * (2 ** retry_count), 2.0))
+                        retry_count += 1
+                        continue
+                response.raise_for_status()
+                message = response.json()["choices"][0]["message"]["content"]
+                decoded = json.loads(message)
+                if not isinstance(decoded, dict):
+                    raise LLMError("Model response must be a JSON object")
+                return decoded
+            except httpx.TransportError as exc:
+                if retry_count < self.max_retries:
+                    time.sleep(min(0.2 * (2 ** retry_count), 2.0))
+                    retry_count += 1
+                    continue
+                raise LLMError(f"{self.provider} LLM transport failure") from exc
+            except LLMError:
+                raise
+            except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError) as exc:
+                # Never print raw response bodies: an API can echo book text or secrets.
+                raise LLMError(f"{self.provider} LLM request or JSON decoding failed") from exc
 
 
 def create_provider(
@@ -139,6 +185,7 @@ def create_provider(
     return OpenAICompatibleProvider(
         provider=selected, base_url=base_url, model=choice.model,
         allow_remote=remote_consent, api_key=api_key, transport=transport,
+        temperature=settings.llm.temperature, max_retries=settings.llm.max_retries,
     )
 
 
