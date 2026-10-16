@@ -48,7 +48,7 @@ def pagination_cleanup(
             continue
         if raw.startswith(('"', "'", "“", "‘", "•", "—", "–")):
             continue
-        if re.match(r"^\\(?\\d{1,3}[.)]\\s", raw):
+        if re.match(r"^\(?\d{1,3}[.)]\s", raw):
             continue
         # A lone numeric line at ordinary body indentation is not sufficient
         # evidence of pagination, even if another page starts with "2".
