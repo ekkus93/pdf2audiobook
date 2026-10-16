@@ -93,7 +93,7 @@
   - [x] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
   - [x] P3.05c Ensure logs, crash reports and config show redact credentials and full text.
 - [ ] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting.
-- [ ] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
+- [x] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
 - [ ] P3.08 Add opt-in real backend smoke checks for local Ollama/llama-server and explicitly consented OpenAI.
 
 **M3 gate:** all three provider adapters pass offline contract tests and model-assisted analysis cannot silently alter or invent source prose.
