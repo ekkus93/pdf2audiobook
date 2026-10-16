@@ -15,6 +15,7 @@ import fitz
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
+from pdf2audiobook.reading_order import order_two_columns
 from pdf2audiobook.workspace import digest_file, fingerprint, write_json
 
 
@@ -281,9 +282,18 @@ def extract_pdf(
                     warnings.append(f"Page {page_index + 1}: OCR produced no text")
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
+            # Diagnose the original extraction order before changing it.
             warnings.extend(
                 page_review_warnings(page_lines, page_number=page_index + 1, origin=origin)
             )
+            page_lines, reordered = order_two_columns(
+                page_lines, float(page.cropbox.width)
+            )
+            if reordered:
+                warnings.append(
+                    f"Page {page_index + 1}: reconstructed two-column reading order; "
+                    "review the transcript against the source page"
+                )
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
                 bounds = line["bbox"]
