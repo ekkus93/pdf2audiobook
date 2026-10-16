@@ -16,7 +16,7 @@ from pdf2audiobook.models import BookManifest
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
 from pdf2audiobook.workspace import (
-    digest_bytes,
+    digest_file,
     fingerprint,
     read_manifest,
     write_json,
@@ -29,7 +29,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
 
     if not source.is_file():
         raise InputError(f"PDF not found: {source}")
-    book_hash = digest_bytes(source.read_bytes())
+    book_hash = digest_file(source)
     root = Path(settings.general.output_dir).expanduser()
     folder = root / f"{source.stem}-{book_hash[:10]}"
     manifest_path = folder / "manifest.json"
@@ -118,9 +118,15 @@ def convert_book(source: Path, settings: Settings, chapter: int | None = None) -
             try:
                 import json
 
-                cached = json.loads(record.read_text(encoding="utf-8")) == {
-                    "fingerprint": identity,
-                }
+                from mutagen.mp3 import MP3
+
+                metadata = json.loads(record.read_text(encoding="utf-8"))
+                cached = (
+                    metadata.get("fingerprint") == identity
+                    and metadata.get("bytes") == output.stat().st_size
+                    and metadata.get("sha256") == digest_file(output)
+                    and MP3(output).info.length > 0
+                )
             except (OSError, ValueError):
                 cached = False
         if not cached:
@@ -142,5 +148,9 @@ def convert_book(source: Path, settings: Settings, chapter: int | None = None) -
             title=item.title, artist=manifest.author, album=manifest.title,
             track=item.number,
         )
-        write_json(record, {"fingerprint": identity})
+        write_json(record, {
+            "fingerprint": identity,
+            "sha256": digest_file(output),
+            "bytes": output.stat().st_size,
+        })
     return outputs

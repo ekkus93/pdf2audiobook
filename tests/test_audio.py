@@ -60,3 +60,17 @@ def test_ffmpeg_mp3_encodes_and_tags(tmp_path):
 def test_empty_audio_rejected():
     with pytest.raises(AudioError):
         wav_bytes(np.array([], dtype=np.float32), 24000)
+
+
+def test_corrupt_wav_cache_regenerates_only_affected_chunk(tmp_path):
+    provider = FakeProvider()
+    kwargs = dict(model="mini", voice="Jasper", speed=1, pause_ms=0, cache=tmp_path)
+    synthesize_chunks("One sentence. Another sentence.", provider, **kwargs)
+    original = provider.calls
+    files = list(tmp_path.glob("*.wav"))
+    assert files
+    files[0].write_bytes(b"RIFF invalid")
+    synthesize_chunks("One sentence. Another sentence.", provider, **kwargs)
+    assert provider.calls == original + 1
+    synthesize_chunks("One sentence. Another sentence.", provider, **kwargs)
+    assert provider.calls == original + 1

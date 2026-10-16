@@ -50,6 +50,11 @@ def test_convert_and_resume_with_fake_kitten(monkeypatch, tmp_path: Path):
     assert calls_made >= 2
     assert convert_book(source, settings) == files
     assert len(calls) == calls_made
+    files[0].write_bytes(b"corrupt mp3")
+    convert_book(source, settings)
+    assert len(calls) == calls_made  # valid WAV chunks are reused
+    assert files[0].stat().st_size > 100
+    assert convert_book(source, settings) == files
     settings.tts.kitten.voice = "Bella"
     convert_book(source, settings)
     assert len(calls) > calls_made

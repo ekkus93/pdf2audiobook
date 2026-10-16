@@ -16,7 +16,7 @@ from mutagen.mp3 import MP3
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.tts import TTSProvider
-from pdf2audiobook.workspace import atomic_write, fingerprint
+from pdf2audiobook.workspace import atomic_write, digest_bytes, fingerprint
 
 
 def split_sentences(text: str, max_chars: int = 350) -> list[str]:
@@ -90,15 +90,20 @@ def synthesize_chunks(
     for idx, text in enumerate(chunks):
         identity = fingerprint(text, model, voice, speed, provider.sample_rate)
         chunk_path = cache / f"{identity}.wav"
-        if use_cache and chunk_path.is_file():
+        checksum_path = chunk_path.with_suffix(".sha256")
+        audio = None
+        if use_cache and chunk_path.is_file() and checksum_path.is_file():
             try:
-                audio = read_wav(chunk_path.read_bytes(), provider.sample_rate)
-            except AudioError:
-                audio = provider.generate(text, voice=voice, speed=speed)
-                atomic_write(chunk_path, wav_bytes(audio, provider.sample_rate))
-        else:
+                cached_bytes = chunk_path.read_bytes()
+                if digest_bytes(cached_bytes) == checksum_path.read_text().strip():
+                    audio = read_wav(cached_bytes, provider.sample_rate)
+            except (AudioError, OSError):
+                pass
+        if audio is None:
             audio = provider.generate(text, voice=voice, speed=speed)
-            atomic_write(chunk_path, wav_bytes(audio, provider.sample_rate))
+            encoded = wav_bytes(audio, provider.sample_rate)
+            atomic_write(chunk_path, encoded)
+            atomic_write(checksum_path, (digest_bytes(encoded) + "\n").encode())
         if idx:
             samples.append(pause)
         samples.append(audio)
