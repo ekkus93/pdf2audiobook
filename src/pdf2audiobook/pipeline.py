@@ -37,7 +37,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
     analysis_key = fingerprint(
         book_hash, settings.pdf.model_dump(), settings.chapters.model_dump(),
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
-        chosen_provider.model, chosen_provider.base_url, "analysis-v3"
+        chosen_provider.model, chosen_provider.base_url, "analysis-v4"
     )
     if manifest_path.is_file():
         existing = read_manifest(manifest_path)
