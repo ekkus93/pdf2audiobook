@@ -52,3 +52,35 @@ def test_list_and_special_blocks_do_not_join_prose():
 def test_ascii_hyphen_preserved_when_wrapped():
     lines = [block(0, "well-"), block(1, "being matters.")]
     assert reflow_narration_lines(lines) == "well-being matters.\n"
+
+
+def test_unicode_soft_hyphen_is_repaired_only_across_soft_wrap():
+    lines = [block(0, "inter\u00ad"), block(1, "national cooperation.")]
+    assert reflow_narration_lines(lines) == "international cooperation.\n"
+
+
+def test_indented_paragraph_stays_separate():
+    first = block(0, "The previous paragraph ends.")
+    second = block(1, "A new paragraph begins.")
+    second.bbox = (110, 114, 400, 126)
+    assert reflow_narration_lines([first, second]) == (
+        "The previous paragraph ends.\n\nA new paragraph begins.\n"
+    )
+
+
+def test_page_boundary_stays_separate_even_if_geometry_matches():
+    first = block(0, "Last line of page one.")
+    second = block(1, "First line of page two.")
+    second.page_index = 1
+    assert reflow_narration_lines([first, second]) == (
+        "Last line of page one.\n\nFirst line of page two.\n"
+    )
+
+
+def test_large_vertical_gap_stays_separate():
+    first = block(0, "A short paragraph.")
+    second = block(1, "Another paragraph.")
+    second.bbox = (72, 160, 400, 172)
+    assert reflow_narration_lines([first, second]) == (
+        "A short paragraph.\n\nAnother paragraph.\n"
+    )
