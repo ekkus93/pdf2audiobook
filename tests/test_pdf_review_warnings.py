@@ -53,4 +53,4 @@ def test_sequential_full_width_lines_not_flagged_as_columns() -> None:
         line("Second", (20, 40, 300, 50)),
         line("Third", (20, 60, 300, 70)),
     ]
-    assert page_review_warnings(lines, page_number=5, origin="ocr") == []
+    assert page_review_warnings(lines, page_number=5, origin="embedded") == []
