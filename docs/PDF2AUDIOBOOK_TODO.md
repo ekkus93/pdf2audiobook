@@ -113,7 +113,7 @@
 - [ ] P4.04 Track per-chunk progress, checksums, cache keys and completion; persist atomically.
   - [ ] P4.04a Implement --resume/--no-resume and --force with precise cache invalidation.
   - [ ] P4.04b Restart interrupted conversion without regenerating validated completed audio chunks.
-  - [ ] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts.
+  - [x] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts.
 - [x] P4.05 Add mocked TTS tests using synthetic sine/audio fixtures; optional actual Kitten model integration test.
 - [ ] P4.06 Decode all generated MP3 fixtures with FFmpeg and inspect expected tags/durations.
 
@@ -150,4 +150,4 @@
 | 2026-10-16 | 84cd664 | Specification and TODO drafted; no implementation yet | Not run | None identified |
 | 2026-10-16 | 21954bae6b6fb012ccf86338858f6fb1dd3f454e | uv Python CLI, config, models, PDF/OCR, conservative pagination, chapter boundaries/overrides, LLM provider adapters, Kitten/MP3 chunk pipeline | Python CI run 38889941369 passed; mocked LLM/TTS, real FFmpeg, mixed scanned/text OCR | Real Kitten model and real LLM provider acceptance not yet run; lockfile unavailable from current local PyPI-restricted environment |
 
-**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
+| 2026-10-16 | fcbb51d3bea71cc96641b649a13bc53188d8509a | Added provenance-validated cleanup edits, coverage.json, checksum-verified WAV/MP3 resume, and streaming input hashes; restored concise CI after uv lock generation check | Python CI runs 38891383049, 38891702908 and 38891853410 passed | uv.lock still uncommitted; real Kitten and LLM acceptance pending |\n\n**Definition of done:** A checked item has implementation + applicable automated tests and/or recorded manual evidence on current master. A milestone is not complete merely because files exist. Keep this checklist synchronized with actual delivered behavior.
