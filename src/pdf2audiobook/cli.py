@@ -243,9 +243,9 @@ def convert(
             raise ConfigError("--chapter and --chapter-range cannot be combined")
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        from pdf2audiobook.audio import audio_output_path
         from pdf2audiobook.pipeline import analyze_book, convert_book, select_chapters
         from pdf2audiobook.workspace import read_manifest
-        from pdf2audiobook.audio import audio_output_path
 
         if dry_run:
             manifest_path = analyze_book(source, settings)
