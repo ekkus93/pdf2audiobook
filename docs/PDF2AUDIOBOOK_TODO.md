@@ -46,7 +46,7 @@
   - [x] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings.
   - [x] P1.02d Detect suspicious OCR/extraction text and possible side-by-side reading-order cases; emit explicit review warnings (heuristics, not engine confidence).
 - [ ] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
-  - [ ] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation.
+  - [x] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation.
   - [x] P1.03b Preserve dialogue, section breaks, legitimate line breaks and special content markers.
 - [ ] P1.04 Detect repeated headers, footers, Arabic/Roman page numbers and alternate-page layouts.
   - [x] P1.04a Remove only confidently identified pagination noise, with source-linked CleanupEdit records.
