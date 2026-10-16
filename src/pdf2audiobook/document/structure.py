@@ -20,6 +20,35 @@ HEADING = re.compile(
 )
 PAGE_NUMBER = re.compile(r"^(?:\d{1,5}|[ivxlcdm]{1,10})$", re.IGNORECASE)
 
+CANONICAL_ROMAN = re.compile(
+    r"^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})"
+    r"(?:IX|IV|V?I{0,3})$"
+)
+
+
+def _number_value(raw: str) -> tuple[int, str] | None:
+    """Only canonical Roman or short Arabic numerals count as page numbers."""
+    if raw.isascii() and raw.isdecimal() and len(raw) <= 5:
+        return int(raw), "arabic"
+    roman = raw.upper()
+    if not roman or not CANONICAL_ROMAN.fullmatch(roman):
+        return None
+    values = {"I": 1, "V": 5, "X": 10, "L": 50,
+              "C": 100, "D": 500, "M": 1000}
+    total = 0
+    for index, symbol in enumerate(roman):
+        number = values[symbol]
+        total += -number if index + 1 < len(roman) and (
+            number < values[roman[index + 1]]
+        ) else number
+    return total, "roman"
+
+
+def _aligned_number_positions(first: float, second: float) -> bool:
+    """Allow fixed placement or mirrored odd/even page-number positions."""
+    return abs(first - second) <= 0.06 or abs(first + second - 1) <= 0.06
+
+
 
 def pagination_cleanup(
     blocks: list[DocumentBlock],
@@ -29,7 +58,7 @@ def pagination_cleanup(
     """Remove only corroborated pagination patterns confined to margin bands."""
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
     text_occurrences: dict[tuple[str, str], set[int]] = defaultdict(set)
-    numbered: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    numbered: dict[str, list[tuple[int, int, float, str]]] = defaultdict(list)
     for block in blocks:
         if not block.bbox or block.page_index >= len(sizes):
             continue
@@ -66,27 +95,46 @@ def pagination_cleanup(
                 continue
         candidates[block.id] = (block, band)
         text_occurrences[(band, val)].add(block.page_index)
-        if PAGE_NUMBER.fullmatch(block.text.strip()):
-            raw = block.text.strip()
-            if raw.isdigit():
-                numbered[band].append((block.page_index, int(raw)))
+        parsed = _number_value(raw)
+        if parsed is not None:
+            width = sizes[block.page_index][0]
+            position = (block.bbox[0] + block.bbox[2]) / (2 * width)
+            numbered[band].append(
+                (block.page_index, parsed[0], position, parsed[1])
+            )
     sequential_pages: dict[str, set[int]] = defaultdict(set)
-    for band, values in numbered.items():
-        for page, value in values:
-            if any(abs(page - p2) == 1 and abs(value - v2) == 1 for p2, v2 in values):
-                sequential_pages[band].add(page)
+    for band, entries in numbered.items():
+        by_key: dict[tuple[int, int, str], list[float]] = defaultdict(list)
+        for page, value, position, notation in entries:
+            by_key[(page, value, notation)].append(position)
+        for page, value, position, notation in entries:
+            successors = by_key.get((page + 1, value + 1, notation), [])
+            for next_position in successors:
+                if not _aligned_number_positions(position, next_position):
+                    continue
+                if notation == "arabic":
+                    sequential_pages[band].update((page, page + 1))
+                else:
+                    # Two-page Roman sequences may be section markers.
+                    final_positions = by_key.get(
+                        (page + 2, value + 2, notation), []
+                    )
+                    if any(
+                        _aligned_number_positions(next_position, final)
+                        for final in final_positions
+                    ):
+                        sequential_pages[band].update(
+                            (page, page + 1, page + 2)
+                        )
     edits = []
     for block, band in candidates.values():
         value = " ".join(block.text.split()).casefold()
-        is_number = PAGE_NUMBER.fullmatch(block.text.strip()) is not None
-        confirmed_number = is_number and (
-            len(text_occurrences[(band, value)]) >= 2 or
-            block.page_index in sequential_pages[band]
-        )
+        is_number = _number_value(block.text.strip()) is not None
+        confirmed_number = is_number and block.page_index in sequential_pages[band]
         repeated = len(text_occurrences[(band, value)]) >= 2
         if is_number and confirmed_number and settings.remove_page_numbers:
             reason = "sequential/repeated page number"
-        elif not is_number and repeated and (
+        elif not PAGE_NUMBER.fullmatch(block.text.strip()) and repeated and (
             (band == "header" and settings.remove_headers) or
             (band == "footer" and settings.remove_footers)
         ):
