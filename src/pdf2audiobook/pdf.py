@@ -9,6 +9,7 @@ import shutil
 import statistics
 import subprocess
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import fitz
@@ -210,6 +211,29 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
     return True, None
 
 
+@lru_cache(maxsize=1)
+def _ocr_engine_version() -> str:
+    """Bind cached recognition to the installed Tesseract engine build.
+
+    Failure to query the CLI is nonfatal: PyMuPDF can use its own Tesseract
+    integration. The PyMuPDF version remains an independent cache component.
+    """
+    if shutil.which("tesseract") is None:
+        return "tesseract-cli-unavailable"
+    try:
+        result = subprocess.run(
+            ["tesseract", "--version"],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "tesseract-cli-unknown"
+    if result.returncode != 0:
+        return "tesseract-cli-unknown"
+    return (result.stdout or result.stderr).splitlines()[0].strip() or (
+        "tesseract-cli-unknown"
+    )
+
+
 def _ocr_page_lines(page: fitz.Page, settings: PdfSettings) -> list[dict]:
     textpage = page.get_textpage_ocr(
         language=settings.ocr_language, dpi=settings.ocr_dpi, full=True
@@ -268,7 +292,7 @@ def _cached_ocr_lines(
     key = fingerprint(
         "ocr-lines-v1", input_sha256, page_index,
         settings.ocr_language, settings.ocr_dpi,
-        str(fitz.VersionBind), int(page.rotation),
+        str(fitz.VersionBind), _ocr_engine_version(), int(page.rotation),
     )
     target = cache_dir / (key + ".json")
     if target.is_file():
