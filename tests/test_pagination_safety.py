@@ -53,3 +53,19 @@ def test_repeated_running_footer_still_removed():
     ]
     edits = pagination_cleanup(blocks, [(595, 842)] * 2, Pdf())
     assert {e.block_id for e in edits if e.accepted} == {"b1", "b2"}
+
+
+def test_repeated_substantive_sentence_is_not_silently_removed():
+    blocks = [
+        line(1, 0, "A meaningful paragraph remains part of the book.", x=75, y=60),
+        line(2, 1, "A meaningful paragraph remains part of the book.", x=75, y=60),
+    ]
+    assert pagination_cleanup(blocks, [(595, 842)] * 2, Pdf()) == []
+
+
+def test_repeated_bracketed_footnote_marker_is_preserved():
+    blocks = [
+        line(1, 0, "[1] Reference marker", x=75, y=800),
+        line(2, 1, "[1] Reference marker", x=75, y=800),
+    ]
+    assert pagination_cleanup(blocks, [(595, 842)] * 2, Pdf()) == []

@@ -46,7 +46,12 @@ def pagination_cleanup(
         # headings. These can legitimately occur in a page's margin band.
         if block.kind in {"heading", "list", "table", "footnote", "caption"}:
             continue
-        if raw.startswith(('"', "'", "“", "‘", "•", "—", "–")):
+        if raw.startswith(('"', "'", "“", "‘", "•", "—", "–", "(", "[")):
+            continue
+        # A full sentence or extended prose in the margin is not safe to
+        # classify as a running title based on repetition alone.
+        if (len(raw.split()) >= 8 or
+                (len(raw.split()) >= 3 and raw.endswith((".", "?", "!", "…")))):
             continue
         if re.match(r"^\(?\d{1,3}[.)]\s", raw):
             continue
