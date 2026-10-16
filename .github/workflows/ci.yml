@@ -18,7 +18,7 @@ jobs:
       - name: Install FFmpeg for chapter MP3 acceptance tests
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
+          sudo apt-get install -y -qq ffmpeg tesseract-ocr tesseract-ocr-eng
       - name: Create uv environment and install project
         run: uv sync --extra dev
       - name: Lint
