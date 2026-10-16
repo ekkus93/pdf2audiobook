@@ -73,3 +73,24 @@ def test_repeated_running_title_respects_toggle_and_numeral_toggle():
     assert removed(titles + numbers, Pdf(remove_footers=False)) == {
         b.id for b in titles + numbers
     }
+
+
+def test_same_line_list_continuation_and_large_roman_heading_are_preserved():
+    entries = []
+    for page, value in enumerate(("1", "2", "3")):
+        entries.append(margin_block(page, value))
+        entries.append(DocumentBlock(
+            id=f"list-content-{page}", page_index=page, kind="paragraph",
+            text="A substantive list item that must not be discarded.",
+            bbox=(318, 806, 590, 820),
+        ))
+    assert removed(entries) == set()
+
+    roman_titles = [
+        DocumentBlock(
+            id=f"roman-title-{page}", page_index=page, kind="unknown",
+            text=roman, bbox=(290, 18, 305, 34), font_size=22,
+        )
+        for page, roman in enumerate(("I", "II", "III"))
+    ]
+    assert removed(roman_titles) == set()

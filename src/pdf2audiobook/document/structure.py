@@ -59,6 +59,9 @@ def pagination_cleanup(
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
     text_occurrences: dict[tuple[str, str], set[int]] = defaultdict(set)
     numbered: dict[str, list[tuple[int, int, float, str]]] = defaultdict(list)
+    blocks_by_page: dict[int, list[DocumentBlock]] = defaultdict(list)
+    for block in blocks:
+        blocks_by_page[block.page_index].append(block)
     for block in blocks:
         if not block.bbox or block.page_index >= len(sizes):
             continue
@@ -84,6 +87,24 @@ def pagination_cleanup(
             continue
         if re.match(r"^\(?\d{1,3}[.)]\s", raw):
             continue
+        # Standalone numerals may be section headings or list labels. Large
+        # display type is not a folio; a same-line continuation suggests a
+        # numbered list rather than a page number.
+        if PAGE_NUMBER.fullmatch(raw):
+            if block.font_size is not None and block.font_size > 14:
+                continue
+            if any(
+                other.id != block.id
+                and other.bbox is not None
+                and other.text.strip()
+                and other.bbox[0] >= block.bbox[2]
+                and 0 <= other.bbox[0] - block.bbox[2] <= sizes[block.page_index][0] * 0.12
+                and abs(other.bbox[1] - block.bbox[1]) <= max(
+                    5.0, block.bbox[3] - block.bbox[1]
+                )
+                for other in blocks_by_page[block.page_index]
+            ):
+                continue
         # A lone numeric line at ordinary body indentation is not sufficient
         # evidence of pagination, even if another page starts with "2".
         if PAGE_NUMBER.fullmatch(raw):
