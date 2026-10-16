@@ -6,6 +6,7 @@ import math
 import os
 import re
 import shutil
+import statistics
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -129,6 +130,64 @@ def page_review_warnings(
             "verify reading order before narration"
         )
     return warnings
+
+
+def _special_material_warnings(
+    page: fitz.Page, lines: list[dict], *, page_number: int
+) -> list[str]:
+    """Report likely non-prose content without deleting or inventing narration.
+
+    Image presence, small bottom-margin text and mathematical symbols are
+    evidence for review, not proof of an image caption, footnote or equation.
+    """
+    result: list[str] = []
+    try:
+        images = page.get_image_info()
+    except Exception:
+        result.append(
+            f"Page {page_number}: could not inspect embedded images; "
+            "verify non-text content manually"
+        )
+    else:
+        page_area = max(1.0, float(page.cropbox.width * page.cropbox.height))
+        if any(
+            isinstance(info.get("bbox"), (tuple, list))
+            and len(info["bbox"]) == 4
+            and max(0.0, info["bbox"][2] - info["bbox"][0])
+            * max(0.0, info["bbox"][3] - info["bbox"][1]) / page_area >= 0.01
+            for info in images
+        ):
+            result.append(
+                f"Page {page_number}: embedded image detected; "
+                "OCR does not describe figures or diagrams; review manually"
+            )
+    sizes = [
+        float(line["size"]) for line in lines
+        if isinstance(line.get("size"), (int, float))
+        and float(line["size"]) > 0
+    ]
+    if len(sizes) >= 3:
+        median_size = statistics.median(sizes)
+        height = float(page.cropbox.height)
+        if any(
+            isinstance(line.get("bbox"), (tuple, list))
+            and len(line["bbox"]) == 4
+            and isinstance(line.get("size"), (int, float))
+            and 0 < float(line["size"]) <= 0.78 * median_size
+            and line["bbox"][1] >= 0.7 * height
+            for line in lines
+        ):
+            result.append(
+                f"Page {page_number}: possible small-font footnote or endnote; "
+                "preserved verbatim for review"
+            )
+    math_symbols = set("∑∫√≈≤≥∞∂∇∈∉⊂⊆≠∝")
+    if any(math_symbols.intersection(line["text"]) for line in lines):
+        result.append(
+            f"Page {page_number}: mathematical notation detected; "
+            "verify spoken rendering against source"
+        )
+    return result
 
 
 def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
@@ -282,6 +341,12 @@ def extract_pdf(
                     warnings.append(f"Page {page_index + 1}: OCR produced no text")
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
+            # Surface non-prose material without changing the raw transcript.
+            warnings.extend(
+                _special_material_warnings(
+                    page, page_lines, page_number=page_index + 1
+                )
+            )
             # Diagnose the original extraction order before changing it.
             warnings.extend(
                 page_review_warnings(page_lines, page_number=page_index + 1, origin=origin)
