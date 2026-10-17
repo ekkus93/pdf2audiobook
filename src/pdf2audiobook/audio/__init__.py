@@ -20,29 +20,52 @@ from pdf2audiobook.workspace import atomic_write, digest_bytes, fingerprint, wri
 
 
 def split_sentences(text: str, max_chars: int = 350) -> list[str]:
-    """Split at sentence or word boundaries; preserve full non-whitespace wording."""
+    """Split at sentence/word boundaries without crossing source paragraphs."""
     if max_chars < 40:
         raise ValueError("max_chars must be at least 40")
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     chunks: list[str] = []
-    current = ""
-    for sentence in sentences:
-        words = sentence.split()
-        for word in words:
-            if len(word) > max_chars:
-                raise AudioError("A single narration token exceeds the chunk limit")
-            if current and len(current) + len(word) + 1 > max_chars:
-                chunks.append(current)
-                current = ""
-            current = f"{current} {word}".strip()
-            if word.endswith((".", "!", "?")):
-                # Prefer a clean sentence boundary if enough text has accumulated.
-                if len(current) >= max_chars // 2:
+    # Blank lines are semantic paragraph boundaries; single soft wraps are not.
+    for paragraph in re.split(r"\r?\n[ \t]*\r?\n+", text.strip()):
+        current = ""
+        for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
+            for word in sentence.split():
+                if len(word) > max_chars:
+                    raise AudioError("A single narration token exceeds the chunk limit")
+                if current and len(current) + len(word) + 1 > max_chars:
                     chunks.append(current)
                     current = ""
-    if current:
-        chunks.append(current)
+                current = f"{current} {word}".strip()
+                if word.endswith((".", "!", "?")) and len(current) >= max_chars // 2:
+                    chunks.append(current)
+                    current = ""
+        if current:
+            chunks.append(current)
     return chunks
+
+
+def chunk_source_ranges(
+    chapter_text: str, chunks: list[str],
+) -> list[tuple[int, int, bool]]:
+    """Map normalized spoken chunks to exact source character ranges, in order."""
+    words = list(re.finditer(r"\S+", chapter_text))
+    positions: list[tuple[int, int, bool]] = []
+    cursor = 0
+    previous_end = 0
+    for chunk in chunks:
+        parts = chunk.split()
+        group = words[cursor:cursor + len(parts)]
+        if not group or [match.group() for match in group] != parts:
+            raise AudioError("Narration chunk source alignment failed")
+        start, end = group[0].start(), group[-1].end()
+        paragraph_boundary = bool(
+            re.search(r"\r?\n[ \t]*\r?\n+", chapter_text[previous_end:start])
+        )
+        positions.append((start, end, paragraph_boundary))
+        previous_end = end
+        cursor += len(parts)
+    if cursor != len(words):
+        raise AudioError("Narration chunks do not cover all source words")
+    return positions
 
 
 def wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
@@ -87,6 +110,8 @@ def synthesize_chunks(
     if not chunks:
         raise AudioError("Chapter has no speakable text")
     pause = np.zeros(int(provider.sample_rate * pause_ms / 1000), dtype=np.float32)
+    paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
+    ranges = chunk_source_ranges(chapter_text, chunks)
     identities = [
         fingerprint(text, model, voice, speed, provider.sample_rate)
         for text in chunks
@@ -96,14 +121,20 @@ def synthesize_chunks(
     progress = {
         "schema_version": 1,
         "fingerprint": fingerprint(
-            "tts-progress-v1", identities, model, voice, speed, provider.sample_rate,
+            "tts-progress-v2", digest_bytes(chapter_text.encode("utf-8")), identities,
+            model, voice, speed, provider.sample_rate,
             pause_ms,
         ),
         "total_chunks": len(chunks),
         "completed_chunks": 0,
         "status": "in_progress",
         "chunks": [
-            {"number": index + 1, "cache_key": identity, "status": "pending"}
+            {
+                "number": index + 1, "cache_key": identity, "status": "pending",
+                "source_start": ranges[index][0], "source_end": ranges[index][1],
+                "paragraph_boundary_before": ranges[index][2],
+                "text_sha256": digest_bytes(chunks[index].encode("utf-8")),
+            }
             for index, identity in enumerate(identities)
         ],
     }
@@ -146,7 +177,7 @@ def synthesize_chunks(
         if progress_file is not None:
             write_json(progress_file, progress)
         if idx:
-            samples.append(pause)
+            samples.append(paragraph_pause if ranges[idx][2] else pause)
         samples.append(audio)
     progress["status"] = "completed"
     if progress_file is not None:
