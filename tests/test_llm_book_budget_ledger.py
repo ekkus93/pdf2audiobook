@@ -57,3 +57,16 @@ def test_metered_fixture(tmp_path):
     )
     assert worker.complete_json(instructions='task', document_text='A') == {'headings': []}
     assert BookLLMBudgetLedger(tmp_path / 'budget.sqlite3').totals()['reported_tokens'] == 50
+
+
+def test_budget_guard_rejects_second_request(tmp_path):
+    provider = Metered()
+    budget = CachedLLMProvider(
+        provider, cache_dir=tmp_path / 'cache',
+        identity='model', ledger_path=tmp_path / 'budget.sqlite3',
+        max_requests=1,
+    )
+    budget.complete_json(instructions='task', document_text='A')
+    with pytest.raises(LLMError, match='request budget'):
+        budget.complete_json(instructions='task', document_text='B')
+    assert provider.calls == 1
