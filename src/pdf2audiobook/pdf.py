@@ -182,6 +182,21 @@ def _special_material_warnings(
                 f"Page {page_number}: possible small-font footnote or endnote; "
                 "preserved verbatim for review"
             )
+    # PyMuPDF's vector/text table detector provides a conservative hint,
+    # not a reading-order guarantee. Never drop or rewrite detected cells.
+    find_tables = getattr(page, "find_tables", None)
+    if callable(find_tables):
+        try:
+            if find_tables().tables:
+                result.append(
+                    f"Page {page_number}: possible table detected; "
+                    "verify cell order and narration; source text preserved"
+                )
+        except Exception:
+            result.append(
+                f"Page {page_number}: table detection unavailable; "
+                "review complex layouts manually"
+            )
     math_symbols = set("∑∫√≈≤≥∞∂∇∈∉⊂⊆≠∝")
     if any(math_symbols.intersection(line["text"]) for line in lines):
         result.append(
@@ -229,8 +244,11 @@ def _ocr_engine_version() -> str:
         return "tesseract-cli-unknown"
     if result.returncode != 0:
         return "tesseract-cli-unknown"
-    return (result.stdout or result.stderr).splitlines()[0].strip() or (
-        "tesseract-cli-unknown"
+    # A successful CLI invocation may still produce no version text.
+    return next(
+        (line.strip() for line in (result.stdout + "\n" + result.stderr).splitlines()
+         if line.strip()),
+        "tesseract-cli-unknown",
     )
 
 
@@ -259,14 +277,22 @@ def _valid_cached_lines(data: object) -> list[dict] | None:
         if (
             not isinstance(text, str)
             or not text.strip()
+            or len(text) > 1_000_000
             or not isinstance(bbox, (list, tuple))
             or len(bbox) != 4
             or any(
-                not isinstance(num, (int, float)) or not math.isfinite(num)
+                isinstance(num, bool)
+                or not isinstance(num, (int, float))
+                or not math.isfinite(num)
+                or abs(num) > 1_000_000
                 for num in bbox
             )
+            or bbox[0] > bbox[2]
+            or bbox[1] > bbox[3]
+            or isinstance(size, bool)
             or not isinstance(size, (int, float))
             or not math.isfinite(size)
+            or size < 0
             or font is not None and not isinstance(font, str)
         ):
             return None
@@ -297,6 +323,9 @@ def _cached_ocr_lines(
     target = cache_dir / (key + ".json")
     if target.is_file():
         try:
+            # Avoid reading arbitrarily large or attacker-modified cache entries.
+            if target.stat().st_size > 32 * 1024 * 1024:
+                raise ValueError("oversized OCR cache")
             parsed = json.loads(target.read_text(encoding="utf-8"))
             lines = _valid_cached_lines(parsed)
             if lines:
