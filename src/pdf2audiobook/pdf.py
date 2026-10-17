@@ -17,6 +17,7 @@ import fitz
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
+from pdf2audiobook.special_material import caption_line_indices
 from pdf2audiobook.reading_order import order_two_columns
 from pdf2audiobook.workspace import digest_file, fingerprint, write_json
 
@@ -498,6 +499,10 @@ def extract_pdf(
                     f"Page {page_index + 1}: reconstructed two-column reading order; "
                     "review the transcript against the source page"
                 )
+            caption_indices, caption_warnings = caption_line_indices(
+                page, page_lines, table_regions, page_number=page_index + 1,
+            )
+            warnings.extend(caption_warnings)
             footnote_indices = _footnote_line_indices(
                 page_lines, page_height=float(page.cropbox.height),
                 table_regions=table_regions,
@@ -535,6 +540,7 @@ def extract_pdf(
                         kind=(
                             "table" if _inside_table(bbox, table_regions)
                             else "footnote" if line_index in footnote_indices
+                            else "caption" if line_index in caption_indices
                             else "heading" if re.match(
                                 r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
                                 r"introduction|preface|part\s+[\divxlcdm]+)\b",
