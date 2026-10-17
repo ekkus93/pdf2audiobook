@@ -87,7 +87,7 @@
 - [ ] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
   - [x] P3.03a Track accepted/rejected edits, evidence, confidence, review flags and provenance.
   - [x] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
-- [ ] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
+- [x] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
 - [ ] P3.05 Enforce remote-data opt-in (--allow-remote-content/config) and warning before sending book content.
   - [x] P3.05a Validate TLS/loopback rules; block accidental external HTTP upload.
   - [x] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
@@ -202,3 +202,5 @@
 | 2026-10-17 | 299fdf3b413f3e51061db481d4e153ca76a4d371 | P3.03b: structure, cleanup, classification and narration tasks have independent settings gates; review-only classification reports use anchored IDs, confidence filters and ambiguity warnings; classification-only pipeline test verifies no cleanup | Python CI 39018113474 passed at exact head | Further strict provider, caching and acceptance requirements remain open |
 
 | 2026-10-17 | 623325f727da8673cfeac3485089791e5fab5bfb | P3.01: completed LLM provider contract with /models discovery, no-book-content health probe, typed structured JSON responses, existing timeout/retry/capability adaptation, success counts and sanitized token-usage telemetry | Python CI 39018254783 passed exact head (offline MockTransport tests) | Live local/remote acceptance remains P3.08; model discovery endpoints may be unsupported on older servers |
+
+| 2026-10-17 | fa37b654b1759d417eb8c72e20c13396aafb5d42 | P3.04: --no-llm deterministic analysis remains independent; backend failures propagate by default; explicit llm.fallback_to_deterministic config or env opt-in discards partial LLM proposals, retains source text and unrelated review warnings, then proceeds deterministically | Python CI 39018475840 and 39018569261 passed at exact respective heads | Real backend acceptance and user confirmation of uncertain chapter boundaries remain separate |

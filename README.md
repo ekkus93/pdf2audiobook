@@ -72,3 +72,21 @@ You can also configure `[pdf] password_env = "BOOK_PDF_PASSWORD"` in TOML. Never
 ## Protecting manual edits
 
 After reviewing a `manifest.json`, mark a chapter's `manually_approved` field or the book's `approved` field to preserve the approved boundaries. The app will regenerate missing derived chapter text from that manifest on resume, but will **reject a destructive reanalysis** when approved content would otherwise be overwritten (including when using `--no-resume` or changing analysis settings). To start a new analysis, back up the approved manifest and choose a fresh output directory.
+
+## Explicit fallback when a local LLM is unavailable
+
+By default, LLM provider errors stop analysis with a typed diagnostic; the program
+does **not** silently switch providers or downgrade analysis. For an offline-only
+workflow, use `--no-llm`. To allow automatic deterministic fallback *only when
+a configured LLM request fails*, set the following in your config file:
+
+~~~toml
+[llm]
+fallback_to_deterministic = true
+~~~
+
+Alternatively set `PDF2AUDIOBOOK_LLM_FALLBACK_TO_DETERMINISTIC=true`.
+The fallback discards partial model suggestions, preserves original book text
+and unrelated review warnings, and records the fallback in the manifest.
+Boundary confidence still requires review where applicable. A remote provider
+continues to require explicit `--allow-remote-content` consent.
