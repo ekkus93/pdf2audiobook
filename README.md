@@ -99,8 +99,8 @@ identity. Cache hits still pass the same deterministic source/ID verification
 as fresh provider responses. Malformed or mismatched records are not trusted.
 `--no-resume` disables cache reuse; turning off the cache in configuration
 does likewise. Cache files can contain model-generated text derived from the
-book and should be protected like the original PDF. There is currently no
-automatic per-book request, token or dollar budget enforcement.
+book and should be protected like the original PDF. Optional per-book request, provider-reported token and estimated dollar limits
+are enforced through the persistent budget ledger described below.
 
 ## Optional LLM token and dollar limits
 
@@ -123,8 +123,24 @@ You may also set `PDF2AUDIOBOOK_LLM_MAX_REPORTED_TOKENS` and
 These checks use token counts returned by the provider and stop subsequent
 requests after the limit is reached. A request can exceed the budget before
 its response is received; the over-budget response is rejected and not cached.
-If a budget is enabled and the server omits required usage data, processing
-fails instead of assuming a free request. The JSON usage report is local,
-contains no PDF prose, and is scoped to the **current analysis run**, not
-an authoritative cross-run book expenditure ledger. Do not rely on these
-limits as a guaranteed provider billing ceiling.
+Per-book accounting persists in `reports/llm_budget.sqlite3`, including
+across process restarts and `--no-resume` runs in the same book workspace.
+SQLite reservations serialize concurrent budgeted requests. Cached responses
+do not create new ledger charges. `reports/llm_usage.json` includes both
+current-run counters and persistent book totals; neither report stores book
+text, prompts, responses, or credentials.
+
+If a request crashes or returns no trustworthy usage, the ledger records an
+unresolved request. A token or dollar budget then fails closed on subsequent
+requests until the unknown charge is reviewed. Enabling a dollar limit after
+earlier unpriced calls also fails closed rather than treating them as free.
+Back up the ledger and reconcile provider billing before manually resetting
+any such entries. Changing the configured prices does not retroactively
+reprice historical calls; each request records the operator-supplied rates
+in effect at that time.
+
+**Important:** a single completion can exceed its budget before usage is
+reported; that response is rejected but may still be billed. Internal HTTP
+retries can also incur charges not reported by the provider. Dollar totals
+are estimates, not authoritative provider billing. Do not rely on these
+limits as guaranteed provider-side spending caps.
