@@ -43,6 +43,8 @@ files = [
     "src/pdf2audiobook/logging.py",
     "src/pdf2audiobook/config.py",
     "src/pdf2audiobook/reading_order.py",
+    "src/pdf2audiobook/llm/budget.py",
+    "src/pdf2audiobook/llm/cache.py",
 ]
 check_untyped_defs = true
 warn_unused_ignores = true
