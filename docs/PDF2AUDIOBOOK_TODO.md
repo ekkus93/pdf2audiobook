@@ -83,7 +83,7 @@
 - [ ] P3.02 Implement bounded prompt/context splitting with stable block references and schema versioning.
   - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries.
   - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
-  - [ ] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
+  - [x] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
 - [ ] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
   - [ ] P3.03a Track accepted/rejected edits, evidence, confidence, review flags and provenance.
   - [ ] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
@@ -194,3 +194,5 @@
 | 2026-10-17 | pending | P5.08/P5.09: added installation, provider setup, TOML example, privacy/troubleshooting, CLI recipes, development workflow and maintainer architecture guide; updated README | Exact-head CI to be checked after commit | Real Kitten/LLM/OCR, uv.lock, typing and long-book acceptance still outstanding |
 
 | 2026-10-17 | bbe64630bec91c0e843fd4e418194e5c0f66ee4a | P2.04: unique nearby TOC-offset title matching, conservative typographic prose headings, duplicate-title ambiguity rejection, no-TOC fallback and mid-page boundary regression coverage | Python CI 39017522174 passed at exact head | TOC correction bounded to ±2 physical pages; unresolvable/duplicate matches remain review-required |
+
+| 2026-10-17 | 43cabd6f8f18a532cdb4b0953ea19fe76097a575 | P3.02c: independently selectable LLM speech-normalization proposals with JSON-bounded source records, source-ID/original-line verification, rejection warnings, and review-only reports; neither chapter transcript nor audio changed | Python CI 39017833967 passed at exact head | Proposals are advisory and not auto-applied; full classification, budgets and real-model acceptance remain outstanding |
