@@ -242,11 +242,29 @@ def propose_chapters(
     """Segment by marked or formatted headings; require review if insufficient evidence."""
     warnings: list[str] = []
     heading_indices = []
+    # Typography is supporting evidence for unlabeled prose headings. Require
+    # substantial size contrast with the body and reject sentence-like prose.
+    body_sizes = sorted(
+        float(block.font_size) for block in blocks
+        if block.id not in omitted and block.font_size is not None
+        and 5 <= float(block.font_size) <= 40
+    )
+    typical_size = body_sizes[(len(body_sizes) - 1) // 2] if len(body_sizes) >= 3 else None
+    typography_ids: set[int] = set()
     for i, block in enumerate(blocks):
         if block.id in omitted:
             continue
         text = block.text.strip()
-        if HEADING.match(text) or block.id in (extra_heading_ids or set()):
+        is_typographic_heading = (
+            typical_size is not None and block.font_size is not None
+            and float(block.font_size) >= max(typical_size * 1.35, typical_size + 3)
+            and 1 <= len(text.split()) <= 9 and len(text) <= 90
+            and not text.endswith((".", "?", "!", ",", ";", ":"))
+            and not text.isdecimal() and block.kind not in {"table", "footnote", "caption", "list"}
+        )
+        if is_typographic_heading:
+            typography_ids.add(i)
+        if HEADING.match(text) or block.id in (extra_heading_ids or set()) or is_typographic_heading:
             heading_indices.append(i)
     # Combine confirmed bookmark anchors with textual headings. Some books mix
     # numbered headings and ornamental titles; do not discard the TOC merely
@@ -259,18 +277,29 @@ def propose_chapters(
         title_normalized = " ".join(title.casefold().split())
         if not title_normalized:
             continue
-        match = next(
-            (
-                i for i, block in enumerate(blocks)
-                if block.page_index == page_index
-                and block.id not in omitted
-                and " ".join(block.text.casefold().split()) == title_normalized
-            ),
-            None,
+        matching = [
+            i for i, block in enumerate(blocks)
+            if block.id not in omitted
+            and " ".join(block.text.casefold().split()) == title_normalized
+        ]
+        exact = [i for i in matching if blocks[i].page_index == page_index]
+        # A TOC page number may refer to printed rather than physical pages.
+        # Correct only a unique nearby title, never a duplicated phrase.
+        nearby = [
+            i for i in matching
+            if abs(blocks[i].page_index - page_index) <= 2
+        ]
+        match = exact[0] if len(exact) == 1 else (
+            nearby[0] if not exact and len(nearby) == 1 else None
         )
         if match is not None:
             heading_indices.append(match)
             bookmark_titles[match] = title.strip()
+            if blocks[match].page_index != page_index:
+                warnings.append(
+                    f"TOC entry {title!r} points to PDF page {page_num}; "
+                    f"matched unique title on page {blocks[match].page_index + 1}"
+                )
     heading_indices = sorted(set(heading_indices))
     if not blocks:
         raise ExtractionError("No text found in PDF; no chapters can be created")
@@ -293,10 +322,18 @@ def propose_chapters(
             evidence = ["unassigned material before chapter heading"]
         elif start in heading_indices:
             name = bookmark_titles.get(start, blocks[start].text.strip())
-            confidence = 0.95 if start in bookmark_titles else 0.9
+            confidence = (
+                0.95 if start in bookmark_titles and not any(
+                    f"TOC entry {bookmark_titles[start]!r} points" in warning
+                    for warning in warnings
+                ) else 0.85 if start in bookmark_titles
+                else 0.82 if start in typography_ids else 0.9
+            )
             evidence = (
-                ["PDF bookmark matched exact text and physical page"]
-                if start in bookmark_titles else ["explicit heading text"]
+                ["PDF bookmark/TOC matched unique source title"]
+                if start in bookmark_titles
+                else ["typographic size contrast with body text"]
+                if start in typography_ids else ["explicit heading text"]
             )
         else:
             name = "Full Book"
