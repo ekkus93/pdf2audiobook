@@ -19,6 +19,7 @@ from pdf2audiobook.llm import (
     propose_llm_cleanup,
     propose_llm_narration,
 )
+from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
@@ -115,17 +116,30 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                 block for block in extracted.blocks if block.id not in omitted
             ]
             with create_provider(settings) as provider:
+                selected_llm = getattr(
+                    settings.llm, settings.llm.provider.replace("-", "_")
+                )
+                worker = CachedLLMProvider(
+                    provider, cache_dir=folder / ".cache" / "llm",
+                    identity=fingerprint(
+                        "llm-provider-v1", settings.llm.provider,
+                        selected_llm.model, selected_llm.base_url,
+                        settings.llm.temperature, settings.llm.max_context_tokens,
+                        settings.llm.chunk_tokens,
+                    ),
+                    enabled=settings.cache.enabled and settings.general.resume,
+                )
                 if settings.llm.structure:
-                    llm_ids, warnings = detect_llm_headings(source_blocks, provider)
+                    llm_ids, warnings = detect_llm_headings(source_blocks, worker)
                 if settings.llm.cleanup:
                     suggestions, edit_warnings = propose_llm_cleanup(
-                        source_blocks, provider, decisions=llm_decisions,
+                        source_blocks, worker, decisions=llm_decisions,
                     )
                     edits.extend(suggestions)
                     warnings.extend(edit_warnings)
                 if settings.llm.classification:
                     classified, class_warnings = propose_llm_classification(
-                        source_blocks, provider,
+                        source_blocks, worker,
                     )
                     warnings.extend(class_warnings)
                     write_json(folder / "reports" / "classification_suggestions.json", {
@@ -135,7 +149,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                     })
                 if settings.llm.narration:
                     spoken_suggestions, spoken_warnings = propose_llm_narration(
-                        source_blocks, provider,
+                        source_blocks, worker,
                     )
                     warnings.extend(spoken_warnings)
                     # Deliberately separate from approved CleanupEdits and chapter
