@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 import wave
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 import numpy as np
 from mutagen.easyid3 import EasyID3
@@ -17,6 +18,27 @@ from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.tts import TTSProvider
 from pdf2audiobook.workspace import atomic_write, digest_bytes, fingerprint, write_json
+
+
+class _ChunkProgress(TypedDict):
+    number: int
+    cache_key: str
+    status: str
+    source_start: int
+    source_end: int
+    paragraph_boundary_before: bool
+    text_sha256: str
+    sha256: NotRequired[str | None]
+    bytes: NotRequired[int | None]
+
+
+class _SynthesisProgress(TypedDict):
+    schema_version: int
+    fingerprint: str
+    total_chunks: int
+    completed_chunks: int
+    status: str
+    chunks: list[_ChunkProgress]
 
 
 def split_sentences(text: str, max_chars: int = 350) -> list[str]:
@@ -125,7 +147,7 @@ def synthesize_chunks(
     ]
     # The ledger is diagnostic; it never authorizes reuse without WAV and SHA-256 validation.
     # No source text, voice content, or absolute paths are persisted in the ledger.
-    progress = {
+    progress: _SynthesisProgress = {
         "schema_version": 1,
         "fingerprint": fingerprint(
             "tts-progress-v3", digest_bytes(chapter_text.encode("utf-8")), identities,
@@ -223,15 +245,20 @@ def encode_mp3(
             )
         try:
             mp3 = MP3(tmp_mp3, ID3=EasyID3)
-            if mp3.tags is None:
+            tags = mp3.tags
+            if tags is None:
                 mp3.add_tags()
-            mp3.tags["title"] = title
-            mp3.tags["album"] = album
-            mp3.tags["tracknumber"] = str(track)
+                tags = mp3.tags
+            if tags is None:
+                raise AudioError("Could not initialize MP3 metadata tags")
+            tags["title"] = title
+            tags["album"] = album
+            tags["tracknumber"] = str(track)
             if artist:
-                mp3.tags["artist"] = artist
+                tags["artist"] = artist
             mp3.save()
-            if MP3(tmp_mp3).info.length <= 0:
+            info = MP3(tmp_mp3).info
+            if info is None or info.length <= 0:
                 raise AudioError("Encoded MP3 has zero duration")
         except AudioError:
             raise
