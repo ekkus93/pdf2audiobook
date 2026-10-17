@@ -101,3 +101,30 @@ as fresh provider responses. Malformed or mismatched records are not trusted.
 does likewise. Cache files can contain model-generated text derived from the
 book and should be protected like the original PDF. There is currently no
 automatic per-book request, token or dollar budget enforcement.
+
+## Optional LLM token and dollar limits
+
+Set the following in your TOML config under `[llm]`:
+
+~~~toml
+[llm]
+max_requests = 12
+max_reported_tokens = 20000
+max_estimated_cost_usd = 0.15
+input_cost_usd_per_million_tokens = 2.00
+output_cost_usd_per_million_tokens = 8.00
+~~~
+
+The prices above are **illustrative only**, not actual or verified provider pricing.
+Supply rates for your selected provider/model if enabling the dollar limit.
+You may also set `PDF2AUDIOBOOK_LLM_MAX_REPORTED_TOKENS` and
+`PDF2AUDIOBOOK_LLM_MAX_ESTIMATED_COST_USD` through environment variables.
+
+These checks use token counts returned by the provider and stop subsequent
+requests after the limit is reached. A request can exceed the budget before
+its response is received; the over-budget response is rejected and not cached.
+If a budget is enabled and the server omits required usage data, processing
+fails instead of assuming a free request. The JSON usage report is local,
+contains no PDF prose, and is scoped to the **current analysis run**, not
+an authoritative cross-run book expenditure ledger. Do not rely on these
+limits as a guaranteed provider billing ceiling.
