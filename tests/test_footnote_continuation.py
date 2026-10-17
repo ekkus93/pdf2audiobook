@@ -71,4 +71,4 @@ def test_extraction_keeps_wrapped_footnote_spans_unchanged(tmp_path: Path):
         and any(span.id == block.id and span.text == block.text for span in extracted.spans)
         for block in footnotes
     )
-    assert any("footnote line(s)" in warning for warning in extracted.warnings)
+    assert any("footnote anchor(s)/continuation" in warning for warning in extracted.warnings)

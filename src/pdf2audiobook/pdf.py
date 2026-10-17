@@ -553,7 +553,7 @@ def extract_pdf(
             if footnote_indices:
                 warnings.append(
                     f"Page {page_index + 1}: {len(footnote_indices)} "
-                    "likely footnote line(s) classified; verify against PDF"
+                    "likely footnote anchor(s)/continuation line(s) classified; verify against PDF"
                 )
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
