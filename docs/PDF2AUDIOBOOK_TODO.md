@@ -122,7 +122,7 @@
 ## Phase 5 — End-to-end acceptance and release (M5)
 
 - [x] P5.01 End-to-end text PDF -> inspect/analyze -> chapter MP3 acceptance.
-- [ ] P5.02 End-to-end scanned and mixed PDF, with OCR auto selection and page-number removal.
+- [x] P5.02 End-to-end scanned and mixed PDF, with OCR auto selection and page-number removal.
 - [x] P5.03 Validate no-text-loss/duplication invariants and mid-page chapter boundaries.
 - [x] P5.04 Verify manual chapter manifest overrides and chapter-specific regeneration.
 - [ ] P5.05 Test each LLM backend with mocks; perform environment-dependent real-model acceptance when available.
@@ -187,3 +187,5 @@
 | 2026-10-17 | 34dfec4790c19f24250f612e2f6cab491a22b693 | P5.04: verified approved mid-page chapter boundary survives reanalysis, selected chapter metadata override regenerates the chosen MP3, and unaffected previous MP3 plus checked WAV chunks are reused | Python CI 39014044365 passed exact head with synthetic PDF and mocked Kitten voice | Real Kitten and scanned/mixed PDF tests still required elsewhere |
 
 | 2026-10-17 | 9e999f91ccfcdc5962dad41ecb378f0e91d44dea | P5.03: source provenance coverage tests ensure each unique prose token is retained once across mid-page chapter starts; omit-only-under-audited-edit, reject chapter holes/overlaps, duplicate IDs and mismatched edit anchors | Python CI 39014171482 passed exact head | Scanned and mixed OCR integration remain separate P5.02 scope |
+
+| 2026-10-17 | 6222adf8dc581ed52859fdd75d2a587fa69291c5 | P5.02: offline E2E mixed embedded/image-only and all-image scanned PDFs, auto OCR selection with stubbed recognition, source origin/coverage checks, chapter MP3 output and mixed-PDF sequential folio cleanup | Python CI 39014351118 and 39014449677 passed at exact respective heads | Actual Tesseract recognition-quality/manual acceptance is still open under P1.06 and P5.10; P1.04c retains broader false-positive review |
