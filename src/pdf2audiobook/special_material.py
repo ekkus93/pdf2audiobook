@@ -50,6 +50,59 @@ def _near_region(
     return gap <= max(32.0, 3 * (line[3] - line[1]))
 
 
+def _vector_caption_regions(page: object) -> list[tuple[float, float, float, float]]:
+    """Find bounded clusters of sizable vector paths near a figure caption.
+
+    A lone page border or rectangle is not enough evidence for a figure.
+    Do not inspect page text or treat these rectangles as transcribed content.
+    """
+    detector = getattr(page, "get_drawings", None)
+    crop = getattr(page, "cropbox", None)
+    if not callable(detector) or crop is None:
+        return []
+    try:
+        page_area = max(1.0, float(crop.width) * float(crop.height))
+        drawings = detector()
+    except Exception:
+        return []
+    candidates = []
+    for item in drawings[:5000]:
+        if not isinstance(item, dict):
+            continue
+        box = _valid_box(item.get("rect"))
+        if box is None:
+            continue
+        width, height = box[2] - box[0], box[3] - box[1]
+        if (
+            width >= 20 and height >= 20
+            and 0.001 * page_area <= width * height <= 0.6 * page_area
+        ):
+            candidates.append(box)
+    regions: list[tuple[float, float, float, float]] = []
+    for index, first in enumerate(candidates):
+        for second in candidates[index + 1:]:
+            horizontal_overlap = min(first[2], second[2]) - max(first[0], second[0])
+            if horizontal_overlap < 0.25 * min(
+                first[2] - first[0], second[2] - second[0]
+            ):
+                continue
+            vertical_gap = max(
+                0.0, first[1] - second[3], second[1] - first[3]
+            )
+            if vertical_gap > 40:
+                continue
+            union = (
+                min(first[0], second[0]), min(first[1], second[1]),
+                max(first[2], second[2]), max(first[3], second[3]),
+            )
+            if (union[2] - union[0]) * (union[3] - union[1]) > 0.6 * page_area:
+                continue
+            regions.append(union)
+            if len(regions) >= 32:
+                return regions
+    return regions
+
+
 def caption_line_indices(
     page: object,
     lines: list[dict],
@@ -74,6 +127,7 @@ def caption_line_indices(
         except Exception:
             # _special_material_warnings handles image-inspection failures.
             pass
+    vector_boxes = _vector_caption_regions(page)
     table_boxes = [
         box for item in table_regions
         if (box := _valid_box(item)) is not None
@@ -88,7 +142,7 @@ def caption_line_indices(
         if match is None or box is None:
             continue
         kind = match.group("kind").lower()
-        regions = table_boxes if kind == "table" else image_boxes
+        regions = table_boxes if kind == "table" else image_boxes + vector_boxes
         if any(_near_region(box, region) for region in regions):
             identified.add(index)
     if not identified:
