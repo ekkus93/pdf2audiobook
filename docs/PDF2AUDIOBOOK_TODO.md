@@ -127,7 +127,7 @@
 - [x] P5.04 Verify manual chapter manifest overrides and chapter-specific regeneration.
 - [ ] P5.05 Test each LLM backend with mocks; perform environment-dependent real-model acceptance when available.
 - [x] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval.
-- [ ] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
+- [x] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
 - [x] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
 - [x] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes.
 - [ ] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps.
@@ -204,3 +204,5 @@
 | 2026-10-17 | 623325f727da8673cfeac3485089791e5fab5bfb | P3.01: completed LLM provider contract with /models discovery, no-book-content health probe, typed structured JSON responses, existing timeout/retry/capability adaptation, success counts and sanitized token-usage telemetry | Python CI 39018254783 passed exact head (offline MockTransport tests) | Live local/remote acceptance remains P3.08; model discovery endpoints may be unsupported on older servers |
 
 | 2026-10-17 | fa37b654b1759d417eb8c72e20c13396aafb5d42 | P3.04: --no-llm deterministic analysis remains independent; backend failures propagate by default; explicit llm.fallback_to_deterministic config or env opt-in discards partial LLM proposals, retains source text and unrelated review warnings, then proceeds deterministically | Python CI 39018475840 and 39018569261 passed at exact respective heads | Real backend acceptance and user confirmation of uncertain chapter boundaries remain separate |
+
+| 2026-10-17 | c4ea7caec24da892c919c7dc2812fe978fa48ff0 | P5.07: 120-page two-chapter PDF coverage/cache stress, 300-sentence interrupted chunk synthesis with checked restart, invalid PDF fail-closed behavior and HTTP 503 retry mock | Python CI 39018695232 passed at exact head | Large production books and physical/real-model quality still require manual acceptance; tests remain network-free |
