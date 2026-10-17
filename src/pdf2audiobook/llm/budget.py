@@ -47,7 +47,9 @@ class BookLLMBudgetLedger:
             "COALESCE(SUM(CASE WHEN status != 'complete' THEN 1 ELSE 0 END), 0), "
             "COALESCE(SUM(total_tokens), 0), "
             "COALESCE(SUM(prompt_tokens), 0), "
-            "COALESCE(SUM(completion_tokens), 0) FROM calls"
+            "COALESCE(SUM(completion_tokens), 0), "
+            "COALESCE(SUM(CASE WHEN status='complete' AND estimated_usd IS NULL "
+            "THEN 1 ELSE 0 END), 0) FROM calls"
         ).fetchone()
         costs = connection.execute(
             "SELECT estimated_usd FROM calls WHERE estimated_usd IS NOT NULL"
@@ -59,6 +61,7 @@ class BookLLMBudgetLedger:
             "reported_tokens": row[2],
             "prompt_tokens": row[3],
             "completion_tokens": row[4],
+            "unpriced_requests": row[5],
             "estimated_cost_usd": float(total_cost),
             "scope": "persistent_book_workspace",
         }
@@ -78,6 +81,10 @@ class BookLLMBudgetLedger:
             )
         if max_tokens is not None and stats["reported_tokens"] >= max_tokens:
             raise LLMError("Per-book LLM reported token budget reached or exceeded")
+        if max_usd is not None and stats["unpriced_requests"]:
+            raise LLMError(
+                "Per-book cost budget has unpriced earlier requests; inspect ledger"
+            )
         if max_usd is not None and Decimal(
             str(stats["estimated_cost_usd"])
         ) >= Decimal(str(max_usd)):
@@ -121,6 +128,9 @@ class BookLLMBudgetLedger:
                 and not isinstance(usage[key], bool)
                 and usage[key] >= 0
                 for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+            )
+            and usage["total_tokens"] >= (
+                usage["prompt_tokens"] + usage["completion_tokens"]
             )
         )
         price = None
