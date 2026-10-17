@@ -15,6 +15,7 @@ from pdf2audiobook.llm import (
     CleanupDecision,
     create_provider,
     detect_llm_headings,
+    propose_llm_classification,
     propose_llm_cleanup,
     propose_llm_narration,
 )
@@ -104,7 +105,8 @@ def analyze_book(source: Path, settings: Settings) -> Path:
             "anchor relocation is not yet supported"
         )
     if settings.llm.enabled and (
-        settings.llm.structure or settings.llm.cleanup or settings.llm.narration
+        settings.llm.structure or settings.llm.cleanup
+        or settings.llm.classification or settings.llm.narration
     ):
         # Only anchored proposals are accepted. OCR cleanup requires manual approval.
         source_blocks = [
@@ -119,6 +121,16 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                 )
                 edits.extend(suggestions)
                 warnings.extend(edit_warnings)
+            if settings.llm.classification:
+                classified, class_warnings = propose_llm_classification(
+                    source_blocks, provider,
+                )
+                warnings.extend(class_warnings)
+                write_json(folder / "reports" / "classification_suggestions.json", {
+                    "schema_version": 1,
+                    "requires_manual_review": True,
+                    "labels": [item.model_dump() for item in classified],
+                })
             if settings.llm.narration:
                 spoken_suggestions, spoken_warnings = propose_llm_narration(
                     source_blocks, provider,
