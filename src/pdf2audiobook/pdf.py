@@ -238,6 +238,55 @@ def _special_material_warnings(
     return result
 
 
+
+def _footnote_line_indices(
+    lines: list[dict], *, page_height: float,
+    table_regions: list[tuple[float, float, float, float]],
+) -> set[int]:
+    """Conservatively tag numbered small-type notes separated from body prose.
+
+    Never classify by small font or bottom position alone: a short numbered
+    list or ordinary paragraph near the page bottom must remain body text.
+    Uncertain notes are preserved as untyped source blocks for review.
+    """
+    body_sizes = [
+        float(line["size"]) for line in lines
+        if line.get("bbox") and line["bbox"][1] < page_height * 0.65
+        and isinstance(line.get("size"), (int, float))
+        and math.isfinite(float(line["size"])) and line["size"] > 0
+    ]
+    if len(body_sizes) < 2:
+        return set()
+    body_size = statistics.median(body_sizes)
+    result: set[int] = set()
+    for index, line in enumerate(lines):
+        bounds = line.get("bbox")
+        size = line.get("size")
+        if (
+            not bounds or len(bounds) != 4
+            or not isinstance(size, (int, float))
+            or not math.isfinite(float(size))
+            or size <= 0 or size > 0.78 * body_size
+            or bounds[1] < page_height * 0.70
+            or _inside_table(tuple(bounds), table_regions)
+            or not re.match(r"^(?:\\d{1,2}[.)]?|[*†‡])\\s+\\S", line["text"])
+        ):
+            continue
+        # A genuine footnote is typically separated from the main text.
+        # Require clear whitespace above the note, not just a font change.
+        preceding_bottom = max(
+            (other["bbox"][3] for other in lines
+             if other is not line and other.get("bbox")
+             and other["bbox"][3] <= bounds[1]),
+            default=None,
+        )
+        if preceding_bottom is None or bounds[1] - preceding_bottom < max(18.0, body_size * 1.5):
+            continue
+        result.add(index)
+    return result
+
+
+
 def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
     """Conservatively reject damaged text layers before choosing OCR in auto mode.
 
@@ -449,6 +498,15 @@ def extract_pdf(
                     f"Page {page_index + 1}: reconstructed two-column reading order; "
                     "review the transcript against the source page"
                 )
+            footnote_indices = _footnote_line_indices(
+                page_lines, page_height=float(page.cropbox.height),
+                table_regions=table_regions,
+            )
+            if footnote_indices:
+                warnings.append(
+                    f"Page {page_index + 1}: {len(footnote_indices)} "
+                    "likely footnote anchor(s) classified; verify against PDF"
+                )
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
                 bounds = line["bbox"]
@@ -476,6 +534,7 @@ def extract_pdf(
                         order=len(blocks),
                         kind=(
                             "table" if _inside_table(bbox, table_regions)
+                            else "footnote" if line_index in footnote_indices
                             else "heading" if re.match(
                                 r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
                                 r"introduction|preface|part\s+[\divxlcdm]+)\b",

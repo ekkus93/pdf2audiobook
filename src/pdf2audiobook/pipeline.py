@@ -12,7 +12,7 @@ from pdf2audiobook.document.structure import (
 )
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.llm import create_provider, detect_llm_headings, propose_llm_cleanup
-from pdf2audiobook.models import BookManifest
+from pdf2audiobook.models import BookManifest, CleanupEdit
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
 from pdf2audiobook.workspace import (
@@ -70,10 +70,32 @@ def analyze_book(source: Path, settings: Settings) -> Path:
         source_sha256=book_hash,
     )
     edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, settings.pdf)
+    # Only explicitly selected omit mode can remove a high-confidence note.
+    # Source spans/blocks remain intact and every exclusion is audited.
+    footnotes = [block for block in extracted.blocks if block.kind == "footnote"]
+    if settings.pdf.footnotes == "omit":
+        edits.extend(
+            CleanupEdit(
+                block_id=block.id, original=block.text, replacement="",
+                reason="explicit footnotes=omit policy (conservative classification)",
+                confidence=0.9, accepted=True,
+            )
+            for block in footnotes
+        )
     omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
 
     llm_ids: set[str] = set()
     warnings: list[str] = []
+    if footnotes and settings.pdf.footnotes == "omit":
+        warnings.append(
+            f"Excluded {len(footnotes)} conservatively classified footnote "
+            "block(s) under explicit omit policy; inspect audited cleanup edits"
+        )
+    elif footnotes and settings.pdf.footnotes == "inline":
+        warnings.append(
+            "Footnotes retained at their PDF reading positions; "
+            "anchor relocation is not yet supported"
+        )
     if settings.llm.enabled and (settings.llm.structure or settings.llm.cleanup):
         # Only anchored proposals are accepted. OCR cleanup requires manual approval.
         source_blocks = [
