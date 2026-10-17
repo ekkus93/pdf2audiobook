@@ -13,6 +13,7 @@ from rich.console import Console
 from pdf2audiobook import __version__
 from pdf2audiobook.config import load_settings, settings_public
 from pdf2audiobook.errors import AudiobookError, ConfigError
+from pdf2audiobook.logging import configure_logging, log_event
 
 app = typer.Typer(no_args_is_help=True, help="Convert PDF books to chapter-based audiobooks.")
 config_app = typer.Typer(help="Inspect effective configuration.")
@@ -23,6 +24,8 @@ console = Console(stderr=True)
 def fail(exc: Exception, *, json_output: bool = False) -> None:
     """Report a stable exit code and optionally a machine-readable stderr diagnostic."""
     code = exc.exit_code if isinstance(exc, AudiobookError) else 1
+    # Never log exception text, file paths, credentials, or PDF contents.
+    log_event("command_failed", error_code=code)
     if json_output:
         # Diagnostics belong on stderr; stdout is reserved for successful JSON payloads.
         typer.echo(json.dumps({
@@ -42,7 +45,16 @@ def emit(payload: dict[str, Any], json_output: bool) -> None:
 
 
 @app.callback()
-def entry(version: bool = typer.Option(False, "--version", help="Show version.")) -> None:
+def entry(
+    ctx: typer.Context,
+    version: bool = typer.Option(False, "--version", help="Show version."),
+    verbose: bool = typer.Option(False, "--verbose", help="Emit privacy-safe debug events to stderr."),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress non-error log events."),
+) -> None:
+    if verbose and quiet:
+        raise typer.BadParameter("--verbose and --quiet cannot be combined")
+    configure_logging(verbose=verbose, quiet=quiet)
+    log_event("command_started", command=ctx.invoked_subcommand or "root")
     if version:
         typer.echo(__version__)
         raise typer.Exit()
