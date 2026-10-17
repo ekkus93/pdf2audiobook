@@ -40,7 +40,7 @@ class KittenProvider:
 
     def __init__(self, model: str = "mini"):
         try:
-            from kittenml import KittenTTS
+            from kittenml import KittenTTS  # type: ignore[import-not-found]
         except ImportError as exc:
             raise AudioError(
                 "Kitten TTS is not installed. Run 'uv sync --extra kitten' first."
