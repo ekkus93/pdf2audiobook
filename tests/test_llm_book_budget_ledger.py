@@ -83,3 +83,19 @@ def test_token_ceiling_records_response_that_crosses_limit(tmp_path):
     with pytest.raises(LLMError, match='token budget'):
         budget.complete_json(instructions='task', document_text='B')
     assert BookLLMBudgetLedger(tmp_path / 'budget.sqlite3').totals()['reported_tokens'] == 100
+
+
+def test_cost_budget_uses_explicit_rates(tmp_path):
+    provider = Metered()
+    budget = CachedLLMProvider(
+        provider, cache_dir=tmp_path / 'cache',
+        identity='model', ledger_path=tmp_path / 'budget.sqlite3',
+        max_estimated_cost_usd=0.00009,
+        input_cost_usd_per_million_tokens=2,
+        output_cost_usd_per_million_tokens=1,
+    )
+    with pytest.raises(LLMError, match='cost budget'):
+        budget.complete_json(instructions='task', document_text='A')
+    assert BookLLMBudgetLedger(
+        tmp_path / 'budget.sqlite3'
+    ).totals()['estimated_cost_usd'] == pytest.approx(0.00009)
