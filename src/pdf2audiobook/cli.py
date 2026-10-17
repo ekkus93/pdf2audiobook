@@ -86,7 +86,9 @@ def doctor(
     try:
         settings, _ = load_settings(config, no_config=no_config)
         try:
-            import kittenml  # noqa: F401
+            from importlib import import_module
+
+            import_module("kittenml")
 
             kitten_installed = True
         except ImportError:
