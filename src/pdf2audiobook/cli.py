@@ -20,9 +20,18 @@ app.add_typer(config_app, name="config")
 console = Console(stderr=True)
 
 
-def fail(exc: Exception) -> None:
-    console.print(f"[red]Error:[/red] {exc}")
-    raise typer.Exit(code=exc.exit_code if isinstance(exc, AudiobookError) else 1) from exc
+def fail(exc: Exception, *, json_output: bool = False) -> None:
+    """Report a stable exit code and optionally a machine-readable stderr diagnostic."""
+    code = exc.exit_code if isinstance(exc, AudiobookError) else 1
+    if json_output:
+        # Diagnostics belong on stderr; stdout is reserved for successful JSON payloads.
+        typer.echo(json.dumps({
+            "ok": False,
+            "error": {"type": type(exc).__name__, "code": code, "message": str(exc)},
+        }, ensure_ascii=False), err=True)
+    else:
+        console.print(f"[red]Error:[/red] {exc}")
+    raise typer.Exit(code=code) from exc
 
 
 def emit(payload: dict[str, Any], json_output: bool) -> None:
@@ -53,7 +62,7 @@ def show_config(
             payload["_sources"] = origin
         emit(payload, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
-        fail(exc)
+        fail(exc, json_output=json_output)
 
 
 @app.command()
@@ -89,7 +98,7 @@ def doctor(
             json_output,
         )
     except (AudiobookError, OSError, ValueError) as exc:
-        fail(exc)
+        fail(exc, json_output=json_output)
 
 
 @app.command()
@@ -119,7 +128,7 @@ def inspect(
             payload = inspect_pdf(source, password_env=pdf_password_env)
         emit(payload, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
-        fail(exc)
+        fail(exc, json_output=json_output)
 
 
 def _overrides(
@@ -194,7 +203,7 @@ def analyze(
 
         emit({"manifest": str(analyze_book(source, settings))}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
-        fail(exc)
+        fail(exc, json_output=json_output)
 
 
 def parse_chapter_range(value: str) -> tuple[int, int]:
@@ -284,4 +293,4 @@ def convert(
             )
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
-        fail(exc)
+        fail(exc, json_output=json_output)
