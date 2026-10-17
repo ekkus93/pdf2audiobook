@@ -10,7 +10,7 @@ from pdf2audiobook.document.structure import (
     propose_chapters,
     render_chapter_texts,
 )
-from pdf2audiobook.errors import AudioError
+from pdf2audiobook.errors import AudioError, LLMError
 from pdf2audiobook.llm import (
     CleanupDecision,
     create_provider,
@@ -104,47 +104,63 @@ def analyze_book(source: Path, settings: Settings) -> Path:
             "Footnotes retained at their PDF reading positions; "
             "anchor relocation is not yet supported"
         )
-    if settings.llm.enabled and (
-        settings.llm.structure or settings.llm.cleanup
-        or settings.llm.classification or settings.llm.narration
-    ):
-        # Only anchored proposals are accepted. OCR cleanup requires manual approval.
-        source_blocks = [
-            block for block in extracted.blocks if block.id not in omitted
-        ]
-        with create_provider(settings) as provider:
-            if settings.llm.structure:
-                llm_ids, warnings = detect_llm_headings(source_blocks, provider)
-            if settings.llm.cleanup:
-                suggestions, edit_warnings = propose_llm_cleanup(
-                    source_blocks, provider, decisions=llm_decisions,
-                )
-                edits.extend(suggestions)
-                warnings.extend(edit_warnings)
-            if settings.llm.classification:
-                classified, class_warnings = propose_llm_classification(
-                    source_blocks, provider,
-                )
-                warnings.extend(class_warnings)
-                write_json(folder / "reports" / "classification_suggestions.json", {
-                    "schema_version": 1,
-                    "requires_manual_review": True,
-                    "labels": [item.model_dump() for item in classified],
-                })
-            if settings.llm.narration:
-                spoken_suggestions, spoken_warnings = propose_llm_narration(
-                    source_blocks, provider,
-                )
-                warnings.extend(spoken_warnings)
-                # Deliberately separate from approved CleanupEdits and chapter
-                # texts. This report is advisory and never changes audio.
-                write_json(folder / "reports" / "narration_suggestions.json", {
-                    "schema_version": 1,
-                    "requires_manual_review": True,
-                    "suggestions": [
-                        item.model_dump() for item in spoken_suggestions
-                    ],
-                })
+    try:
+        if settings.llm.enabled and (
+            settings.llm.structure or settings.llm.cleanup
+            or settings.llm.classification or settings.llm.narration
+        ):
+            # Only anchored proposals are accepted. OCR cleanup requires manual approval.
+            source_blocks = [
+                block for block in extracted.blocks if block.id not in omitted
+            ]
+            with create_provider(settings) as provider:
+                if settings.llm.structure:
+                    llm_ids, warnings = detect_llm_headings(source_blocks, provider)
+                if settings.llm.cleanup:
+                    suggestions, edit_warnings = propose_llm_cleanup(
+                        source_blocks, provider, decisions=llm_decisions,
+                    )
+                    edits.extend(suggestions)
+                    warnings.extend(edit_warnings)
+                if settings.llm.classification:
+                    classified, class_warnings = propose_llm_classification(
+                        source_blocks, provider,
+                    )
+                    warnings.extend(class_warnings)
+                    write_json(folder / "reports" / "classification_suggestions.json", {
+                        "schema_version": 1,
+                        "requires_manual_review": True,
+                        "labels": [item.model_dump() for item in classified],
+                    })
+                if settings.llm.narration:
+                    spoken_suggestions, spoken_warnings = propose_llm_narration(
+                        source_blocks, provider,
+                    )
+                    warnings.extend(spoken_warnings)
+                    # Deliberately separate from approved CleanupEdits and chapter
+                    # texts. This report is advisory and never changes audio.
+                    write_json(folder / "reports" / "narration_suggestions.json", {
+                        "schema_version": 1,
+                        "requires_manual_review": True,
+                        "suggestions": [
+                            item.model_dump() for item in spoken_suggestions
+                        ],
+                    })
+    except LLMError:
+        if not settings.llm.fallback_to_deterministic:
+            raise
+        # Fail closed to deterministic analysis: no partial model proposals,
+        # rejected decisions or uncertain chapter boundaries may be retained.
+        llm_ids.clear()
+        edits = [edit for edit in edits if edit.provider != "llm"]
+        llm_decisions.clear()
+        warnings = ["LLM provider failed; explicit deterministic fallback used"]
+        write_json(folder / "reports" / "classification_suggestions.json", {
+            "schema_version": 1, "requires_manual_review": True, "labels": [],
+        })
+        write_json(folder / "reports" / "narration_suggestions.json", {
+            "schema_version": 1, "requires_manual_review": True, "suggestions": [],
+        })
     write_json(folder / "reports" / "llm_cleanup_audit.json", {
         "schema_version": 1,
         "requires_manual_review": True,

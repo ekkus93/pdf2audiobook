@@ -57,6 +57,7 @@ class LLM(ConfigModel):
     classification: bool = True
     narration: bool = True
     allow_remote_content: bool = False
+    fallback_to_deterministic: bool = False
     openai: RemoteLLM = Field(
         default_factory=lambda: RemoteLLM(model="gpt-4.1-mini", api_key_env="OPENAI_API_KEY")
     )
@@ -114,6 +115,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_LLM_MODEL": ("llm", "@selected", "model"),
     "PDF2AUDIOBOOK_LLM_URL": ("llm", "@selected", "base_url"),
     "PDF2AUDIOBOOK_ALLOW_REMOTE_CONTENT": ("llm", "allow_remote_content"),
+    "PDF2AUDIOBOOK_LLM_FALLBACK_TO_DETERMINISTIC": ("llm", "fallback_to_deterministic"),
     "PDF2AUDIOBOOK_TTS_VOICE": ("tts", "kitten", "voice"),
     "PDF2AUDIOBOOK_TTS_MODEL": ("tts", "kitten", "model"),
 }
