@@ -84,3 +84,48 @@ def test_auto_ocr_mixed_pdf_without_duplicates_and_with_clean_folios(tmp_path, m
     assert "\n1\n" not in combined and "\n2\n" not in combined
     assert any(edit.accepted and edit.original == "1" for edit in manifest.edits)
     assert any(edit.accepted and edit.original == "2" for edit in manifest.edits)
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg unavailable")
+def test_image_only_scanned_book_uses_ocr_auto(tmp_path, monkeypatch):
+    import pdf2audiobook.pdf as pdf
+    import pdf2audiobook.pipeline as pipeline
+
+    source = tmp_path / "scan.pdf"
+    raster = fitz.open()
+    target = raster.new_page(width=600, height=800)
+    target.insert_text((70, 70), "Chapter 1", fontsize=18)
+    target.insert_text((70, 120), "Image only book narration from OCR.", fontsize=11)
+    image = target.get_pixmap().tobytes("png")
+    raster.close()
+    book = fitz.open()
+    page = book.new_page(width=600, height=800)
+    page.insert_image(page.rect, stream=image)
+    book.save(source)
+    book.close()
+
+    calls = []
+
+    def stub_ocr(page, settings):
+        calls.append(page.number)
+        return [
+            {"text": "Chapter 1", "bbox": (70, 52, 170, 76), "font": "OCR", "size": 18},
+            {"text": "Image only book narration from OCR.",
+             "bbox": (70, 108, 410, 123), "font": "OCR", "size": 11},
+        ]
+
+    monkeypatch.setattr(pdf, "_ocr_page_lines", stub_ocr)
+    monkeypatch.setattr(pipeline, "KittenProvider", FakeVoice)
+    settings = Settings(
+        general=General(output_dir=str(tmp_path / "out")),
+        pdf=Pdf(ocr="auto"), llm=LLM(enabled=False),
+    )
+    outputs = convert_book(source, settings)
+    assert len(outputs) == 1
+    assert outputs[0].exists() and MP3(outputs[0]).info.length > 0
+    assert calls == [0]
+    manifest_path = next((tmp_path / "out").glob("*/manifest.json"))
+    manifest = read_manifest(manifest_path)
+    assert manifest.spans and all(span.origin == "ocr" for span in manifest.spans)
+    transcript = (manifest_path.parent / "chapters" / "001.txt").read_text()
+    assert transcript.count("Image only book narration from OCR.") == 1
