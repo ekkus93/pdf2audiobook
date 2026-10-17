@@ -92,7 +92,7 @@
   - [x] P3.05a Validate TLS/loopback rules; block accidental external HTTP upload.
   - [x] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
   - [x] P3.05c Ensure logs, crash reports and config show redact credentials and full text.
-- [ ] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting.
+- [x] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting.
 - [x] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
 - [ ] P3.08 Add opt-in real backend smoke checks for local Ollama/llama-server and explicitly consented OpenAI.
 
@@ -100,7 +100,7 @@
 
 ## Phase 4 — TTS, MP3 and resume (M4)
 
-- [ ] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
+- [x] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
   - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
   - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate.
 - [ ] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
@@ -212,3 +212,5 @@
 | 2026-10-17 | pending | P3.06 partial: added opt-in per-analysis LLM request ceiling (`llm.max_requests` / `PDF2AUDIOBOOK_LLM_MAX_REQUESTS`), counting failed provider calls and cache misses while allowing cache hits; atomic text-free request/cache/token-telemetry report at `reports/llm_usage.json` | Exact-head CI pending | This is a logical-call ceiling, not a guarantee on internal HTTP retries; cross-run token/USD budgets and authoritative cost reporting remain open; P3.06 unchecked |
 
 | 2026-10-17 | 012a0cf6364590c4c103987bcef602f9d7fe174f | P3.06 partial: added opt-in per-analysis max_reported_tokens and max_estimated_cost_usd checks; configured input/output USD-per-million-token rates, verified provider-usage gating and privacy-safe usage report; cached replies bypass new charges | Python CI 39021163524 passed at exact head | This is a post-response guard, not a strict single-request/cross-run expenditure ceiling. Without reported usage, opted-in budgets fail closed after the first attempted request. P3.06 remains unchecked pending robust per-book accounting |
+
+| 2026-10-17 | 47e0e0d5fe84d7d19753968d225dde403bf72410 | P1.05 partial: geometry-backed figure/table caption classification, explicit caption syntax, false-positive guards for ordinary prose and page-wide scanned images; all source text and span links preserved. Reconciled P3.06 and P4.01 from separately verified implementation and protocol evidence | Python CI 39028095220 passed at exact head; prior P3.06 CI 39024049500 and P4.01 CI 39024343721 passed | P1.05 remains unchecked pending special-material/footnote/math policy and real-document acceptance; live provider/model tests remain P3.08/P5.05 |
