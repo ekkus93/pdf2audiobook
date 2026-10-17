@@ -46,6 +46,8 @@ files = [
     "src/pdf2audiobook/llm/budget.py",
     "src/pdf2audiobook/llm/cache.py",
     "src/pdf2audiobook/tts/__init__.py",
+    "src/pdf2audiobook/document/structure.py",
+    "src/pdf2audiobook/special_material.py",
 ]
 check_untyped_defs = true
 warn_unused_ignores = true
