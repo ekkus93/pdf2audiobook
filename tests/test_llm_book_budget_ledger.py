@@ -4,6 +4,7 @@ import pytest
 
 from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm.budget import BookLLMBudgetLedger
+from pdf2audiobook.llm.cache import CachedLLMProvider
 
 
 def test_new_book_ledger_has_no_requests(tmp_path):
@@ -32,3 +33,17 @@ def test_pending_budget_reservation_blocks_next_worker(tmp_path):
             request_hash='c', provider_hash='b',
             max_requests=None, max_tokens=100, max_usd=None,
         )
+
+
+class Metered:
+    def __init__(self):
+        self.calls = 0
+        self.last_usage = {}
+        self.total_usage = {'prompt_tokens': 0, 'completion_tokens': 0, 'total_tokens': 0}
+
+    def complete_json(self, *, instructions, document_text):
+        self.calls += 1
+        self.last_usage = {'prompt_tokens': 40, 'completion_tokens': 10, 'total_tokens': 50}
+        for key, value in self.last_usage.items():
+            self.total_usage[key] += value
+        return {'headings': []}
