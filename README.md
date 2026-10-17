@@ -90,3 +90,14 @@ The fallback discards partial model suggestions, preserves original book text
 and unrelated review warnings, and records the fallback in the manifest.
 Boundary confidence still requires review where applicable. A remote provider
 continues to require explicit `--allow-remote-content` consent.
+
+## LLM response cache and privacy
+
+LLM analysis responses are cached locally under each book workspace at
+`.cache/llm/`, with keys derived from the full request, prompt and provider
+identity. Cache hits still pass the same deterministic source/ID verification
+as fresh provider responses. Malformed or mismatched records are not trusted.
+`--no-resume` disables cache reuse; turning off the cache in configuration
+does likewise. Cache files can contain model-generated text derived from the
+book and should be protected like the original PDF. There is currently no
+automatic per-book request, token or dollar budget enforcement.
