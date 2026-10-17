@@ -59,6 +59,12 @@ class CleanupDecision(BaseModel):
 
 
 class LLMProvider(Protocol):
+    def list_models(self) -> list[str]:
+        """Return discoverable model IDs, or raise a sanitized error."""
+
+    def health(self) -> bool:
+        """Perform a bounded remote capability/availability probe."""
+
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
         """Return parsed JSON from the provider, or raise a sanitized LLMError."""
 
@@ -100,6 +106,11 @@ class OpenAICompatibleProvider:
         self.model = model
         self.temperature = temperature
         self.max_retries = max_retries
+        self.request_count = 0
+        self.last_usage: dict[str, int] = {}
+        self.total_usage: dict[str, int] = {
+            "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
+        }
         self._client = httpx.Client(
             timeout=timeout,
             transport=transport,
@@ -112,18 +123,38 @@ class OpenAICompatibleProvider:
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         self._client.close()
 
-    def _model(self) -> str:
-        if self.model != "auto":
-            return self.model
+    def list_models(self) -> list[str]:
+        """Use bounded /models discovery; never include raw server replies in errors."""
         try:
             response = self._client.get(f"{self.base_url}/models")
             response.raise_for_status()
-            models = response.json()["data"]
-            if not models:
-                raise LLMError("No models are served at configured endpoint")
-            return str(models[0]["id"])
-        except (httpx.HTTPError, KeyError, ValueError, IndexError, TypeError) as exc:
-            raise LLMError("Could not discover the served LLM model") from exc
+            payload = response.json()
+            models = payload["data"]
+            if not isinstance(models, list):
+                raise ValueError("invalid model list")
+            names = [
+                item["id"] for item in models
+                if isinstance(item, dict) and isinstance(item.get("id"), str)
+                and item["id"].strip()
+            ]
+            return list(dict.fromkeys(names))
+        except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
+            raise LLMError("Could not discover the served LLM models") from exc
+
+    def health(self) -> bool:
+        """Check model discovery without uploading any document content."""
+        try:
+            return bool(self.list_models())
+        except LLMError:
+            return False
+
+    def _model(self) -> str:
+        if self.model != "auto":
+            return self.model
+        models = self.list_models()
+        if not models:
+            raise LLMError("No models are served at configured endpoint")
+        return models[0]
 
     @staticmethod
     def _unsupported_json_mode(response: httpx.Response) -> bool:
@@ -177,10 +208,20 @@ class OpenAICompatibleProvider:
                         retry_count += 1
                         continue
                 response.raise_for_status()
-                message = response.json()["choices"][0]["message"]["content"]
+                reply = response.json()
+                message = reply["choices"][0]["message"]["content"]
                 decoded = json.loads(message)
                 if not isinstance(decoded, dict):
                     raise LLMError("Model response must be a JSON object")
+                self.request_count += 1
+                usage = reply.get("usage", {}) if isinstance(reply, dict) else {}
+                self.last_usage = {}
+                if isinstance(usage, dict):
+                    for field in self.total_usage:
+                        count = usage.get(field)
+                        if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                            self.last_usage[field] = count
+                            self.total_usage[field] += count
                 return decoded
             except httpx.TransportError as exc:
                 if retry_count < self.max_retries:
