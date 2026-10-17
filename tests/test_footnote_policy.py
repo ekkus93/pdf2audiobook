@@ -3,7 +3,7 @@ from pathlib import Path
 
 import fitz
 
-from pdf2audiobook.config import Chapters, General, LLM, Pdf, Settings
+from pdf2audiobook.config import LLM, Chapters, General, Pdf, Settings
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.pipeline import analyze_book
 from pdf2audiobook.workspace import read_manifest
