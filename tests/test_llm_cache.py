@@ -1,0 +1,73 @@
+"""Cache requests by full content, prompt schema and provider identity."""
+
+import json
+
+import pytest
+
+from pdf2audiobook.llm.cache import CachedLLMProvider
+from pdf2audiobook.workspace import fingerprint
+
+
+class Stub:
+    def __init__(self):
+        self.calls = 0
+
+    def complete_json(self, *, instructions, document_text):
+        self.calls += 1
+        return {"headings": []}
+
+
+def test_cache_key_includes_content_prompt_and_provider(tmp_path):
+    original = Stub()
+    worker = CachedLLMProvider(original, cache_dir=tmp_path, identity="model-v1")
+    first = worker.complete_json(instructions="schema1", document_text="Book text")
+    assert worker.complete_json(instructions="schema1", document_text="Book text") == first
+    assert original.calls == 1
+    worker.complete_json(instructions="schema2", document_text="Book text")
+    worker.complete_json(instructions="schema1", document_text="Other book")
+    CachedLLMProvider(
+        original, cache_dir=tmp_path, identity="model-v2"
+    ).complete_json(instructions="schema1", document_text="Book text")
+    assert original.calls == 4
+    assert worker.hits == 1
+    assert len(list(tmp_path.glob("*.json"))) == 4
+    assert all("Book text" not in p.name for p in tmp_path.glob("*.json"))
+
+
+def test_corruption_and_forged_fingerprint_cause_regeneration(tmp_path):
+    provider = Stub()
+    worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="model")
+    worker.complete_json(instructions="prompt", document_text="source")
+    path = next(tmp_path.glob("*.json"))
+    path.write_text("corrupt JSON")
+    worker.complete_json(instructions="prompt", document_text="source")
+    assert provider.calls == 2
+    data = json.loads(path.read_text())
+    assert data["fingerprint"] == fingerprint(
+        "llm-json-cache-v1", "model", "prompt", "source"
+    )
+    data["fingerprint"] = "forged"
+    path.write_text(json.dumps(data))
+    worker.complete_json(instructions="prompt", document_text="source")
+    assert provider.calls == 3
+
+
+def test_disabled_cache_and_failed_response_are_not_persisted(tmp_path):
+    provider = Stub()
+    worker = CachedLLMProvider(
+        provider, cache_dir=tmp_path, identity="model", enabled=False,
+    )
+    worker.complete_json(instructions="prompt", document_text="source")
+    worker.complete_json(instructions="prompt", document_text="source")
+    assert provider.calls == 2
+    assert not list(tmp_path.glob("*.json"))
+
+    class Failure:
+        def complete_json(self, *, instructions, document_text):
+            raise RuntimeError("backend failed")
+
+    with pytest.raises(RuntimeError, match="backend failed"):
+        CachedLLMProvider(
+            Failure(), cache_dir=tmp_path, identity="model",
+        ).complete_json(instructions="prompt", document_text="source")
+    assert not list(tmp_path.glob("*.json"))
