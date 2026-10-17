@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from pdf2audiobook.errors import LLMError
+from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 from pdf2audiobook.workspace import fingerprint, write_json
 
 
@@ -17,6 +18,7 @@ class CachedLLMProvider:
         max_estimated_cost_usd: float | None = None,
         input_cost_usd_per_million_tokens: float | None = None,
         output_cost_usd_per_million_tokens: float | None = None,
+        ledger_path: Path | None = None,
     ):
         self.provider = provider
         self.cache_dir = cache_dir
@@ -28,6 +30,7 @@ class CachedLLMProvider:
         self.max_estimated_cost_usd = max_estimated_cost_usd
         self.input_cost_usd_per_million_tokens = input_cost_usd_per_million_tokens
         self.output_cost_usd_per_million_tokens = output_cost_usd_per_million_tokens
+        self.ledger = BookLLMBudgetLedger(ledger_path) if ledger_path else None
         self.usage_verified = False
         self.hits = 0
         self.misses = 0
@@ -92,6 +95,7 @@ class CachedLLMProvider:
             "usage_verified": self.usage_verified,
             "provider_reported_tokens": safe_usage,
             "scope": "current_analysis_run",
+            "book_totals": self.ledger.totals() if self.ledger is not None else None,
         })
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
@@ -114,11 +118,21 @@ class CachedLLMProvider:
             except (OSError, ValueError, UnicodeError, TypeError):
                 pass
         self.misses += 1
-        self._check_usage_budget()
-        if self.max_requests is not None and self.requests_started >= self.max_requests:
-            self._write_usage()
-            raise LLMError("LLM request budget exhausted; increase llm.max_requests")
-        # Count before the call: even a failed request can incur provider charges.
+        reservation = None
+        if self.ledger is None:
+            self._check_usage_budget()
+            if self.max_requests is not None and self.requests_started >= self.max_requests:
+                self._write_usage()
+                raise LLMError("LLM request budget exhausted; increase llm.max_requests")
+        else:
+            reservation = self.ledger.reserve(
+                request_hash=key, provider_hash=self.identity,
+                max_requests=self.max_requests, max_tokens=self.max_reported_tokens,
+                max_usd=self.max_estimated_cost_usd,
+            )
+        # A failed response can still incur charges. Never reuse stale usage.
+        if hasattr(self.provider, "last_usage"):
+            self.provider.last_usage = {}
         self.requests_started += 1
         self._write_usage()
         try:
@@ -126,18 +140,29 @@ class CachedLLMProvider:
                 instructions=instructions, document_text=document_text,
             )
         finally:
+            last = getattr(self.provider, "last_usage", None)
+            self.usage_verified = (
+                isinstance(last, dict)
+                and isinstance(last.get("total_tokens"), int)
+                and not isinstance(last.get("total_tokens"), bool)
+                and last["total_tokens"] >= 0
+            )
+            if self.ledger is not None and reservation is not None:
+                self.ledger.settle(
+                    reservation, usage=last,
+                    input_rate=self.input_cost_usd_per_million_tokens,
+                    output_rate=self.output_cost_usd_per_million_tokens,
+                )
             self._write_usage()
         if not isinstance(reply, dict):
             raise ValueError("LLM cache requires a JSON-object response")
-        last = getattr(self.provider, "last_usage", None)
-        self.usage_verified = (
-            isinstance(last, dict)
-            and isinstance(last.get("total_tokens"), int)
-            and not isinstance(last.get("total_tokens"), bool)
-            and last["total_tokens"] >= 0
-        )
-        self._write_usage()
-        self._check_usage_budget()
+        if self.ledger is not None:
+            self.ledger.check_spend(
+                max_tokens=self.max_reported_tokens,
+                max_usd=self.max_estimated_cost_usd,
+            )
+        else:
+            self._check_usage_budget()
         if self.enabled:
             write_json(target, {"schema_version": 1, "fingerprint": key, "response": reply})
         return reply

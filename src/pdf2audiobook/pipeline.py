@@ -138,6 +138,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                         settings.llm.output_cost_usd_per_million_tokens
                     ),
                     usage_report=folder / "reports" / "llm_usage.json",
+                    ledger_path=folder / "reports" / "llm_budget.sqlite3",
                 )
                 if settings.llm.structure:
                     llm_ids, warnings = detect_llm_headings(source_blocks, worker)
