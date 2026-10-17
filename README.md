@@ -144,3 +144,27 @@ reported; that response is rejected but may still be billed. Internal HTTP
 retries can also incur charges not reported by the provider. Dollar totals
 are estimates, not authoritative provider billing. Do not rely on these
 limits as guaranteed provider-side spending caps.
+
+## Opt-in live LLM provider smoke tests
+
+These are **never run by offline CI**. Each command sends only a small synthetic
+fixture (no PDF content) to the selected endpoint. The `--execute` switch is
+required even for loopback servers:
+
+~~~bash
+uv run python -m pdf2audiobook.llm.smoke --provider ollama --model qwen3.5:9b --execute
+uv run python -m pdf2audiobook.llm.smoke --provider llama-server --model auto --execute
+~~~
+
+For OpenAI, set `OPENAI_API_KEY` in the environment first and additionally
+provide explicit remote-content consent:
+
+~~~bash
+uv run python -m pdf2audiobook.llm.smoke --provider openai --model gpt-4.1-mini --execute --allow-remote-content
+~~~
+
+Model identifiers are examples, not guarantees that those models are installed
+or available. The runner returns a JSON success/error result with sanitized
+provider details and usage metadata, but never echoes the synthetic request
+body or credentials. Real backend acceptance remains pending until these
+checks are executed against actual reachable services.
