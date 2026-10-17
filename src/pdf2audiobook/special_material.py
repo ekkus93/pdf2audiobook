@@ -91,3 +91,45 @@ def caption_line_indices(
         f"Page {page_number}: {len(identified)} geometry-backed caption(s) "
         "classified for review; original text preserved verbatim"
     ]
+
+
+def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
+    """Flag vector-only diagrams that image enumeration cannot see.
+
+    Require multiple sizable drawing paths to avoid mistaking text underlines
+    or a single page border for a diagram. This is a review signal only.
+    """
+    detector = getattr(page, "get_drawings", None)
+    crop = getattr(page, "cropbox", None)
+    if not callable(detector) or crop is None:
+        return []
+    try:
+        area = max(1.0, float(crop.width) * float(crop.height))
+        drawings = detector()
+    except Exception:
+        return [
+            f"Page {page_number}: vector drawing inspection unavailable; "
+            "review diagrams manually"
+        ]
+    count = 0
+    for item in drawings[:5000]:
+        if not isinstance(item, dict):
+            continue
+        box = _valid_box(item.get("rect"))
+        if box is None:
+            continue
+        width = box[2] - box[0]
+        height = box[3] - box[1]
+        if width >= 20 and height >= 20 and width * height >= 0.001 * area:
+            count += 1
+            if count >= 2:
+                return [
+                    f"Page {page_number}: substantial vector artwork detected; "
+                    "verify diagrams, tables and narration manually; source text preserved"
+                ]
+    if len(drawings) > 5000:
+        return [
+            f"Page {page_number}: unusually complex vector drawing content; "
+            "review diagrams and narration manually"
+        ]
+    return []
