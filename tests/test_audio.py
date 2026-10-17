@@ -74,3 +74,21 @@ def test_corrupt_wav_cache_regenerates_only_affected_chunk(tmp_path):
     assert provider.calls == original + 1
     synthesize_chunks("One sentence. Another sentence.", provider, **kwargs)
     assert provider.calls == original + 1
+
+
+def test_chunk_cache_invalidation_for_voice_model_speed_and_resume(tmp_path):
+    provider = FakeProvider()
+    options = dict(model="mini", voice="Jasper", speed=1.0, pause_ms=100, cache=tmp_path)
+    synthesize_chunks("A short sentence.", provider, **options)
+    assert provider.calls == 1
+    synthesize_chunks("A short sentence.", provider, **options)
+    assert provider.calls == 1
+    for field, value in [("model", "nano"), ("voice", "Different"), ("speed", 1.2)]:
+        changed = dict(options, **{field: value})
+        synthesize_chunks("A short sentence.", provider, **changed)
+        assert provider.calls >= 2
+    before = provider.calls
+    synthesize_chunks("A short sentence.", provider, **options, use_cache=False)
+    assert provider.calls == before + 1
+    synthesize_chunks("A short sentence.", provider, **dict(options, pause_ms=500))
+    assert provider.calls == before + 1
