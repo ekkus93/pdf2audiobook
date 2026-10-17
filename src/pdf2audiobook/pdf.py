@@ -18,7 +18,11 @@ from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.reading_order import order_two_columns
-from pdf2audiobook.special_material import caption_line_indices, vector_artwork_warnings
+from pdf2audiobook.special_material import (
+    caption_line_indices,
+    equation_line_indices,
+    vector_artwork_warnings,
+)
 from pdf2audiobook.workspace import digest_file, fingerprint, write_json
 
 
@@ -508,6 +512,10 @@ def extract_pdf(
                 page_lines, page_height=float(page.cropbox.height),
                 table_regions=table_regions,
             )
+            equation_indices, equation_warnings = equation_line_indices(
+                page_lines, page_number=page_index + 1,
+            )
+            warnings.extend(equation_warnings)
             if footnote_indices:
                 warnings.append(
                     f"Page {page_index + 1}: {len(footnote_indices)} "
@@ -542,6 +550,7 @@ def extract_pdf(
                             "table" if _inside_table(bbox, table_regions)
                             else "footnote" if line_index in footnote_indices
                             else "caption" if line_index in caption_indices
+                            else "equation" if line_index in equation_indices
                             else "heading" if re.match(
                                 r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
                                 r"introduction|preface|part\s+[\divxlcdm]+)\b",

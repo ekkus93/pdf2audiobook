@@ -27,7 +27,7 @@ class DocumentBlock(StrictModel):
     span_ids: list[str] = Field(default_factory=list)
     text: str
     page_index: int = Field(ge=0)
-    kind: Literal["heading", "paragraph", "list", "table", "footnote", "caption", "unknown"] = "unknown"
+    kind: Literal["heading", "paragraph", "list", "table", "footnote", "caption", "equation", "unknown"] = "unknown"
     bbox: tuple[float, float, float, float] | None = None
     font_size: float | None = None
     order: int = Field(default=0, ge=0)

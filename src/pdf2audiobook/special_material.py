@@ -153,6 +153,58 @@ def caption_line_indices(
     ]
 
 
+
+# Conservative displayed-formula classification. This is not mathematical OCR,
+# a parser, or a source of automatically generated spoken descriptions.
+_FORMULA_LHS = re.compile(
+    r"^(?:[A-Za-z][A-Za-z0-9_]{0,12}|[A-Za-z]\([^)]{1,24}\))"
+    r"\s*(?:=|≈|≃|≤|≥|≠)\s*\S"
+)
+_FORMULA_SIGNS = frozenset("∑∫√≈≤≥∞∂∇∈∉⊂⊆≠∝±×÷∀∃∼≃≅⊥∥²³")
+
+
+def equation_line_indices(
+    lines: list[dict], *, page_number: int,
+) -> tuple[set[int], list[str]]:
+    """Mark high-confidence short standalone formulas for review only.
+
+    Avoid inferring formulas from ordinary prose containing '=' or an inline
+    mathematical symbol. No text is removed, rewritten, or reordered.
+    """
+    selected: set[int] = set()
+    for index, item in enumerate(lines):
+        text = item.get("text")
+        if not isinstance(text, str):
+            continue
+        text = text.strip()
+        if not text or len(text) > 140 or len(text.split()) > 16:
+            continue
+        # Sentences, figure captions, lists and URLs are not displayed formulas.
+        if text.endswith((".", "?", "!", ";", ":")) or re.match(
+            r"^(?:fig(?:ure)?|table|chapter)\s+\d+[:.\s]", text, re.I
+        ):
+            continue
+        is_assignment = _FORMULA_LHS.match(text) is not None
+        has_formula_signs = bool(_FORMULA_SIGNS.intersection(text))
+        is_symbolic = (
+            has_formula_signs
+            and (
+                text[0] in "∑∫√∂∇∀∃"
+                or "=" in text or "≈" in text or "≠" in text
+                or "≤" in text or "≥" in text
+            )
+            and len(text.split()) <= 12
+            and (text[:1].isalpha() or text[0] in "∑∫√∂∇∀∃")
+        )
+        if is_assignment or is_symbolic:
+            selected.add(index)
+    if not selected:
+        return set(), []
+    return selected, [
+        f"Page {page_number}: {len(selected)} likely displayed equation(s) "
+        "classified for review; verify spoken rendering; original text preserved"
+    ]
+
 def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
     """Flag vector-only diagrams that image enumeration cannot see.
 

@@ -123,7 +123,7 @@ def pagination_cleanup(
         raw = block.text.strip()
         # Fail closed on standalone quotations, numbered list markers and
         # headings. These can legitimately occur in a page's margin band.
-        if block.kind in {"heading", "list", "table", "footnote", "caption"}:
+        if block.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
             continue
         if raw.startswith(('"', "'", "“", "‘", "•", "—", "–", "(", "[")):
             continue
@@ -286,7 +286,7 @@ def propose_chapters(
             and float(block.font_size) >= max(typical_size * 1.35, typical_size + 3)
             and 1 <= len(text.split()) <= 9 and len(text) <= 90
             and not text.endswith((".", "?", "!", ",", ";", ":"))
-            and not text.isdecimal() and block.kind not in {"table", "footnote", "caption", "list"}
+            and not text.isdecimal() and block.kind not in {"table", "footnote", "caption", "equation", "list"}
         )
         if is_typographic_heading:
             typography_ids.add(i)
@@ -463,9 +463,9 @@ def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
 
 def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
     """Join nearby consecutive body lines only when geometry supports a soft wrap."""
-    if before.kind in {"heading", "list", "table", "footnote", "caption"}:
+    if before.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
         return False
-    if after.kind in {"heading", "list", "table", "footnote", "caption"}:
+    if after.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
         return False
     if before.page_index != after.page_index or not before.bbox or not after.bbox:
         return False
