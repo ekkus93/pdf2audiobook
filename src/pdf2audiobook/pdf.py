@@ -269,7 +269,7 @@ def _footnote_line_indices(
             or size <= 0 or size > 0.78 * body_size
             or bounds[1] < page_height * 0.70
             or _inside_table(tuple(bounds), table_regions)
-            or not re.match(r"^(?:\\d{1,2}[.)]?|[*†‡])\\s+\\S", line["text"])
+            or not re.match(r"^(?:\d{1,2}[.)]?|[*†‡])\s+\S", line["text"])
         ):
             continue
         # A genuine footnote is typically separated from the main text.
