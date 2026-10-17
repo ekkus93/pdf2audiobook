@@ -24,9 +24,7 @@ def test_equations_require_symbolic_evidence_not_body_prose():
         "The measurement is 4.",
         "",
     ]
-    flags, warnings = equation_line_indices(
-        [{"text": text} for text in raw], page_number=7
-    )
+    flags, warnings = equation_line_indices([{"text": text} for text in raw], page_number=7)
     assert flags == {0, 1, 2}
     assert len(warnings) == 1
     assert "Page 7" in warnings[0]
@@ -68,7 +66,5 @@ def test_pdf_equation_review_preserves_line_text_and_span_order(tmp_path: Path):
     assert [b.kind for b in blocks].count("equation") == 1
     assert blocks[2].kind == "equation"
     assert len(extracted.spans) == len(blocks)
-    assert [(b.id, b.text) for b in blocks] == [
-        (span.id, span.text) for span in extracted.spans
-    ]
+    assert [(b.id, b.text) for b in blocks] == [(span.id, span.text) for span in extracted.spans]
     assert any("displayed equation" in w for w in extracted.warnings)
