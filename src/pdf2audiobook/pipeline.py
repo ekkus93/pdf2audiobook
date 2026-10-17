@@ -167,7 +167,7 @@ def chapter_audio_fingerprint(
         text, settings.tts.provider, settings.tts.kitten.model,
         settings.tts.kitten.voice, settings.tts.kitten.speed,
         settings.tts.pause_ms, settings.tts.bitrate, settings.tts.sample_rate,
-        manifest.title, manifest.author, chapter.title, chapter.number, "mp3-v3",
+        manifest.title, manifest.author, chapter.title, chapter.number, "mp3-v4",
     )
 
 
