@@ -126,10 +126,10 @@
 - [x] P5.03 Validate no-text-loss/duplication invariants and mid-page chapter boundaries.
 - [x] P5.04 Verify manual chapter manifest overrides and chapter-specific regeneration.
 - [ ] P5.05 Test each LLM backend with mocks; perform environment-dependent real-model acceptance when available.
-- [ ] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval.
+- [x] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval.
 - [ ] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
-- [ ] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
-- [ ] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes.
+- [x] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
+- [x] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes.
 - [ ] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps.
 
 **M5 gate:** all ten release acceptance criteria in the spec pass, with evidence; no unchecked implementation-critical subtasks.
@@ -189,3 +189,6 @@
 | 2026-10-17 | 9e999f91ccfcdc5962dad41ecb378f0e91d44dea | P5.03: source provenance coverage tests ensure each unique prose token is retained once across mid-page chapter starts; omit-only-under-audited-edit, reject chapter holes/overlaps, duplicate IDs and mismatched edit anchors | Python CI 39014171482 passed exact head | Scanned and mixed OCR integration remain separate P5.02 scope |
 
 | 2026-10-17 | 6222adf8dc581ed52859fdd75d2a587fa69291c5 | P5.02: offline E2E mixed embedded/image-only and all-image scanned PDFs, auto OCR selection with stubbed recognition, source origin/coverage checks, chapter MP3 output and mixed-PDF sequential folio cleanup | Python CI 39014351118 and 39014449677 passed at exact respective heads | Actual Tesseract recognition-quality/manual acceptance is still open under P1.06 and P5.10; P1.04c retains broader false-positive review |
+
+| 2026-10-17 | 511f3e6dbddfc972d3b28c47d1baf6d1cea8ebce | P5.06: offline acceptance covers defaults, config/env/CLI false precedence, no-LLM, provider selection and remote-content consent denial/approval | Python CI run 39016358142 passed at exact head | Real-model acceptance remains P5.05/P5.10 scope |
+| 2026-10-17 | pending | P5.08/P5.09: added installation, provider setup, TOML example, privacy/troubleshooting, CLI recipes, development workflow and maintainer architecture guide; updated README | Exact-head CI to be checked after commit | Real Kitten/LLM/OCR, uv.lock, typing and long-book acceptance still outstanding |

@@ -2,7 +2,7 @@
 
 Python CLI project for converting PDF books into chapter-separated MP3 audiobooks. Planned features include OCR, chapter detection, optional LLM support for OpenAI/Ollama/llama-server, and Kitten TTS.
 
-**Status:** Early development. See the [specification](docs/PDF2AUDIOBOOK_SPEC.md) and [implementation TODO](docs/PDF2AUDIOBOOK_TODO.md). Conversion is not complete yet.
+**Status:** Working initial CLI implementation with offline end-to-end fixture coverage; real-model acceptance and release hardening remain incomplete. See the [specification](docs/PDF2AUDIOBOOK_SPEC.md), [implementation TODO](docs/PDF2AUDIOBOOK_TODO.md), and [installation/maintainer guide](docs/MAINTAINER_GUIDE.md).
 
 ## Development with uv
 
