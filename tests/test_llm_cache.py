@@ -71,3 +71,71 @@ def test_disabled_cache_and_failed_response_are_not_persisted(tmp_path):
             Failure(), cache_dir=tmp_path, identity="model",
         ).complete_json(instructions="prompt", document_text="source")
     assert not list(tmp_path.glob("*.json"))
+
+
+
+def test_request_budget_counts_misses_but_allows_cache_hits(tmp_path):
+    from pdf2audiobook.errors import LLMError
+
+    source = "Private book passage"
+    report = tmp_path / "reports" / "llm_usage.json"
+    provider = Stub()
+    worker = CachedLLMProvider(
+        provider, cache_dir=tmp_path / "cache", identity="model",
+        max_requests=1, usage_report=report,
+    )
+    assert worker.complete_json(instructions="classify", document_text=source) == {
+        "headings": []
+    }
+    assert worker.complete_json(instructions="classify", document_text=source) == {
+        "headings": []
+    }
+    with pytest.raises(LLMError, match="request budget exhausted"):
+        worker.complete_json(instructions="classify", document_text="Different passage")
+    assert provider.calls == 1
+    record = json.loads(report.read_text(encoding="utf-8"))
+    assert record["requests_started"] == 1
+    assert record["cache_hits"] == 1
+    assert record["cache_misses"] == 2
+    assert record["max_requests"] == 1
+    assert source not in report.read_text(encoding="utf-8")
+    assert "classify" not in report.read_text(encoding="utf-8")
+
+
+def test_request_budget_counts_failed_provider_attempts(tmp_path):
+    from pdf2audiobook.errors import LLMError
+
+    class FailingProvider:
+        def __init__(self):
+            self.calls = 0
+
+        def complete_json(self, *, instructions, document_text):
+            self.calls += 1
+            raise LLMError("offline")
+
+    provider = FailingProvider()
+    worker = CachedLLMProvider(
+        provider, cache_dir=tmp_path / "cache", identity="model",
+        enabled=False, max_requests=1, usage_report=tmp_path / "usage.json",
+    )
+    with pytest.raises(LLMError, match="offline"):
+        worker.complete_json(instructions="x", document_text="secret")
+    with pytest.raises(LLMError, match="request budget exhausted"):
+        worker.complete_json(instructions="x", document_text="secret")
+    assert provider.calls == 1
+    assert json.loads((tmp_path / "usage.json").read_text())["requests_started"] == 1
+
+
+def test_request_budget_config_env_and_validation():
+    from pdf2audiobook.config import load_settings
+    from pdf2audiobook.errors import ConfigError
+
+    settings, sources = load_settings(
+        no_config=True, environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "2"},
+    )
+    assert settings.llm.max_requests == 2
+    assert sources["llm.max_requests"] == "env:PDF2AUDIOBOOK_LLM_MAX_REQUESTS"
+    with pytest.raises(ConfigError, match="max_requests"):
+        load_settings(
+            no_config=True, environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "0"},
+        )

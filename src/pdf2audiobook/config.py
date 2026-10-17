@@ -52,6 +52,7 @@ class LLM(ConfigModel):
     max_context_tokens: int = Field(default=16384, ge=512)
     chunk_tokens: int = Field(default=4000, ge=100)
     max_retries: int = Field(default=3, ge=0, le=15)
+    max_requests: int | None = Field(default=None, ge=1)
     structure: bool = True
     cleanup: bool = True
     classification: bool = True
@@ -112,6 +113,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_OCR_DPI": ("pdf", "ocr_dpi"),
     "PDF2AUDIOBOOK_LLM_ENABLED": ("llm", "enabled"),
     "PDF2AUDIOBOOK_LLM_PROVIDER": ("llm", "provider"),
+    "PDF2AUDIOBOOK_LLM_MAX_REQUESTS": ("llm", "max_requests"),
     "PDF2AUDIOBOOK_LLM_MODEL": ("llm", "@selected", "model"),
     "PDF2AUDIOBOOK_LLM_URL": ("llm", "@selected", "base_url"),
     "PDF2AUDIOBOOK_ALLOW_REMOTE_CONTENT": ("llm", "allow_remote_content"),

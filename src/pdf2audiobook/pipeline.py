@@ -128,6 +128,8 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                         settings.llm.chunk_tokens,
                     ),
                     enabled=settings.cache.enabled and settings.general.resume,
+                    max_requests=settings.llm.max_requests,
+                    usage_report=folder / "reports" / "llm_usage.json",
                 )
                 if settings.llm.structure:
                     llm_ids, warnings = detect_llm_headings(source_blocks, worker)
