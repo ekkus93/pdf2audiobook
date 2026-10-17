@@ -70,3 +70,16 @@ def test_budget_guard_rejects_second_request(tmp_path):
     with pytest.raises(LLMError, match='request budget'):
         budget.complete_json(instructions='task', document_text='B')
     assert provider.calls == 1
+
+
+def test_token_ceiling_records_response_that_crosses_limit(tmp_path):
+    provider = Metered()
+    budget = CachedLLMProvider(
+        provider, cache_dir=tmp_path / 'cache',
+        identity='model', ledger_path=tmp_path / 'budget.sqlite3',
+        max_reported_tokens=75,
+    )
+    budget.complete_json(instructions='task', document_text='A')
+    with pytest.raises(LLMError, match='token budget'):
+        budget.complete_json(instructions='task', document_text='B')
+    assert BookLLMBudgetLedger(tmp_path / 'budget.sqlite3').totals()['reported_tokens'] == 100
