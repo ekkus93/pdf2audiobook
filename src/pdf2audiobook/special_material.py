@@ -28,12 +28,15 @@ def _valid_box(box: object) -> tuple[float, float, float, float] | None:
             return None
     if len(box) != 4:
         return None
-    if any(
-        isinstance(v, bool) or not isinstance(v, (int, float))
-        or not math.isfinite(v) for v in box
-    ):
-        return None
-    x0, y0, x1, y1 = (float(v) for v in box)
+    coordinates: list[float] = []
+    for value in box:
+        if (
+            isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+        ):
+            return None
+        coordinates.append(float(value))
+    x0, y0, x1, y1 = coordinates
     if x1 <= x0 or y1 <= y0:
         return None
     return (x0, y0, x1, y1)
