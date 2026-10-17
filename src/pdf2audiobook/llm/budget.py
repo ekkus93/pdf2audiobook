@@ -126,7 +126,10 @@ class BookLLMBudgetLedger:
                     "VALUES (?, ?, 'pending')",
                     (request_hash, provider_hash),
                 )
-                return int(cursor.lastrowid)
+                reservation_id = cursor.lastrowid
+                if reservation_id is None:
+                    raise LLMError("LLM budget reservation did not return a row ID")
+                return reservation_id
         except (sqlite3.Error, InvalidOperation) as exc:
             raise LLMError("Cannot reserve per-book LLM budget") from exc
 
@@ -134,23 +137,31 @@ class BookLLMBudgetLedger:
         self, call_id: int, *, usage: dict | None,
         input_rate: float | None, output_rate: float | None,
     ) -> None:
-        known = (
-            isinstance(usage, dict)
-            and all(
-                isinstance(usage.get(key), int)
-                and not isinstance(usage[key], bool)
-                and usage[key] >= 0
-                for key in ("prompt_tokens", "completion_tokens", "total_tokens")
-            )
-            and usage["total_tokens"] >= (
-                usage["prompt_tokens"] + usage["completion_tokens"]
-            )
-        )
+        # Validate each provider counter independently before using any of
+        # them for persistent accounting. A failed or malformed response is
+        # deliberately settled as unknown rather than undercounted.
+        verified: dict[str, int] | None = None
+        if isinstance(usage, dict):
+            prompt = usage.get("prompt_tokens")
+            completion = usage.get("completion_tokens")
+            total = usage.get("total_tokens")
+            if (
+                isinstance(prompt, int) and not isinstance(prompt, bool)
+                and isinstance(completion, int) and not isinstance(completion, bool)
+                and isinstance(total, int) and not isinstance(total, bool)
+                and prompt >= 0 and completion >= 0
+                and total >= prompt + completion
+            ):
+                verified = {
+                    "prompt_tokens": prompt,
+                    "completion_tokens": completion,
+                    "total_tokens": total,
+                }
         price = None
-        if known and input_rate is not None and output_rate is not None:
+        if verified is not None and input_rate is not None and output_rate is not None:
             price = str((
-                Decimal(usage["prompt_tokens"]) * Decimal(str(input_rate))
-                + Decimal(usage["completion_tokens"]) * Decimal(str(output_rate))
+                Decimal(verified["prompt_tokens"]) * Decimal(str(input_rate))
+                + Decimal(verified["completion_tokens"]) * Decimal(str(output_rate))
             ) / Decimal(1_000_000))
         try:
             with self._connect() as connection:
@@ -159,10 +170,10 @@ class BookLLMBudgetLedger:
                     "UPDATE calls SET status=?, prompt_tokens=?, completion_tokens=?, "
                     "total_tokens=?, estimated_usd=? WHERE id=? AND status='pending'",
                     (
-                        "complete" if known else "unknown",
-                        usage["prompt_tokens"] if known else None,
-                        usage["completion_tokens"] if known else None,
-                        usage["total_tokens"] if known else None,
+                        "complete" if verified is not None else "unknown",
+                        verified["prompt_tokens"] if verified is not None else None,
+                        verified["completion_tokens"] if verified is not None else None,
+                        verified["total_tokens"] if verified is not None else None,
                         price, call_id,
                     ),
                 )
