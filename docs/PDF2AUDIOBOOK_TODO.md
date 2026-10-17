@@ -110,7 +110,7 @@
   - [x] P4.03a Produce playable, deterministic, zero-padded chapter MP3 filenames.
   - [x] P4.03b Apply configurable inter-chunk pauses, suitable default bitrate and correct chapter order.
   - [x] P4.03c Add ID3 book/author/chapter title/track tags, optional cover artwork.
-- [ ] P4.04 Track per-chunk progress, checksums, cache keys and completion; persist atomically.
+- [x] P4.04 Track per-chunk progress, checksums, cache keys and completion; persist atomically.
   - [x] P4.04a Implement --resume/--no-resume and --force with precise cache invalidation.
   - [x] P4.04b Restart interrupted conversion without regenerating validated completed audio chunks.
   - [x] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts.
@@ -177,3 +177,5 @@
 | 2026-10-16 | 76994bba8789e692051ea136b1e5da2aa9c0cb51 | P0.02a: typed domain error codes now produce consistent machine-readable JSON stderr diagnostics for --json commands; human-readable CLI errors retained | Python CI 38997597162 passed exact head; JSON CLI and domain exit-code regression tests | Structured logging/redaction and verbose/quiet controls remain open under P0.02b |
 
 | 2026-10-16 | ab17301c88325930951be75dab165155081c1d9f | P4.04a: verified --resume/--no-resume/--force chapter cache policy, voice/model/speed PCM invalidation, and MP3 fingerprint invalidation for audio settings plus book/chapter ID3 metadata; metadata-aware MP3 fingerprint bumped to v3 | Python CI 38997774864, 38997861361 and 38997928419 passed at exact respective heads | Full P4.04 per-chunk progress manifest remains open; real Kitten model acceptance pending |
+
+| 2026-10-17 | af48ec15e026e5ba8d395babc4870cf99132cf74 | P4.04: per-chapter atomic, text-free TTS chunk progress ledger (cache keys, WAV bytes, SHA-256, pending/completed/failed states); pipeline wiring and restart/corruption/cache-invalidation tests | Python CI 39013122952 passed at exact head (lint, tests) | A full real-model Kitten acceptance remains pending; ledger does not bypass WAV checksum verification |
