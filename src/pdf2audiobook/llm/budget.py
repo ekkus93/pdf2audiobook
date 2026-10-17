@@ -42,6 +42,16 @@ class BookLLMBudgetLedger:
 
     @staticmethod
     def _stats(connection: sqlite3.Connection) -> dict:
+        # Fail closed on malformed/corrupted ledgers rather than undercounting.
+        invalid = connection.execute(
+            "SELECT COUNT(*) FROM calls WHERE status NOT IN ('pending','complete','unknown') "
+            "OR (status='complete' AND (prompt_tokens IS NULL OR "
+            "completion_tokens IS NULL OR total_tokens IS NULL)) "
+            "OR prompt_tokens < 0 OR completion_tokens < 0 OR total_tokens < 0 "
+            "OR (status='complete' AND total_tokens < prompt_tokens + completion_tokens)"
+        ).fetchone()[0]
+        if invalid:
+            raise LLMError("Invalid per-book LLM budget ledger entries")
         row = connection.execute(
             "SELECT COUNT(*), "
             "COALESCE(SUM(CASE WHEN status != 'complete' THEN 1 ELSE 0 END), 0), "
@@ -54,7 +64,10 @@ class BookLLMBudgetLedger:
         costs = connection.execute(
             "SELECT estimated_usd FROM calls WHERE estimated_usd IS NOT NULL"
         ).fetchall()
-        total_cost = sum((Decimal(item[0]) for item in costs), Decimal(0))
+        values = [Decimal(item[0]) for item in costs]
+        if any(not amount.is_finite() or amount < 0 for amount in values):
+            raise LLMError("Invalid per-book LLM cost entries")
+        total_cost = sum(values, Decimal(0))
         return {
             "requests_started": row[0],
             "unresolved_requests": row[1],
