@@ -112,10 +112,10 @@
   - [x] P4.03c Add ID3 book/author/chapter title/track tags, optional cover artwork.
 - [ ] P4.04 Track per-chunk progress, checksums, cache keys and completion; persist atomically.
   - [ ] P4.04a Implement --resume/--no-resume and --force with precise cache invalidation.
-  - [ ] P4.04b Restart interrupted conversion without regenerating validated completed audio chunks.
+  - [x] P4.04b Restart interrupted conversion without regenerating validated completed audio chunks.
   - [x] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts.
 - [x] P4.05 Add mocked TTS tests using synthetic sine/audio fixtures; optional actual Kitten model integration test.
-- [ ] P4.06 Decode all generated MP3 fixtures with FFmpeg and inspect expected tags/durations.
+- [x] P4.06 Decode all generated MP3 fixtures with FFmpeg and inspect expected tags/durations.
 
 **M4 gate:** one playable, tagged MP3 per approved chapter; resumes cleanly after interruption.
 
@@ -169,3 +169,5 @@
 | 2026-10-16 | e4d1c3cecf05de75cf48407a9d763baad142dc14 | Added non-destructive extraction review warnings for suspicious OCR output and possible side-by-side reading order; offline tests cover normal and ambiguous cases | Python CI 38898782355 passed | Heuristics cannot substitute for engine OCR confidence or full two-column reconstruction |
 | 2026-10-16 | 9af6839fbaab155d866255afa80f2316d8836ea6 | P1.03: integrated conservative two-column ordering into embedded/OCR extraction, preserving span/block provenance; single-column and ambiguous layouts retain original order with review warnings. Bumped analysis fingerprint to v4 so stale manifests are not silently reused | Python CI runs 38959880545 and 38960031431 passed at exact respective heads; synthetic two-column extraction, OCR, single-column and existing reflow regression tests | Dense tables, sidebars and ambiguous multi-column pages remain review-required; approved manifests cannot be automatically rewritten |
 | 2026-10-16 | edb7907a51117bca38eed309a0d4ba69c820e630 | P1.05 partial: high-confidence small-type footnotes classified as typed source blocks; warn/inline preserve text; explicit omit creates source-anchored accepted CleanupEdits, with false-positive guards for numbered body lines | Python CI 38989706523 passed at exact head; synthetic extraction and policy regression tests | Footnote continuation/anchor relocation, figure captions, formula narration and full special-material acceptance remain open |
+
+| 2026-10-16 | ae18259a3b3b7b1637ac57d17802d8a69b287447 | P4.04b: verified interrupted synthesis checkpoints and fresh-provider resume without regenerating valid WAV chunks; verified --no-resume regenerates all chunks. P4.06: qualified FFmpeg-decoded MP3 fixtures with sample-rate/duration/ID3 assertions (prior commit b381c2d) | Python CI 38993383868 passed exact head; Python CI 38990016197 passed exact head | Full P4.04 chunk progress manifest and P4.04a precise invalidation remain open; actual Kitten model acceptance pending |
