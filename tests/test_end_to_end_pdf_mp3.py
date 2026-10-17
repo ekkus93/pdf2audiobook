@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from mutagen.mp3 import MP3
 
-from pdf2audiobook.config import General, LLM, Pdf, Settings
+from pdf2audiobook.config import LLM, General, Pdf, Settings
 from pdf2audiobook.pipeline import convert_book
 
 class FakeKitten:
