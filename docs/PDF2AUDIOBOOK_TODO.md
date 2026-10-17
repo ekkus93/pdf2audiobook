@@ -69,7 +69,7 @@
 - [ ] P2.03 Persist editable chapter manifest plus per-chapter UTF-8 text files and inspection report.
   - [x] P2.03a Implement manifest override validation and preserve user edits across reruns.
   - [x] P2.03b Support inspect, analyze, --dry-run, --json, --chapter and --chapter-range.
-- [ ] P2.04 Test bookmark, no-TOC, TOC-offset, prose heading and chapter-mid-page fixtures.
+- [x] P2.04 Test bookmark, no-TOC, TOC-offset, prose heading and chapter-mid-page fixtures.
 
 **M2 gate:** correct, auditable chapter boundaries; authoritatively editable pre-TTS analysis.
 
@@ -192,3 +192,5 @@
 
 | 2026-10-17 | 511f3e6dbddfc972d3b28c47d1baf6d1cea8ebce | P5.06: offline acceptance covers defaults, config/env/CLI false precedence, no-LLM, provider selection and remote-content consent denial/approval | Python CI run 39016358142 passed at exact head | Real-model acceptance remains P5.05/P5.10 scope |
 | 2026-10-17 | pending | P5.08/P5.09: added installation, provider setup, TOML example, privacy/troubleshooting, CLI recipes, development workflow and maintainer architecture guide; updated README | Exact-head CI to be checked after commit | Real Kitten/LLM/OCR, uv.lock, typing and long-book acceptance still outstanding |
+
+| 2026-10-17 | bbe64630bec91c0e843fd4e418194e5c0f66ee4a | P2.04: unique nearby TOC-offset title matching, conservative typographic prose headings, duplicate-title ambiguity rejection, no-TOC fallback and mid-page boundary regression coverage | Python CI 39017522174 passed at exact head | TOC correction bounded to ±2 physical pages; unresolvable/duplicate matches remain review-required |
