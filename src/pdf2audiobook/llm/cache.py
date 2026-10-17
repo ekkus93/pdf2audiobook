@@ -1,6 +1,7 @@
 """Atomic content-addressed cache for LLM JSON responses (always revalidated by callers)."""
 
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,10 @@ class CachedLLMProvider:
     def __init__(
         self, provider: Any, *, cache_dir: Path, identity: str, enabled: bool = True,
         max_requests: int | None = None, usage_report: Path | None = None,
+        max_reported_tokens: int | None = None,
+        max_estimated_cost_usd: float | None = None,
+        input_cost_usd_per_million_tokens: float | None = None,
+        output_cost_usd_per_million_tokens: float | None = None,
     ):
         self.provider = provider
         self.cache_dir = cache_dir
@@ -19,9 +24,50 @@ class CachedLLMProvider:
         self.enabled = enabled
         self.max_requests = max_requests
         self.usage_report = usage_report
+        self.max_reported_tokens = max_reported_tokens
+        self.max_estimated_cost_usd = max_estimated_cost_usd
+        self.input_cost_usd_per_million_tokens = input_cost_usd_per_million_tokens
+        self.output_cost_usd_per_million_tokens = output_cost_usd_per_million_tokens
+        self.usage_verified = False
         self.hits = 0
         self.misses = 0
         self.requests_started = 0
+
+    def _reported_cost_usd(self) -> float | None:
+        usage = getattr(self.provider, "total_usage", {})
+        if not self.usage_verified or not isinstance(usage, dict):
+            return None
+        prompt = usage.get("prompt_tokens")
+        completion = usage.get("completion_tokens")
+        if (
+            not isinstance(prompt, int) or isinstance(prompt, bool)
+            or not isinstance(completion, int) or isinstance(completion, bool)
+            or prompt < 0 or completion < 0
+            or self.input_cost_usd_per_million_tokens is None
+            or self.output_cost_usd_per_million_tokens is None
+        ):
+            return None
+        return float((
+            Decimal(prompt) * Decimal(str(self.input_cost_usd_per_million_tokens))
+            + Decimal(completion) * Decimal(str(self.output_cost_usd_per_million_tokens))
+        ) / Decimal(1_000_000))
+
+    def _check_usage_budget(self) -> None:
+        if self.max_reported_tokens is not None:
+            usage = getattr(self.provider, "total_usage", {})
+            count = usage.get("total_tokens") if isinstance(usage, dict) else None
+            if not self.usage_verified or not isinstance(count, int):
+                if self.requests_started:
+                    raise LLMError("LLM token budget requires provider-reported usage")
+            elif count >= self.max_reported_tokens:
+                raise LLMError("LLM reported token budget reached or exceeded")
+        if self.max_estimated_cost_usd is not None:
+            cost = self._reported_cost_usd()
+            if cost is None:
+                if self.requests_started:
+                    raise LLMError("LLM cost budget requires verified usage and rates")
+            elif cost >= self.max_estimated_cost_usd:
+                raise LLMError("LLM estimated cost budget reached or exceeded")
 
     def _write_usage(self) -> None:
         """Persist counters only, never book text, prompts, credentials or model output."""
@@ -40,6 +86,10 @@ class CachedLLMProvider:
             "cache_misses": self.misses,
             "requests_started": self.requests_started,
             "max_requests": self.max_requests,
+            "max_reported_tokens": self.max_reported_tokens,
+            "max_estimated_cost_usd": self.max_estimated_cost_usd,
+            "estimated_cost_usd": self._reported_cost_usd(),
+            "usage_verified": self.usage_verified,
             "provider_reported_tokens": safe_usage,
             "scope": "current_analysis_run",
         })
@@ -64,6 +114,7 @@ class CachedLLMProvider:
             except (OSError, ValueError, UnicodeError, TypeError):
                 pass
         self.misses += 1
+        self._check_usage_budget()
         if self.max_requests is not None and self.requests_started >= self.max_requests:
             self._write_usage()
             raise LLMError("LLM request budget exhausted; increase llm.max_requests")
@@ -78,6 +129,15 @@ class CachedLLMProvider:
             self._write_usage()
         if not isinstance(reply, dict):
             raise ValueError("LLM cache requires a JSON-object response")
+        last = getattr(self.provider, "last_usage", None)
+        self.usage_verified = (
+            isinstance(last, dict)
+            and isinstance(last.get("total_tokens"), int)
+            and not isinstance(last.get("total_tokens"), bool)
+            and last["total_tokens"] >= 0
+        )
+        self._write_usage()
+        self._check_usage_budget()
         if self.enabled:
             write_json(target, {"schema_version": 1, "fingerprint": key, "response": reply})
         return reply

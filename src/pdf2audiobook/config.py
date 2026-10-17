@@ -53,6 +53,10 @@ class LLM(ConfigModel):
     chunk_tokens: int = Field(default=4000, ge=100)
     max_retries: int = Field(default=3, ge=0, le=15)
     max_requests: int | None = Field(default=None, ge=1)
+    max_reported_tokens: int | None = Field(default=None, ge=1)
+    max_estimated_cost_usd: float | None = Field(default=None, gt=0)
+    input_cost_usd_per_million_tokens: float | None = Field(default=None, ge=0)
+    output_cost_usd_per_million_tokens: float | None = Field(default=None, ge=0)
     structure: bool = True
     cleanup: bool = True
     classification: bool = True
@@ -114,6 +118,8 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_LLM_ENABLED": ("llm", "enabled"),
     "PDF2AUDIOBOOK_LLM_PROVIDER": ("llm", "provider"),
     "PDF2AUDIOBOOK_LLM_MAX_REQUESTS": ("llm", "max_requests"),
+    "PDF2AUDIOBOOK_LLM_MAX_REPORTED_TOKENS": ("llm", "max_reported_tokens"),
+    "PDF2AUDIOBOOK_LLM_MAX_ESTIMATED_COST_USD": ("llm", "max_estimated_cost_usd"),
     "PDF2AUDIOBOOK_LLM_MODEL": ("llm", "@selected", "model"),
     "PDF2AUDIOBOOK_LLM_URL": ("llm", "@selected", "base_url"),
     "PDF2AUDIOBOOK_ALLOW_REMOTE_CONTENT": ("llm", "allow_remote_content"),
@@ -200,6 +206,13 @@ def load_settings(
         result = Settings.model_validate(data)
     except ValidationError as exc:
         raise ConfigError(f"invalid configuration: {exc}") from exc
+    if result.llm.max_estimated_cost_usd is not None and (
+        result.llm.input_cost_usd_per_million_tokens is None
+        or result.llm.output_cost_usd_per_million_tokens is None
+    ):
+        raise ConfigError(
+            "max_estimated_cost_usd requires explicit input/output token prices"
+        )
     if result.llm.chunk_tokens >= result.llm.max_context_tokens:
         raise ConfigError("llm.chunk_tokens must be smaller than llm.max_context_tokens")
     return result, sources
