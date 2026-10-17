@@ -373,10 +373,21 @@ def _ocr_engine_version() -> str:
 
 
 def _ocr_page_lines(page: fitz.Page, settings: PdfSettings) -> list[dict]:
-    textpage = page.get_textpage_ocr(
-        language=settings.ocr_language, dpi=settings.ocr_dpi, full=True
-    )
-    return _lines(page, textpage=textpage)
+    # OCR is performed in the PDF page's unrotated coordinate system, just
+    # like embedded text and span bboxes. PyMuPDF's OCR otherwise rasterizes
+    # the page rotation and can pass sideways text to Tesseract, which returns
+    # plausible-looking garbage rather than a reliable transcription.
+    rotation = page.rotation
+    try:
+        if rotation:
+            page.set_rotation(0)
+        textpage = page.get_textpage_ocr(
+            language=settings.ocr_language, dpi=settings.ocr_dpi, full=True
+        )
+        return _lines(page, textpage=textpage)
+    finally:
+        if rotation:
+            page.set_rotation(rotation)
 
 
 def _valid_cached_lines(data: object) -> list[dict] | None:
