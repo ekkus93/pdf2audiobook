@@ -11,7 +11,12 @@ from pdf2audiobook.document.structure import (
     render_chapter_texts,
 )
 from pdf2audiobook.errors import AudioError
-from pdf2audiobook.llm import create_provider, detect_llm_headings, propose_llm_cleanup
+from pdf2audiobook.llm import (
+    create_provider,
+    detect_llm_headings,
+    propose_llm_cleanup,
+    propose_llm_narration,
+)
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
@@ -96,7 +101,9 @@ def analyze_book(source: Path, settings: Settings) -> Path:
             "Footnotes retained at their PDF reading positions; "
             "anchor relocation is not yet supported"
         )
-    if settings.llm.enabled and (settings.llm.structure or settings.llm.cleanup):
+    if settings.llm.enabled and (
+        settings.llm.structure or settings.llm.cleanup or settings.llm.narration
+    ):
         # Only anchored proposals are accepted. OCR cleanup requires manual approval.
         source_blocks = [
             block for block in extracted.blocks if block.id not in omitted
@@ -108,6 +115,20 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                 suggestions, edit_warnings = propose_llm_cleanup(source_blocks, provider)
                 edits.extend(suggestions)
                 warnings.extend(edit_warnings)
+            if settings.llm.narration:
+                spoken_suggestions, spoken_warnings = propose_llm_narration(
+                    source_blocks, provider,
+                )
+                warnings.extend(spoken_warnings)
+                # Deliberately separate from approved CleanupEdits and chapter
+                # texts. This report is advisory and never changes audio.
+                write_json(folder / "reports" / "narration_suggestions.json", {
+                    "schema_version": 1,
+                    "requires_manual_review": True,
+                    "suggestions": [
+                        item.model_dump() for item in spoken_suggestions
+                    ],
+                })
     chapters, chapter_warnings = propose_chapters(
         extracted.blocks, omitted, extracted.toc, settings.chapters,
         extra_heading_ids=llm_ids,
