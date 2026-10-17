@@ -54,6 +54,7 @@ def test_default_model_failure_does_not_silently_fallback(tmp_path, monkeypatch)
 
 def test_explicit_fallback_discards_llm_and_retains_raw_transcript(tmp_path, monkeypatch):
     import json
+
     import pdf2audiobook.pipeline as pipeline
 
     monkeypatch.setattr(pipeline, "create_provider", lambda _: FailingModel())
