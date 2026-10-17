@@ -12,7 +12,7 @@ from pdf2audiobook.document.structure import (
 )
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.llm import create_provider, detect_llm_headings, propose_llm_cleanup
-from pdf2audiobook.models import BookManifest, CleanupEdit
+from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.tts import KittenProvider
 from pdf2audiobook.workspace import (
@@ -158,6 +158,19 @@ def select_chapters(
     return chosen
 
 
+
+def chapter_audio_fingerprint(
+    text: str, settings: Settings, manifest: BookManifest, chapter: Chapter,
+) -> str:
+    """Key the final MP3 by audible content, encoding, and its ID3 metadata."""
+    return fingerprint(
+        text, settings.tts.provider, settings.tts.kitten.model,
+        settings.tts.kitten.voice, settings.tts.kitten.speed,
+        settings.tts.pause_ms, settings.tts.bitrate, settings.tts.sample_rate,
+        manifest.title, manifest.author, chapter.title, chapter.number, "mp3-v3",
+    )
+
+
 def convert_book(
     source: Path, settings: Settings, chapter: int | None = None,
     chapter_range: tuple[int, int] | None = None, *, force: bool = False,
@@ -174,11 +187,7 @@ def convert_book(
         outputs.append(output)
         text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
         text = text_file.read_text(encoding="utf-8")
-        identity = fingerprint(
-            text, settings.tts.kitten.model, settings.tts.kitten.voice,
-            settings.tts.kitten.speed, settings.tts.pause_ms,
-            settings.tts.bitrate, settings.tts.sample_rate, "mp3-v2"
-        )
+        identity = chapter_audio_fingerprint(text, settings, manifest, item)
         record = output.with_suffix(".cache.json")
         cached = False
         if (settings.general.resume and not force and output.is_file()
