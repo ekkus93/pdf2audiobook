@@ -7,7 +7,7 @@ import fitz
 from typer.testing import CliRunner
 
 from pdf2audiobook.cli import app
-from pdf2audiobook.config import General, LLM, Pdf, Settings
+from pdf2audiobook.config import LLM, General, Pdf, Settings
 from pdf2audiobook.pipeline import analyze_book
 from pdf2audiobook.workspace import read_manifest
 
