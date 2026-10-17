@@ -186,8 +186,23 @@ def pagination_cleanup(
             numbered[band].append(
                 (block.page_index, parsed[0], position, parsed[1])
             )
+    # More than one standalone numeral in a single margin band on a page
+    # is ambiguous (often a numbered list or page-local references), not
+    # reliable evidence of one running folio. Do not use those numerals to
+    # corroborate a sequence on adjacent pages either.
+    numeric_counts: dict[tuple[str, int], int] = defaultdict(int)
+    for band, entries in numbered.items():
+        for page, _value, _position, _notation in entries:
+            numeric_counts[(band, page)] += 1
+    ambiguous_numeric_bands = {
+        key for key, count in numeric_counts.items() if count > 1
+    }
     sequential_pages: dict[str, set[int]] = defaultdict(set)
     for band, entries in numbered.items():
+        entries = [
+            entry for entry in entries
+            if (band, entry[0]) not in ambiguous_numeric_bands
+        ]
         by_key: dict[tuple[int, int, str], list[float]] = defaultdict(list)
         for page, value, position, notation in entries:
             by_key[(page, value, notation)].append(position)
@@ -214,7 +229,11 @@ def pagination_cleanup(
     for block, band in candidates.values():
         value = " ".join(block.text.split()).casefold()
         is_number = _number_value(block.text.strip()) is not None
-        confirmed_number = is_number and block.page_index in sequential_pages[band]
+        confirmed_number = (
+            is_number
+            and (band, block.page_index) not in ambiguous_numeric_bands
+            and block.page_index in sequential_pages[band]
+        )
         repeated = len(text_occurrences[(band, value)]) >= 2
         if is_number and confirmed_number and settings.remove_page_numbers:
             reason = "sequential/repeated page number"
