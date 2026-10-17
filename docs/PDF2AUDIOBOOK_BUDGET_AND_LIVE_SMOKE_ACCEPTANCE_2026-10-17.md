@@ -22,3 +22,15 @@ Real-model acceptance remains open. On a host with the relevant services or API 
 ## Checklist reconciliation
 
 P3.06 has implementation and offline CI evidence sufficient for its technical acceptance criteria. Its checkbox in `docs/PDF2AUDIOBOOK_TODO.md` still needs to be reconciled if not already checked on the current master. P3.08 remains unchecked until live backend evidence exists.
+
+## P4.01 TTS provider protocol acceptance
+
+The `TTSProvider` runtime-checkable protocol now includes model discovery,
+voice discovery, engine health, sample rate, maximum text chunk length and
+synthesis. The Kitten adapter implements the capability surface and rejects
+oversized chunks. Existing lazy import/model-loading behavior is preserved.
+Offline Kitten fake-model acceptance passed in Python CI run 39024343721 at
+exact head `dd4a0b67a05d1d39e4263f72cf5679e85a8b2fba`.
+Real Kitten model download, inference quality and audio hardware qualification
+remain external acceptance tasks. Reconcile the P4.01 parent checkbox in the
+canonical TODO after reviewing the CI evidence.
