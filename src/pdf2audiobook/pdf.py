@@ -288,6 +288,40 @@ def _footnote_line_indices(
         if preceding_bottom is None or bounds[1] - preceding_bottom < max(18.0, body_size * 1.5):
             continue
         result.add(index)
+
+    # Extend confirmed footnotes through adjacent, same-column small-type
+    # continuation lines only. Never infer a note from small text alone.
+    for anchor_index in sorted(result):
+        anchor_box = lines[anchor_index]["bbox"]
+        previous_box = anchor_box
+        for next_index in range(anchor_index + 1, len(lines)):
+            if next_index in result:
+                break
+            item = lines[next_index]
+            bounds, size, text = item.get("bbox"), item.get("size"), item.get("text")
+            if (
+                not bounds or len(bounds) != 4
+                or not isinstance(size, (int, float)) or isinstance(size, bool)
+                or not math.isfinite(float(size))
+                or size <= 0 or size > 0.78 * body_size
+                or not isinstance(text, str) or not text.strip()
+                or bounds[1] < page_height * 0.70
+                or _inside_table(tuple(bounds), table_regions)
+            ):
+                break
+            # A fresh number/symbol needs separate anchor evidence.
+            if re.match(r"^(?:\d{1,2}[.)]?|[*†‡])\s+\S", text):
+                break
+            gap = bounds[1] - previous_box[3]
+            overlap = min(bounds[2], previous_box[2]) - max(bounds[0], previous_box[0])
+            if (
+                not -2.0 <= gap <= max(8.0, 0.8 * body_size)
+                or overlap <= 0
+                or abs(bounds[0] - anchor_box[0]) > max(24.0, 2 * body_size)
+            ):
+                break
+            result.add(next_index)
+            previous_box = bounds
     return result
 
 
@@ -519,7 +553,7 @@ def extract_pdf(
             if footnote_indices:
                 warnings.append(
                     f"Page {page_index + 1}: {len(footnote_indices)} "
-                    "likely footnote anchor(s) classified; verify against PDF"
+                    "likely footnote line(s) classified; verify against PDF"
                 )
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
