@@ -11,8 +11,9 @@ import subprocess
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
-import fitz
+import fitz  # type: ignore[import-untyped]
 
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
@@ -508,7 +509,7 @@ def extract_pdf(
                     f"Page {page_index + 1}: damaged embedded text layer; "
                     "using OCR instead of unreliable selectable text"
                 )
-            origin = "embedded"
+            origin: Literal["embedded", "ocr"] = "embedded"
             if use_ocr:
                 try:
                     page_lines = _cached_ocr_lines(
@@ -569,7 +570,17 @@ def extract_pdf(
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
                 bounds = line["bbox"]
-                bbox = tuple(float(n) for n in bounds) if bounds else None
+                bbox: tuple[float, float, float, float] | None = None
+                if isinstance(bounds, (tuple, list)) and len(bounds) == 4:
+                    if all(
+                        isinstance(value, (int, float))
+                        and not isinstance(value, bool)
+                        and math.isfinite(value)
+                        for value in bounds
+                    ):
+                        x0, y0, x1, y1 = (float(value) for value in bounds)
+                        if x0 <= x1 and y0 <= y1:
+                            bbox = (x0, y0, x1, y1)
                 spans.append(
                     SourceSpan(
                         id=ident,
