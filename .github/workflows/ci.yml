@@ -32,3 +32,15 @@ jobs:
           uv run --extra dev pdf2audiobook --help
           uv run --extra dev pdf2audiobook config show --json
           uv run --extra dev pdf2audiobook doctor --json
+      - name: Installed-wheel clean environment smoke
+        run: |
+          uv build --wheel --out-dir "$RUNNER_TEMP/pdf2audiobook-wheelhouse"
+          uv venv --python 3.11 "$RUNNER_TEMP/pdf2audiobook-fresh"
+          uv pip install --python "$RUNNER_TEMP/pdf2audiobook-fresh/bin/python" "$RUNNER_TEMP"/pdf2audiobook-wheelhouse/pdf2audiobook-*.whl
+          (
+            cd "$RUNNER_TEMP"
+            "$RUNNER_TEMP/pdf2audiobook-fresh/bin/python" -c 'import pdf2audiobook; from pdf2audiobook.cli import app; assert app is not None'
+            "$RUNNER_TEMP/pdf2audiobook-fresh/bin/pdf2audiobook" --help
+            "$RUNNER_TEMP/pdf2audiobook-fresh/bin/pdf2audiobook" config show --no-config --json
+            "$RUNNER_TEMP/pdf2audiobook-fresh/bin/pdf2audiobook" doctor --no-config --json
+          )
