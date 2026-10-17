@@ -20,7 +20,7 @@ def _safe(value: object) -> str:
 
 class EventFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
-        data = {"level": record.levelname.lower(), "event": "unstructured_message_redacted"}
+        data: dict[str, object] = {"level": record.levelname.lower(), "event": "unstructured_message_redacted"}
         if isinstance(record.msg, dict):
             data["event"] = _safe(record.msg.get("event"))
             fields = record.msg.get("fields")
