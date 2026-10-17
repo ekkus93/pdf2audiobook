@@ -7,7 +7,6 @@ import pytest
 from pdf2audiobook.audio import split_sentences, synthesize_chunks
 from pdf2audiobook.workspace import digest_file
 
-
 TEXT = ("Alpha " * 40).strip() + ". " + ("Bravo " * 40).strip() + "."
 
 
