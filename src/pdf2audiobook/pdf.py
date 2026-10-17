@@ -133,6 +133,53 @@ def page_review_warnings(
     return warnings
 
 
+def _table_regions(
+    page: fitz.Page, *, page_number: int
+) -> tuple[list[tuple[float, float, float, float]], list[str]]:
+    """Locate high-confidence table rectangles without altering their text.
+
+    The geometry is used only to label contained source blocks for review.
+    Never discard text, synthesize cell descriptions or infer reading order.
+    """
+    detector = getattr(page, "find_tables", None)
+    if not callable(detector):
+        return [], []
+    try:
+        found = detector()
+        boxes = []
+        for table in found.tables:
+            bounds = tuple(float(n) for n in table.bbox)
+            if len(bounds) != 4 or not all(math.isfinite(n) for n in bounds):
+                continue
+            if bounds[2] <= bounds[0] or bounds[3] <= bounds[1]:
+                continue
+            boxes.append(bounds)
+    except Exception:
+        return [], [
+            f"Page {page_number}: table detection unavailable; "
+            "review complex layouts manually"
+        ]
+    if not boxes:
+        return [], []
+    return boxes, [
+        f"Page {page_number}: possible table detected; "
+        "verify cell order and narration; source text preserved"
+    ]
+
+
+def _inside_table(
+    bbox: tuple[float, float, float, float] | None,
+    regions: list[tuple[float, float, float, float]],
+) -> bool:
+    if bbox is None:
+        return False
+    return any(
+        bbox[0] >= x0 - 2 and bbox[1] >= y0 - 2
+        and bbox[2] <= x1 + 2 and bbox[3] <= y1 + 2
+        for x0, y0, x1, y1 in regions
+    )
+
+
 def _special_material_warnings(
     page: fitz.Page, lines: list[dict], *, page_number: int
 ) -> list[str]:
@@ -181,21 +228,6 @@ def _special_material_warnings(
             result.append(
                 f"Page {page_number}: possible small-font footnote or endnote; "
                 "preserved verbatim for review"
-            )
-    # PyMuPDF's vector/text table detector provides a conservative hint,
-    # not a reading-order guarantee. Never drop or rewrite detected cells.
-    find_tables = getattr(page, "find_tables", None)
-    if callable(find_tables):
-        try:
-            if find_tables().tables:
-                result.append(
-                    f"Page {page_number}: possible table detected; "
-                    "verify cell order and narration; source text preserved"
-                )
-        except Exception:
-            result.append(
-                f"Page {page_number}: table detection unavailable; "
-                "review complex layouts manually"
             )
     math_symbols = set("∑∫√≈≤≥∞∂∇∈∉⊂⊆≠∝")
     if any(math_symbols.intersection(line["text"]) for line in lines):
@@ -394,6 +426,11 @@ def extract_pdf(
                     warnings.append(f"Page {page_index + 1}: OCR produced no text")
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
+            # Preserve table cell text and annotate only contained blocks.
+            table_regions, table_warnings = _table_regions(
+                page, page_number=page_index + 1
+            )
+            warnings.extend(table_warnings)
             # Surface non-prose material without changing the raw transcript.
             warnings.extend(
                 _special_material_warnings(
@@ -437,14 +474,16 @@ def extract_pdf(
                         bbox=bbox,
                         font_size=line["size"],
                         order=len(blocks),
-                        kind="heading"
-                        if re.match(
-                            r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
-                            r"introduction|preface|part\s+[\divxlcdm]+)\b",
-                            line["text"],
-                            re.IGNORECASE,
-                        )
-                        else "unknown",
+                        kind=(
+                            "table" if _inside_table(bbox, table_regions)
+                            else "heading" if re.match(
+                                r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
+                                r"introduction|preface|part\s+[\divxlcdm]+)\b",
+                                line["text"],
+                                re.IGNORECASE,
+                            )
+                            else "unknown"
+                        ),
                     )
                 )
         return ExtractedDocument(

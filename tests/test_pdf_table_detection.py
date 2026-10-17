@@ -28,6 +28,8 @@ def test_grid_table_warns_without_dropping_cells(tmp_path: Path):
     assert any("possible table detected" in warning for warning in result.warnings)
     assert all(any(cell in span.text for span in result.spans) for cell in expected)
     assert all(span.origin == "embedded" for span in result.spans)
+    assert sum(block.kind == "table" for block in result.blocks) >= 6
+    assert all(block.span_ids for block in result.blocks if block.kind == "table")
 
 
 def test_prose_page_has_no_table_warning(tmp_path: Path):
@@ -40,3 +42,4 @@ def test_prose_page_has_no_table_warning(tmp_path: Path):
 
     result = extract_pdf(source, Pdf(ocr="never"))
     assert not any("table detected" in warning for warning in result.warnings)
+    assert all(block.kind != "table" for block in result.blocks)
