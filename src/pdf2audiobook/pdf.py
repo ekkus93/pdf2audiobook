@@ -17,8 +17,8 @@ import fitz
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
-from pdf2audiobook.special_material import caption_line_indices
 from pdf2audiobook.reading_order import order_two_columns
+from pdf2audiobook.special_material import caption_line_indices
 from pdf2audiobook.workspace import digest_file, fingerprint, write_json
 
 
