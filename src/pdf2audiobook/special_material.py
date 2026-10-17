@@ -16,7 +16,13 @@ _CAPTION = re.compile(
 
 
 def _valid_box(box: object) -> tuple[float, float, float, float] | None:
-    if not isinstance(box, (list, tuple)) or len(box) != 4:
+    # PyMuPDF drawing rectangles are fitz.Rect iterables, not list/tuple.
+    if not isinstance(box, (list, tuple)):
+        try:
+            box = tuple(box)
+        except (TypeError, ValueError, OverflowError):
+            return None
+    if len(box) != 4:
         return None
     if any(
         isinstance(v, bool) or not isinstance(v, (int, float))
