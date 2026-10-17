@@ -191,9 +191,16 @@ def pagination_cleanup(
     # reliable evidence of one running folio. Do not use those numerals to
     # corroborate a sequence on adjacent pages either.
     numeric_counts: dict[tuple[str, int], int] = defaultdict(int)
-    for band, entries in numbered.items():
-        for page, _value, _position, _notation in entries:
-            numeric_counts[(band, page)] += 1
+    for block in blocks:
+        if block.bbox is None or block.page_index >= len(sizes):
+            continue
+        height = sizes[block.page_index][1]
+        band = (
+            "header" if block.bbox[3] < 0.12 * height else
+            "footer" if block.bbox[1] > 0.88 * height else None
+        )
+        if band and _number_value(block.text.strip()) is not None:
+            numeric_counts[(band, block.page_index)] += 1
     ambiguous_numeric_bands = {
         key for key, count in numeric_counts.items() if count > 1
     }
