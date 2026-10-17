@@ -104,6 +104,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
             "Footnotes retained at their PDF reading positions; "
             "anchor relocation is not yet supported"
         )
+    original_warning_count = len(warnings)
     try:
         if settings.llm.enabled and (
             settings.llm.structure or settings.llm.cleanup
@@ -154,7 +155,9 @@ def analyze_book(source: Path, settings: Settings) -> Path:
         llm_ids.clear()
         edits = [edit for edit in edits if edit.provider != "llm"]
         llm_decisions.clear()
-        warnings = ["LLM provider failed; explicit deterministic fallback used"]
+        warnings = warnings[:original_warning_count] + [
+            "LLM provider failed; explicit deterministic fallback used"
+        ]
         write_json(folder / "reports" / "classification_suggestions.json", {
             "schema_version": 1, "requires_manual_review": True, "labels": [],
         })

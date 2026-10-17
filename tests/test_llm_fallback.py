@@ -78,3 +78,27 @@ def test_fallback_can_only_be_enabled_by_explicit_settings():
     )
     assert enabled.llm.fallback_to_deterministic
     assert src["llm.fallback_to_deterministic"].startswith("env:")
+
+
+def test_fallback_preserves_unrelated_footnote_review_warnings(tmp_path, monkeypatch):
+    import pdf2audiobook.pipeline as pipeline
+    from pdf2audiobook.models import DocumentBlock
+    from pdf2audiobook.pdf import ExtractedDocument
+
+    monkeypatch.setattr(pipeline, "create_provider", lambda _: FailingModel())
+    sample = fixture(tmp_path)
+    fake = ExtractedDocument(
+        title="Book", author=None, toc=[], spans=[],
+        blocks=[
+            DocumentBlock(id="h1", page_index=0, kind="heading", text="Chapter 1"),
+            DocumentBlock(id="f1", page_index=0, kind="footnote",
+                          text="1. Explanatory note retained."),
+        ],
+        page_sizes=[(600, 800)], warnings=[],
+    )
+    monkeypatch.setattr(pipeline, "extract_pdf", lambda *a, **k: fake)
+    options = settings(tmp_path, fallback=True)
+    options.pdf.footnotes = "inline"
+    manifest = read_manifest(analyze_book(sample, options))
+    assert any("Footnotes retained" in warning for warning in manifest.warnings)
+    assert any("explicit deterministic fallback" in warning for warning in manifest.warnings)
