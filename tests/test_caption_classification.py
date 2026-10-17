@@ -21,7 +21,7 @@ def test_caption_requires_explicit_label_and_adjacent_matching_region():
         {"text": "Figure 1 shows the next step.", "bbox": (100, 250, 320, 264)},
         {"text": "Figure 2: A distant square.", "bbox": (100, 440, 300, 454)},
         {"text": "Table 2: Experimental results", "bbox": (100, 500, 330, 515)},
-        {"text": "Table 3: No matching table", "bbox": (100, 610, 330, 625)},
+        {"text": "Table 3: No matching table", "bbox": (100, 710, 330, 725)},
     ]
     result, warnings = caption_line_indices(
         FakePage([(100, 100, 310, 215)]),
