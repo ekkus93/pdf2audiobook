@@ -348,6 +348,7 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
 
 
 @lru_cache(maxsize=1)
+
 def _ocr_engine_version() -> str:
     """Bind cached recognition to the installed Tesseract engine build.
 
@@ -419,8 +420,8 @@ def _valid_cached_lines(data: object) -> list[dict] | None:
                 or abs(num) > 1_000_000
                 for num in bbox
             )
-            or bbox[0] > bbox[2]
-            or bbox[1] > bbox[3]
+            or bbox[0] >= bbox[2]
+            or bbox[1] >= bbox[3]
             or isinstance(size, bool)
             or not isinstance(size, (int, float))
             or not math.isfinite(size)
@@ -466,7 +467,10 @@ def _cached_ocr_lines(
             pass
     lines = _ocr_page_lines(page, settings)
     verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
-    # Empty OCR is not a reusable success: a later retry may recover text.
+    # Invalid fresh OCR must not silently enter the transcript or poison
+    # a future cache hit. An empty result is allowed but never cached.
+    if verified is None:
+        raise ValueError("invalid OCR line geometry or metadata; no cache entry written")
     if verified:
         write_json(target, {"schema_version": 1, "lines": verified})
     return lines
