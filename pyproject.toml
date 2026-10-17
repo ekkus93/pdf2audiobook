@@ -52,6 +52,7 @@ files = [
     "src/pdf2audiobook/llm/smoke.py",
     "src/pdf2audiobook/pdf.py",
     "src/pdf2audiobook/pipeline.py",
+    "src/pdf2audiobook/cli.py",
 ]
 check_untyped_defs = true
 warn_unused_ignores = true
