@@ -12,6 +12,7 @@ from pdf2audiobook.document.structure import (
 )
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.llm import (
+    CleanupDecision,
     create_provider,
     detect_llm_headings,
     propose_llm_cleanup,
@@ -90,6 +91,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
     omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
 
     llm_ids: set[str] = set()
+    llm_decisions: list[CleanupDecision] = []
     warnings: list[str] = []
     if footnotes and settings.pdf.footnotes == "omit":
         warnings.append(
@@ -112,7 +114,9 @@ def analyze_book(source: Path, settings: Settings) -> Path:
             if settings.llm.structure:
                 llm_ids, warnings = detect_llm_headings(source_blocks, provider)
             if settings.llm.cleanup:
-                suggestions, edit_warnings = propose_llm_cleanup(source_blocks, provider)
+                suggestions, edit_warnings = propose_llm_cleanup(
+                    source_blocks, provider, decisions=llm_decisions,
+                )
                 edits.extend(suggestions)
                 warnings.extend(edit_warnings)
             if settings.llm.narration:
@@ -129,6 +133,11 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                         item.model_dump() for item in spoken_suggestions
                     ],
                 })
+    write_json(folder / "reports" / "llm_cleanup_audit.json", {
+        "schema_version": 1,
+        "requires_manual_review": True,
+        "decisions": [item.model_dump() for item in llm_decisions],
+    })
     chapters, chapter_warnings = propose_chapters(
         extracted.blocks, omitted, extracted.toc, settings.chapters,
         extra_heading_ids=llm_ids,

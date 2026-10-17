@@ -1,12 +1,13 @@
 """OpenAI-compatible LLM providers with explicit transport and privacy boundaries."""
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import os
 import time
 from difflib import SequenceMatcher
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from urllib.parse import urlparse
 
 import httpx
@@ -42,6 +43,19 @@ class CleanupSuggestion(BaseModel):
 class CleanupSuggestions(BaseModel):
     model_config = ConfigDict(extra="forbid")
     edits: list[CleanupSuggestion] = Field(default_factory=list)
+
+
+class CleanupDecision(BaseModel):
+    """Privacy-preserving audit of the verifier's decision on one LLM proposal."""
+
+    model_config = ConfigDict(extra="forbid")
+    block_id: str
+    status: Literal["rejected", "pending_review"]
+    reason_code: str
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    source_sha256: str | None = None
+    provider: str = "llm"
+    requires_manual_review: bool = True
 
 
 class LLMProvider(Protocol):
@@ -257,6 +271,7 @@ def propose_llm_cleanup(
     provider: LLMProvider,
     *,
     window_size: int = 40,
+    decisions: list[CleanupDecision] | None = None,
 ) -> tuple[list[CleanupEdit], list[str]]:
     """Suggest strictly anchored text-level OCR corrections; never auto-approve edits.
 
@@ -265,6 +280,20 @@ def propose_llm_cleanup(
     """
     edits: list[CleanupEdit] = []
     warnings: list[str] = []
+
+    def audit(
+        block_id: str, status: Literal["rejected", "pending_review"],
+        reason_code: str, confidence: float | None = None,
+        source: DocumentBlock | None = None,
+    ) -> None:
+        if decisions is not None:
+            decisions.append(CleanupDecision(
+                block_id=block_id, status=status, reason_code=reason_code,
+                confidence=confidence,
+                source_sha256=hashlib.sha256(source.text.encode("utf-8")).hexdigest()
+                if source is not None else None,
+            ))
+
     for start in range(0, len(blocks), window_size):
         window = blocks[start:start + window_size]
         valid = {block.id: block for block in window}
@@ -293,29 +322,42 @@ def propose_llm_cleanup(
             batch = CleanupSuggestions.model_validate(raw)
         except ValidationError:
             warnings.append(f"LLM cleanup output rejected at block window {start}")
+            audit(f"window:{start}", "rejected", "invalid_response_schema")
             continue
         seen: set[str] = set()
         for suggestion in batch.edits:
             source = valid.get(suggestion.block_id)
             if source is None or suggestion.block_id in seen:
                 warnings.append(f"LLM cleanup references unknown/duplicate block {suggestion.block_id}")
+                audit(suggestion.block_id, "rejected", "unknown_or_duplicate_block",
+                      suggestion.confidence, source)
                 continue
             seen.add(suggestion.block_id)
             if suggestion.original != source.text:
                 warnings.append(f"LLM cleanup original does not match source {source.id}")
+                audit(source.id, "rejected", "source_text_mismatch",
+                      suggestion.confidence, source)
                 continue
             if suggestion.replacement == source.text:
+                audit(source.id, "rejected", "no_change",
+                      suggestion.confidence, source)
                 continue
             if not suggestion.replacement.strip():
                 warnings.append(f"LLM cleanup attempted to delete source {source.id}")
+                audit(source.id, "rejected", "proposed_deletion",
+                      suggestion.confidence, source)
                 continue
             if SequenceMatcher(
                 None, source.text, suggestion.replacement, autojunk=False
             ).ratio() < 0.85:
                 warnings.append(f"LLM cleanup modified too much text in {source.id}")
+                audit(source.id, "rejected", "excessive_change",
+                      suggestion.confidence, source)
                 continue
             if suggestion.confidence < 0.80:
                 warnings.append(f"LLM cleanup confidence too low in {source.id}")
+                audit(source.id, "rejected", "low_confidence",
+                      suggestion.confidence, source)
                 continue
             edits.append(
                 CleanupEdit(
@@ -325,6 +367,8 @@ def propose_llm_cleanup(
                     accepted=False, provider="llm",
                 )
             )
+            audit(source.id, "pending_review", "verified_proposal",
+                  suggestion.confidence, source)
     return edits, warnings
 
 
