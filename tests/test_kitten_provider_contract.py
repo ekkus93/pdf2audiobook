@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from pdf2audiobook.errors import AudioError
-from pdf2audiobook.tts import KittenProvider
+from pdf2audiobook.tts import KittenProvider, TTSProvider
 
 
 def _install_fake_kitten(monkeypatch):
@@ -73,3 +73,16 @@ def test_kitten_invalid_audio_is_rejected(monkeypatch):
     monkeypatch.setattr(fake, "generate", bad_audio)
     with pytest.raises(AudioError, match="empty or invalid speech audio"):
         KittenProvider("mini").generate("Hello", voice="Jasper", speed=1.0)
+
+
+def test_tts_protocol_discovery_health_and_chunk_limit(monkeypatch):
+    _install_fake_kitten(monkeypatch)
+    provider = KittenProvider("mini")
+    assert isinstance(provider, TTSProvider)
+    assert provider.health() is True
+    assert "mini" in provider.list_models()
+    assert provider.model_id in provider.list_models()
+    assert provider.list_voices() == ["Jasper", "Luna"]
+    assert provider.max_chars_per_chunk == 350
+    with pytest.raises(AudioError, match="chunk exceeds"):
+        provider.generate("A" * 351, voice="Jasper", speed=1.0)
