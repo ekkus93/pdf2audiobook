@@ -36,7 +36,14 @@ select = ["E4", "E7", "E9", "F", "I"]
 # participates in static type checking.
 [tool.mypy]
 python_version = "3.11"
-files = ["src/pdf2audiobook/models.py", "src/pdf2audiobook/errors.py", "src/pdf2audiobook/workspace.py", "src/pdf2audiobook/logging.py"]
+files = [
+    "src/pdf2audiobook/models.py",
+    "src/pdf2audiobook/errors.py",
+    "src/pdf2audiobook/workspace.py",
+    "src/pdf2audiobook/logging.py",
+    "src/pdf2audiobook/config.py",
+    "src/pdf2audiobook/reading_order.py",
+]
 check_untyped_defs = true
 warn_unused_ignores = true
 no_implicit_optional = true
