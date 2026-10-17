@@ -16,7 +16,7 @@ from mutagen.mp3 import MP3
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.tts import TTSProvider
-from pdf2audiobook.workspace import atomic_write, digest_bytes, fingerprint
+from pdf2audiobook.workspace import atomic_write, digest_bytes, fingerprint, write_json
 
 
 def split_sentences(text: str, max_chars: int = 350) -> list[str]:
@@ -79,34 +79,78 @@ def read_wav(data: bytes, expected_rate: int) -> np.ndarray:
 def synthesize_chunks(
     chapter_text: str, provider: TTSProvider, *,
     model: str, voice: str, speed: float, pause_ms: int, cache: Path,
-    use_cache: bool = True,
+    use_cache: bool = True, progress_file: Path | None = None,
 ) -> np.ndarray:
-    """Reuse audio by text/model/voice/speed and concatenate at PCM level."""
+    """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
     samples: list[np.ndarray] = []
     chunks = split_sentences(chapter_text)
     if not chunks:
         raise AudioError("Chapter has no speakable text")
     pause = np.zeros(int(provider.sample_rate * pause_ms / 1000), dtype=np.float32)
-    for idx, text in enumerate(chunks):
-        identity = fingerprint(text, model, voice, speed, provider.sample_rate)
+    identities = [
+        fingerprint(text, model, voice, speed, provider.sample_rate)
+        for text in chunks
+    ]
+    # The ledger is diagnostic; it never authorizes reuse without WAV and SHA-256 validation.
+    # No source text, voice content, or absolute paths are persisted in the ledger.
+    progress = {
+        "schema_version": 1,
+        "fingerprint": fingerprint(
+            "tts-progress-v1", identities, model, voice, speed, provider.sample_rate,
+            pause_ms,
+        ),
+        "total_chunks": len(chunks),
+        "completed_chunks": 0,
+        "status": "in_progress",
+        "chunks": [
+            {"number": index + 1, "cache_key": identity, "status": "pending"}
+            for index, identity in enumerate(identities)
+        ],
+    }
+    if progress_file is not None:
+        write_json(progress_file, progress)
+    for idx, (text, identity) in enumerate(zip(chunks, identities, strict=True)):
         chunk_path = cache / f"{identity}.wav"
         checksum_path = chunk_path.with_suffix(".sha256")
         audio = None
+        checksum = None
+        encoded_size = None
         if use_cache and chunk_path.is_file() and checksum_path.is_file():
             try:
                 cached_bytes = chunk_path.read_bytes()
-                if digest_bytes(cached_bytes) == checksum_path.read_text().strip():
+                candidate = digest_bytes(cached_bytes)
+                if candidate == checksum_path.read_text(encoding="utf-8").strip():
                     audio = read_wav(cached_bytes, provider.sample_rate)
-            except (AudioError, OSError):
+                    checksum = candidate
+                    encoded_size = len(cached_bytes)
+            except (AudioError, OSError, UnicodeError):
                 pass
         if audio is None:
-            audio = provider.generate(text, voice=voice, speed=speed)
-            encoded = wav_bytes(audio, provider.sample_rate)
-            atomic_write(chunk_path, encoded)
-            atomic_write(checksum_path, (digest_bytes(encoded) + "\n").encode())
+            try:
+                audio = provider.generate(text, voice=voice, speed=speed)
+                encoded = wav_bytes(audio, provider.sample_rate)
+                checksum = digest_bytes(encoded)
+                atomic_write(chunk_path, encoded)
+                atomic_write(checksum_path, (checksum + "\n").encode())
+                encoded_size = len(encoded)
+            except Exception:
+                progress["chunks"][idx]["status"] = "failed"
+                progress["status"] = "failed"
+                if progress_file is not None:
+                    write_json(progress_file, progress)
+                raise
+        progress["chunks"][idx].update({
+            "sha256": checksum, "bytes": encoded_size, "status": "completed",
+        })
+        progress["completed_chunks"] += 1
+        if progress_file is not None:
+            write_json(progress_file, progress)
         if idx:
             samples.append(pause)
         samples.append(audio)
+    progress["status"] = "completed"
+    if progress_file is not None:
+        write_json(progress_file, progress)
     return np.concatenate(samples)
 
 
