@@ -288,7 +288,8 @@ def convert_book(
                     metadata.get("fingerprint") == identity
                     and metadata.get("bytes") == output.stat().st_size
                     and metadata.get("sha256") == digest_file(output)
-                    and MP3(output).info.length > 0
+                    and (info := MP3(output).info) is not None
+                    and info.length > 0
                 )
             except (OSError, ValueError):
                 cached = False

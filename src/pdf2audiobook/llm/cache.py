@@ -36,6 +36,21 @@ class CachedLLMProvider:
         self.misses = 0
         self.requests_started = 0
 
+    def list_models(self) -> list[str]:
+        """Forward capability discovery without reading or sending book content."""
+        discover = getattr(self.provider, "list_models", None)
+        if not callable(discover):
+            raise LLMError("LLM provider does not support model discovery")
+        models = discover()
+        if not isinstance(models, list) or not all(isinstance(model, str) for model in models):
+            raise LLMError("Invalid LLM provider model discovery response")
+        return models
+
+    def health(self) -> bool:
+        """Forward the underlying provider's bounded availability probe."""
+        probe = getattr(self.provider, "health", None)
+        return bool(probe()) if callable(probe) else False
+
     def _reported_cost_usd(self) -> float | None:
         usage = getattr(self.provider, "total_usage", {})
         if not self.usage_verified or not isinstance(usage, dict):
