@@ -101,7 +101,7 @@
 ## Phase 4 — TTS, MP3 and resume (M4)
 
 - [ ] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
-  - [ ] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
+  - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
   - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate.
 - [ ] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
   - [ ] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
@@ -171,3 +171,5 @@
 | 2026-10-16 | edb7907a51117bca38eed309a0d4ba69c820e630 | P1.05 partial: high-confidence small-type footnotes classified as typed source blocks; warn/inline preserve text; explicit omit creates source-anchored accepted CleanupEdits, with false-positive guards for numbered body lines | Python CI 38989706523 passed at exact head; synthetic extraction and policy regression tests | Footnote continuation/anchor relocation, figure captions, formula narration and full special-material acceptance remain open |
 
 | 2026-10-16 | ae18259a3b3b7b1637ac57d17802d8a69b287447 | P4.04b: verified interrupted synthesis checkpoints and fresh-provider resume without regenerating valid WAV chunks; verified --no-resume regenerates all chunks. P4.06: qualified FFmpeg-decoded MP3 fixtures with sample-rate/duration/ID3 assertions (prior commit b381c2d) | Python CI 38993383868 passed exact head; Python CI 38990016197 passed exact head | Full P4.04 chunk progress manifest and P4.04a precise invalidation remain open; actual Kitten model acceptance pending |
+
+| 2026-10-16 | 5eae9f12b643bf51ca585eafecca185a355d4cce | P4.01a: qualified existing lazy Kitten adapter, model aliases/custom model IDs, voice validation, model-load failures and invalid audio with a mocked Kitten package (no model download) | Python CI 38993506977 passed at exact head | Real Kitten model acceptance and full P4.01 provider discovery/health protocol remain open |
