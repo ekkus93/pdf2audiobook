@@ -218,6 +218,10 @@ def convert_book(
             pause_ms=settings.tts.pause_ms,
             cache=manifest_path.parent / ".cache" / "tts",
             use_cache=settings.cache.enabled and settings.general.resume and not force,
+            progress_file=(
+                manifest_path.parent / ".cache" / "tts" / "progress"
+                / f"{fingerprint(item.id, item.number)[:32]}.json"
+            ),
         )
         encode_mp3(
             samples, provider.sample_rate, output,
