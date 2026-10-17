@@ -209,11 +209,8 @@ class OpenAICompatibleProvider:
                         continue
                 response.raise_for_status()
                 reply = response.json()
-                message = reply["choices"][0]["message"]["content"]
-                decoded = json.loads(message)
-                if not isinstance(decoded, dict):
-                    raise LLMError("Model response must be a JSON object")
-                self.request_count += 1
+                # Provider usage is billable even when generated JSON is malformed.
+                # Account for it before attempting to parse or validate the content.
                 usage = reply.get("usage", {}) if isinstance(reply, dict) else {}
                 self.last_usage = {}
                 if isinstance(usage, dict):
@@ -222,6 +219,11 @@ class OpenAICompatibleProvider:
                         if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
                             self.last_usage[field] = count
                             self.total_usage[field] += count
+                message = reply["choices"][0]["message"]["content"]
+                decoded = json.loads(message)
+                if not isinstance(decoded, dict):
+                    raise LLMError("Model response must be a JSON object")
+                self.request_count += 1
                 return decoded
             except httpx.TransportError as exc:
                 if retry_count < self.max_retries:
