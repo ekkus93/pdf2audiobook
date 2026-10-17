@@ -48,6 +48,8 @@ files = [
     "src/pdf2audiobook/tts/__init__.py",
     "src/pdf2audiobook/document/structure.py",
     "src/pdf2audiobook/special_material.py",
+    "src/pdf2audiobook/audio/__init__.py",
+    "src/pdf2audiobook/llm/smoke.py",
 ]
 check_untyped_defs = true
 warn_unused_ignores = true
