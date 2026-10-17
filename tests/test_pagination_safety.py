@@ -4,7 +4,6 @@ from pdf2audiobook.config import Pdf
 from pdf2audiobook.document.structure import pagination_cleanup
 from pdf2audiobook.models import DocumentBlock
 
-
 PAGE = (600.0, 800.0)
 
 
