@@ -86,7 +86,7 @@
   - [x] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
 - [ ] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
   - [x] P3.03a Track accepted/rejected edits, evidence, confidence, review flags and provenance.
-  - [ ] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
+  - [x] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
 - [ ] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
 - [ ] P3.05 Enforce remote-data opt-in (--allow-remote-content/config) and warning before sending book content.
   - [x] P3.05a Validate TLS/loopback rules; block accidental external HTTP upload.
@@ -198,3 +198,5 @@
 | 2026-10-17 | 43cabd6f8f18a532cdb4b0953ea19fe76097a575 | P3.02c: independently selectable LLM speech-normalization proposals with JSON-bounded source records, source-ID/original-line verification, rejection warnings, and review-only reports; neither chapter transcript nor audio changed | Python CI 39017833967 passed at exact head | Proposals are advisory and not auto-applied; full classification, budgets and real-model acceptance remain outstanding |
 
 | 2026-10-17 | 856754f4f405d954d0b296cff7614ec7119fbf3f | P3.03a: structured LLM cleanup verifier audit records rejected/pending-review proposals with reason, confidence, source-block ID and SHA-256 fingerprint; approved CleanupEdit workflow remains separately explicit and auditable | Python CI 39017990100 passed exact head | User approval remains required before model suggestions affect narration; full deterministic verifier and classification toggles still open |
+
+| 2026-10-17 | 299fdf3b413f3e51061db481d4e153ca76a4d371 | P3.03b: structure, cleanup, classification and narration tasks have independent settings gates; review-only classification reports use anchored IDs, confidence filters and ambiguity warnings; classification-only pipeline test verifies no cleanup | Python CI 39018113474 passed at exact head | Further strict provider, caching and acceptance requirements remain open |
