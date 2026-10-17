@@ -104,7 +104,7 @@
   - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
   - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate.
 - [ ] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
-  - [ ] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
+  - [x] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
   - [x] P4.02b Handle oversized sentences and TTS failures without silently dropping text.
 - [x] P4.03 Generate validated PCM/WAV chunks; normalize channels/rate, join at PCM level and encode once per chapter via FFmpeg.
   - [x] P4.03a Produce playable, deterministic, zero-padded chapter MP3 filenames.
@@ -179,3 +179,5 @@
 | 2026-10-16 | ab17301c88325930951be75dab165155081c1d9f | P4.04a: verified --resume/--no-resume/--force chapter cache policy, voice/model/speed PCM invalidation, and MP3 fingerprint invalidation for audio settings plus book/chapter ID3 metadata; metadata-aware MP3 fingerprint bumped to v3 | Python CI 38997774864, 38997861361 and 38997928419 passed at exact respective heads | Full P4.04 per-chunk progress manifest remains open; real Kitten model acceptance pending |
 
 | 2026-10-17 | af48ec15e026e5ba8d395babc4870cf99132cf74 | P4.04: per-chapter atomic, text-free TTS chunk progress ledger (cache keys, WAV bytes, SHA-256, pending/completed/failed states); pipeline wiring and restart/corruption/cache-invalidation tests | Python CI 39013122952 passed at exact head (lint, tests) | A full real-model Kitten acceptance remains pending; ledger does not bypass WAV checksum verification |
+
+| 2026-10-17 | 89ef9fa63df24453ef309f2bb74f75138c19e8bc | P4.02a: preserve paragraph chunk boundaries, distinct pauses and exact source-character offsets per chunk in atomic progress ledger; no chapter text stored there | Python CI 39013343810 passed on exact commit, including source-alignment and pause-sample regressions | P4.02 parent narration-normalization policy remains open |
