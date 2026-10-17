@@ -37,10 +37,20 @@ def order_two_columns(
         return "anchor"
 
     def region_order(region: list[dict]) -> tuple[list[dict], bool]:
-        left = [(i, line, bbox(line)) for i, line in enumerate(region)
-                if side(line) == "left"]
-        right = [(i, line, bbox(line)) for i, line in enumerate(region)
-                 if side(line) == "right"]
+        # Narrow the validated bounding-box type before sorting by geometry.
+        # If a line cannot be classified, retain the original region verbatim.
+        left: list[tuple[int, dict, tuple[float, float, float, float]]] = []
+        right: list[tuple[int, dict, tuple[float, float, float, float]]] = []
+        for index, line in enumerate(region):
+            bounds = bbox(line)
+            if bounds is None:
+                return region, False
+            if bounds[2] < middle - gap:
+                left.append((index, line, bounds))
+            elif bounds[0] > middle + gap:
+                right.append((index, line, bounds))
+            else:
+                return region, False
         if len(left) < 4 or len(right) < 4:
             return region, False
         for column in (left, right):
