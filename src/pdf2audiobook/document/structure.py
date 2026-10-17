@@ -127,9 +127,17 @@ def pagination_cleanup(
             continue
         if raw.startswith(('"', "'", "“", "‘", "•", "—", "–", "(", "[")):
             continue
+        if raw.startswith(("- ", "− ")):
+            # Hyphen-led dialogue is substantive even when it repeats in margins.
+            continue
         # A closing quote or unfinished dialogue clause is also prose, not
         # a title/folio, even when a short fragment repeats in a margin.
         if raw.endswith(('"', "'", "”", "’", ",", ";", "—")):
+            continue
+        # Short one-word dialogue or complete sentences can recur in page
+        # margins; punctuation is stronger evidence of prose than repetition
+        # is evidence of a running title. Fail closed instead of deleting it.
+        if raw.endswith((".", "?", "!", "…")):
             continue
         # A phrase appearing in the interior of any page is substantive text
         # somewhere in the book; do not delete identical margin occurrences.
