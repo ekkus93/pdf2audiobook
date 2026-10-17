@@ -75,7 +75,7 @@
 
 ## Phase 3 — LLM providers and safeguards (M3)
 
-- [ ] P3.01 Define LLMProvider interface, model discovery, typed structured-response API, health checks, request timeout, retry and usage telemetry.
+- [x] P3.01 Define LLMProvider interface, model discovery, typed structured-response API, health checks, request timeout, retry and usage telemetry.
   - [x] P3.01a Implement OpenAI API adapter; load key only from OPENAI_API_KEY or designated env.
   - [x] P3.01b Implement Ollama adapter with configurable local base URL/model.
   - [x] P3.01c Implement llama-server adapter with configurable local base URL/model and optional auth.
@@ -200,3 +200,5 @@
 | 2026-10-17 | 856754f4f405d954d0b296cff7614ec7119fbf3f | P3.03a: structured LLM cleanup verifier audit records rejected/pending-review proposals with reason, confidence, source-block ID and SHA-256 fingerprint; approved CleanupEdit workflow remains separately explicit and auditable | Python CI 39017990100 passed exact head | User approval remains required before model suggestions affect narration; full deterministic verifier and classification toggles still open |
 
 | 2026-10-17 | 299fdf3b413f3e51061db481d4e153ca76a4d371 | P3.03b: structure, cleanup, classification and narration tasks have independent settings gates; review-only classification reports use anchored IDs, confidence filters and ambiguity warnings; classification-only pipeline test verifies no cleanup | Python CI 39018113474 passed at exact head | Further strict provider, caching and acceptance requirements remain open |
+
+| 2026-10-17 | 623325f727da8673cfeac3485089791e5fab5bfb | P3.01: completed LLM provider contract with /models discovery, no-book-content health probe, typed structured JSON responses, existing timeout/retry/capability adaptation, success counts and sanitized token-usage telemetry | Python CI 39018254783 passed exact head (offline MockTransport tests) | Live local/remote acceptance remains P3.08; model discovery endpoints may be unsupported on older servers |
