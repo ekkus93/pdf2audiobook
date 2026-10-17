@@ -20,7 +20,7 @@
   - [ ] P0.01b Add formatting, lint, type checking and pytest configuration; ensure clean install from repository checkout.
   - [x] P0.01c Add GitHub Actions lint/unit CI with no remote keys/model downloads.
 - [ ] P0.02 Establish src/pdf2audiobook/{cli,config,pdf,document,llm,tts,audio,pipeline} and public adapter protocols.
-  - [ ] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics.
+  - [x] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics.
   - [ ] P0.02b Add structured logging with text/key redaction and --verbose/--quiet controls.
 - [x] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
   - [x] P0.03a Implement lookup of per-user config directory; --config and --no-config.
@@ -173,3 +173,5 @@
 | 2026-10-16 | ae18259a3b3b7b1637ac57d17802d8a69b287447 | P4.04b: verified interrupted synthesis checkpoints and fresh-provider resume without regenerating valid WAV chunks; verified --no-resume regenerates all chunks. P4.06: qualified FFmpeg-decoded MP3 fixtures with sample-rate/duration/ID3 assertions (prior commit b381c2d) | Python CI 38993383868 passed exact head; Python CI 38990016197 passed exact head | Full P4.04 chunk progress manifest and P4.04a precise invalidation remain open; actual Kitten model acceptance pending |
 
 | 2026-10-16 | 5eae9f12b643bf51ca585eafecca185a355d4cce | P4.01a: qualified existing lazy Kitten adapter, model aliases/custom model IDs, voice validation, model-load failures and invalid audio with a mocked Kitten package (no model download) | Python CI 38993506977 passed at exact head | Real Kitten model acceptance and full P4.01 provider discovery/health protocol remain open |
+
+| 2026-10-16 | 76994bba8789e692051ea136b1e5da2aa9c0cb51 | P0.02a: typed domain error codes now produce consistent machine-readable JSON stderr diagnostics for --json commands; human-readable CLI errors retained | Python CI 38997597162 passed exact head; JSON CLI and domain exit-code regression tests | Structured logging/redaction and verbose/quiet controls remain open under P0.02b |
