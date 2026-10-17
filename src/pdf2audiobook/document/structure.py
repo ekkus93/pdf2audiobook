@@ -211,10 +211,10 @@ def pagination_cleanup(
             if (band, entry[0]) not in ambiguous_numeric_bands
         ]
         by_key: dict[tuple[int, int, str], list[float]] = defaultdict(list)
-        for page, value, position, notation in entries:
-            by_key[(page, value, notation)].append(position)
-        for page, value, position, notation in entries:
-            successors = by_key.get((page + 1, value + 1, notation), [])
+        for page, folio_number, position, notation in entries:
+            by_key[(page, folio_number, notation)].append(position)
+        for page, folio_number, position, notation in entries:
+            successors = by_key.get((page + 1, folio_number + 1, notation), [])
             for next_position in successors:
                 if not _aligned_number_positions(position, next_position):
                     continue
@@ -223,7 +223,7 @@ def pagination_cleanup(
                 else:
                     # Two-page Roman sequences may be section markers.
                     final_positions = by_key.get(
-                        (page + 2, value + 2, notation), []
+                        (page + 2, folio_number + 2, notation), []
                     )
                     if any(
                         _aligned_number_positions(next_position, final)

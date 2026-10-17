@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Iterable
 
 _CAPTION = re.compile(
     r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+"
@@ -18,6 +19,8 @@ _CAPTION = re.compile(
 def _valid_box(box: object) -> tuple[float, float, float, float] | None:
     # PyMuPDF drawing rectangles are fitz.Rect iterables, not list/tuple.
     if not isinstance(box, (list, tuple)):
+        if not isinstance(box, Iterable):
+            return None
         try:
             box = tuple(box)
         except (TypeError, ValueError, OverflowError):
