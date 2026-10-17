@@ -121,7 +121,7 @@
 
 ## Phase 5 — End-to-end acceptance and release (M5)
 
-- [ ] P5.01 End-to-end text PDF -> inspect/analyze -> chapter MP3 acceptance.
+- [x] P5.01 End-to-end text PDF -> inspect/analyze -> chapter MP3 acceptance.
 - [ ] P5.02 End-to-end scanned and mixed PDF, with OCR auto selection and page-number removal.
 - [ ] P5.03 Validate no-text-loss/duplication invariants and mid-page chapter boundaries.
 - [ ] P5.04 Verify manual chapter manifest overrides and chapter-specific regeneration.
@@ -181,3 +181,5 @@
 | 2026-10-17 | af48ec15e026e5ba8d395babc4870cf99132cf74 | P4.04: per-chapter atomic, text-free TTS chunk progress ledger (cache keys, WAV bytes, SHA-256, pending/completed/failed states); pipeline wiring and restart/corruption/cache-invalidation tests | Python CI 39013122952 passed at exact head (lint, tests) | A full real-model Kitten acceptance remains pending; ledger does not bypass WAV checksum verification |
 
 | 2026-10-17 | 89ef9fa63df24453ef309f2bb74f75138c19e8bc | P4.02a: preserve paragraph chunk boundaries, distinct pauses and exact source-character offsets per chunk in atomic progress ledger; no chapter text stored there | Python CI 39013343810 passed on exact commit, including source-alignment and pause-sample regressions | P4.02 parent narration-normalization policy remains open |
+
+| 2026-10-17 | 05d763d608f1af64e2e035bff6f05d8525c23581 | P5.01: synthetic two-chapter selectable-text PDF through analysis, chapter boundaries and FFmpeg/ID3 MP3 synthesis; verified repeat-cache skip and corrupt-output repair without fresh speech generation | Python CI 39013862697 passed at exact head | Real Kitten model and scanned/mixed E2E acceptance remain outstanding under P5.02/P5.05 |
