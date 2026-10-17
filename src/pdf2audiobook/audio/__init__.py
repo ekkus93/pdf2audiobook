@@ -106,7 +106,14 @@ def synthesize_chunks(
 ) -> np.ndarray:
     """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
     samples: list[np.ndarray] = []
-    chunks = split_sentences(chapter_text)
+    # Legacy mocked providers need no explicit chunk-limit attribute, but
+    # concrete providers advertise a hard limit that must be enforced before
+    # any synthesis or cache replay. Defaulting to 350 otherwise can send
+    # invalid requests to engines with a smaller input window.
+    chunk_limit = getattr(provider, "max_chars_per_chunk", 350)
+    if isinstance(chunk_limit, bool) or not isinstance(chunk_limit, int) or chunk_limit < 40:
+        raise AudioError("TTS provider max_chars_per_chunk must be an integer >= 40")
+    chunks = split_sentences(chapter_text, max_chars=chunk_limit)
     if not chunks:
         raise AudioError("Chapter has no speakable text")
     pause = np.zeros(int(provider.sample_rate * pause_ms / 1000), dtype=np.float32)
@@ -121,9 +128,9 @@ def synthesize_chunks(
     progress = {
         "schema_version": 1,
         "fingerprint": fingerprint(
-            "tts-progress-v2", digest_bytes(chapter_text.encode("utf-8")), identities,
+            "tts-progress-v3", digest_bytes(chapter_text.encode("utf-8")), identities,
             model, voice, speed, provider.sample_rate,
-            pause_ms,
+            pause_ms, chunk_limit,
         ),
         "total_chunks": len(chunks),
         "completed_chunks": 0,
