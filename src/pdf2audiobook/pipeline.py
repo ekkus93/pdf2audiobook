@@ -129,6 +129,14 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                     ),
                     enabled=settings.cache.enabled and settings.general.resume,
                     max_requests=settings.llm.max_requests,
+                    max_reported_tokens=settings.llm.max_reported_tokens,
+                    max_estimated_cost_usd=settings.llm.max_estimated_cost_usd,
+                    input_cost_usd_per_million_tokens=(
+                        settings.llm.input_cost_usd_per_million_tokens
+                    ),
+                    output_cost_usd_per_million_tokens=(
+                        settings.llm.output_cost_usd_per_million_tokens
+                    ),
                     usage_report=folder / "reports" / "llm_usage.json",
                 )
                 if settings.llm.structure:
