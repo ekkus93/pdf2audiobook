@@ -124,7 +124,7 @@
 - [x] P5.01 End-to-end text PDF -> inspect/analyze -> chapter MP3 acceptance.
 - [ ] P5.02 End-to-end scanned and mixed PDF, with OCR auto selection and page-number removal.
 - [ ] P5.03 Validate no-text-loss/duplication invariants and mid-page chapter boundaries.
-- [ ] P5.04 Verify manual chapter manifest overrides and chapter-specific regeneration.
+- [x] P5.04 Verify manual chapter manifest overrides and chapter-specific regeneration.
 - [ ] P5.05 Test each LLM backend with mocks; perform environment-dependent real-model acceptance when available.
 - [ ] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval.
 - [ ] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
@@ -183,3 +183,5 @@
 | 2026-10-17 | 89ef9fa63df24453ef309f2bb74f75138c19e8bc | P4.02a: preserve paragraph chunk boundaries, distinct pauses and exact source-character offsets per chunk in atomic progress ledger; no chapter text stored there | Python CI 39013343810 passed on exact commit, including source-alignment and pause-sample regressions | P4.02 parent narration-normalization policy remains open |
 
 | 2026-10-17 | 05d763d608f1af64e2e035bff6f05d8525c23581 | P5.01: synthetic two-chapter selectable-text PDF through analysis, chapter boundaries and FFmpeg/ID3 MP3 synthesis; verified repeat-cache skip and corrupt-output repair without fresh speech generation | Python CI 39013862697 passed at exact head | Real Kitten model and scanned/mixed E2E acceptance remain outstanding under P5.02/P5.05 |
+
+| 2026-10-17 | 34dfec4790c19f24250f612e2f6cab491a22b693 | P5.04: verified approved mid-page chapter boundary survives reanalysis, selected chapter metadata override regenerates the chosen MP3, and unaffected previous MP3 plus checked WAV chunks are reused | Python CI 39014044365 passed exact head with synthetic PDF and mocked Kitten voice | Real Kitten and scanned/mixed PDF tests still required elsewhere |
