@@ -3,6 +3,7 @@
 import json
 
 import httpx
+import pytest
 
 from pdf2audiobook.llm import OpenAICompatibleProvider
 
@@ -77,3 +78,17 @@ def test_malformed_usage_does_not_poison_totals():
         provider.complete_json(instructions="task", document_text="fixture")
         assert provider.total_usage["total_tokens"] == 0
         assert provider.last_usage == {}
+
+
+def test_provider_accounts_billable_usage_before_invalid_json_rejection():
+    def respond(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "not-json"}}],
+            "usage": {"prompt_tokens": 40, "completion_tokens": 10, "total_tokens": 50},
+        })
+
+    with make_provider(respond, model="fixed") as provider:
+        with pytest.raises(Exception):
+            provider.complete_json(instructions="task", document_text="fixture")
+        assert provider.last_usage["total_tokens"] == 50
+        assert provider.total_usage["total_tokens"] == 50
