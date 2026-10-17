@@ -54,7 +54,7 @@
   - [ ] P1.04c Never remove numbered lists, quoted standalone numbers or substantive body text.
 - [ ] P1.05 Implement footnote/table/image/math handling policies, conservative warnings and audit.
 - [ ] P1.06 Add synthetic PDF fixtures for text, scans, mixed pages, two-column, Roman numbering, repeated headers, numbered lists and difficult OCR.
-  - [ ] P1.06a Unit and integration tests verify correct extraction/coverage without network dependency.
+  - [x] P1.06a Unit and integration tests verify correct extraction/coverage without network dependency.
 
 **M1 gate:** text/OCR pipeline yields traceable clean transcript from text, scanned and mixed fixtures, with no duplication.
 
@@ -216,3 +216,5 @@
 | 2026-10-17 | 47e0e0d5fe84d7d19753968d225dde403bf72410 | P1.05 partial: geometry-backed figure/table caption classification, explicit caption syntax, false-positive guards for ordinary prose and page-wide scanned images; all source text and span links preserved. Reconciled P3.06 and P4.01 from separately verified implementation and protocol evidence | Python CI 39028095220 passed at exact head; prior P3.06 CI 39024049500 and P4.01 CI 39024343721 passed | P1.05 remains unchecked pending special-material/footnote/math policy and real-document acceptance; live provider/model tests remain P3.08/P5.05 |
 
 | 2026-10-17 | 1c3f2911aeef53ce26f50f5918ebbd3d0b62fbca | P1.05 partial: detect substantial vector-only artwork and report for human review; preserve source spans and text. Added synthetic vector PDF and false-positive tests | Python CI 39028325162 passed exact head | Table/math/footnote policies and real-book acceptance remain open |
+
+| 2026-10-17 | 723b71c867ac53ea98004919eec026bdbb78bce7 | P1.06a: verified offline synthetic PDF extraction/coverage suite including numbered-list body retention while sequential folios and repeated headers are removed; existing scanned/mixed, two-column and chapter coverage fixture tests remain part of CI | Python CI 39028469005 passed exact head (252 tests) | P1.06 parent remains unchecked pending comprehensive difficult-OCR fixtures and manual acceptance |
