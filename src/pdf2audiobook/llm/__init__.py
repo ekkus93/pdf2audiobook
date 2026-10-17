@@ -7,7 +7,7 @@ import json
 import os
 import time
 from difflib import SequenceMatcher
-from typing import Any, Literal, Protocol
+from typing import Any, Literal, Protocol, runtime_checkable
 from urllib.parse import urlparse
 
 import httpx
@@ -58,6 +58,7 @@ class CleanupDecision(BaseModel):
     requires_manual_review: bool = True
 
 
+@runtime_checkable
 class LLMProvider(Protocol):
     def list_models(self) -> list[str]:
         """Return discoverable model IDs, or raise a sanitized error."""
