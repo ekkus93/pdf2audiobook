@@ -431,7 +431,7 @@ def _valid_cached_lines(data: object) -> list[dict] | None:
         ):
             return None
         checked.append({
-            "text": text, "bbox": bbox, "font": font, "size": size
+            "text": text, "bbox": list(bbox), "font": font, "size": size
         })
     return checked
 
