@@ -37,7 +37,7 @@ def run(argv: list[str] | None = None) -> int:
             instructions='Return only the JSON object {"ok":true}.',
             document_text="Synthetic smoke-test fixture; no user or book content.",
         )
-        if result.get("ok") is not True:
+        if not isinstance(result, dict) or result.get("ok") is not True:
             print(json.dumps({"ok": False, "provider": args.provider, "error": "unexpected_schema"}))
             return 1
         print(json.dumps({
