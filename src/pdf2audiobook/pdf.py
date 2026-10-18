@@ -464,9 +464,9 @@ def _cached_ocr_lines(
             if target.stat().st_size > 32 * 1024 * 1024:
                 raise ValueError("oversized OCR cache")
             parsed = json.loads(target.read_text(encoding="utf-8"))
-            lines = _valid_cached_lines(parsed)
-            if lines:
-                return lines
+            cached_lines = _valid_cached_lines(parsed)
+            if cached_lines:
+                return cached_lines
         except (OSError, UnicodeError, ValueError, TypeError):
             pass
     lines = _ocr_page_lines(page, settings)
