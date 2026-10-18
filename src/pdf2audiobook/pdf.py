@@ -523,6 +523,10 @@ def extract_pdf(
                 )
             origin: Literal["embedded", "ocr"] = "embedded"
             if use_ocr:
+                # Retain the original text layer until OCR actually produces
+                # text. A short selectable heading can be the only prose on
+                # a page, and an empty OCR result must not silently erase it.
+                embedded_lines = page_lines
                 try:
                     page_lines = _cached_ocr_lines(
                         page, settings, cache_dir=ocr_cache_dir,
@@ -536,6 +540,13 @@ def extract_pdf(
                 origin = "ocr"
                 if not page_lines:
                     warnings.append(f"Page {page_index + 1}: OCR produced no text")
+                    if settings.ocr == "auto" and embedded_lines:
+                        page_lines = embedded_lines
+                        origin = "embedded"
+                        warnings.append(
+                            f"Page {page_index + 1}: retained unverified embedded text "
+                            "after empty automatic OCR; review against the PDF"
+                        )
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
             # Preserve table cell text and annotate only contained blocks.
