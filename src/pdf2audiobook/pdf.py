@@ -248,6 +248,7 @@ def _special_material_warnings(
 def _footnote_line_indices(
     lines: list[dict], *, page_height: float,
     table_regions: list[tuple[float, float, float, float]],
+
 ) -> set[int]:
     """Conservatively tag numbered small-type notes separated from body prose.
 
@@ -477,7 +478,9 @@ def _cached_ocr_lines(
         raise ValueError("invalid OCR line geometry or metadata; no cache entry written")
     if verified:
         write_json(target, {"schema_version": 1, "lines": verified})
-    return lines
+    # Return the same validated, allowlisted fields on cache miss and hit.
+    # Never leak incidental OCR-engine metadata into downstream stages.
+    return verified
 
 
 def extract_pdf(
@@ -498,6 +501,7 @@ def extract_pdf(
         title = document.metadata.get("title") or source.stem
         author = document.metadata.get("author") or None
         for page_index, page in enumerate(document):
+
             # page.get_text() coordinates are unrotated, unlike page.rect.
             # Margin cleanup must use the same coordinate system as spans.
             sizes.append((float(page.cropbox.width), float(page.cropbox.height)))
