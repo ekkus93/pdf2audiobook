@@ -1,7 +1,7 @@
 """Raster-tile union detection and OCR auto-mode coverage regressions."""
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import fitz
 import pytest
