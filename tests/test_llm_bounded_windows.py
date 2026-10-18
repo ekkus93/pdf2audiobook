@@ -187,3 +187,49 @@ def test_oversized_source_record_breaks_context_overlap():
         "a", None, "b"
     ]
     assert json.loads(windows[-1][2]) == [{"id": "b", "text": "Small again."}]
+
+
+@pytest.mark.parametrize(
+    ("task", "response_key"),
+    [
+        (detect_llm_headings, "headings"),
+        (propose_llm_cleanup, "edits"),
+        (propose_llm_classification, "labels"),
+        (propose_llm_narration, "suggestions"),
+    ],
+)
+def test_llm_cannot_nominate_read_only_context_source(task, response_key):
+    blocks = [
+        DocumentBlock(id="prior", page_index=0, text="Chapter One"),
+        DocumentBlock(id="active", page_index=0, text="Ordinary paragraph."),
+    ]
+
+    class ContextOnly:
+        def complete_json(self, *, instructions, document_text):
+            contexts = [row for row in json.loads(document_text)
+                        if row.get("context_only")]
+            if not contexts:
+                return {response_key: []}
+            row = contexts[0]
+            if response_key == "headings":
+                proposal = {"block_id": row["id"], "title": row["text"],
+                            "confidence": 0.99}
+            elif response_key == "edits":
+                proposal = {"block_id": row["id"], "original": row["text"],
+                            "replacement": "New content", "confidence": 0.99,
+                            "reason": "not authorized"}
+            elif response_key == "labels":
+                proposal = {"block_id": row["id"], "category": "heading",
+                            "confidence": 0.99, "reason": "not authorized"}
+            else:
+                proposal = {"block_id": row["id"], "original": row["text"],
+                            "spoken": "Unauthorized narration",
+                            "confidence": 0.99, "reason": "not authorized"}
+            return {response_key: [proposal]}
+
+    result, warnings = task(
+        blocks, ContextOnly(), window_size=1, chunk_tokens=500,
+    )
+    assert result == set() if response_key == "headings" else result == []
+    assert len(warnings) == 1
+    assert "prior" in warnings[0]
