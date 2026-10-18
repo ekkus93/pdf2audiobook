@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 
 import fitz
 import pytest
@@ -93,3 +94,37 @@ def test_dominant_raster_with_substantial_selectable_text_stays_embedded(
     assert len(extracted.spans) >= 5
     assert all(span.origin == "embedded" for span in extracted.spans)
     assert not any("sparse selectable text overlays" in w for w in extracted.warnings)
+
+
+@pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract CLI unavailable")
+def test_real_tesseract_recovers_scanned_body_beneath_selectable_heading(
+    tmp_path: Path,
+) -> None:
+    """Network-free actual OCR of raster prose, not just a recognition stub."""
+    # Render synthetic, public-domain test prose into a raster image.
+    with fitz.open() as raster_doc:
+        page = raster_doc.new_page(width=400, height=400)
+        page.insert_text(
+            (35, 160), "The scanner captured this hidden body.", fontsize=17,
+        )
+        page.insert_text(
+            (35, 195), "More prose belongs in the audiobook.", fontsize=17,
+        )
+        raster = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).tobytes("png")
+
+    source = tmp_path / "hybrid-real-ocr.pdf"
+    with fitz.open() as doc:
+        page = doc.new_page(width=400, height=400)
+        page.insert_image(page.rect, stream=raster)
+        page.insert_text((35, 65), "Chapter Eleven A Very Long Heading", fontsize=12)
+        doc.save(source)
+
+    embedded = extract_pdf(source, Pdf(ocr="never"))
+    assert "scanner captured" not in " ".join(s.text for s in embedded.spans).lower()
+
+    recognized = extract_pdf(source, Pdf(ocr="auto", ocr_language="eng"))
+    text = " ".join(s.text for s in recognized.spans).lower()
+    assert "scanner captured" in text
+    assert "belongs in the audiobook" in text
+    assert recognized.spans and all(s.origin == "ocr" for s in recognized.spans)
+    assert any("sparse selectable text overlays" in w for w in recognized.warnings)
