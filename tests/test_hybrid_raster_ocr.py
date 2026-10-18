@@ -128,3 +128,32 @@ def test_real_tesseract_recovers_scanned_body_beneath_selectable_heading(
     assert "belongs in the audiobook" in text
     assert recognized.spans and all(s.origin == "ocr" for s in recognized.spans)
     assert any("sparse selectable text overlays" in w for w in recognized.warnings)
+
+
+def test_hybrid_raster_ocr_only_selectable_overlay_requires_specific_review(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    source = tmp_path / "heading-only-ocr.pdf"
+    _hybrid_page(source, image_width=600)
+
+    def heading_only_ocr(*args: object, **kwargs: object) -> list[dict]:
+        return [{
+            "text": HEADING,
+            "bbox": [30, 50, 340, 65],
+            "font": "OCR",
+            "size": 10.0,
+        }]
+
+    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", heading_only_ocr)
+    result = extract_pdf(source, Pdf(ocr="auto"))
+    assert len(result.spans) == 1
+    assert result.spans[0].text == HEADING
+    assert result.spans[0].origin == "ocr"
+    assert any(
+        "OCR found no additional text beyond the selectable overlay" in warning
+        for warning in result.warnings
+    )
+    assert not any(
+        "automatic OCR did not reproduce short selectable text" in warning
+        for warning in result.warnings
+    )

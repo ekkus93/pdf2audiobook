@@ -607,6 +607,17 @@ def extract_pdf(
                             f"Page {page_index + 1}: automatic OCR did not reproduce "
                             "short selectable text; review page coverage before narration"
                         )
+                    elif (
+                        quality_issue == "sparse selectable text over dominant raster"
+                        and selectable and recognized == selectable
+                    ):
+                        # Recognition may have recovered only the selectable
+                        # overlay, leaving the scan's prose completely unread.
+                        warnings.append(
+                            f"Page {page_index + 1}: OCR found no additional text "
+                            "beyond the selectable overlay on a large raster; "
+                            "verify scanned body coverage manually"
+                        )
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
             # Preserve table cell text and annotate only contained blocks.
