@@ -85,6 +85,11 @@ def _vector_caption_regions(page: object) -> list[tuple[float, float, float, flo
             and 0.001 * page_area <= width * height <= 0.6 * page_area
         ):
             candidates.append(box)
+            # Pairwise grouping is quadratic; bound it on vector-heavy PDFs.
+            # Other substantial artwork remains flagged for manual review by
+            # vector_artwork_warnings, never silently described or removed.
+            if len(candidates) >= 256:
+                break
     regions: list[tuple[float, float, float, float]] = []
     for index, first in enumerate(candidates):
         for second in candidates[index + 1:]:
