@@ -446,10 +446,10 @@ def _cached_ocr_lines(
     """
     if cache_dir is None:
         lines = _ocr_page_lines(page, settings)
-        verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
-        if verified is None:
+        uncached_verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
+        if uncached_verified is None:
             raise ValueError("invalid OCR line geometry or metadata; no cache entry written")
-        return verified
+        return uncached_verified
     if input_sha256 is None:
         raise ValueError("OCR caching requires the source PDF SHA-256")
     key = fingerprint(
