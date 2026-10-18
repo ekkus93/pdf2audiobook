@@ -45,7 +45,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
     analysis_key = fingerprint(
         book_hash, settings.pdf.model_dump(), settings.chapters.model_dump(),
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
-        chosen_provider.model, chosen_provider.base_url, "analysis-v5"
+        chosen_provider.model, chosen_provider.base_url, "analysis-v6"
     )
     if manifest_path.is_file():
         existing = read_manifest(manifest_path)
@@ -141,16 +141,19 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                     ledger_path=folder / "reports" / "llm_budget.sqlite3",
                 )
                 if settings.llm.structure:
-                    llm_ids, warnings = detect_llm_headings(source_blocks, worker)
+                    llm_ids, warnings = detect_llm_headings(
+                        source_blocks, worker, chunk_tokens=settings.llm.chunk_tokens,
+                    )
                 if settings.llm.cleanup:
                     suggestions, edit_warnings = propose_llm_cleanup(
                         source_blocks, worker, decisions=llm_decisions,
+                        chunk_tokens=settings.llm.chunk_tokens,
                     )
                     edits.extend(suggestions)
                     warnings.extend(edit_warnings)
                 if settings.llm.classification:
                     classified, class_warnings = propose_llm_classification(
-                        source_blocks, worker,
+                        source_blocks, worker, chunk_tokens=settings.llm.chunk_tokens,
                     )
                     warnings.extend(class_warnings)
                     write_json(folder / "reports" / "classification_suggestions.json", {
@@ -160,7 +163,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                     })
                 if settings.llm.narration:
                     spoken_suggestions, spoken_warnings = propose_llm_narration(
-                        source_blocks, worker,
+                        source_blocks, worker, chunk_tokens=settings.llm.chunk_tokens,
                     )
                     warnings.extend(spoken_warnings)
                     # Deliberately separate from approved CleanupEdits and chapter
