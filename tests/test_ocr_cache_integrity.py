@@ -42,7 +42,8 @@ def test_cached_ocr_rejects_degenerate_or_nonfinite_boxes(bbox):
 
 def test_cached_ocr_accepts_valid_text_and_geometry():
     data = {"schema_version": 1, "lines": [_line()]}
-    assert _valid_cached_lines(data) == [_line()]
+    assert _valid_cached_lines(data) == [_line([40, 50, 120, 64])]
+    assert data["lines"][0]["bbox"] == (40, 50, 120, 64)
 
 
 def test_degenerate_cached_geometry_triggers_fresh_recognition(monkeypatch, tmp_path: Path):
