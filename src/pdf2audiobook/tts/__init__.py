@@ -49,7 +49,7 @@ class KittenProvider:
         self.model_id = model_id
         try:
             self.model = KittenTTS(model_id)
-        except Exception as exc:
+        except Exception:
             # Third-party exceptions can echo model paths, credentials or
             # supplied text. Do not surface their contents or chained context.
             raise AudioError("Could not load Kitten TTS model; verify the model and installation") from None
@@ -78,7 +78,7 @@ class KittenProvider:
             result = np.asarray(
                 self.model.generate(text, voice=voice, speed=speed), dtype=np.float32
             ).reshape(-1)
-        except Exception as exc:
+        except Exception:
             # The backend may include private narration text in its exception.
             raise AudioError("Kitten speech generation failed; verify model and voice") from None
         if result.size == 0 or not np.isfinite(result).all():
