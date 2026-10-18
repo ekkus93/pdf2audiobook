@@ -130,3 +130,25 @@ def test_mirrored_running_headers_still_remove_with_position_corroboration():
     edits = pagination_cleanup(blocks, [(600, 800)] * 2, Pdf())
     assert {edit.block_id for edit in edits} == {"p0-header", "p1-header"}
     assert all(edit.reason == "repeated running header" for edit in edits)
+
+
+def test_repeated_one_word_margin_prose_is_not_automatically_a_running_header():
+    # A single repeated word can be part of a poem or dialogue, even when
+    # positioned like a running title. Keep it unless other evidence exists.
+    blocks = []
+    for page in range(3):
+        blocks.extend(
+            [
+                _block(page, "refrain", "Again", 200, 20),
+                _block(page, "running-title", "Sample Book", 220, 65),
+                _block(page, "body", f"Ordinary body passage {page}", 60, 180),
+                _block(page, "folio", str(page + 1), 295, 765),
+            ]
+        )
+    edits = pagination_cleanup(blocks, [(600, 800)] * 3, Pdf())
+    removed = {edit.block_id for edit in edits}
+    assert removed == {
+        *(f"p{page}-running-title" for page in range(3)),
+        *(f"p{page}-folio" for page in range(3)),
+    }
+    assert not any(edit.original == "Again" for edit in edits)

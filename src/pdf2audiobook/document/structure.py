@@ -266,9 +266,14 @@ def pagination_cleanup(
             )
         if is_number and confirmed_number and settings.remove_page_numbers:
             reason = "sequential/repeated page number"
-        elif not PAGE_NUMBER.fullmatch(block.text.strip()) and repeated and (
-            (band == "header" and settings.remove_headers) or
-            (band == "footer" and settings.remove_footers)
+        elif (
+            not PAGE_NUMBER.fullmatch(block.text.strip())
+            and len(block.text.split()) >= 2
+            and repeated
+            and (
+                (band == "header" and settings.remove_headers)
+                or (band == "footer" and settings.remove_footers)
+            )
         ):
             reason = "repeated running " + band
         else:
