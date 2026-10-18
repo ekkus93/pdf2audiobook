@@ -47,6 +47,9 @@ class BookLLMBudgetLedger:
             "SELECT COUNT(*) FROM calls WHERE status NOT IN ('pending','complete','unknown') "
             "OR (status='complete' AND (prompt_tokens IS NULL OR "
             "completion_tokens IS NULL OR total_tokens IS NULL)) "
+            "OR (status!='complete' AND (prompt_tokens IS NOT NULL OR "
+            "completion_tokens IS NOT NULL OR total_tokens IS NOT NULL "
+            "OR estimated_usd IS NOT NULL)) "
             "OR prompt_tokens < 0 OR completion_tokens < 0 OR total_tokens < 0 "
             "OR (status='complete' AND total_tokens < prompt_tokens + completion_tokens)"
         ).fetchone()[0]
@@ -159,10 +162,21 @@ class BookLLMBudgetLedger:
                 }
         price = None
         if verified is not None and input_rate is not None and output_rate is not None:
-            price = str((
-                Decimal(verified["prompt_tokens"]) * Decimal(str(input_rate))
-                + Decimal(verified["completion_tokens"]) * Decimal(str(output_rate))
-            ) / Decimal(1_000_000))
+            # Bad price configuration must never create negative/NaN charges or
+            # be treated as a correctly priced successful provider request.
+            try:
+                input_price = Decimal(str(input_rate))
+                output_price = Decimal(str(output_rate))
+                if (
+                    input_price.is_finite() and input_price >= 0
+                    and output_price.is_finite() and output_price >= 0
+                ):
+                    price = str((
+                        Decimal(verified["prompt_tokens"]) * input_price
+                        + Decimal(verified["completion_tokens"]) * output_price
+                    ) / Decimal(1_000_000))
+            except (InvalidOperation, ValueError, TypeError):
+                pass  # Preserve token counts; mark this request unpriced.
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
