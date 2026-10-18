@@ -122,3 +122,24 @@ def test_wav_cache_isolated_by_tts_engine_with_identical_public_settings(tmp_pat
     synthesize_chunks("The same synthetic sentence.", second_engine, **options)
     assert first_engine.calls == 1
     assert second_engine.calls == 1
+
+
+class FractionalVoice(FakeProvider):
+    def generate(self, text, *, voice, speed):
+        self.calls += 1
+        return np.array([0.123456, -0.123456, 1.2, -1.2], dtype=np.float32)
+
+
+def test_fresh_and_cached_synthesis_use_identical_canonical_pcm(tmp_path):
+    voice = FractionalVoice()
+    options = dict(
+        model="mini", voice="Jasper", speed=1.0, pause_ms=0, cache=tmp_path,
+    )
+    first = synthesize_chunks("A deterministic synthetic sentence.", voice, **options)
+    assert voice.calls == 1
+    replay = synthesize_chunks("A deterministic synthetic sentence.", voice, **options)
+    assert voice.calls == 1
+    assert np.array_equal(first, replay)
+    assert np.array_equal(first, read_wav(wav_bytes(first, voice.sample_rate), voice.sample_rate))
+    assert first.max() == 1.0
+    assert first.min() == -1.0

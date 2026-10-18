@@ -206,7 +206,11 @@ def synthesize_chunks(
         if audio is None:
             try:
                 audio = provider.generate(text, voice=voice, speed=speed)
-                encoded = wav_bytes(audio, provider.sample_rate)
+                encoded = wav_bytes(audio, rate)
+                # First-pass PCM must match verified cached PCM exactly:
+                # canonicalize clipping and 16-bit quantization before
+                # concatenation, not only when replaying the WAV cache.
+                audio = read_wav(encoded, rate)
                 checksum = digest_bytes(encoded)
                 atomic_write(chunk_path, encoded)
                 atomic_write(checksum_path, (checksum + "\n").encode())
