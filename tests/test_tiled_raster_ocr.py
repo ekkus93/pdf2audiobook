@@ -1,6 +1,7 @@
 """Raster-tile union detection and OCR auto-mode coverage regressions."""
 
 from pathlib import Path
+import shutil
 
 import fitz
 import pytest
@@ -91,3 +92,34 @@ def test_tiled_scan_auto_ocr_does_not_discard_valid_embedded_prose(
         assert result.spans and all(span.origin == "embedded" for span in result.spans)
         assert HEADING in " ".join(span.text for span in result.spans)
         assert not any("sparse selectable text overlays" in w for w in result.warnings)
+
+
+@pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract unavailable")
+def test_real_tesseract_recovers_prose_from_four_scanned_tiles(tmp_path: Path) -> None:
+    """Actual engine integration with non-copyrighted text split across raster tiles."""
+    source = tmp_path / "tiled-real-ocr.pdf"
+    with fitz.open() as doc:
+        page = doc.new_page(width=400, height=400)
+        for index, (x, y) in enumerate(QUADRANTS):
+            with fitz.open() as tile:
+                tile_page = tile.new_page(width=200, height=200)
+                if index == 0:
+                    tile_page.insert_text((18, 110), "The scanner found prose.", fontsize=13)
+                elif index == 2:
+                    tile_page.insert_text((18, 110), "Another sentence survives.", fontsize=13)
+                image = tile_page.get_pixmap(
+                    matrix=fitz.Matrix(2, 2), alpha=False,
+                ).tobytes("png")
+                page.insert_image(fitz.Rect(x, y, x + 200, y + 200), stream=image)
+        page.insert_text((30, 60), HEADING, fontsize=10)
+        doc.save(source)
+
+    embedded = extract_pdf(source, Pdf(ocr="never"))
+    assert "scanner found prose" not in " ".join(s.text for s in embedded.spans).lower()
+
+    result = extract_pdf(source, Pdf(ocr="auto", ocr_language="eng"))
+    transcript = " ".join(s.text for s in result.spans).lower()
+    assert "scanner found prose" in transcript
+    assert "another sentence survives" in transcript
+    assert result.spans and all(span.origin == "ocr" for span in result.spans)
+    assert any("sparse selectable text overlays" in warning for warning in result.warnings)
