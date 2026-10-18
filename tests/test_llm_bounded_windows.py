@@ -92,3 +92,35 @@ def test_invalid_window_limits_rejected_before_provider_call():
         detect_llm_headings(blocks, NoCalls(), window_size=0)
     with pytest.raises(LLMError, match="chunk_tokens"):
         propose_llm_cleanup(blocks, NoCalls(), chunk_tokens=0)
+
+
+def test_long_full_source_is_verified_without_legacy_truncation():
+    original = "Nasa " + ("long OCR source sentence. " * 28)
+    block = DocumentBlock(id="long", page_index=0, text=original)
+    observed = []
+
+    class FullSource:
+        def complete_json(self, *, instructions, document_text):
+            records = json.loads(document_text)
+            assert records == [{"id": "long", "text": original}]
+            observed.append(document_text)
+            if "edits" in instructions:
+                return {"edits": [{
+                    "block_id": "long", "original": original,
+                    "replacement": original.replace("Nasa", "NASA", 1),
+                    "reason": "OCR casing", "confidence": 0.95,
+                }]}
+            return {"suggestions": [{
+                "block_id": "long", "original": original,
+                "spoken": original.replace("Nasa", "NASA", 1),
+                "reason": "Acronym pronunciation", "confidence": 0.95,
+            }]}
+
+    provider = FullSource()
+    edits, warnings = propose_llm_cleanup([block], provider, chunk_tokens=1600)
+    assert not warnings and len(edits) == 1
+    assert edits[0].original == original and not edits[0].accepted
+    narration, warnings = propose_llm_narration([block], provider, chunk_tokens=1600)
+    assert not warnings and len(narration) == 1
+    assert narration[0].original == original
+    assert len(observed) == 2
