@@ -113,7 +113,14 @@ def read_wav(data: bytes, expected_rate: int) -> np.ndarray:
                 or wav.getsampwidth() != 2
             ):
                 raise AudioError("Cached WAV has wrong sample rate/channels/format")
-            result = np.frombuffer(wav.readframes(wav.getnframes()), dtype="<i2")
+            frame_count = wav.getnframes()
+            raw_frames = wav.readframes(frame_count)
+            # A WAV header may advertise more PCM data than the file actually
+            # contains. A matching sidecar checksum alone cannot certify that
+            # the declared audio frames were present.
+            if len(raw_frames) != frame_count * wav.getnchannels() * wav.getsampwidth():
+                raise AudioError("Cached WAV is truncated")
+            result = np.frombuffer(raw_frames, dtype="<i2")
             if result.size == 0:
                 raise AudioError("Cached WAV is empty")
             return result.astype(np.float32) / 32767.0
