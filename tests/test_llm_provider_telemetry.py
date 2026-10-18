@@ -92,3 +92,28 @@ def test_provider_accounts_billable_usage_before_invalid_json_rejection():
             provider.complete_json(instructions="task", document_text="fixture")
         assert provider.last_usage["total_tokens"] == 50
         assert provider.total_usage["total_tokens"] == 50
+
+def test_failed_request_clears_previous_usage_without_erasing_accounted_totals():
+    attempts = 0
+
+    def respond(request):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return httpx.Response(200, json={
+                "choices": [{"message": {"content": '{"headings":[]}'}}],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 5, "total_tokens": 25},
+            })
+        return httpx.Response(503, text="server may echo private book content")
+
+    with make_provider(respond, model="fixed") as provider:
+        provider.max_retries = 0
+        assert provider.complete_json(instructions="task", document_text="fixture") == {
+            "headings": []
+        }
+        assert provider.last_usage["total_tokens"] == 25
+        with pytest.raises(Exception, match="LLM request or JSON decoding failed"):
+            provider.complete_json(instructions="task", document_text="fixture")
+        assert provider.last_usage == {}
+        assert provider.total_usage["total_tokens"] == 25
+        assert provider.request_count == 1

@@ -180,6 +180,9 @@ class OpenAICompatibleProvider:
         )
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
+        # Never expose the previous request's usage when this attempt fails before
+        # receiving a billable response. Accounted aggregate usage is unchanged.
+        self.last_usage = {}
         # The book is untrusted data; never send it as system instructions or as tools.
         payload = {
             "model": self._model(),
