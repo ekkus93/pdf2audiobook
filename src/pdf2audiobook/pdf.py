@@ -445,7 +445,11 @@ def _cached_ocr_lines(
     triggers a fresh OCR and an atomic replacement, never silent empty output.
     """
     if cache_dir is None:
-        return _ocr_page_lines(page, settings)
+        lines = _ocr_page_lines(page, settings)
+        verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
+        if verified is None:
+            raise ValueError("invalid OCR line geometry or metadata; no cache entry written")
+        return verified
     if input_sha256 is None:
         raise ValueError("OCR caching requires the source PDF SHA-256")
     key = fingerprint(
