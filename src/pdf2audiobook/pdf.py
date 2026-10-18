@@ -348,6 +348,29 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
     return True, None
 
 
+def _page_has_dominant_raster(page: fitz.Page) -> bool:
+    """Identify scan-sized raster pages with a sparse selectable text overlay.
+
+    Image area alone is not enough: a tiny decorative image stretched over a
+    page is not evidence of scanned prose. A large raster is only a signal to
+    attempt OCR, not proof that OCR output is more faithful than source text.
+    """
+    try:
+        page_area = float(page.rect.get_area())
+        if page_area <= 0:
+            return False
+        for image in page.get_image_info():
+            if image.get("width", 0) < 500 or image.get("height", 0) < 500:
+                continue
+            visible = fitz.Rect(image["bbox"]) & page.rect
+            if visible.get_area() >= page_area * 0.65:
+                return True
+    except (KeyError, TypeError, ValueError, RuntimeError):
+        # Uninspectable image metadata is not a reason to discard text.
+        return False
+    return False
+
+
 @lru_cache(maxsize=1)
 
 def _ocr_engine_version() -> str:
@@ -513,6 +536,20 @@ def extract_pdf(
                     f"{type(exc).__name__}"
                 ) from exc
             usable, quality_issue = _embedded_text_quality(page_lines)
+            # A scanned body can coexist with a short, perfectly valid
+            # selectable heading. Character quality alone misses that body.
+            if settings.ocr == "auto" and usable:
+                printable = sum(
+                    not char.isspace()
+                    for line in page_lines for char in line["text"]
+                )
+                if printable < 120 and _page_has_dominant_raster(page):
+                    usable = False
+                    quality_issue = "sparse selectable text over dominant raster"
+                    warnings.append(
+                        f"Page {page_index + 1}: sparse selectable text overlays "
+                        "a large raster; attempting OCR and requiring coverage review"
+                    )
             use_ocr = settings.ocr == "always" or (
                 settings.ocr == "auto" and not usable
             )
@@ -549,7 +586,10 @@ def extract_pdf(
                         )
                 elif (
                     settings.ocr == "auto"
-                    and quality_issue == "too little selectable text"
+                    and quality_issue in (
+                        "too little selectable text",
+                        "sparse selectable text over dominant raster",
+                    )
                     and embedded_lines
                 ):
                     # A nonempty OCR result can still omit a short genuine
