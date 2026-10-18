@@ -37,7 +37,7 @@ def test_json_windows_bounded_and_complete(task, response_key):
             self.windows = []
 
         def complete_json(self, *, instructions, document_text):
-            assert "Schema version: llm-advisory-v2." in instructions
+            assert "Schema version: llm-advisory-v3." in instructions
             assert len(document_text.encode("utf-8")) <= 230
             self.windows.append(json.loads(document_text))
             return {response_key: []}
@@ -46,7 +46,10 @@ def test_json_windows_bounded_and_complete(task, response_key):
     result, warnings = task(blocks, recorder, window_size=40, chunk_tokens=230)
     assert not result and not warnings
     assert len(recorder.windows) > 1
-    records = [record for window in recorder.windows for record in window]
+    records = [
+        record for window in recorder.windows for record in window
+        if not record.get("context_only")
+    ]
     assert [record["id"] for record in records] == [block.id for block in blocks]
     assert [record["text"] for record in records] == [block.text for block in blocks]
 
@@ -133,10 +136,54 @@ def test_escaped_untrusted_text_cannot_create_additional_json_records():
 
     class Recorder:
         def complete_json(self, *, instructions, document_text):
-            assert "Schema version: llm-advisory-v2." in instructions
+            assert "Schema version: llm-advisory-v3." in instructions
             records = json.loads(document_text)
             assert records == [{"id": "real", "page": 1, "text": source}]
             return {"headings": []}
 
     approved, warnings = detect_llm_headings(blocks, Recorder(), chunk_tokens=300)
     assert not approved and not warnings
+
+def test_lookback_is_context_only_not_an_editable_primary_record():
+    from pdf2audiobook.llm import _bounded_block_windows
+
+    blocks = [
+        DocumentBlock(id=f"b{i}", page_index=0, text=f"Text {i}.")
+        for i in range(5)
+    ]
+    windows = list(_bounded_block_windows(
+        blocks, window_size=2, max_json_bytes=450,
+        record=lambda item: {"id": item.id, "text": item.text},
+    ))
+    assert len(windows) == 3
+    assert [block.id for _, group, _ in windows for block in group] == [
+        block.id for block in blocks
+    ]
+    for index, (_, group, snippet) in enumerate(windows):
+        assert len(snippet.encode("utf-8")) <= 450
+        payload = json.loads(snippet)
+        assert [item["id"] for item in payload if not item.get("context_only")] == [
+            block.id for block in group
+        ]
+        context = [item for item in payload if item.get("context_only")]
+        assert len(context) == (0 if index == 0 else 1)
+        if context:
+            assert context[0]["id"] == windows[index - 1][1][-1].id
+
+
+def test_oversized_source_record_breaks_context_overlap():
+    from pdf2audiobook.llm import _bounded_block_windows
+
+    blocks = [
+        DocumentBlock(id="a", page_index=0, text="Small."),
+        DocumentBlock(id="huge", page_index=0, text="x" * 1000),
+        DocumentBlock(id="b", page_index=0, text="Small again."),
+    ]
+    windows = list(_bounded_block_windows(
+        blocks, window_size=1, max_json_bytes=150,
+        record=lambda item: {"id": item.id, "text": item.text},
+    ))
+    assert [group[0].id if group else None for _, group, _ in windows] == [
+        "a", None, "b"
+    ]
+    assert json.loads(windows[-1][2]) == [{"id": "b", "text": "Small again."}]
