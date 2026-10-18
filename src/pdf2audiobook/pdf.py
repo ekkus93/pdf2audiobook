@@ -547,6 +547,26 @@ def extract_pdf(
                             f"Page {page_index + 1}: retained unverified embedded text "
                             "after empty automatic OCR; review against the PDF"
                         )
+                elif (
+                    settings.ocr == "auto"
+                    and quality_issue == "too little selectable text"
+                    and embedded_lines
+                ):
+                    # A nonempty OCR result can still omit a short genuine
+                    # heading or other selectable text. Do not merge both text
+                    # layers (which may duplicate prose); require explicit review
+                    # when the original line sequence is absent from OCR.
+                    selectable = " ".join(
+                        " ".join(line["text"].split()) for line in embedded_lines
+                    ).casefold()
+                    recognized = " ".join(
+                        " ".join(line["text"].split()) for line in page_lines
+                    ).casefold()
+                    if selectable and selectable not in recognized:
+                        warnings.append(
+                            f"Page {page_index + 1}: automatic OCR did not reproduce "
+                            "short selectable text; review page coverage before narration"
+                        )
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
             # Preserve table cell text and annotate only contained blocks.
