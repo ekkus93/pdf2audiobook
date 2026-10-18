@@ -103,3 +103,30 @@ def test_isolated_repeated_list_markers_are_not_running_headers(marker):
         *(f"p{page}-title" for page in range(3)),
         *(f"p{page}-folio" for page in range(3)),
     }
+
+
+def test_repeated_margin_text_at_unrelated_horizontal_positions_is_preserved():
+    blocks = [
+        _block(0, "fragment", "Repeated fragment", 40, 20),
+        _block(1, "fragment", "Repeated fragment", 210, 20),
+    ]
+    assert pagination_cleanup(blocks, [(600, 800)] * 2, Pdf()) == []
+
+
+def test_repeated_margin_text_at_unrelated_vertical_positions_is_preserved():
+    blocks = [
+        _block(0, "fragment", "Repeated fragment", 200, 20),
+        _block(1, "fragment", "Repeated fragment", 200, 65),
+    ]
+    assert pagination_cleanup(blocks, [(600, 800)] * 2, Pdf()) == []
+
+
+def test_mirrored_running_headers_still_remove_with_position_corroboration():
+    # "Running Title" occupies 91 points with the fixture's geometry.
+    blocks = [
+        _block(0, "header", "Running Title", 40, 20),
+        _block(1, "header", "Running Title", 469, 20),
+    ]
+    edits = pagination_cleanup(blocks, [(600, 800)] * 2, Pdf())
+    assert {edit.block_id for edit in edits} == {"p0-header", "p1-header"}
+    assert all(edit.reason == "repeated running header" for edit in edits)

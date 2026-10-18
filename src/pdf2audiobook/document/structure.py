@@ -94,7 +94,7 @@ def pagination_cleanup(
 ) -> list[CleanupEdit]:
     """Remove only corroborated pagination patterns confined to margin bands."""
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
-    text_occurrences: dict[tuple[str, str], set[int]] = defaultdict(set)
+    text_occurrences: dict[tuple[str, str], list[tuple[int, float, float]]] = defaultdict(list)
     numbered: dict[str, list[tuple[int, int, float, str]]] = defaultdict(list)
     blocks_by_page: dict[int, list[DocumentBlock]] = defaultdict(list)
     body_text: set[str] = set()
@@ -179,7 +179,13 @@ def pagination_cleanup(
                     0.38 <= position <= 0.62):
                 continue
         candidates[block.id] = (block, band)
-        text_occurrences[(band, val)].add(block.page_index)
+        width = sizes[block.page_index][0]
+        if width > 0 and height > 0:
+            x_center = (block.bbox[0] + block.bbox[2]) / (2 * width)
+            y_center = (block.bbox[1] + block.bbox[3]) / (2 * height)
+            text_occurrences[(band, val)].append(
+                (block.page_index, x_center, y_center)
+            )
         parsed = _number_value(raw)
         if parsed is not None:
             width = sizes[block.page_index][0]
@@ -242,7 +248,19 @@ def pagination_cleanup(
             and (band, block.page_index) not in ambiguous_numeric_bands
             and block.page_index in sequential_pages[band]
         )
-        repeated = len(text_occurrences[(band, value)]) >= 2
+        # Repetition alone is insufficient: separate margin prose may recur
+        # at unrelated horizontal or vertical positions on different pages.
+        width, height = sizes[block.page_index]
+        repeated = False
+        if width > 0 and height > 0:
+            x_center = (block.bbox[0] + block.bbox[2]) / (2 * width)
+            y_center = (block.bbox[1] + block.bbox[3]) / (2 * height)
+            repeated = any(
+                page != block.page_index
+                and _aligned_number_positions(x_center, other_x)
+                and abs(y_center - other_y) <= 0.025
+                for page, other_x, other_y in text_occurrences[(band, value)]
+            )
         if is_number and confirmed_number and settings.remove_page_numbers:
             reason = "sequential/repeated page number"
         elif not PAGE_NUMBER.fullmatch(block.text.strip()) and repeated and (
