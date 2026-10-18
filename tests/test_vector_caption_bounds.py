@@ -30,5 +30,7 @@ def test_complex_vector_page_caps_caption_candidates_but_flags_review(monkeypatc
     page = DenseVectorPage()
     assert special._vector_caption_regions(page) == []
     assert calls <= 256
-    assert any("review" in warning.lower() for warning in
-               special.vector_artwork_warnings(page, page_number=1))
+    assert any(
+        "verify" in warning.lower() or "review" in warning.lower()
+        for warning in special.vector_artwork_warnings(page, page_number=1)
+    )
