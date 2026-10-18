@@ -241,6 +241,9 @@ def pagination_cleanup(
                         )
     edits = []
     for block, band in candidates.values():
+        bbox = block.bbox
+        if bbox is None:
+            continue
         value = " ".join(block.text.split()).casefold()
         is_number = _number_value(block.text.strip()) is not None
         confirmed_number = (
@@ -253,8 +256,8 @@ def pagination_cleanup(
         width, height = sizes[block.page_index]
         repeated = False
         if width > 0 and height > 0:
-            x_center = (block.bbox[0] + block.bbox[2]) / (2 * width)
-            y_center = (block.bbox[1] + block.bbox[3]) / (2 * height)
+            x_center = (bbox[0] + bbox[2]) / (2 * width)
+            y_center = (bbox[1] + bbox[3]) / (2 * height)
             repeated = any(
                 page != block.page_index
                 and _aligned_number_positions(x_center, other_x)
