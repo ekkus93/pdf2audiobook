@@ -1,5 +1,7 @@
 """Fail-closed pagination classification of legitimate margin prose and lists."""
 
+import pytest
+
 from pdf2audiobook.config import Pdf
 from pdf2audiobook.document.structure import pagination_cleanup
 from pdf2audiobook.models import DocumentBlock
@@ -82,3 +84,22 @@ def test_three_page_roman_folio_sequence_requires_corroboration():
     }
     # A two-page Roman sequence alone is not enough evidence for deletion.
     assert pagination_cleanup(blocks[:2], [(600, 800)] * 2, Pdf()) == []
+
+
+@pytest.mark.parametrize("marker", ["1)", "a)", "IV)"])
+def test_isolated_repeated_list_markers_are_not_running_headers(marker):
+    blocks = []
+    for page in range(3):
+        blocks.extend(
+            [
+                _block(page, "title", "Running Title", 200, 20),
+                _block(page, "list-marker", marker, 45, 50),
+                _block(page, "body", f"Body paragraph {page}", 65, 180),
+                _block(page, "folio", str(page + 1), 295, 760),
+            ]
+        )
+    removed = {edit.block_id for edit in pagination_cleanup(blocks, [(600, 800)] * 3, Pdf())}
+    assert removed == {
+        *(f"p{page}-title" for page in range(3)),
+        *(f"p{page}-folio" for page in range(3)),
+    }

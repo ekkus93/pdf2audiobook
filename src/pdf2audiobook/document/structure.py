@@ -148,7 +148,8 @@ def pagination_cleanup(
         if (len(raw.split()) >= 8 or
                 (len(raw.split()) >= 3 and raw.endswith((".", "?", "!", "…")))):
             continue
-        if re.match(r"^\(?\d{1,3}[.)]\s", raw):
+        # Isolated list labels can repeat at page starts without being headers.
+        if re.match(r"^(?:\(?\d{1,3}|[A-Za-z]|[IVXLCDMivxlcdm]{1,7})[.)](?:\s|$)", raw):
             continue
         # Standalone numerals may be section headings or list labels. Large
         # display type is not a folio; a same-line continuation suggests a
