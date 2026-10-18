@@ -349,24 +349,62 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
 
 
 def _page_has_dominant_raster(page: fitz.Page) -> bool:
-    """Identify scan-sized raster pages with a sparse selectable text overlay.
+    """Find scan-sized raster coverage, including pages assembled from tiles.
 
-    Image area alone is not enough: a tiny decorative image stretched over a
-    page is not evidence of scanned prose. A large raster is only a signal to
-    attempt OCR, not proof that OCR output is more faithful than source text.
+    Compute the union of visible image rectangles so overlapping artwork cannot
+    be counted multiple times. Require plausible pixel density on each tile:
+    tiny decorative images stretched across a page are not scan evidence.
+    This is only an OCR trigger; the transcript still needs coverage review.
     """
     try:
         page_area = float(page.rect.get_area())
         if page_area <= 0:
             return False
-        for image in page.get_image_info():
-            if image.get("width", 0) < 500 or image.get("height", 0) < 500:
+        images = page.get_image_info()
+        # Bound worst-case geometric work on adversarial image-heavy PDFs.
+        if len(images) > 256:
+            return False
+        regions = []
+        for image in images:
+            width, height = image.get("width", 0), image.get("height", 0)
+            if width < 250 or height < 250:
                 continue
-            visible = fitz.Rect(image["bbox"]) & page.rect
-            if visible.get_area() >= page_area * 0.65:
+            bounds = fitz.Rect(image["bbox"])
+            if not all(math.isfinite(float(value)) for value in bounds):
+                continue
+            if bounds.width <= 0 or bounds.height <= 0:
+                continue
+            if width / bounds.width < 1.0 or height / bounds.height < 1.0:
+                continue
+            visible = bounds & page.rect
+            if visible.get_area() > 0:
+                regions.append(visible)
+        if not regions:
+            return False
+
+        x_coords = sorted({edge for rect in regions for edge in (rect.x0, rect.x1)})
+        covered = 0.0
+        for left, right in zip(x_coords, x_coords[1:]):
+            intervals = sorted(
+                (rect.y0, rect.y1)
+                for rect in regions if rect.x0 < right and rect.x1 > left
+            )
+            if not intervals:
+                continue
+            start, end = intervals[0]
+            covered_height = 0.0
+            for y0, y1 in intervals[1:]:
+                if y0 > end:
+                    covered_height += end - start
+                    start, end = y0, y1
+                else:
+                    end = max(end, y1)
+            covered_height += end - start
+            covered += (right - left) * covered_height
+            if covered >= page_area * 0.65:
                 return True
-    except (KeyError, TypeError, ValueError, RuntimeError):
-        # Uninspectable image metadata is not a reason to discard text.
+    except (KeyError, TypeError, ValueError, RuntimeError, OverflowError, ZeroDivisionError):
+        # Uninspectable image metadata must not replace selectable text.
         return False
     return False
 
