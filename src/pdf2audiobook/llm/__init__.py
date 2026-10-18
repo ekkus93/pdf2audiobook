@@ -324,6 +324,19 @@ def _bounded_block_windows(
         yield start, window, payload()
 
 
+def _diagnostic_block_id(candidate: str, known_ids: set[str]) -> str:
+    """Never echo arbitrary model-generated identifiers into local diagnostics.
+
+    Existing canonical IDs may help trace a rejected context-only candidate,
+    but values that are unknown or contain non-identifier text are untrusted.
+    """
+    if (candidate in known_ids and len(candidate) <= 80
+            and candidate.isascii()
+            and all(char.isalnum() or char in "-_:." for char in candidate)):
+        return candidate
+    return "<unrecognized>"
+
+
 def detect_llm_headings(
     blocks: list, provider: LLMProvider, *,
     window_size: int = 60, chunk_tokens: int = 4000,
@@ -331,6 +344,7 @@ def detect_llm_headings(
     """LLM may nominate existing IDs, not invent chapter text or new source spans."""
     approved: set[str] = set()
     warnings = []
+    known_ids = {block.id for block in blocks}
     for start, window, snippet in _bounded_block_windows(
         blocks, window_size=window_size, max_json_bytes=chunk_tokens,
         record=lambda item: {
@@ -357,7 +371,10 @@ def detect_llm_headings(
         valid = {item.id: item for item in window}
         for heading in proposal.headings:
             if heading.block_id not in valid:
-                warnings.append(f"LLM nominated nonexistent block ID: {heading.block_id}")
+                warnings.append(
+                    "LLM nominated nonexistent block ID: "
+                    + _diagnostic_block_id(heading.block_id, known_ids)
+                )
                 continue
             source = valid[heading.block_id]
             if heading.title.strip().casefold() != source.text.strip().casefold():
@@ -382,6 +399,7 @@ def propose_llm_cleanup(
     """
     edits: list[CleanupEdit] = []
     warnings: list[str] = []
+    known_ids = {block.id for block in blocks}
 
     def audit(
         block_id: str, status: Literal["rejected", "pending_review"],
@@ -428,8 +446,12 @@ def propose_llm_cleanup(
         for suggestion in batch.edits:
             source = valid.get(suggestion.block_id)
             if source is None or suggestion.block_id in seen:
-                warnings.append(f"LLM cleanup references unknown/duplicate block {suggestion.block_id}")
-                audit(suggestion.block_id, "rejected", "unknown_or_duplicate_block",
+                warnings.append(
+                    "LLM cleanup references unknown/duplicate block "
+                    + _diagnostic_block_id(suggestion.block_id, known_ids)
+                )
+                audit(_diagnostic_block_id(suggestion.block_id, known_ids),
+                      "rejected", "unknown_or_duplicate_block",
                       suggestion.confidence, source)
                 continue
             seen.add(suggestion.block_id)
@@ -495,6 +517,7 @@ def propose_llm_narration(
     """Return review-only, verified speech suggestions keyed to exact source lines."""
     suggestions: list[NarrationSuggestion] = []
     warnings: list[str] = []
+    known_ids = {block.id for block in blocks}
     for start, window, snippet in _bounded_block_windows(
         blocks, window_size=window_size, max_json_bytes=chunk_tokens,
         record=lambda block: {"id": block.id, "text": block.text},
@@ -524,7 +547,8 @@ def propose_llm_narration(
             source = valid.get(proposal.block_id)
             if source is None or source.id in seen:
                 warnings.append(
-                    f"LLM narration references unknown/duplicate block {proposal.block_id}"
+                    "LLM narration references unknown/duplicate block "
+                    + _diagnostic_block_id(proposal.block_id, known_ids)
                 )
                 continue
             seen.add(source.id)
@@ -571,6 +595,7 @@ def propose_llm_classification(
     """Identify possible non-prose material without altering the source transcript."""
     accepted: list[ClassificationSuggestion] = []
     warnings: list[str] = []
+    known_ids = {block.id for block in blocks}
     for start, window, snippet in _bounded_block_windows(
         blocks, window_size=window_size, max_json_bytes=chunk_tokens,
         record=lambda block: {
@@ -602,7 +627,8 @@ def propose_llm_classification(
         for item in parsed.labels:
             if item.block_id not in valid or item.block_id in seen:
                 warnings.append(
-                    f"LLM classification unknown/duplicate block: {item.block_id}"
+                    "LLM classification unknown/duplicate block: "
+                    + _diagnostic_block_id(item.block_id, known_ids)
                 )
                 continue
             seen.add(item.block_id)
