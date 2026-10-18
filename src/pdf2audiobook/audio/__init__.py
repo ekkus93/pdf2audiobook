@@ -135,6 +135,13 @@ def synthesize_chunks(
 ) -> np.ndarray:
     """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
     samples: list[np.ndarray] = []
+    # Validate engine metadata before computing pause lengths or replaying
+    # persisted WAVs. Invalid rates must never create bogus audio artifacts.
+    rate = getattr(provider, "sample_rate", None)
+    if isinstance(rate, bool) or not isinstance(rate, int) or not 8000 <= rate <= 192000:
+        raise AudioError("TTS provider sample_rate must be an integer from 8000 to 192000")
+    if isinstance(pause_ms, bool) or not isinstance(pause_ms, int) or not 0 <= pause_ms <= 5000:
+        raise AudioError("TTS pause_ms must be an integer from 0 to 5000")
     # Legacy mocked providers need no explicit chunk-limit attribute, but
     # concrete providers advertise a hard limit that must be enforced before
     # any synthesis or cache replay. Defaulting to 350 otherwise can send

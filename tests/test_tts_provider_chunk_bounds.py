@@ -73,3 +73,26 @@ def test_invalid_provider_limits_fail_closed(tmp_path, limit):
     with pytest.raises(AudioError, match="max_chars_per_chunk"):
         synthesize_chunks("This sentence should never be synthesized.", voice, **_options(tmp_path))
     assert voice.calls == []
+
+
+@pytest.mark.parametrize("rate", [0, -1, 7999, 192001, True, 24000.5, "24000"])
+def test_invalid_tts_sample_rate_does_not_write_cache_or_start_synthesis(
+    tmp_path, rate,
+):
+    voice = BoundedVoice()
+    voice.sample_rate = rate
+    with pytest.raises(AudioError, match="sample_rate"):
+        synthesize_chunks("A short synthetic sentence.", voice, **_options(tmp_path))
+    assert voice.calls == []
+    assert not (tmp_path / "progress.json").exists()
+    assert not (tmp_path / "wav").exists()
+
+
+@pytest.mark.parametrize("pause", [-1, 5001, True, 2.5, "500"])
+def test_invalid_pause_length_fails_before_synthesis(tmp_path, pause):
+    voice = BoundedVoice()
+    opts = dict(_options(tmp_path), pause_ms=pause)
+    with pytest.raises(AudioError, match="pause_ms"):
+        synthesize_chunks("A short synthetic sentence.", voice, **opts)
+    assert voice.calls == []
+    assert not (tmp_path / "progress.json").exists()
