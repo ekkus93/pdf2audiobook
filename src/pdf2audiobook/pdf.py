@@ -357,7 +357,10 @@ def _page_has_dominant_raster(page: fitz.Page) -> bool:
     This is only an OCR trigger; the transcript still needs coverage review.
     """
     try:
-        page_area = float(page.rect.get_area())
+        # Image bounds use unrotated page coordinates even when page.rect
+        # reflects a 90/270-degree viewer rotation. Compare in one frame.
+        page_bounds = fitz.Rect(0, 0, page.cropbox.width, page.cropbox.height)
+        page_area = float(page_bounds.get_area())
         if page_area <= 0:
             return False
         images = page.get_image_info()
@@ -376,7 +379,7 @@ def _page_has_dominant_raster(page: fitz.Page) -> bool:
                 continue
             if width / bounds.width < 1.0 or height / bounds.height < 1.0:
                 continue
-            visible = bounds & page.rect
+            visible = bounds & page_bounds
             if visible.get_area() > 0:
                 regions.append(visible)
         if not regions:

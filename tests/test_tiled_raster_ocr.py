@@ -123,3 +123,49 @@ def test_real_tesseract_recovers_prose_from_four_scanned_tiles(tmp_path: Path) -
     assert "another sentence survives" in transcript
     assert result.spans and all(span.origin == "ocr" for span in result.spans)
     assert any("sparse selectable text overlays" in warning for warning in result.warnings)
+
+
+@pytest.mark.parametrize("rotation", [90, 270])
+def test_rotated_wide_scans_use_unrotated_raster_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rotation: int,
+) -> None:
+    """Auto OCR must not clip unrotated image bounds to rotated page.rect."""
+    source = tmp_path / f"wide-rotated-{rotation}.pdf"
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 800, 400), False)
+    pix.clear_with(255)
+    with fitz.open() as document:
+        page = document.new_page(width=800, height=400)
+        page.insert_image(page.rect, stream=pix.tobytes("png"))
+        page.insert_text((30, 60), HEADING, fontsize=10)
+        page.set_rotation(rotation)
+        document.save(source)
+
+    with fitz.open(source) as document:
+        page = document[0]
+        assert page.rotation == rotation
+        assert page.rect.width == 400
+        assert page.cropbox.width == 800
+        assert _page_has_dominant_raster(page)
+
+    calls: list[int] = []
+
+    def fake_ocr(*args: object, **kwargs: object) -> list[dict]:
+        calls.append(1)
+        return [{
+            "text": RECOGNIZED, "bbox": [30, 100, 650, 115],
+            "font": "OCR", "size": 12.0,
+        }]
+
+    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", fake_ocr)
+    result = extract_pdf(source, Pdf(ocr="auto"))
+    assert calls == [1]
+    assert len(result.spans) == 1
+    assert result.spans[0].origin == "ocr"
+    assert result.spans[0].text == RECOGNIZED
+    assert any("sparse selectable text overlays" in warning for warning in result.warnings)
+
+    # Explicit no-OCR still retains the selectable source layer.
+    never = extract_pdf(source, Pdf(ocr="never"))
+    assert calls == [1]
+    assert never.spans and all(span.origin == "embedded" for span in never.spans)
+    assert HEADING in " ".join(span.text for span in never.spans)
