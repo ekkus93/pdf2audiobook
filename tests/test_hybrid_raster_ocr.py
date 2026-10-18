@@ -1,8 +1,8 @@
 """Hybrid scanned pages with short selectable overlays require OCR review."""
 from __future__ import annotations
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import fitz
 import pytest
