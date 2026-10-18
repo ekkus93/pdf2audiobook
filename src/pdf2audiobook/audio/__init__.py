@@ -155,8 +155,12 @@ def synthesize_chunks(
     pause = np.zeros(int(provider.sample_rate * pause_ms / 1000), dtype=np.float32)
     paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
     ranges = chunk_source_ranges(chapter_text, chunks)
+    # Chunk WAVs are shared across chapters, but never across different
+    # synthesis engines even when their model/voice labels and rates coincide.
+    # The version marker invalidates older engine-agnostic cache keys.
+    engine = f"{type(provider).__module__}.{type(provider).__qualname__}"
     identities = [
-        fingerprint(text, model, voice, speed, provider.sample_rate)
+        fingerprint("tts-wav-v2", engine, text, model, voice, speed, rate)
         for text in chunks
     ]
     # The ledger is diagnostic; it never authorizes reuse without WAV and SHA-256 validation.

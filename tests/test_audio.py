@@ -92,3 +92,33 @@ def test_chunk_cache_invalidation_for_voice_model_speed_and_resume(tmp_path):
     assert provider.calls == before + 1
     synthesize_chunks("A short sentence.", provider, **dict(options, pause_ms=500))
     assert provider.calls == before + 1
+
+
+class AlternateFakeProvider(FakeProvider):
+    """A second engine using the same public model, voice and sample rate."""
+
+    def generate(self, text, *, voice, speed):
+        self.calls += 1
+        return np.zeros(2400, dtype=np.float32) - 0.025
+
+
+def test_wav_cache_isolated_by_tts_engine_with_identical_public_settings(tmp_path):
+    options = dict(
+        model="mini", voice="Jasper", speed=1.0,
+        pause_ms=0, cache=tmp_path / "wav",
+    )
+    first_engine = FakeProvider()
+    first_audio = synthesize_chunks("The same synthetic sentence.", first_engine, **options)
+    assert first_engine.calls == 1
+
+    second_engine = AlternateFakeProvider()
+    second_audio = synthesize_chunks("The same synthetic sentence.", second_engine, **options)
+    assert second_engine.calls == 1
+    assert not np.array_equal(first_audio, second_audio)
+    assert len(list((tmp_path / "wav").glob("*.wav"))) == 2
+
+    # Both engines still resume their own verified chunks independently.
+    synthesize_chunks("The same synthetic sentence.", first_engine, **options)
+    synthesize_chunks("The same synthetic sentence.", second_engine, **options)
+    assert first_engine.calls == 1
+    assert second_engine.calls == 1
