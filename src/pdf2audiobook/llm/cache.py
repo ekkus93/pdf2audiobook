@@ -114,6 +114,12 @@ class CachedLLMProvider:
         })
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
+        # Reject known oversized requests before reserving a book-budget call.
+        # Such requests cannot incur a charge and must not poison the ledger
+        # with a false "unknown" charge. Apply this to cache hits as well.
+        preflight = getattr(self.provider, "validate_request_capacity", None)
+        if callable(preflight):
+            preflight(instructions=instructions, document_text=document_text)
         key = fingerprint("llm-json-cache-v1", self.identity, instructions, document_text)
         target = self.cache_dir / f"{key}.json"
         if self.enabled and target.is_file():

@@ -106,3 +106,42 @@ def test_unsupported_output_cap_fails_closed_without_uncapped_retry():
             provider.complete_json(instructions="classify", document_text="book")
     assert len(sent) == 1
     assert sent[0]["max_tokens"] == settings.llm.max_output_tokens
+
+
+def test_oversized_request_does_not_reserve_unknown_ledger_charge(tmp_path):
+    import sqlite3
+
+    from pdf2audiobook.llm.cache import CachedLLMProvider
+
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"headings":[]}'}}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+            },
+        )
+
+    settings = Settings()
+    settings.llm.max_context_tokens = 512
+    settings.llm.max_output_tokens = 128
+    ledger = tmp_path / "llm_budget.sqlite3"
+    with create_provider(settings, transport=httpx.MockTransport(handler)) as provider:
+        worker = CachedLLMProvider(
+            provider, cache_dir=tmp_path / "cache",
+            identity="context-budget-v1", ledger_path=ledger, max_requests=1,
+        )
+        with pytest.raises(LLMError, match="context"):
+            worker.complete_json(instructions="i" * 250, document_text="d" * 10)
+        assert not ledger.exists()
+        assert worker.requests_started == 0
+        assert requests == []
+        assert worker.complete_json(instructions="short", document_text="book") == {
+            "headings": []
+        }
+    assert len(requests) == 1
+    with sqlite3.connect(ledger) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM calls").fetchone()[0] == 1

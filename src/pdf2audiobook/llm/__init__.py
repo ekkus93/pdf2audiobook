@@ -184,10 +184,10 @@ class OpenAICompatibleProvider:
             ))
         )
 
-    def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
-        # Never expose the previous request's usage when this attempt fails before
-        # receiving a billable response. Accounted aggregate usage is unchanged.
-        self.last_usage = {}
+    def validate_request_capacity(
+        self, *, instructions: str, document_text: str
+    ) -> None:
+        """Check capacity before cache/ledger reservations or any book-text upload."""
         # Conservatively bound tokenized text by its UTF-8 byte length.
         # Reserve fixed chat-role overhead and generation capacity as well.
         # This is not a model-specific tokenizer; live qualification is still needed.
@@ -200,6 +200,12 @@ class OpenAICompatibleProvider:
                 + self.max_output_tokens + 128 > self.max_context_tokens
             ):
                 raise LLMError("LLM request exceeds configured context and output reserve")
+
+    def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
+        # Never expose the previous request's usage when this attempt fails before
+        # receiving a billable response. Accounted aggregate usage is unchanged.
+        self.last_usage = {}
+        self.validate_request_capacity(instructions=instructions, document_text=document_text)
         # The book is untrusted data; never send it as system instructions or as tools.
         payload = {
             "model": self._model(),
