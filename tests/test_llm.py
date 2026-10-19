@@ -90,3 +90,44 @@ def test_llm_does_not_invent_headings():
     ids, warnings = detect_llm_headings(blocks, Fake())
     assert ids == {"b1"}
     assert len(warnings) == 2
+
+
+def test_remote_book_content_warning_precedes_first_upload_only(capsys):
+    seen = []
+
+    def handler(request):
+        # Observe stderr at the instant the mocked remote upload occurs.
+        seen.append(capsys.readouterr().err)
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
+        )
+
+    with OpenAICompatibleProvider(
+        provider="openai", base_url="https://api.openai.com/v1",
+        model="mock-remote", allow_remote=True,
+        transport=httpx.MockTransport(handler),
+    ) as provider:
+        provider.complete_json(instructions="analyse", document_text="PRIVATE_BOOK_TEXT")
+        provider.complete_json(instructions="analyse", document_text="PRIVATE_BOOK_TEXT")
+    assert len(seen) == 2
+    assert "remote LLM" in seen[0]
+    assert "openai" in seen[0]
+    assert "mock-remote" in seen[0]
+    assert "current analysis block window" in seen[0]
+    assert "PRIVATE_BOOK_TEXT" not in seen[0]
+    assert seen[1] == ""
+
+
+def test_loopback_model_never_emits_remote_upload_warning(capsys):
+    def handler(request):
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
+        )
+
+    with OpenAICompatibleProvider(
+        provider="ollama", base_url="http://127.0.0.1:11434/v1",
+        model="mock-local", allow_remote=False,
+        transport=httpx.MockTransport(handler),
+    ) as provider:
+        provider.complete_json(instructions="analyse", document_text="Book text")
+    assert "remote LLM" not in capsys.readouterr().err
