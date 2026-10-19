@@ -4,6 +4,7 @@ Raw blocks are immutable. Cleanup decisions are stored as audited edits.
 """
 from __future__ import annotations
 
+import math
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -98,15 +99,26 @@ def pagination_cleanup(
     numbered: dict[str, list[tuple[int, int, float, str]]] = defaultdict(list)
     blocks_by_page: dict[int, list[DocumentBlock]] = defaultdict(list)
     body_text: set[str] = set()
+
+    def valid_page(page_index: int) -> bool:
+        # Malformed zero/nonfinite page dimensions must never create cleanup
+        # evidence or cause folio-position division by zero.
+        if not 0 <= page_index < len(sizes):
+            return False
+        width, height = sizes[page_index]
+        return (
+            math.isfinite(width) and math.isfinite(height)
+            and width > 0 and height > 0
+        )
     for block in blocks:
         blocks_by_page[block.page_index].append(block)
-        if not block.bbox or block.page_index >= len(sizes):
+        if not block.bbox or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
         if block.bbox[1] >= 0.12 * height and block.bbox[3] <= 0.88 * height:
             body_text.add(" ".join(block.text.split()).casefold())
     for block in blocks:
-        if not block.bbox or block.page_index >= len(sizes):
+        if not block.bbox or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
         top, bottom = block.bbox[1], block.bbox[3]
@@ -210,7 +222,7 @@ def pagination_cleanup(
     # corroborate a sequence on adjacent pages either.
     numeric_counts: dict[tuple[str, int], int] = defaultdict(int)
     for block in blocks:
-        if block.bbox is None or block.page_index >= len(sizes):
+        if block.bbox is None or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
         band = (
