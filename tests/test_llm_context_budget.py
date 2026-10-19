@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from pdf2audiobook.config import load_settings, Settings
+from pdf2audiobook.config import Settings, load_settings
 from pdf2audiobook.errors import ConfigError, LLMError
 from pdf2audiobook.llm import create_provider
 
