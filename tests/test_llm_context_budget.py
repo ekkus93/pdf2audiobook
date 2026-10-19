@@ -23,6 +23,8 @@ def test_chat_context_budget_reserves_output_and_caps_response(provider_name):
 
     settings = Settings()
     settings.llm.provider = provider_name
+    if provider_name == "llama-server":
+        settings.llm.llama_server.model = "mock"
     settings.llm.max_context_tokens = 512
     settings.llm.max_output_tokens = 128
     with create_provider(settings, transport=httpx.MockTransport(handler)) as provider:
