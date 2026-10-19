@@ -144,6 +144,9 @@ def caption_line_indices(
                 box for item in islice(detector(), 5000)
                 if isinstance(item, dict)
                 if (box := _valid_box(item.get("bbox"))) is not None
+                # Decorative icons or tiny raster noise are not reliable
+                # geometric evidence for a figure caption.
+                if box[2] - box[0] >= 20 and box[3] - box[1] >= 20
             ]
         except Exception:
             # _special_material_warnings handles image-inspection failures.
