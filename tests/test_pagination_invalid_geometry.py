@@ -34,10 +34,10 @@ def test_invalid_page_geometry_does_not_trigger_cleanup_or_divide(bad_geometry):
     assert [block.text for block in blocks] == ["1", "2", "3"]
 
 
-def test_invalid_negative_page_index_is_not_used_as_last_page_size():
+def test_out_of_range_page_index_is_not_used_as_evidence():
     blocks = [
         DocumentBlock(
-            id="invalid", page_index=-1, text="A Study of Light",
+            id="invalid", page_index=1, text="A Study of Light",
             bbox=(100.0, 10.0, 220.0, 22.0),
         ),
         DocumentBlock(
