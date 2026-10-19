@@ -46,3 +46,18 @@ def test_unreadable_rectangle_iterator_is_nonfatal():
             raise OSError("unreadable metadata")
 
     assert _valid_box(BrokenRectangle()) is None
+
+
+def test_huge_integer_rectangle_coordinates_do_not_crash_geometry_review():
+    enormous = 10**1000
+    assert _valid_box((0, 0, enormous, 100)) is None
+    assert _valid_box(iter((0, 0, enormous, 100))) is None
+
+
+def test_nonfinite_rectangle_coordinates_are_rejected():
+    assert _valid_box((0, 0, float("inf"), 100)) is None
+    assert _valid_box((0, float("nan"), 10, 100)) is None
+
+
+def test_regular_integer_and_float_rectangles_remain_supported():
+    assert _valid_box((0, 0.5, 20, 40.0)) == (0.0, 0.5, 20.0, 40.0)

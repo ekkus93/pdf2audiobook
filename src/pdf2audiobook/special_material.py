@@ -32,12 +32,16 @@ def _valid_box(box: object) -> tuple[float, float, float, float] | None:
         return None
     coordinates: list[float] = []
     for value in box:
-        if (
-            isinstance(value, bool) or not isinstance(value, (int, float))
-            or not math.isfinite(value)
-        ):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             return None
-        coordinates.append(float(value))
+        try:
+            numeric = float(value)
+        except (OverflowError, ValueError, TypeError):
+            # Python integers can exceed the representable float range.
+            return None
+        if not math.isfinite(numeric):
+            return None
+        coordinates.append(numeric)
     x0, y0, x1, y1 = coordinates
     if x1 <= x0 or y1 <= y0:
         return None
