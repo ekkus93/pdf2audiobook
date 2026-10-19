@@ -125,14 +125,20 @@ def pagination_cleanup(
         # headings. These can legitimately occur in a page's margin band.
         if block.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
             continue
-        if raw.startswith(('"', "'", "“", "‘", "•", "—", "–", "(", "[")):
+        if raw.startswith((
+            '"', "'", "“", "‘", "«", "‹", "„", "‚", "「", "『", "《",
+            "•", "—", "–", "(", "[",
+        )):
             continue
         if raw.startswith(("- ", "− ")):
             # Hyphen-led dialogue is substantive even when it repeats in margins.
             continue
         # A closing quote or unfinished dialogue clause is also prose, not
         # a title/folio, even when a short fragment repeats in a margin.
-        if raw.endswith(('"', "'", "”", "’", ",", ";", "—")):
+        if raw.endswith((
+            '"', "'", "”", "’", "»", "›", "“", "‘", "」", "』", "》",
+            ",", ";", "—",
+        )):
             continue
         # Short one-word dialogue or complete sentences can recur in page
         # margins; punctuation is stronger evidence of prose than repetition
