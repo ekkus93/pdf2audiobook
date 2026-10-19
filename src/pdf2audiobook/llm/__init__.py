@@ -263,7 +263,14 @@ class OpenAICompatibleProvider:
                 if isinstance(usage, dict):
                     for field in self.total_usage:
                         count = usage.get(field)
-                        if isinstance(count, int) and not isinstance(count, bool) and count >= 0:
+                        if (
+                            isinstance(count, int)
+                            and not isinstance(count, bool)
+                            and 0 <= count <= (2**63 - 1) - self.total_usage[field]
+                        ):
+                            # Persisted token ledgers use signed SQLite integers.
+                            # Malformed or overflowing usage must stay unknown,
+                            # not crash accounting or authorize a false zero cost.
                             self.last_usage[field] = count
                             self.total_usage[field] += count
                 message = reply["choices"][0]["message"]["content"]
