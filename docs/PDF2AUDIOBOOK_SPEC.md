@@ -165,7 +165,7 @@ Use the OpenAI Python SDK or an equivalent HTTP client with OpenAI-compatible ch
 - **Content classification:** distinguish running headers, body prose, footnotes, bibliographies, page labels, captions and ornamental material.
 - **Narration policy:** flag terms that need pronunciation/speech normalization while retaining source text unchanged.
 
-Use bounded requests with nearby-context overlap, stable IDs and prompt versioning; avoid sending entire books to small-context models. Use low temperature when supported. Treat book text as **untrusted data**: embedded instructions may not change prompts, run tools, exfiltrate text or alter policy.
+Use bounded requests with nearby-context overlap, stable IDs and prompt versioning; avoid sending entire books to small-context models. Reserve configured output capacity before each request, use a conservative UTF-8-byte upper bound for prompt content plus explicit chat-message overhead, and pass max_tokens to the compatible API. This is a fail-closed preliminary bound, not a model-specific tokenizer guarantee; incompatible parameter support and live served-model context windows require real-model checks. Use low temperature when supported. Treat book text as **untrusted data**: embedded instructions may not change prompts, run tools, exfiltrate text or alter policy.
 
 ### 6.3 Verification and fallbacks
 
@@ -213,6 +213,7 @@ enabled = true
 provider = "ollama"
 temperature = 0.1
 max_context_tokens = 16384
+max_output_tokens = 1024  # reserved output, also sent as max_tokens
 chunk_tokens = 4000
 max_retries = 3
 structure = true
