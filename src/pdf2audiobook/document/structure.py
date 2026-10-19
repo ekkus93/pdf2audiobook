@@ -346,8 +346,22 @@ def propose_chapters(
     # numbered headings and ornamental titles; do not discard the TOC merely
     # because a subset of chapters matched the regular expression.
     bookmark_titles: dict[int, str] = {}
-    for depth, title, page_num, *_ in toc:
-        if depth > 2 or page_num < 1 or not isinstance(title, str):
+    malformed_bookmarks = 0
+    for entry in toc:
+        # Bookmarks are advisory metadata. Corrupt/third-party TOC records
+        # must not abort an otherwise usable source-text chapter analysis.
+        if not isinstance(entry, (list, tuple)) or len(entry) < 3:
+            malformed_bookmarks += 1
+            continue
+        depth, title, page_num = entry[:3]
+        if (
+            isinstance(depth, bool) or not isinstance(depth, int)
+            or isinstance(page_num, bool) or not isinstance(page_num, int)
+            or depth < 1 or page_num < 1 or not isinstance(title, str)
+        ):
+            malformed_bookmarks += 1
+            continue
+        if depth > 2:
             continue
         page_index = page_num - 1
         title_normalized = " ".join(title.casefold().split())
@@ -376,6 +390,11 @@ def propose_chapters(
                     f"TOC entry {title!r} points to PDF page {page_num}; "
                     f"matched unique title on page {blocks[match].page_index + 1}"
                 )
+    if malformed_bookmarks:
+        warnings.append(
+            f"Skipped {malformed_bookmarks} malformed PDF bookmark "
+            "record(s); verify chapter boundaries manually"
+        )
     heading_indices = sorted(set(heading_indices))
     if not blocks:
         raise ExtractionError("No text found in PDF; no chapters can be created")
