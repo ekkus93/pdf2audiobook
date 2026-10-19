@@ -41,13 +41,14 @@ class _SynthesisProgress(TypedDict):
     chunks: list[_ChunkProgress]
 
 
-def split_sentences(text: str, max_chars: int = 350) -> list[str]:
+\n# Match pairs of logical line endings (CRLF, LF, or CR) with optional\n# indentation between them. The same rule controls chunking and source spans.\n_PARAGRAPH_BREAK = re.compile(r"(?:\\r\\n|\\r|\\n)[ \\t]*(?:\\r\\n|\\r|\\n)+")\n\n\ndef split_sentences(text: str, max_chars: int = 350) -> list[str]:
     """Split at sentence/word boundaries without crossing source paragraphs."""
     if max_chars < 40:
         raise ValueError("max_chars must be at least 40")
     chunks: list[str] = []
-    # Blank lines are semantic paragraph boundaries; single soft wraps are not.
-    for paragraph in re.split(r"\r?\n[ \t]*\r?\n+", text.strip()):
+    # Blank lines are semantic paragraph boundaries, including PDF-derived
+    # CR-only line endings; a single soft wrap is not a paragraph break.
+    for paragraph in _PARAGRAPH_BREAK.split(text.strip()):
         current = ""
         for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
             for word in sentence.split():
@@ -80,7 +81,7 @@ def chunk_source_ranges(
             raise AudioError("Narration chunk source alignment failed")
         start, end = group[0].start(), group[-1].end()
         paragraph_boundary = bool(
-            re.search(r"\r?\n[ \t]*\r?\n+", chapter_text[previous_end:start])
+            _PARAGRAPH_BREAK.search(chapter_text[previous_end:start])
         )
         positions.append((start, end, paragraph_boundary))
         previous_end = end
