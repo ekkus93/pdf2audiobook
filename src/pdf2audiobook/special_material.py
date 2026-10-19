@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Iterable
+from itertools import islice
 from typing import cast
 
 _CAPTION = re.compile(
@@ -23,7 +24,7 @@ def _valid_box(box: object) -> tuple[float, float, float, float] | None:
         # fitz.Rect supports tuple(rect) but does not register with the
         # collections.abc.Iterable runtime check. Validate by conversion.
         try:
-            box = tuple(cast(Iterable[object], box))
+            box = tuple(islice(cast(Iterable[object], box), 5))
         except (TypeError, ValueError, OverflowError):
             return None
     if len(box) != 4:
