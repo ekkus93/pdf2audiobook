@@ -20,7 +20,7 @@ uv run ruff check .
 
 The `uv sync` command creates/manages `.venv` automatically. You can also explicitly create one with `uv venv`. To use Kitten TTS later, run `uv sync --extra kitten --extra dev`; that may download a large model and additional dependencies. FFmpeg and Tesseract are installed separately at the OS level.
 
-The default LLM provider is local Ollama; OpenAI requires explicit consent before transmitting book contents. See the specification for privacy and audit requirements.
+The default LLM provider is local Ollama; OpenAI requires explicit consent before transmitting book contents. For consented non-loopback endpoints, a one-time stderr warning identifies the provider, selected model, and current analysis block-window scope *before* uploading book text. Local loopback analysis does not emit the remote-upload warning. See the specification for privacy and audit requirements.
 
 **Lockfile:** `uv.lock` is not checked in yet and must be generated with `uv lock` in an environment with PyPI connectivity, then committed. CI currently resolves dependencies when running `uv sync --extra dev`.
 
