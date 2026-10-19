@@ -9,8 +9,8 @@ import shutil
 import statistics
 import subprocess
 from dataclasses import dataclass
-from itertools import islice
 from functools import lru_cache
+from itertools import islice
 from pathlib import Path
 from typing import Literal
 
