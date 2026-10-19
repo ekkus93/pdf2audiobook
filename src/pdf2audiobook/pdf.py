@@ -205,8 +205,13 @@ def _special_material_warnings(
         images = page.get_image_info()
         if not isinstance(images, (list, tuple)):
             raise ValueError("uninspectable image metadata")
+        if len(images) > 5000:
+            result.append(
+                f"Page {page_number}: embedded image inventory truncated; "
+                "review complex image layouts manually"
+            )
         boxes = []
-        for info in images:
+        for info in images[:5000]:
             if not isinstance(info, dict):
                 raise ValueError("uninspectable image metadata")
             box = _valid_box(info.get("bbox"))
