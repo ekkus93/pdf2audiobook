@@ -20,6 +20,7 @@ from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.reading_order import order_two_columns
 from pdf2audiobook.special_material import (
+    _valid_box,
     caption_line_indices,
     equation_line_indices,
     vector_artwork_warnings,
@@ -197,20 +198,28 @@ def _special_material_warnings(
     result: list[str] = []
     try:
         images = page.get_image_info()
+        if not isinstance(images, (list, tuple)):
+            raise ValueError("uninspectable image metadata")
+        boxes = []
+        for info in images:
+            if not isinstance(info, dict):
+                raise ValueError("uninspectable image metadata")
+            box = _valid_box(info.get("bbox"))
+            if box is None:
+                raise ValueError("invalid image geometry")
+            boxes.append(box)
+        page_area = max(1.0, float(page.cropbox.width * page.cropbox.height))
+        large_image = any(
+            (box[2] - box[0]) * (box[3] - box[1]) / page_area >= 0.01
+            for box in boxes
+        )
     except Exception:
         result.append(
             f"Page {page_number}: could not inspect embedded images; "
             "verify non-text content manually"
         )
     else:
-        page_area = max(1.0, float(page.cropbox.width * page.cropbox.height))
-        if any(
-            isinstance(info.get("bbox"), (tuple, list))
-            and len(info["bbox"]) == 4
-            and max(0.0, info["bbox"][2] - info["bbox"][0])
-            * max(0.0, info["bbox"][3] - info["bbox"][1]) / page_area >= 0.01
-            for info in images
-        ):
+        if large_image:
             result.append(
                 f"Page {page_number}: embedded image detected; "
                 "OCR does not describe figures or diagrams; review manually"
