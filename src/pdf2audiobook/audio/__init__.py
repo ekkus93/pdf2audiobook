@@ -41,7 +41,12 @@ class _SynthesisProgress(TypedDict):
     chunks: list[_ChunkProgress]
 
 
-\n# Match pairs of logical line endings (CRLF, LF, or CR) with optional\n# indentation between them. The same rule controls chunking and source spans.\n_PARAGRAPH_BREAK = re.compile(r"(?:\\r\\n|\\r|\\n)[ \\t]*(?:\\r\\n|\\r|\\n)+")\n\n\ndef split_sentences(text: str, max_chars: int = 350) -> list[str]:
+# Match pairs of logical line endings (CRLF, LF, or CR) with optional
+# indentation between them. The same rule controls chunking and source spans.
+_PARAGRAPH_BREAK = re.compile(r"(?:\r\n|\r|\n)[ \t]*(?:\r\n|\r|\n)+")
+
+
+def split_sentences(text: str, max_chars: int = 350) -> list[str]:
     """Split at sentence/word boundaries without crossing source paragraphs."""
     if max_chars < 40:
         raise ValueError("max_chars must be at least 40")
