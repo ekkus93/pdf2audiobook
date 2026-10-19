@@ -162,11 +162,18 @@ class CachedLLMProvider:
             )
         finally:
             last = getattr(self.provider, "last_usage", None)
+            # A total-token counter alone cannot prove a request's cost.
+            # Require complete, internally consistent signed counters before
+            # using provider aggregates to authorize additional budget spend.
             self.usage_verified = (
                 isinstance(last, dict)
-                and isinstance(last.get("total_tokens"), int)
-                and not isinstance(last.get("total_tokens"), bool)
-                and last["total_tokens"] >= 0
+                and all(
+                    isinstance(last.get(field), int)
+                    and not isinstance(last[field], bool)
+                    and 0 <= last[field] <= 2**63 - 1
+                    for field in ("prompt_tokens", "completion_tokens", "total_tokens")
+                )
+                and last["total_tokens"] >= last["prompt_tokens"] + last["completion_tokens"]
             )
             if self.ledger is not None and reservation is not None:
                 self.ledger.settle(
