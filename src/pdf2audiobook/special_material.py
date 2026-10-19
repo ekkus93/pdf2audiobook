@@ -72,6 +72,11 @@ def _vector_caption_regions(page: object) -> list[tuple[float, float, float, flo
         drawings = detector()
     except Exception:
         return []
+    # A third-party adapter can return an unexpected object instead of a
+    # bounded sequence. Treat it as uninspectable rather than crashing PDF
+    # extraction or consuming an unbounded iterator.
+    if not isinstance(drawings, (list, tuple)):
+        return []
     candidates = []
     for item in drawings[:5000]:
         if not isinstance(item, dict):
@@ -231,6 +236,11 @@ def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
         area = max(1.0, float(crop.width) * float(crop.height))
         drawings = detector()
     except Exception:
+        return [
+            f"Page {page_number}: vector drawing inspection unavailable; "
+            "review diagrams manually"
+        ]
+    if not isinstance(drawings, (list, tuple)):
         return [
             f"Page {page_number}: vector drawing inspection unavailable; "
             "review diagrams manually"
