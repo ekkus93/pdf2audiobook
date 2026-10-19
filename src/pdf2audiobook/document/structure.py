@@ -519,9 +519,18 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
     if len(span_ids) != len(set(span_ids)):
         raise ExtractionError("Duplicate source span IDs in manifest")
     known_spans = set(span_ids)
+    assigned_spans: set[str] = set()
     for block in manifest.blocks:
-        if not set(block.span_ids).issubset(known_spans):
-            raise ExtractionError(f"Block {block.id} references missing source spans")
+        if known_spans and not block.span_ids:
+            raise ExtractionError(f"Block {block.id} has no source span provenance")
+        for span_id in block.span_ids:
+            if span_id not in known_spans:
+                raise ExtractionError(f"Block {block.id} references missing source spans")
+            if span_id in assigned_spans:
+                raise ExtractionError(f"Source span {span_id} is assigned more than once")
+            assigned_spans.add(span_id)
+    if assigned_spans != known_spans:
+        raise ExtractionError("Manifest contains unassigned source spans")
     by_id = {block.id: block for block in manifest.blocks}
     accepted: dict[str, str] = {}
     for edit in manifest.edits:
