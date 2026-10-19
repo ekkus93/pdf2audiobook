@@ -139,3 +139,26 @@ def test_request_budget_config_env_and_validation():
         load_settings(
             no_config=True, environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "0"},
         )
+
+
+def test_cached_provider_identity_invalidates_on_output_token_cap_change(tmp_path):
+    from pdf2audiobook.config import Settings
+    from pdf2audiobook.pipeline import _llm_cache_identity
+
+    provider = Stub()
+    settings = Settings()
+    first_identity = _llm_cache_identity(settings)
+    CachedLLMProvider(
+        provider, cache_dir=tmp_path, identity=first_identity,
+    ).complete_json(instructions="schema", document_text="text")
+    settings.llm.max_output_tokens = 256
+    updated_identity = _llm_cache_identity(settings)
+    assert first_identity != updated_identity
+    CachedLLMProvider(
+        provider, cache_dir=tmp_path, identity=updated_identity,
+    ).complete_json(instructions="schema", document_text="text")
+    assert provider.calls == 2
+    CachedLLMProvider(
+        provider, cache_dir=tmp_path, identity=updated_identity,
+    ).complete_json(instructions="schema", document_text="text")
+    assert provider.calls == 2

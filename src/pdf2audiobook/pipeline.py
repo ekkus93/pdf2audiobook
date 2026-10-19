@@ -32,6 +32,17 @@ from pdf2audiobook.workspace import (
 )
 
 
+def _llm_cache_identity(settings: Settings) -> str:
+    """Include response-cap settings in the model-specific request cache namespace."""
+    selected = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
+    return fingerprint(
+        "llm-provider-v2", settings.llm.provider,
+        selected.model, selected.base_url,
+        settings.llm.temperature, settings.llm.max_context_tokens,
+        settings.llm.chunk_tokens, settings.llm.max_output_tokens,
+    )
+
+
 def analyze_book(source: Path, settings: Settings) -> Path:
     from pdf2audiobook.errors import InputError
 
@@ -116,17 +127,9 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                 block for block in extracted.blocks if block.id not in omitted
             ]
             with create_provider(settings) as provider:
-                selected_llm = getattr(
-                    settings.llm, settings.llm.provider.replace("-", "_")
-                )
                 worker = CachedLLMProvider(
                     provider, cache_dir=folder / ".cache" / "llm",
-                    identity=fingerprint(
-                        "llm-provider-v1", settings.llm.provider,
-                        selected_llm.model, selected_llm.base_url,
-                        settings.llm.temperature, settings.llm.max_context_tokens,
-                        settings.llm.chunk_tokens,
-                    ),
+                    identity=_llm_cache_identity(settings),
                     enabled=settings.cache.enabled and settings.general.resume,
                     max_requests=settings.llm.max_requests,
                     max_reported_tokens=settings.llm.max_reported_tokens,
