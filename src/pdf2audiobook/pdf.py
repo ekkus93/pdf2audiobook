@@ -448,6 +448,7 @@ def _page_has_dominant_raster(page: fitz.Page) -> bool:
             covered_height += end - start
             covered += (right - left) * covered_height
             if covered >= page_area * 0.65:
+
                 return True
     except (KeyError, TypeError, ValueError, RuntimeError, OverflowError, ZeroDivisionError):
         # Uninspectable image metadata must not replace selectable text.
@@ -525,16 +526,19 @@ def _valid_cached_lines(data: object) -> list[dict] | None:
             or any(
                 isinstance(num, bool)
                 or not isinstance(num, (int, float))
-                or not math.isfinite(num)
+                # Check magnitude before converting arbitrary-size integers
+                # to float inside isfinite (which can raise OverflowError).
                 or abs(num) > 1_000_000
+                or not math.isfinite(num)
                 for num in bbox
             )
             or bbox[0] >= bbox[2]
             or bbox[1] >= bbox[3]
             or isinstance(size, bool)
             or not isinstance(size, (int, float))
-            or not math.isfinite(size)
             or size < 0
+            or size > 1_000_000
+            or not math.isfinite(size)
             or font is not None and not isinstance(font, str)
         ):
             return None
