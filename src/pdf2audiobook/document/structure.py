@@ -145,6 +145,11 @@ def pagination_cleanup(
         # is evidence of a running title. Fail closed instead of deleting it.
         if raw.endswith((".", "?", "!", "…")):
             continue
+        # A repeated dialogue/speaker label or chapter-and-verse reference
+        # can be isolated at the top or bottom of multiple pages. Repetition
+        # is not sufficient evidence to delete these source text blocks.
+        if raw.endswith((":", "：")) or re.search(r"\b\d{1,3}:\d{1,3}\b", raw):
+            continue
         # A phrase appearing in the interior of any page is substantive text
         # somewhere in the book; do not delete identical margin occurrences.
         if val in body_text:
