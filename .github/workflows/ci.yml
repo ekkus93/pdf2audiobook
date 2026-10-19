@@ -30,7 +30,7 @@ jobs:
       - name: Scoped Ruff format check
         run: uv run --extra dev ruff format --check src/pdf2audiobook/errors.py tests/test_equation_review.py
       - name: Schema and error type checks
-        run: uv run --extra dev mypy
+        run: uv run --extra dev mypy --python-version "${{ matrix.python-version }}"
       - name: Unit tests
         run: uv run --extra dev pytest -q
       - name: CLI smoke
