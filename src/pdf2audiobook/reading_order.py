@@ -12,18 +12,31 @@ def order_two_columns(
     Full-width text acts as a section boundary. Sparse notes, tables, and
     ambiguous layouts retain their original extraction order for review.
     """
-    if page_width <= 0 or len(lines) < 8:
+    # Geometry comes from a PDF parser. Reject invalid page dimensions without
+    # speculatively changing the order of any source text.
+    if isinstance(page_width, bool):
         return lines, False
-    middle = page_width / 2
-    gap = max(8.0, page_width * 0.012)
+    try:
+        width = float(page_width)
+    except (TypeError, ValueError, OverflowError):
+        return lines, False
+    if not math.isfinite(width) or width <= 0 or len(lines) < 8:
+        return lines, False
+    middle = width / 2
+    gap = max(8.0, width * 0.012)
 
     def bbox(line: dict) -> tuple[float, float, float, float] | None:
         raw = line.get("bbox")
         if not isinstance(raw, (list, tuple)) or len(raw) != 4:
             return None
-        if any(not isinstance(n, (float, int)) or not math.isfinite(n) for n in raw):
+        if any(isinstance(n, bool) or not isinstance(n, (float, int)) for n in raw):
             return None
-        x0, y0, x1, y1 = map(float, raw)
+        try:
+            x0, y0, x1, y1 = map(float, raw)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if not all(math.isfinite(n) for n in (x0, y0, x1, y1)):
+            return None
         return (x0, y0, x1, y1) if x1 > x0 and y1 > y0 else None
 
     def side(line: dict) -> str:
@@ -55,7 +68,7 @@ def order_two_columns(
             return region, False
         for column in (left, right):
             widths = sorted(b[2] - b[0] for _, _, b in column)
-            if widths[len(widths) // 2] < page_width * 0.24:
+            if widths[len(widths) // 2] < width * 0.24:
                 return region, False
         top = max(min(b[1] for _, _, b in left), min(b[1] for _, _, b in right))
         bottom = min(max(b[3] for _, _, b in left), max(b[3] for _, _, b in right))
