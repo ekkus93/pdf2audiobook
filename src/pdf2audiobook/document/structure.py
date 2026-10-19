@@ -347,6 +347,7 @@ def propose_chapters(
     # because a subset of chapters matched the regular expression.
     bookmark_titles: dict[int, str] = {}
     malformed_bookmarks = 0
+    valid_bookmarks: list[tuple[str, int]] = []
     for entry in toc:
         # Bookmarks are advisory metadata. Corrupt/third-party TOC records
         # must not abort an otherwise usable source-text chapter analysis.
@@ -363,6 +364,34 @@ def propose_chapters(
             continue
         if depth > 2:
             continue
+        valid_bookmarks.append((title, page_num))
+
+    # A printed TOC can be offset from physical PDF pages by front matter.
+    # Infer a nontrivial offset only from at least two distinct, uniquely
+    # matched textual headings and no conflicting unique heading evidence.
+    offset_evidence: dict[int, set[str]] = defaultdict(set)
+    for title, page_num in valid_bookmarks:
+        normalized = " ".join(title.casefold().split())
+        matches = [
+            i for i in heading_indices
+            if blocks[i].id not in omitted
+            and " ".join(blocks[i].text.casefold().split()) == normalized
+        ]
+        if len(matches) == 1:
+            offset = blocks[matches[0]].page_index - (page_num - 1)
+            if abs(offset) <= 128:
+                offset_evidence[offset].add(normalized)
+    inferred_offset: int | None = None
+    if len(offset_evidence) == 1:
+        offset, titles = next(iter(offset_evidence.items()))
+        if abs(offset) > 2 and len(titles) >= 2:
+            inferred_offset = offset
+            warnings.append(
+                f"PDF bookmark page offset {offset:+d} inferred from "
+                f"{len(titles)} unique headings; verify chapter alignment"
+            )
+
+    for title, page_num in valid_bookmarks:
         page_index = page_num - 1
         title_normalized = " ".join(title.casefold().split())
         if not title_normalized:
@@ -382,6 +411,13 @@ def propose_chapters(
         match = exact[0] if len(exact) == 1 else (
             nearby[0] if not exact and len(nearby) == 1 else None
         )
+        if match is None and not exact and not nearby and inferred_offset is not None:
+            shifted = [
+                i for i in matching
+                if blocks[i].page_index == page_index + inferred_offset
+            ]
+            if len(shifted) == 1:
+                match = shifted[0]
         if match is not None:
             heading_indices.append(match)
             bookmark_titles[match] = title.strip()
