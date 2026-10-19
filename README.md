@@ -162,7 +162,10 @@ max_output_tokens = 1024
 `max_tokens` and fails closed if a server rejects the parameter; it must
 not retry without the cap. Existing JSON-mode fallback preserves the cap.
 Input estimation uses a conservative UTF-8-byte count plus reserved chat
-overhead, **not** model-specific tokenization. Operators must verify actual
+overhead, **not** model-specific tokenization. Oversized requests are rejected
+before cache retrieval or SQLite budget reservations, so a locally rejected
+request does not leave a false unresolved provider charge. Changing the output
+cap also invalidates earlier LLM response-cache identities. Operators must verify actual
 context windows and `max_tokens` support against their selected live model.
 These checks do not guarantee that a misconfigured server honors its limit.
 
