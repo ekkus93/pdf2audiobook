@@ -275,35 +275,60 @@ def _footnote_line_indices(
     list or ordinary paragraph near the page bottom must remain body text.
     Uncertain notes are preserved as untyped source blocks for review.
     """
+    # Geometry is advisory and may originate in a malformed PDF or adapter.
+    # A nonfinite page size or unrepresentable coordinate must not interrupt
+    # extraction or cause an unverified footnote classification.
+    if isinstance(page_height, bool):
+        return set()
+    try:
+        height = float(page_height)
+    except (TypeError, ValueError, OverflowError):
+        return set()
+    if not math.isfinite(height) or height <= 0:
+        return set()
+
+    validated: list[tuple[tuple[float, float, float, float] | None, float | None]] = []
+    for line in lines:
+        bounds = _valid_box(line.get("bbox"))
+        raw_size = line.get("size")
+        size: float | None = None
+        if not isinstance(raw_size, bool) and isinstance(raw_size, (int, float)):
+            try:
+                candidate = float(raw_size)
+            except (TypeError, ValueError, OverflowError):
+                pass
+            else:
+                if math.isfinite(candidate) and candidate > 0:
+                    size = candidate
+        validated.append((bounds, size))
+
     body_sizes = [
-        float(line["size"]) for line in lines
-        if line.get("bbox") and line["bbox"][1] < page_height * 0.65
-        and isinstance(line.get("size"), (int, float))
-        and math.isfinite(float(line["size"])) and line["size"] > 0
+        size for bounds, size in validated
+        if bounds is not None and size is not None and bounds[1] < height * 0.65
     ]
     if len(body_sizes) < 2:
         return set()
     body_size = statistics.median(body_sizes)
     result: set[int] = set()
     for index, line in enumerate(lines):
-        bounds = line.get("bbox")
-        size = line.get("size")
+        bounds, size = validated[index]
+        text = line.get("text")
         if (
-            not bounds or len(bounds) != 4
-            or not isinstance(size, (int, float))
-            or not math.isfinite(float(size))
-            or size <= 0 or size > 0.78 * body_size
-            or bounds[1] < page_height * 0.70
-            or _inside_table(tuple(bounds), table_regions)
-            or not re.match(r"^(?:\d{1,2}[.)]?|[*†‡])\s+\S", line["text"])
+            bounds is None or size is None
+            or size > 0.78 * body_size
+            or bounds[1] < height * 0.70
+            or _inside_table(bounds, table_regions)
+            or not isinstance(text, str)
+            or not re.match(r"^(?:\d{1,2}[.)]?|[*†‡])\s+\S", text)
         ):
             continue
-        # A genuine footnote is typically separated from the main text.
-        # Require clear whitespace above the note, not just a font change.
+        # Require a clear gap from preceding valid text, not merely small font.
         preceding_bottom = max(
-            (other["bbox"][3] for other in lines
-             if other is not line and other.get("bbox")
-             and other["bbox"][3] <= bounds[1]),
+            (
+                other_bounds[3] for other_index, (other_bounds, _) in enumerate(validated)
+                if other_index != index and other_bounds is not None
+                and other_bounds[3] <= bounds[1]
+            ),
             default=None,
         )
         if preceding_bottom is None or bounds[1] - preceding_bottom < max(18.0, body_size * 1.5):
@@ -313,24 +338,24 @@ def _footnote_line_indices(
     # Extend confirmed footnotes through adjacent, same-column small-type
     # continuation lines only. Never infer a note from small text alone.
     for anchor_index in sorted(result):
-        anchor_box = lines[anchor_index]["bbox"]
+        anchor_box = validated[anchor_index][0]
+        if anchor_box is None:
+            continue
         previous_box = anchor_box
         for next_index in range(anchor_index + 1, len(lines)):
             if next_index in result:
                 break
             item = lines[next_index]
-            bounds, size, text = item.get("bbox"), item.get("size"), item.get("text")
+            bounds, size = validated[next_index]
+            text = item.get("text")
             if (
-                not bounds or len(bounds) != 4
-                or not isinstance(size, (int, float)) or isinstance(size, bool)
-                or not math.isfinite(float(size))
-                or size <= 0 or size > 0.78 * body_size
+                bounds is None or size is None
+                or size > 0.78 * body_size
                 or not isinstance(text, str) or not text.strip()
-                or bounds[1] < page_height * 0.70
-                or _inside_table(tuple(bounds), table_regions)
+                or bounds[1] < height * 0.70
+                or _inside_table(bounds, table_regions)
             ):
                 break
-            # A fresh number/symbol needs separate anchor evidence.
             if re.match(r"^(?:\d{1,2}[.)]?|[*†‡])\s+\S", text):
                 break
             gap = bounds[1] - previous_box[3]
@@ -344,7 +369,6 @@ def _footnote_line_indices(
             result.add(next_index)
             previous_box = bounds
     return result
-
 
 
 def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
@@ -448,6 +472,7 @@ def _ocr_engine_version() -> str:
         )
     except (OSError, subprocess.TimeoutExpired):
         return "tesseract-cli-unknown"
+
     if result.returncode != 0:
         return "tesseract-cli-unknown"
     # A successful CLI invocation may still produce no version text.
