@@ -138,8 +138,10 @@ def caption_line_indices(
     detector = getattr(page, "get_image_info", None)
     if callable(detector):
         try:
+            # Bound third-party image inventories just as PDF review does.
+            # A malformed adapter may expose an unbounded iterable.
             image_boxes = [
-                box for item in detector()
+                box for item in islice(detector(), 5000)
                 if isinstance(item, dict)
                 if (box := _valid_box(item.get("bbox"))) is not None
             ]
