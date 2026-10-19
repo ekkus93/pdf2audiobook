@@ -50,6 +50,10 @@ class BookLLMBudgetLedger:
             "OR (status!='complete' AND (prompt_tokens IS NOT NULL OR "
             "completion_tokens IS NOT NULL OR total_tokens IS NOT NULL "
             "OR estimated_usd IS NOT NULL)) "
+            "OR (status='complete' AND (typeof(prompt_tokens) != 'integer' "
+            "OR typeof(completion_tokens) != 'integer' "
+            "OR typeof(total_tokens) != 'integer')) "
+            "OR (estimated_usd IS NOT NULL AND typeof(estimated_usd) != 'text') "
             "OR prompt_tokens < 0 OR completion_tokens < 0 OR total_tokens < 0 "
             "OR (status='complete' AND total_tokens < prompt_tokens + completion_tokens)"
         ).fetchone()[0]
