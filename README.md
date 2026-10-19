@@ -145,6 +145,27 @@ retries can also incur charges not reported by the provider. Dollar totals
 are estimates, not authoritative provider billing. Do not rely on these
 limits as guaranteed provider-side spending caps.
 
+## LLM context and completion capacity
+
+The LLM adapter checks each request before uploading book content, reserving
+space for model output as well as instructions and document records. Configure:
+
+~~~toml
+[llm]
+max_context_tokens = 16384
+chunk_tokens = 4000
+max_output_tokens = 1024
+~~~
+
+`max_output_tokens` can also be set with
+`PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS`. The adapter sends this value as
+`max_tokens` and fails closed if a server rejects the parameter; it must
+not retry without the cap. Existing JSON-mode fallback preserves the cap.
+Input estimation uses a conservative UTF-8-byte count plus reserved chat
+overhead, **not** model-specific tokenization. Operators must verify actual
+context windows and `max_tokens` support against their selected live model.
+These checks do not guarantee that a misconfigured server honors its limit.
+
 ## Opt-in live LLM provider smoke tests
 
 These are **never run by offline CI**. Each command sends only a small synthetic
