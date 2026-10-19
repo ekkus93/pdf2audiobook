@@ -43,7 +43,7 @@ class _SynthesisProgress(TypedDict):
 
 # Match pairs of logical line endings (CRLF, LF, or CR) with optional
 # indentation between them. The same rule controls chunking and source spans.
-_PARAGRAPH_BREAK = re.compile(r"(?:\r\n|\r|\n)[ \t]*(?:\r\n|\r|\n)+")
+_PARAGRAPH_BREAK = re.compile(r"(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)+")
 
 
 def split_sentences(text: str, max_chars: int = 350) -> list[str]:
