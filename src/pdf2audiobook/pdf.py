@@ -78,6 +78,17 @@ def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
         }
 
 
+def _positive_finite_number(value: object) -> float | None:
+    """Convert advisory PDF numeric metadata without trusting its magnitude."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except (OverflowError, TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) and number > 0 else None
+
+
 def _lines(page: fitz.Page, textpage: fitz.TextPage | None = None) -> list[dict]:
     structure = page.get_text("dict", sort=True, textpage=textpage)
     extracted = []
@@ -90,7 +101,10 @@ def _lines(page: fitz.Page, textpage: fitz.TextPage | None = None) -> list[dict]
             if not text:
                 continue
             bbox = line.get("bbox")
-            largest = max((float(span.get("size", 0)) for span in spans), default=0)
+            largest = max(
+                (_positive_finite_number(span.get("size")) or 0.0 for span in spans),
+                default=0.0,
+            )
             font = spans[0].get("font") if spans else None
             extracted.append(
                 {"text": text, "bbox": bbox, "font": font, "size": largest}
@@ -125,8 +139,8 @@ def page_review_warnings(
 
     aligned_separate_lines = 0
     for first, second in zip(lines, lines[1:]):
-        left, right = first.get("bbox"), second.get("bbox")
-        if not left or not right:
+        left, right = _valid_box(first.get("bbox")), _valid_box(second.get("bbox"))
+        if left is None or right is None:
             continue
         overlap = min(left[3], right[3]) - max(left[1], right[1])
         shortest_height = min(left[3] - left[1], right[3] - right[1])
@@ -234,20 +248,20 @@ def _special_material_warnings(
                 f"Page {page_number}: embedded image detected; "
                 "OCR does not describe figures or diagrams; review manually"
             )
+    # Font and bbox metadata is advisory; reject unrepresentable numeric
+    # values rather than allowing malformed PDF metadata to crash inspection.
     sizes = [
-        float(line["size"]) for line in lines
-        if isinstance(line.get("size"), (int, float))
-        and float(line["size"]) > 0
+        size for line in lines
+        if (size := _positive_finite_number(line.get("size"))) is not None
     ]
     if len(sizes) >= 3:
         median_size = statistics.median(sizes)
-        height = float(page.cropbox.height)
-        if any(
-            isinstance(line.get("bbox"), (tuple, list))
-            and len(line["bbox"]) == 4
-            and isinstance(line.get("size"), (int, float))
-            and 0 < float(line["size"]) <= 0.78 * median_size
-            and line["bbox"][1] >= 0.7 * height
+        height = _positive_finite_number(page.cropbox.height)
+        if height is not None and any(
+            (bounds := _valid_box(line.get("bbox"))) is not None
+            and (size := _positive_finite_number(line.get("size"))) is not None
+            and size <= 0.78 * median_size
+            and bounds[1] >= 0.7 * height
             for line in lines
         ):
             result.append(
