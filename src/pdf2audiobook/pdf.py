@@ -9,6 +9,7 @@ import shutil
 import statistics
 import subprocess
 from dataclasses import dataclass
+from itertools import islice
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
@@ -154,13 +155,17 @@ def _table_regions(
     try:
         found = detector()
         boxes = []
-        for table in found.tables:
-            bounds = tuple(float(n) for n in table.bbox)
-            if len(bounds) != 4 or not all(math.isfinite(n) for n in bounds):
-                continue
-            if bounds[2] <= bounds[0] or bounds[3] <= bounds[1]:
-                continue
-            boxes.append(bounds)
+        # Table geometry is advisory. Third-party iterators and bbox objects
+        # must not hang extraction or exhaust memory on malformed documents.
+        for index, table in enumerate(islice(found.tables, 501)):
+            if index == 500:
+                return boxes, [
+                    f"Page {page_number}: table inspection truncated; "
+                    "review complex layouts manually"
+                ]
+            bounds = _valid_box(getattr(table, "bbox", None))
+            if bounds is not None:
+                boxes.append(bounds)
     except Exception:
         return [], [
             f"Page {page_number}: table detection unavailable; "
