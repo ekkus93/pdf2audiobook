@@ -50,6 +50,7 @@ class LLM(ConfigModel):
     provider: Literal["openai", "ollama", "llama-server"] = "ollama"
     temperature: float = Field(default=0.1, ge=0, le=2)
     max_context_tokens: int = Field(default=16384, ge=512)
+    max_output_tokens: int = Field(default=1024, ge=1)
     chunk_tokens: int = Field(default=4000, ge=100)
     max_retries: int = Field(default=3, ge=0, le=15)
     max_requests: int | None = Field(default=None, ge=1)
@@ -118,6 +119,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_LLM_ENABLED": ("llm", "enabled"),
     "PDF2AUDIOBOOK_LLM_PROVIDER": ("llm", "provider"),
     "PDF2AUDIOBOOK_LLM_MAX_REQUESTS": ("llm", "max_requests"),
+    "PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS": ("llm", "max_output_tokens"),
     "PDF2AUDIOBOOK_LLM_MAX_REPORTED_TOKENS": ("llm", "max_reported_tokens"),
     "PDF2AUDIOBOOK_LLM_MAX_ESTIMATED_COST_USD": ("llm", "max_estimated_cost_usd"),
     "PDF2AUDIOBOOK_LLM_MODEL": ("llm", "@selected", "model"),
@@ -215,6 +217,8 @@ def load_settings(
         )
     if result.llm.chunk_tokens >= result.llm.max_context_tokens:
         raise ConfigError("llm.chunk_tokens must be smaller than llm.max_context_tokens")
+    if result.llm.max_output_tokens + 128 >= result.llm.max_context_tokens:
+        raise ConfigError("llm.max_output_tokens leaves no context room for messages")
     return result, sources
 
 

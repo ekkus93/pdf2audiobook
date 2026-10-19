@@ -103,12 +103,15 @@ class OpenAICompatibleProvider:
         api_key: str | None = None, timeout: float = 60.0,
         transport: httpx.BaseTransport | None = None,
         temperature: float = 0.1, max_retries: int = 3,
+        max_context_tokens: int | None = None, max_output_tokens: int = 1024,
     ):
         self.provider = provider
         self.base_url = validate_endpoint(base_url, allow_remote)
         self.model = model
         self.temperature = temperature
         self.max_retries = max_retries
+        self.max_context_tokens = max_context_tokens
+        self.max_output_tokens = max_output_tokens
         self.request_count = 0
         self.last_usage: dict[str, int] = {}
         self.total_usage: dict[str, int] = {
@@ -185,6 +188,18 @@ class OpenAICompatibleProvider:
         # Never expose the previous request's usage when this attempt fails before
         # receiving a billable response. Accounted aggregate usage is unchanged.
         self.last_usage = {}
+        # Conservatively bound tokenized text by its UTF-8 byte length.
+        # Reserve fixed chat-role overhead and generation capacity as well.
+        # This is not a model-specific tokenizer; live qualification is still needed.
+        if self.max_context_tokens is not None:
+            if (
+                self.max_output_tokens < 1
+                or self.max_context_tokens < self.max_output_tokens + 128
+                or len(instructions.encode("utf-8"))
+                + len(document_text.encode("utf-8"))
+                + self.max_output_tokens + 128 > self.max_context_tokens
+            ):
+                raise LLMError("LLM request exceeds configured context and output reserve")
         # The book is untrusted data; never send it as system instructions or as tools.
         payload = {
             "model": self._model(),
@@ -195,6 +210,9 @@ class OpenAICompatibleProvider:
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
         }
+        # Do not silently drop the response cap for an incompatible provider.
+        if self.max_context_tokens is not None:
+            payload["max_tokens"] = self.max_output_tokens
         format_fallback_used = False
         retry_count = 0
         while True:
@@ -266,6 +284,8 @@ def create_provider(
         provider=selected, base_url=base_url, model=choice.model,
         allow_remote=remote_consent, api_key=api_key, transport=transport,
         temperature=settings.llm.temperature, max_retries=settings.llm.max_retries,
+        max_context_tokens=settings.llm.max_context_tokens,
+        max_output_tokens=settings.llm.max_output_tokens,
     )
 
 
