@@ -154,7 +154,7 @@ def _table_regions(
         return [], []
     try:
         found = detector()
-        boxes = []
+        boxes: list[tuple[float, float, float, float]] = []
         # Table geometry is advisory. Third-party iterators and bbox objects
         # must not hang extraction or exhaust memory on malformed documents.
         for index, table in enumerate(islice(found.tables, 501)):
