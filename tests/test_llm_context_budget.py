@@ -62,3 +62,47 @@ def test_context_reserve_validation_and_environment_override():
     )
     assert settings.llm.max_output_tokens == 256
     assert sources["llm.max_output_tokens"] == "env:PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS"
+
+
+def test_json_mode_fallback_keeps_output_cap():
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append(body)
+        if len(seen) == 1:
+            return httpx.Response(
+                400, json={"error": {
+                    "message": "response_format unsupported",
+                    "param": "response_format",
+                }}
+            )
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
+        )
+
+    settings = Settings()
+    with create_provider(settings, transport=httpx.MockTransport(handler)) as provider:
+        assert provider.complete_json(instructions="classify", document_text="book") == {
+            "headings": []
+        }
+    assert len(seen) == 2
+    assert seen[0]["max_tokens"] == seen[1]["max_tokens"] == 1024
+    assert "response_format" not in seen[1]
+
+
+def test_unsupported_output_cap_fails_closed_without_uncapped_retry():
+    sent = []
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return httpx.Response(
+            400, json={"error": {"message": "unsupported max_tokens", "param": "max_tokens"}}
+        )
+
+    settings = Settings()
+    with create_provider(settings, transport=httpx.MockTransport(handler)) as provider:
+        with pytest.raises(LLMError, match="request or JSON decoding failed"):
+            provider.complete_json(instructions="classify", document_text="book")
+    assert len(sent) == 1
+    assert sent[0]["max_tokens"] == settings.llm.max_output_tokens
