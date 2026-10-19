@@ -9,12 +9,16 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          python-version: "3.11"
+          python-version: "${{ matrix.python-version }}"
       - name: Install FFmpeg for chapter MP3 acceptance tests
         run: |
           sudo apt-get update -qq
@@ -37,7 +41,7 @@ jobs:
       - name: Installed-wheel clean environment smoke
         run: |
           uv build --wheel --out-dir "$RUNNER_TEMP/pdf2audiobook-wheelhouse"
-          uv venv --python 3.11 "$RUNNER_TEMP/pdf2audiobook-fresh"
+          uv venv --python "${{ matrix.python-version }}" "$RUNNER_TEMP/pdf2audiobook-fresh"
           uv pip install --python "$RUNNER_TEMP/pdf2audiobook-fresh/bin/python" "$RUNNER_TEMP"/pdf2audiobook-wheelhouse/pdf2audiobook-*.whl
           (
             cd "$RUNNER_TEMP"
