@@ -29,3 +29,20 @@ def test_four_coordinate_rectangle_iterator_is_still_supported():
 
 def test_five_coordinate_iterator_is_not_accepted_as_rectangle():
     assert _valid_box(iter((10, 20, 30, 40, 50))) is None
+
+
+def test_rectangle_iterator_exception_is_nonfatal():
+    def broken():
+        yield 1
+        yield 2
+        raise RuntimeError("corrupt vector geometry")
+
+    assert _valid_box(broken()) is None
+
+
+def test_unreadable_rectangle_iterator_is_nonfatal():
+    class BrokenRectangle:
+        def __iter__(self):
+            raise OSError("unreadable metadata")
+
+    assert _valid_box(BrokenRectangle()) is None

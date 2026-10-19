@@ -25,7 +25,8 @@ def _valid_box(box: object) -> tuple[float, float, float, float] | None:
         # collections.abc.Iterable runtime check. Validate by conversion.
         try:
             box = tuple(islice(cast(Iterable[object], box), 5))
-        except (TypeError, ValueError, OverflowError):
+        except Exception:
+            # Malformed third-party geometry is advisory, never fatal.
             return None
     if len(box) != 4:
         return None
