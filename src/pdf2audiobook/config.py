@@ -14,7 +14,9 @@ from pdf2audiobook.errors import ConfigError
 
 
 class ConfigModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # NaN/Infinity must not disable token-cost and price validation or emit
+    # nonstandard JSON in persisted budget reports.
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
 
 
 class General(ConfigModel):

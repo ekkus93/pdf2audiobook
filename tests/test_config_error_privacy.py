@@ -98,3 +98,19 @@ def test_toml_scalar_llm_section_is_rejected_before_provider_selection(tmp_path:
     assert str(raised.value) == "invalid configuration values; check field names and types"
     assert SENTINEL not in str(raised.value)
     assert raised.value.__cause__ is None
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "max_estimated_cost_usd",
+        "input_cost_usd_per_million_tokens",
+        "output_cost_usd_per_million_tokens",
+    ],
+)
+@pytest.mark.parametrize("invalid", ["Infinity", "-Infinity", "NaN"])
+def test_nonfinite_llm_pricing_never_validates_or_leaks_input(field: str, invalid: str) -> None:
+    with pytest.raises(ConfigError) as raised:
+        load_settings(no_config=True, environ={}, overrides={"llm": {field: invalid}})
+    assert str(raised.value) == "invalid configuration values; check field names and types"
+    assert raised.value.__cause__ is None
