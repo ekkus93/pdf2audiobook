@@ -51,6 +51,21 @@ def _aligned_number_positions(first: float, second: float) -> bool:
 
 
 
+def _valid_bbox(box: object) -> bool:
+    """Use only finite, ordered PDF coordinates as cleanup evidence."""
+    if not isinstance(box, (tuple, list)) or len(box) != 4:
+        return False
+    if any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or abs(value) > 1_000_000
+        or not math.isfinite(value)
+        for value in box
+    ):
+        return False
+    return box[0] < box[2] and box[1] < box[3]
+
+
 def _adjacent_body_line(
     block: DocumentBlock,
     page_blocks: list[DocumentBlock],
@@ -62,12 +77,13 @@ def _adjacent_body_line(
     the nominal header/footer band. Without whitespace separating it from the
     body, deletion is unsafe even when it repeats on multiple pages.
     """
-    if block.bbox is None:
+    if block.bbox is None or not _valid_bbox(block.bbox):
         return False
     x0, y0, x1, y1 = block.bbox
     line_height = max(1.0, y1 - y0)
     for other in page_blocks:
-        if other.id == block.id or other.bbox is None or not other.text.strip():
+        if (other.id == block.id or other.bbox is None
+                or not _valid_bbox(other.bbox) or not other.text.strip()):
             continue
         ox0, oy0, ox1, oy1 = other.bbox
         if band == "header":
@@ -117,13 +133,13 @@ def pagination_cleanup(
         )
     for block in blocks:
         blocks_by_page[block.page_index].append(block)
-        if not block.bbox or not valid_page(block.page_index):
+        if not block.bbox or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
         if block.bbox[1] >= 0.12 * height and block.bbox[3] <= 0.88 * height:
             body_text.add(" ".join(block.text.split()).casefold())
     for block in blocks:
-        if not block.bbox or not valid_page(block.page_index):
+        if not block.bbox or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
         top, bottom = block.bbox[1], block.bbox[3]
@@ -188,6 +204,7 @@ def pagination_cleanup(
             if any(
                 other.id != block.id
                 and other.bbox is not None
+                and _valid_bbox(other.bbox)
                 and other.text.strip()
                 and other.bbox[0] >= block.bbox[2]
                 and 0 <= other.bbox[0] - block.bbox[2] <= sizes[block.page_index][0] * 0.12
@@ -227,7 +244,8 @@ def pagination_cleanup(
     # corroborate a sequence on adjacent pages either.
     numeric_counts: dict[tuple[str, int], int] = defaultdict(int)
     for block in blocks:
-        if block.bbox is None or not valid_page(block.page_index):
+        if (block.bbox is None or not _valid_bbox(block.bbox)
+                or not valid_page(block.page_index)):
             continue
         height = sizes[block.page_index][1]
         band = (
@@ -588,6 +606,8 @@ def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
     if after.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
         return False
     if before.page_index != after.page_index or not before.bbox or not after.bbox:
+        return False
+    if not _valid_bbox(before.bbox) or not _valid_bbox(after.bbox):
         return False
     if not before.text.strip() or not after.text.strip():
         return False
