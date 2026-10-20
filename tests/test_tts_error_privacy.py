@@ -1,5 +1,6 @@
 """TTS numeric conversion and provider failures must not echo narration."""
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -41,8 +42,6 @@ class FailingProvider:
 
 
 def test_provider_error_does_not_echo_narration_and_marks_progress_failed(tmp_path: Path):
-    from pdf2audiobook.workspace import read_json
-
     progress = tmp_path / "progress.json"
     with pytest.raises(AudioError) as raised:
         synthesize_chunks(
@@ -54,7 +53,7 @@ def test_provider_error_does_not_echo_narration_and_marks_progress_failed(tmp_pa
     assert str(raised.value) == "TTS synthesis failed; verify model and voice"
     assert PRIVATE not in str(raised.value)
     assert raised.value.__cause__ is None
-    record = read_json(progress)
+    record = json.loads(progress.read_text(encoding="utf-8"))
     assert record["status"] == "failed"
     assert record["chunks"][0]["status"] == "failed"
     assert not list((tmp_path / "cache").glob("*.wav"))
