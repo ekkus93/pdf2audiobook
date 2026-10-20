@@ -3,6 +3,7 @@
 import json
 
 import numpy as np
+import pytest
 
 from pdf2audiobook import pipeline
 from pdf2audiobook.audio import audio_output_path
@@ -11,7 +12,21 @@ from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
 from pdf2audiobook.workspace import digest_bytes
 
 
-def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "sidecar_override",
+    [
+        None,
+        "null",
+        "[]",
+        '"unexpected string"',
+        "42",
+        "{broken json",
+        '{"padding":"' + "x" * 5000 + '"}',
+    ],
+)
+def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
+    tmp_path, monkeypatch, sidecar_override,
+):
     settings = Settings()
     settings.general.resume = True
     source = tmp_path / "synthetic.pdf"
@@ -38,13 +53,17 @@ def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(tmp_path, monke
     invalid_mp3 = b"not an MPEG audio frame"
     output.write_bytes(invalid_mp3)
     record = output.with_suffix(".cache.json")
-    record.write_text(json.dumps({
+    valid_record = json.dumps({
         "fingerprint": pipeline.chapter_audio_fingerprint(
             chapter_text, settings, manifest, chapter,
         ),
         "bytes": len(invalid_mp3),
         "sha256": digest_bytes(invalid_mp3),
-    }), encoding="utf-8")
+    })
+    record.write_text(
+        valid_record if sidecar_override is None else sidecar_override,
+        encoding="utf-8",
+    )
 
     class StubKitten:
         sample_rate = 24000

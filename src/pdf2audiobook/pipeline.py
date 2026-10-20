@@ -293,9 +293,14 @@ def convert_book(
                 from mutagen import MutagenError
                 from mutagen.mp3 import MP3
 
-                metadata = json.loads(record.read_text(encoding="utf-8"))
+                # A cache sidecar is tiny (three scalar fields). Never parse
+                # an unbounded or non-object JSON document from disk.
+                with record.open("rb") as sidecar:
+                    raw_metadata = sidecar.read(4097)
+                metadata = json.loads(raw_metadata) if len(raw_metadata) <= 4096 else None
                 cached = (
-                    metadata.get("fingerprint") == identity
+                    isinstance(metadata, dict)
+                    and metadata.get("fingerprint") == identity
                     and metadata.get("bytes") == output.stat().st_size
                     and metadata.get("sha256") == digest_file(output)
                     and (info := MP3(output).info) is not None
