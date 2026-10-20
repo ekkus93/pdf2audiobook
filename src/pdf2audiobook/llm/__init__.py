@@ -85,14 +85,26 @@ def _loopback(host: str | None) -> bool:
 
 
 def validate_endpoint(url: str, allow_remote: bool) -> str:
-    parsed = urlparse(url)
+    # Direct adapter callers may bypass Pydantic configuration. urllib raises
+    # ValueError for malformed IPv6 brackets and invalid/out-of-range ports.
+    # Never surface an untrusted endpoint or parser diagnostic in an error.
+    if not isinstance(url, str) or not url.strip():
+        raise LLMError("Invalid LLM endpoint URL or port")
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname
+        port = parsed.port
+    except (ValueError, TypeError):
+        raise LLMError("Invalid LLM endpoint URL or port") from None
+    if port == 0:
+        raise LLMError("Invalid LLM endpoint URL or port")
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
         raise LLMError("LLM endpoint may not contain credentials, query or fragment")
-    if parsed.scheme == "https" and parsed.hostname:
-        if not _loopback(parsed.hostname) and not allow_remote:
+    if parsed.scheme == "https" and host:
+        if not _loopback(host) and not allow_remote:
             raise LLMError("Remote LLM content upload requires --allow-remote-content")
         return url.rstrip("/")
-    if parsed.scheme == "http" and _loopback(parsed.hostname):
+    if parsed.scheme == "http" and _loopback(host):
         return url.rstrip("/")
     raise LLMError("Non-loopback LLM endpoint must use HTTPS and explicit remote consent")
 
