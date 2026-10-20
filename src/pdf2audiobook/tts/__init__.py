@@ -1,6 +1,7 @@
 """Replaceable text-to-speech provider interface and Kitten implementation."""
 from __future__ import annotations
 
+import math
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -74,6 +75,15 @@ class KittenProvider:
             return False
 
     def generate(self, text: str, *, voice: str, speed: float) -> np.ndarray:
+        # The protocol is callable outside the Pydantic/CLI configuration path.
+        # Validate the same finite speed bounds before invoking third-party code.
+        if (
+            isinstance(speed, bool)
+            or not isinstance(speed, (int, float))
+            or not math.isfinite(speed)
+            or not 0 < speed <= 3
+        ):
+            raise AudioError("Kitten speech speed must be finite and in (0, 3]")
         if len(text) > self.max_chars_per_chunk:
             raise AudioError("Kitten text chunk exceeds configured engine limit")
         if not text.strip():
