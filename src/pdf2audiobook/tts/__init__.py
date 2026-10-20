@@ -84,12 +84,19 @@ class KittenProvider:
             or not 0 < speed <= 3
         ):
             raise AudioError("Kitten speech speed must be finite and in (0, 3]")
+        if not isinstance(voice, str) or not voice.strip():
+            # Direct protocol callers may bypass typed configuration.
+            raise AudioError("Kitten voice must be a nonempty string")
         if len(text) > self.max_chars_per_chunk:
             raise AudioError("Kitten text chunk exceeds configured engine limit")
         if not text.strip():
             raise AudioError("Cannot synthesize an empty text chunk")
         try:
             voices = getattr(self.model, "available_voices", None)
+            if voices is not None and not isinstance(voices, (list, tuple, dict)):
+                # A string is not a voice collection: substring membership
+                # would otherwise approve unknown voice IDs.
+                raise TypeError("invalid voice metadata type")
             known_voice = not voices or voice in voices
         except Exception:
             # Third-party voice metadata may include private model diagnostics.
