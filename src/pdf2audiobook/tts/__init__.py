@@ -1,4 +1,5 @@
 """Replaceable text-to-speech provider interface and Kitten implementation."""
+
 from __future__ import annotations
 
 import math
@@ -53,7 +54,9 @@ class KittenProvider:
         except Exception:
             # Third-party exceptions can echo model paths, credentials or
             # supplied text. Do not surface their contents or chained context.
-            raise AudioError("Could not load Kitten TTS model; verify the model and installation") from None
+            raise AudioError(
+                "Could not load Kitten TTS model; verify the model and installation"
+            ) from None
 
     def list_models(self) -> list[str]:
         return list(dict.fromkeys([*KITTEN_MODEL_ALIASES, self.model_id]))
