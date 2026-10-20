@@ -103,7 +103,12 @@ def wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
         or not 8000 <= sample_rate <= 192000
     ):
         raise AudioError("Audio sample_rate must be an integer from 8000 to 192000")
-    audio = np.asarray(samples, dtype=np.float32)
+    try:
+        audio = np.asarray(samples, dtype=np.float32)
+    except Exception:
+        # Untrusted TTS arrays and third-party conversion exceptions may echo
+        # the source text. Report only a stable, non-content-bearing error.
+        raise AudioError("TTS returned invalid audio sample data") from None
     # A multichannel buffer must not be silently flattened into a mono WAV:
     # doing so interleaves channels and changes playback speed and duration.
     if audio.ndim != 1:
@@ -221,7 +226,11 @@ def synthesize_chunks(
                 pass
         if audio is None:
             try:
-                audio = provider.generate(text, voice=voice, speed=speed)
+                try:
+                    audio = provider.generate(text, voice=voice, speed=speed)
+                except Exception:
+                    # Arbitrary TTS engines can echo book text in their errors.
+                    raise AudioError("TTS synthesis failed; verify model and voice") from None
                 encoded = wav_bytes(audio, rate)
                 # First-pass PCM must match verified cached PCM exactly:
                 # canonicalize clipping and 16-bit quantization before
