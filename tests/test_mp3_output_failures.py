@@ -1,7 +1,7 @@
 """Encoded MP3 output failures must not expose private document paths."""
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import numpy as np
 import pytest
