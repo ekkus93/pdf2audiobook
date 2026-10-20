@@ -1,7 +1,6 @@
 """Audio chunk generation, caching, and single-encode chapter MP3 assembly."""
 from __future__ import annotations
 
-from contextlib import contextmanager
 import io
 import math
 import re
@@ -9,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import wave
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, NotRequired, TypedDict
 
