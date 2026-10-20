@@ -53,3 +53,18 @@ def test_mp3_publication_error_redacts_path_and_preserves_existing_file(tmp_path
     assert "PRIVATE_BOOK_TITLE" not in str(exc.value)
     assert exc.value.__suppress_context__ is True
     assert target.read_bytes() == existing
+
+
+def test_mp3_temporary_workspace_error_redacts_private_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(audio_module.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
+
+    def fail_workspace(*, dir):
+        raise OSError("PRIVATE_TEMP_DIRECTORY: cannot create workspace")
+
+    monkeypatch.setattr(audio_module.tempfile, "TemporaryDirectory", fail_workspace)
+    target = tmp_path / "PRIVATE_TEMP_DIRECTORY.mp3"
+    with pytest.raises(AudioError, match="Could not manage temporary MP3 workspace") as exc:
+        _encode(target)
+    assert "PRIVATE_TEMP_DIRECTORY" not in str(exc.value)
+    assert exc.value.__suppress_context__ is True
+    assert not target.exists()

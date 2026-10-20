@@ -1,6 +1,7 @@
 """Audio chunk generation, caching, and single-encode chapter MP3 assembly."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 import io
 import math
 import re
@@ -9,7 +10,7 @@ import subprocess
 import tempfile
 import wave
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import Iterator, NotRequired, TypedDict
 
 import numpy as np
 from mutagen.easyid3 import EasyID3
@@ -353,6 +354,17 @@ def _write_chapter_wav(samples: np.ndarray, sample_rate: int, target: Path) -> N
         raise AudioError("Could not write chapter PCM WAV") from None
 
 
+@contextmanager
+def _safe_chapter_workspace(parent: Path) -> Iterator[str]:
+    """Convert temporary directory creation and cleanup OS errors to safe diagnostics."""
+    try:
+        with tempfile.TemporaryDirectory(dir=parent) as temp_dir:
+            yield temp_dir
+    except OSError:
+        # Temporary-directory errors may embed book titles or private paths.
+        raise AudioError("Could not manage temporary MP3 workspace; check permissions") from None
+
+
 def encode_mp3(
     samples: np.ndarray, sample_rate: int, output: Path, *,
     bitrate: str, target_rate: int, title: str, artist: str | None,
@@ -365,7 +377,7 @@ def encode_mp3(
         output.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
         raise AudioError("Could not create MP3 output directory; check permissions") from None
-    with tempfile.TemporaryDirectory(dir=output.parent) as temp_dir:
+    with _safe_chapter_workspace(output.parent) as temp_dir:
         wav_path = Path(temp_dir) / "chapter.wav"
         tmp_mp3 = Path(temp_dir) / "chapter.mp3"
         _write_chapter_wav(samples, sample_rate, wav_path)
