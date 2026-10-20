@@ -275,11 +275,16 @@ def encode_mp3(
                 command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 check=False, timeout=1800
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise AudioError(f"FFmpeg failed: {exc}") from exc
+        except subprocess.TimeoutExpired:
+            # Third-party exception text can expose output paths or PDF-derived data.
+            raise AudioError("FFmpeg encoding timed out; check the audio and system resources") from None
+        except OSError:
+            raise AudioError("Cannot execute FFmpeg; check installation and permissions") from None
         if result.returncode != 0 or not tmp_mp3.is_file():
+            # FFmpeg stderr may include private workspace paths or metadata.
             raise AudioError(
-                f"FFmpeg encoding failed: {result.stderr.decode(errors='replace')[-1000:]}"
+                f"FFmpeg encoding failed (exit status {result.returncode}); "
+                "check codec support and audio settings"
             )
         try:
             mp3 = MP3(tmp_mp3, ID3=EasyID3)
@@ -300,8 +305,9 @@ def encode_mp3(
                 raise AudioError("Encoded MP3 has zero duration")
         except AudioError:
             raise
-        except Exception as exc:
-            raise AudioError(f"MP3 metadata validation failed: {exc}") from exc
+        except Exception:
+            # Parser diagnostics can echo source-derived ID3 values or paths.
+            raise AudioError("MP3 metadata validation failed; check encoded audio") from None
         tmp_mp3.replace(output)
     return output
 
