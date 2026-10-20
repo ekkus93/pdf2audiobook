@@ -9,7 +9,6 @@ from pdf2audiobook.cli import app
 from pdf2audiobook.config import load_settings
 from pdf2audiobook.errors import ConfigError
 
-
 SENTINEL = "SYNTHETIC_PRIVATE_CONFIG_VALUE_173"
 
 
