@@ -87,6 +87,6 @@ def test_page_text_failure_reports_page_number(monkeypatch, tmp_path: Path):
         raise RuntimeError("broken page text stream")
 
     monkeypatch.setattr("pdf2audiobook.pdf._lines", fail_text)
-    with pytest.raises(ExtractionError, match="PDF page 1: RuntimeError") as failure:
+    with pytest.raises(ExtractionError, match="Failed to extract embedded text from PDF page 1") as failure:
         extract_pdf(source, Pdf(ocr="never"))
     assert "broken page text stream" not in str(failure.value)
