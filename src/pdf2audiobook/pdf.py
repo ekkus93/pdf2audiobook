@@ -56,8 +56,9 @@ def _open(source: Path, password_env: str | None = None) -> fitz.Document:
         return document
     except InputError:
         raise
-    except Exception as exc:
-        raise InputError(f"cannot open PDF: {exc}") from exc
+    except Exception:
+        # PDF parsers may echo document paths or embedded content in errors.
+        raise InputError("cannot open PDF; verify file integrity and permissions") from None
 
 
 def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
@@ -633,11 +634,12 @@ def extract_pdf(
             sizes.append((float(page.cropbox.width), float(page.cropbox.height)))
             try:
                 page_lines = _lines(page)
-            except Exception as exc:
+            except Exception:
+                # Suppress parser exception details that may include book content.
                 raise ExtractionError(
-                    f"Failed to extract embedded text from PDF page {page_index + 1}: "
-                    f"{type(exc).__name__}"
-                ) from exc
+                    f"Failed to extract embedded text from PDF page {page_index + 1}; "
+                    "check PDF integrity"
+                ) from None
             usable, quality_issue = _embedded_text_quality(page_lines)
             # A scanned body can coexist with a short, perfectly valid
             # selectable heading. Character quality alone misses that body.
@@ -672,11 +674,12 @@ def extract_pdf(
                         page, settings, cache_dir=ocr_cache_dir,
                         input_sha256=source_sha256, page_index=page_index,
                     )
-                except Exception as exc:
+                except Exception:
+                    # OCR failures can include recognized text and local paths.
                     raise ExtractionError(
                         f"OCR failed on PDF page {page_index + 1}; verify Tesseract "
-                        f"and language '{settings.ocr_language}': {exc}"
-                    ) from exc
+                        "and the configured OCR language"
+                    ) from None
                 origin = "ocr"
                 if not page_lines:
                     warnings.append(f"Page {page_index + 1}: OCR produced no text")
