@@ -181,7 +181,11 @@ def synthesize_chunks(
         raise AudioError("TTS speech speed must be finite and in (0, 3]")
     # Validate engine metadata before computing pause lengths or replaying
     # persisted WAVs. Invalid rates must never create bogus audio artifacts.
-    rate = getattr(provider, "sample_rate", None)
+    try:
+        rate = getattr(provider, "sample_rate", None)
+    except Exception:
+        # Third-party engine properties can raise with private model details.
+        raise AudioError("Could not inspect TTS provider audio settings") from None
     if isinstance(rate, bool) or not isinstance(rate, int) or not 8000 <= rate <= 192000:
         raise AudioError("TTS provider sample_rate must be an integer from 8000 to 192000")
     if isinstance(pause_ms, bool) or not isinstance(pause_ms, int) or not 0 <= pause_ms <= 5000:
@@ -190,13 +194,17 @@ def synthesize_chunks(
     # concrete providers advertise a hard limit that must be enforced before
     # any synthesis or cache replay. Defaulting to 350 otherwise can send
     # invalid requests to engines with a smaller input window.
-    chunk_limit = getattr(provider, "max_chars_per_chunk", 350)
+    try:
+        chunk_limit = getattr(provider, "max_chars_per_chunk", 350)
+    except Exception:
+        raise AudioError("Could not inspect TTS provider chunk limit") from None
     if isinstance(chunk_limit, bool) or not isinstance(chunk_limit, int) or chunk_limit < 40:
         raise AudioError("TTS provider max_chars_per_chunk must be an integer >= 40")
     chunks = split_sentences(chapter_text, max_chars=chunk_limit)
     if not chunks:
         raise AudioError("Chapter has no speakable text")
-    pause = np.zeros(int(provider.sample_rate * pause_ms / 1000), dtype=np.float32)
+    # Use one validated snapshot of the engine rate throughout the request.
+    pause = np.zeros(int(rate * pause_ms / 1000), dtype=np.float32)
     paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
     ranges = chunk_source_ranges(chapter_text, chunks)
     # Chunk WAVs are shared across chapters, but never across different
@@ -213,7 +221,7 @@ def synthesize_chunks(
         "schema_version": 1,
         "fingerprint": fingerprint(
             "tts-progress-v3", digest_bytes(chapter_text.encode("utf-8")), identities,
-            model, voice, speed, provider.sample_rate,
+            model, voice, speed, rate,
             pause_ms, chunk_limit,
         ),
         "total_chunks": len(chunks),
@@ -255,7 +263,7 @@ def synthesize_chunks(
                     raise AudioError("Cached WAV checksum sidecar is oversized")
                 candidate = digest_bytes(cached_bytes)
                 if candidate.encode("ascii") == saved_digest.strip():
-                    audio = read_wav(cached_bytes, provider.sample_rate)
+                    audio = read_wav(cached_bytes, rate)
                     checksum = candidate
                     encoded_size = len(cached_bytes)
             except (AudioError, OSError, UnicodeError):
