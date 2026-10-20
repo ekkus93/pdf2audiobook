@@ -90,7 +90,10 @@ class BookLLMBudgetLedger:
     def _check(
         stats: dict, *, max_requests: int | None,
         max_tokens: int | None, max_usd: float | None,
+        postflight: bool = False,
     ) -> None:
+        # An exactly exhausted limit may return its already-paid response.
+        # A subsequent reservation still rejects equality before the next call.
         if max_requests is not None and stats["requests_started"] >= max_requests:
             raise LLMError("Per-book LLM request budget exhausted")
         if (max_tokens is not None or max_usd is not None) and stats[
@@ -99,16 +102,20 @@ class BookLLMBudgetLedger:
             raise LLMError(
                 "Per-book LLM budget has unresolved requests; inspect ledger before retrying"
             )
-        if max_tokens is not None and stats["reported_tokens"] >= max_tokens:
+        if max_tokens is not None and (
+            stats["reported_tokens"] > max_tokens if postflight
+            else stats["reported_tokens"] >= max_tokens
+        ):
             raise LLMError("Per-book LLM reported token budget reached or exceeded")
         if max_usd is not None and stats["unpriced_requests"]:
             raise LLMError(
                 "Per-book cost budget has unpriced earlier requests; inspect ledger"
             )
-        if max_usd is not None and Decimal(
-            str(stats["estimated_cost_usd"])
-        ) >= Decimal(str(max_usd)):
-            raise LLMError("Per-book LLM estimated cost budget reached or exceeded")
+        if max_usd is not None:
+            cost = Decimal(str(stats["estimated_cost_usd"]))
+            limit = Decimal(str(max_usd))
+            if cost > limit if postflight else cost >= limit:
+                raise LLMError("Per-book LLM estimated cost budget reached or exceeded")
 
     def totals(self) -> dict:
         try:
@@ -211,6 +218,7 @@ class BookLLMBudgetLedger:
                 self._check(
                     self._stats(connection), max_requests=None,
                     max_tokens=max_tokens, max_usd=max_usd,
+                    postflight=True,
                 )
         except (sqlite3.Error, InvalidOperation) as exc:
             raise LLMError("Cannot inspect per-book LLM budget") from exc

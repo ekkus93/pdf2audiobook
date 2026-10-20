@@ -70,21 +70,23 @@ class CachedLLMProvider:
             + Decimal(completion) * Decimal(str(self.output_cost_usd_per_million_tokens))
         ) / Decimal(1_000_000))
 
-    def _check_usage_budget(self) -> None:
+    def _check_usage_budget(self, *, postflight: bool = False) -> None:
         if self.max_reported_tokens is not None:
             usage = getattr(self.provider, "total_usage", {})
             count = usage.get("total_tokens") if isinstance(usage, dict) else None
             if not self.usage_verified or not isinstance(count, int):
                 if self.requests_started:
                     raise LLMError("LLM token budget requires provider-reported usage")
-            elif count >= self.max_reported_tokens:
+            elif (count > self.max_reported_tokens if postflight
+                  else count >= self.max_reported_tokens):
                 raise LLMError("LLM reported token budget reached or exceeded")
         if self.max_estimated_cost_usd is not None:
             cost = self._reported_cost_usd()
             if cost is None:
                 if self.requests_started:
                     raise LLMError("LLM cost budget requires verified usage and rates")
-            elif cost >= self.max_estimated_cost_usd:
+            elif (cost > self.max_estimated_cost_usd if postflight
+                  else cost >= self.max_estimated_cost_usd):
                 raise LLMError("LLM estimated cost budget reached or exceeded")
 
     def _write_usage(self) -> None:
@@ -190,7 +192,7 @@ class CachedLLMProvider:
                 max_usd=self.max_estimated_cost_usd,
             )
         else:
-            self._check_usage_budget()
+            self._check_usage_budget(postflight=True)
         if self.enabled:
             write_json(target, {"schema_version": 1, "fingerprint": key, "response": reply})
         return reply
