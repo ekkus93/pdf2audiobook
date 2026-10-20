@@ -33,7 +33,7 @@ def _manifest() -> BookManifest:
 @pytest.mark.parametrize(
     ("case", "diagnostic"),
     [
-        ("missing_provenance", "Source block has no span provenance"),
+        ("missing_provenance", "Source block has no source span provenance"),
         ("missing_span", "Source block references missing source spans"),
         ("duplicate_span", "Source span is assigned more than once"),
         ("missing_edit_block", "Cleanup edit references missing source block"),
