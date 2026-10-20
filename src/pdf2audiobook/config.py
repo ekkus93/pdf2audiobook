@@ -183,12 +183,15 @@ def load_settings(
     sources = {key: "built-in" for key in _flatten(data)}
     path = config_path or user_config_path()
     if config_path is not None and not path.is_file() and not no_config:
-        raise ConfigError(f"configuration file not found: {path}")
+        raise ConfigError("configuration file not found; check --config path")
     if not no_config and path.exists():
         try:
             toml = tomllib.loads(path.read_text(encoding="utf-8"))
-        except (ValueError, OSError) as exc:
-            raise ConfigError(f"cannot read {path}: {exc}") from exc
+        except tomllib.TOMLDecodeError:
+            # TOML parser diagnostics may contain configuration values or paths.
+            raise ConfigError("invalid TOML configuration syntax") from None
+        except (OSError, UnicodeError):
+            raise ConfigError("cannot read configuration file; check permissions and encoding") from None
         _merge(data, toml)
         sources.update({key: f"file:{path}" for key in _flatten(toml)})
     env = environ if environ is not None else os.environ
@@ -206,8 +209,9 @@ def load_settings(
         sources.update({key: "CLI" for key in _flatten(overrides)})
     try:
         result = Settings.model_validate(data)
-    except ValidationError as exc:
-        raise ConfigError(f"invalid configuration: {exc}") from exc
+    except ValidationError:
+        # Pydantic errors can echo rejected values, including provider URLs and secrets.
+        raise ConfigError("invalid configuration values; check field names and types") from None
     if result.llm.max_estimated_cost_usd is not None and (
         result.llm.input_cost_usd_per_million_tokens is None
         or result.llm.output_cost_usd_per_million_tokens is None
