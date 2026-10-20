@@ -9,7 +9,7 @@ import pytest
 
 from pdf2audiobook.audio import split_sentences, synthesize_chunks
 from pdf2audiobook.config import LLM, General, Pdf, Settings
-from pdf2audiobook.errors import InputError
+from pdf2audiobook.errors import AudioError, InputError
 from pdf2audiobook.llm import OpenAICompatibleProvider
 from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.pipeline import analyze_book
@@ -79,7 +79,7 @@ def test_many_chunk_interruption_resumes_only_valid_checkpoints(tmp_path):
         pause_ms=30, cache=tmp_path / "wav", progress_file=tmp_path / "progress.json",
     )
     failed = InterruptibleVoice(fail_at=7)
-    with pytest.raises(RuntimeError, match="simulated interrupted"):
+    with pytest.raises(AudioError, match="TTS synthesis failed"):
         synthesize_chunks(narration, failed, **args)
     state = json.loads(args["progress_file"].read_text())
     assert state["completed_chunks"] == 6

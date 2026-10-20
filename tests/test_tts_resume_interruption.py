@@ -41,7 +41,7 @@ def test_interrupted_synthesis_reuses_only_completed_chunks(tmp_path):
         pause_ms=0, cache=tmp_path,
     )
     interrupted = InterruptibleProvider(fail_at=2)
-    with pytest.raises(AudioError, match="simulated interruption"):
+    with pytest.raises(AudioError, match="TTS synthesis failed"):
         synthesize_chunks(chapter, interrupted, **options)
     assert interrupted.calls == chunks[:2]
     assert len(list(tmp_path.glob("*.wav"))) == 1

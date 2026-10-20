@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from pdf2audiobook.audio import split_sentences, synthesize_chunks
+from pdf2audiobook.errors import AudioError
 from pdf2audiobook.workspace import digest_file
 
 TEXT = ("Alpha " * 40).strip() + ". " + ("Bravo " * 40).strip() + "."
@@ -40,7 +41,7 @@ def test_interrupted_ledger_persists_and_resume_verifies_cache(tmp_path):
     assert len(split_sentences(TEXT)) == 2
     opts = options(tmp_path)
     provider = Provider(fail_at=2)
-    with pytest.raises(RuntimeError, match="synthetic interruption"):
+    with pytest.raises(AudioError, match="TTS synthesis failed"):
         synthesize_chunks(TEXT, provider, **opts)
     saved = read_progress(opts["progress_file"])
     assert saved["schema_version"] == 1
