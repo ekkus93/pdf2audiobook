@@ -290,6 +290,7 @@ def convert_book(
             try:
                 import json
 
+                from mutagen import MutagenError
                 from mutagen.mp3 import MP3
 
                 metadata = json.loads(record.read_text(encoding="utf-8"))
@@ -300,7 +301,9 @@ def convert_book(
                     and (info := MP3(output).info) is not None
                     and info.length > 0
                 )
-            except (OSError, ValueError):
+            except (OSError, ValueError, MutagenError):
+                # A corrupt MP3, even with a matching cache sidecar checksum,
+                # must be regenerated rather than aborting the entire book.
                 cached = False
         if not cached:
             pending.append((item, output, text, record, identity))
