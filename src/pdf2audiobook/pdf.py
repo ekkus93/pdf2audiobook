@@ -648,7 +648,21 @@ def extract_pdf(
 
             # page.get_text() coordinates are unrotated, unlike page.rect.
             # Margin cleanup must use the same coordinate system as spans.
-            sizes.append((float(page.cropbox.width), float(page.cropbox.height)))
+            try:
+                width = float(page.cropbox.width)
+                height = float(page.cropbox.height)
+            except Exception:
+                # Untrusted page geometry can include document paths/content
+                # in parser exceptions. Fail before source-block creation.
+                raise ExtractionError(
+                    f"Page {page_index + 1}: cannot read PDF page geometry"
+                ) from None
+            if not (math.isfinite(width) and math.isfinite(height)
+                    and width > 0 and height > 0):
+                raise ExtractionError(
+                    f"Page {page_index + 1}: invalid PDF page geometry"
+                )
+            sizes.append((width, height))
             try:
                 page_lines = _lines(page)
             except Exception:
@@ -765,9 +779,7 @@ def extract_pdf(
             warnings.extend(
                 page_review_warnings(page_lines, page_number=page_index + 1, origin=origin)
             )
-            page_lines, reordered = order_two_columns(
-                page_lines, float(page.cropbox.width)
-            )
+            page_lines, reordered = order_two_columns(page_lines, width)
             if reordered:
                 warnings.append(
                     f"Page {page_index + 1}: reconstructed two-column reading order; "
@@ -778,7 +790,7 @@ def extract_pdf(
             )
             warnings.extend(caption_warnings)
             footnote_indices = _footnote_line_indices(
-                page_lines, page_height=float(page.cropbox.height),
+                page_lines, page_height=height,
                 table_regions=table_regions,
             )
             equation_indices, equation_warnings = equation_line_indices(
