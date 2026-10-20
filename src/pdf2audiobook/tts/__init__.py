@@ -77,10 +77,14 @@ class KittenProvider:
         try:
             result = np.asarray(
                 self.model.generate(text, voice=voice, speed=speed), dtype=np.float32
-            ).reshape(-1)
+            )
         except Exception:
             # The backend may include private narration text in its exception.
             raise AudioError("Kitten speech generation failed; verify model and voice") from None
+        # The TTSProvider contract requires mono PCM. Flattening multi-channel
+        # samples would interleave channels and corrupt duration and playback.
+        if result.ndim != 1:
+            raise AudioError("Kitten returned non-mono speech audio")
         if result.size == 0 or not np.isfinite(result).all():
             raise AudioError("Kitten returned empty or invalid speech audio")
         return np.clip(result, -1.0, 1.0)
