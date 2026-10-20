@@ -135,7 +135,7 @@ def test_request_budget_config_env_and_validation():
     )
     assert settings.llm.max_requests == 2
     assert sources["llm.max_requests"] == "env:PDF2AUDIOBOOK_LLM_MAX_REQUESTS"
-    with pytest.raises(ConfigError, match="max_requests"):
+    with pytest.raises(ConfigError, match="invalid configuration values"):
         load_settings(
             no_config=True, environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "0"},
         )
