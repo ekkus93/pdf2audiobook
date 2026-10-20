@@ -1,4 +1,6 @@
 """Reading-order geometry must not drop or duplicate PDF text."""
+import pytest
+
 from pdf2audiobook.reading_order import order_two_columns
 
 
@@ -37,3 +39,27 @@ def test_sparse_or_short_table_cells_are_unchanged():
         )]
         ordered, changed = order_two_columns(lines, 600)
         assert not changed and ordered == lines
+
+
+@pytest.mark.parametrize("bad_x", [-35, 490])
+def test_out_of_page_column_geometry_keeps_original_order(bad_x):
+    lines = [entry for n in range(5) for entry in (
+        line(f"L{n}", bad_x, 100 + n * 24),
+        line(f"R{n}", 335, 100 + n * 24),
+    )]
+    ordered, changed = order_two_columns(lines, 600)
+    assert not changed
+    assert ordered == lines
+    assert all(before is after for before, after in zip(lines, ordered, strict=True))
+
+
+def test_small_page_edge_rounding_does_not_disable_valid_column_order():
+    lines = [entry for n in range(5) for entry in (
+        line(f"L{n}", -0.5, 100 + n * 24),
+        line(f"R{n}", 335, 100 + n * 24),
+    )]
+    ordered, changed = order_two_columns(lines, 600)
+    assert changed
+    assert [entry["text"] for entry in ordered] == [
+        *(f"L{n}" for n in range(5)), *(f"R{n}" for n in range(5)),
+    ]

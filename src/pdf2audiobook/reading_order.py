@@ -37,7 +37,15 @@ def order_two_columns(
             return None
         if not all(math.isfinite(n) for n in (x0, y0, x1, y1)):
             return None
-        return (x0, y0, x1, y1) if x1 > x0 and y1 > y0 else None
+        if x1 <= x0 or y1 <= y0:
+            return None
+        # Out-of-page geometry is unreliable for inferring columns. A small
+        # tolerance admits harmless PDF floating-point/crop-edge drift, but
+        # large excursions must keep the original source order for review.
+        tolerance = max(1.0, width * 0.002)
+        if x0 < -tolerance or x1 > width + tolerance:
+            return None
+        return x0, y0, x1, y1
 
     def side(line: dict) -> str:
         b = bbox(line)
