@@ -636,9 +636,14 @@ def extract_pdf(
             raise ExtractionError("PDF has no pages")
         if ocr_cache_dir is not None and source_sha256 is None:
             source_sha256 = digest_file(source)
-        toc = document.get_toc()
-        title = document.metadata.get("title") or source.stem
-        author = document.metadata.get("author") or None
+        try:
+            toc = document.get_toc()
+            metadata = document.metadata
+            title = metadata.get("title") or source.stem
+            author = metadata.get("author") or None
+        except Exception:
+            # PyMuPDF parser failures can include embedded text or file paths.
+            raise ExtractionError("Failed to read PDF outline or metadata") from None
         for page_index, page in enumerate(document):
 
             # page.get_text() coordinates are unrotated, unlike page.rect.
@@ -785,6 +790,15 @@ def extract_pdf(
                     f"Page {page_index + 1}: {len(footnote_indices)} "
                     "likely footnote anchor(s)/continuation line(s) classified; verify against PDF"
                 )
+            try:
+                page_label = page.get_label() or str(page_index + 1)
+            except Exception:
+                # Page labels are advisory; keep the transcript and provenance.
+                page_label = str(page_index + 1)
+                warnings.append(
+                    f"Page {page_index + 1}: could not read PDF page label; "
+                    "using physical page number"
+                )
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
                 bounds = line["bbox"]
@@ -803,7 +817,7 @@ def extract_pdf(
                     SourceSpan(
                         id=ident,
                         page_index=page_index,
-                        page_label=page.get_label() or str(page_index + 1),
+                        page_label=page_label,
                         text=line["text"],
                         bbox=bbox,
                         origin=origin,
