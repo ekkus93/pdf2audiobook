@@ -63,3 +63,16 @@ def test_small_page_edge_rounding_does_not_disable_valid_column_order():
     assert [entry["text"] for entry in ordered] == [
         *(f"L{n}" for n in range(5)), *(f"R{n}" for n in range(5)),
     ]
+
+
+@pytest.mark.parametrize("bad_record", [None, "corrupt", 7, ["stray"], float("nan")])
+def test_malformed_line_records_preserve_order_and_identity(bad_record):
+    lines = [entry for n in range(5) for entry in (
+        line(f"L{n}", 50, 100 + n * 24),
+        line(f"R{n}", 335, 100 + n * 24),
+    )]
+    lines.insert(5, bad_record)
+    ordered, changed = order_two_columns(lines, 600)
+    assert not changed
+    assert len(ordered) == len(lines)
+    assert all(before is after for before, after in zip(lines, ordered, strict=True))

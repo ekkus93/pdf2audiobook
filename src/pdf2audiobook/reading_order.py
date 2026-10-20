@@ -26,6 +26,10 @@ def order_two_columns(
     gap = max(8.0, width * 0.012)
 
     def bbox(line: dict) -> tuple[float, float, float, float] | None:
+        # Malformed adapter records cannot establish column geometry. Treat
+        # them as section anchors and preserve the original item identity.
+        if not isinstance(line, dict):
+            return None
         raw = line.get("bbox")
         if not isinstance(raw, (list, tuple)) or len(raw) != 4:
             return None
