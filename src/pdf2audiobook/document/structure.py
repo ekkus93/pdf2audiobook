@@ -101,14 +101,19 @@ def pagination_cleanup(
     body_text: set[str] = set()
 
     def valid_page(page_index: int) -> bool:
-        # Malformed zero/nonfinite page dimensions must never create cleanup
-        # evidence or cause folio-position division by zero.
+        # Treat untrusted/malformed page sizes as missing evidence. In
+        # particular, isfinite() raises for strings and huge Python integers.
         if not 0 <= page_index < len(sizes):
             return False
-        width, height = sizes[page_index]
-        return (
-            math.isfinite(width) and math.isfinite(height)
-            and width > 0 and height > 0
+        dimensions = sizes[page_index]
+        if not isinstance(dimensions, (tuple, list)) or len(dimensions) != 2:
+            return False
+        return all(
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and 0 < value <= 1_000_000
+            and math.isfinite(value)
+            for value in dimensions
         )
     for block in blocks:
         blocks_by_page[block.page_index].append(block)
