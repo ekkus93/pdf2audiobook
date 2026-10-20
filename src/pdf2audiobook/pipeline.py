@@ -144,9 +144,12 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                     ledger_path=folder / "reports" / "llm_budget.sqlite3",
                 )
                 if settings.llm.structure:
-                    llm_ids, warnings = detect_llm_headings(
+                    llm_ids, heading_warnings = detect_llm_headings(
                         source_blocks, worker, chunk_tokens=settings.llm.chunk_tokens,
                     )
+                    # Keep deterministic footnote-policy warnings in the audit.
+                    # Replacing the list also corrupts the fallback warning prefix.
+                    warnings.extend(heading_warnings)
                 if settings.llm.cleanup:
                     suggestions, edit_warnings = propose_llm_cleanup(
                         source_blocks, worker, decisions=llm_decisions,
