@@ -146,8 +146,9 @@ class OpenAICompatibleProvider:
                 and item["id"].strip()
             ]
             return list(dict.fromkeys(names))
-        except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
-            raise LLMError("Could not discover the served LLM models") from exc
+        except (httpx.HTTPError, KeyError, ValueError, TypeError):
+            # Transport/parser diagnostics may include private server details.
+            raise LLMError("Could not discover the served LLM models") from None
 
     def health(self) -> bool:
         """Check model discovery without uploading any document content."""
@@ -279,17 +280,24 @@ class OpenAICompatibleProvider:
                     raise LLMError("Model response must be a JSON object")
                 self.request_count += 1
                 return decoded
-            except httpx.TransportError as exc:
+            except httpx.TransportError:
                 if retry_count < self.max_retries:
                     time.sleep(min(0.2 * (2 ** retry_count), 2.0))
                     retry_count += 1
                     continue
-                raise LLMError(f"{self.provider} LLM transport failure") from exc
+                label = self.provider if self.provider in (
+                    "openai", "ollama", "llama-server"
+                ) else "provider"
+                raise LLMError(f"{label} LLM transport failure") from None
             except LLMError:
                 raise
-            except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError) as exc:
-                # Never print raw response bodies: an API can echo book text or secrets.
-                raise LLMError(f"{self.provider} LLM request or JSON decoding failed") from exc
+            except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError):
+                # Never print raw response bodies, exception chains or untrusted
+                # provider labels: an API can echo book text or secrets.
+                label = self.provider if self.provider in (
+                    "openai", "ollama", "llama-server"
+                ) else "provider"
+                raise LLMError(f"{label} LLM request or JSON decoding failed") from None
 
 
 def create_provider(
