@@ -157,6 +157,11 @@ class BookLLMBudgetLedger:
                 and isinstance(completion, int) and not isinstance(completion, bool)
                 and isinstance(total, int) and not isinstance(total, bool)
                 and prompt >= 0 and completion >= 0
+                # SQLite INTEGER is signed 64-bit. Never mark a provider
+                # report verified if it cannot be persisted without overflow.
+                and prompt <= (1 << 63) - 1
+                and completion <= (1 << 63) - 1
+                and total <= (1 << 63) - 1
                 and total >= prompt + completion
             ):
                 verified = {
