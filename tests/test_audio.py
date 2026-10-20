@@ -143,3 +143,15 @@ def test_fresh_and_cached_synthesis_use_identical_canonical_pcm(tmp_path):
     assert np.array_equal(first, read_wav(wav_bytes(first, voice.sample_rate), voice.sample_rate))
     assert first.max() == 1.0
     assert first.min() == -1.0
+
+
+@pytest.mark.parametrize("sample_rate", [0, -1, 7999, 192001, True, 24000.0, 10**100])
+def test_wav_rejects_invalid_sample_rate(sample_rate):
+    with pytest.raises(AudioError, match="sample_rate"):
+        wav_bytes(np.zeros(32, dtype=np.float32), sample_rate)
+
+
+@pytest.mark.parametrize("shape", [(2, 32), (32, 2), (1, 32)])
+def test_wav_rejects_multidimensional_samples_instead_of_interleaving_channels(shape):
+    with pytest.raises(AudioError, match="one-dimensional mono"):
+        wav_bytes(np.zeros(shape, dtype=np.float32), 24000)

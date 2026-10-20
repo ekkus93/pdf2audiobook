@@ -97,7 +97,17 @@ def chunk_source_ranges(
 
 
 def wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
-    audio = np.asarray(samples, dtype=np.float32).reshape(-1)
+    if (
+        isinstance(sample_rate, bool)
+        or not isinstance(sample_rate, int)
+        or not 8000 <= sample_rate <= 192000
+    ):
+        raise AudioError("Audio sample_rate must be an integer from 8000 to 192000")
+    audio = np.asarray(samples, dtype=np.float32)
+    # A multichannel buffer must not be silently flattened into a mono WAV:
+    # doing so interleaves channels and changes playback speed and duration.
+    if audio.ndim != 1:
+        raise AudioError("TTS audio must be a one-dimensional mono sample buffer")
     if audio.size == 0 or not np.isfinite(audio).all():
         raise AudioError("TTS returned empty/nonfinite audio samples")
     pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2")
