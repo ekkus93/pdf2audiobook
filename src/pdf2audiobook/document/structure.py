@@ -338,6 +338,7 @@ def propose_chapters(
         text = block.text.strip()
         is_typographic_heading = (
             typical_size is not None and block.font_size is not None
+            and math.isfinite(float(block.font_size))
             and float(block.font_size) >= max(typical_size * 1.35, typical_size + 3)
             and 1 <= len(text.split()) <= 9 and len(text) <= 90
             and not text.endswith((".", "?", "!", ",", ";", ":"))
