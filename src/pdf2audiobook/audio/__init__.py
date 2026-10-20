@@ -117,6 +117,10 @@ def wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
     # doing so interleaves channels and changes playback speed and duration.
     if audio.ndim != 1:
         raise AudioError("TTS audio must be a one-dimensional mono sample buffer")
+    # Enforce the same bounded WAV contract for direct callers before any
+    # full-buffer scan, PCM allocation or serialization.
+    if audio.size > (_MAX_CACHED_WAV_BYTES - 44) // 2:
+        raise AudioError("TTS chunk exceeds safe WAV cache limit")
     if audio.size == 0 or not np.isfinite(audio).all():
         raise AudioError("TTS returned empty/nonfinite audio samples")
     pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2")
