@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import wave
 
 import numpy as np
@@ -44,6 +43,7 @@ def test_oversized_checksum_sidecar_regenerates_without_unbounded_read(
     from pathlib import Path
 
     original_read_bytes = Path.read_bytes
+    original_read_text = Path.read_text
 
     def reject_sidecar_unbounded_read(path):
         if path == sidecar:
@@ -51,16 +51,14 @@ def test_oversized_checksum_sidecar_regenerates_without_unbounded_read(
         return original_read_bytes(path)
 
     monkeypatch.setattr(Path, "read_bytes", reject_sidecar_unbounded_read)
-    monkeypatch.setattr(
-        Path, "read_text",
-        lambda path, *args, **kwargs: (
-            (_ for _ in ()).throw(AssertionError("unbounded sidecar text read"))
-            if path == sidecar else path.open(encoding="utf-8").read()
-        ),
-    )
+    def reject_sidecar_text_read(path, *args, **kwargs):
+        if path == sidecar:
+            raise AssertionError("unbounded sidecar text read")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", reject_sidecar_text_read)
     _synthesize(tmp_path, voice)
     assert voice.calls == 2
-    assert sidecar.read_bytes.__self__ if False else True
     with sidecar.open("rb") as saved:
         assert len(saved.read(66)) == 65
     _synthesize(tmp_path, voice)
