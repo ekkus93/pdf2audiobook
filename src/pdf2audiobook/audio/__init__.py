@@ -153,8 +153,9 @@ def read_wav(data: bytes, expected_rate: int) -> np.ndarray:
             if result.size == 0:
                 raise AudioError("Cached WAV is empty")
             return result.astype(np.float32) / 32767.0
-    except (wave.Error, EOFError) as exc:
-        raise AudioError(f"Cached WAV is invalid: {exc}") from exc
+    except (wave.Error, EOFError):
+        # Untrusted WAV parser diagnostics may include cached payload details.
+        raise AudioError("Cached WAV is invalid or unsupported") from None
 
 
 def synthesize_chunks(
@@ -227,9 +228,19 @@ def synthesize_chunks(
                 # Check file size before loading untrusted cache bytes into RAM.
                 if chunk_path.stat().st_size > _MAX_CACHED_WAV_BYTES:
                     raise AudioError("Cached WAV exceeds safe size limit")
-                cached_bytes = chunk_path.read_bytes()
+                # Bound both reads even if an untrusted cache file changes
+                # between stat() and open(). A checksum sidecar needs at most
+                # 64 ASCII hex characters plus its trailing newline.
+                with chunk_path.open("rb") as cached_stream:
+                    cached_bytes = cached_stream.read(_MAX_CACHED_WAV_BYTES + 1)
+                if len(cached_bytes) > _MAX_CACHED_WAV_BYTES:
+                    raise AudioError("Cached WAV exceeds safe size limit")
+                with checksum_path.open("rb") as checksum_stream:
+                    saved_digest = checksum_stream.read(66)
+                if len(saved_digest) > 65:
+                    raise AudioError("Cached WAV checksum sidecar is oversized")
                 candidate = digest_bytes(cached_bytes)
-                if candidate == checksum_path.read_text(encoding="utf-8").strip():
+                if candidate.encode("ascii") == saved_digest.strip():
                     audio = read_wav(cached_bytes, provider.sample_rate)
                     checksum = candidate
                     encoded_size = len(cached_bytes)
@@ -242,7 +253,17 @@ def synthesize_chunks(
                 except Exception:
                     # Arbitrary TTS engines can echo book text in their errors.
                     raise AudioError("TTS synthesis failed; verify model and voice") from None
+                # Short model chunks must not generate enormous cache entries.
+                # Reject oversized ndarray outputs before PCM conversion and
+                # also check serialized size for other provider buffer types.
+                if (
+                    isinstance(audio, np.ndarray)
+                    and audio.size > (_MAX_CACHED_WAV_BYTES - 44) // 2
+                ):
+                    raise AudioError("TTS chunk exceeds safe WAV cache limit")
                 encoded = wav_bytes(audio, rate)
+                if len(encoded) > _MAX_CACHED_WAV_BYTES:
+                    raise AudioError("TTS chunk exceeds safe WAV cache limit")
                 # First-pass PCM must match verified cached PCM exactly:
                 # canonicalize clipping and 16-bit quantization before
                 # concatenation, not only when replaying the WAV cache.
