@@ -563,6 +563,10 @@ def _valid_cached_lines(data: object) -> list[dict] | None:
     return checked
 
 
+class _InvalidOCRGeometry(ValueError):
+    """Trusted, content-free failure from local OCR validation only."""
+
+
 def _cached_ocr_lines(
     page: fitz.Page, settings: PdfSettings, *,
     cache_dir: Path | None, input_sha256: str | None, page_index: int,
@@ -576,7 +580,7 @@ def _cached_ocr_lines(
         lines = _ocr_page_lines(page, settings)
         uncached_verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
         if uncached_verified is None:
-            raise ValueError("invalid OCR line geometry or metadata; no cache entry written")
+            raise _InvalidOCRGeometry("invalid OCR line geometry or metadata; no cache entry written")
         return uncached_verified
     if input_sha256 is None:
         raise ValueError("OCR caching requires the source PDF SHA-256")
@@ -602,7 +606,7 @@ def _cached_ocr_lines(
     # Invalid fresh OCR must not silently enter the transcript or poison
     # a future cache hit. An empty result is allowed but never cached.
     if verified is None:
-        raise ValueError("invalid OCR line geometry or metadata; no cache entry written")
+        raise _InvalidOCRGeometry("invalid OCR line geometry or metadata; no cache entry written")
     if verified:
         write_json(target, {"schema_version": 1, "lines": verified})
     # Return the same validated, allowlisted fields on cache miss and hit.
@@ -674,6 +678,12 @@ def extract_pdf(
                         page, settings, cache_dir=ocr_cache_dir,
                         input_sha256=source_sha256, page_index=page_index,
                     )
+                except _InvalidOCRGeometry:
+                    # Only our own validator can produce this safe, fixed error.
+                    # Never inspect or echo arbitrary OCR backend diagnostics.
+                    raise ExtractionError(
+                        f"Page {page_index + 1}: invalid OCR line geometry or metadata"
+                    ) from None
                 except Exception:
                     # OCR failures can include recognized text and local paths.
                     raise ExtractionError(

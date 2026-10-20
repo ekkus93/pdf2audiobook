@@ -61,3 +61,18 @@ def test_ocr_failure_redacts_backend_diagnostics(monkeypatch, tmp_path):
     assert "OCR failed on PDF page 1" in str(raised.value)
     assert PRIVATE not in str(raised.value)
     assert raised.value.__cause__ is None
+
+
+def test_backend_cannot_spoof_trusted_ocr_validation(monkeypatch, tmp_path):
+    source = _fixture(tmp_path)
+
+    def fail_ocr(*args, **kwargs):
+        raise ValueError(f"invalid OCR line geometry or metadata; {PRIVATE}")
+
+    monkeypatch.setattr(pdf, "_cached_ocr_lines", fail_ocr)
+    with pytest.raises(ExtractionError) as raised:
+        pdf.extract_pdf(source, Pdf(ocr="always"))
+    assert "OCR failed on PDF page 1" in str(raised.value)
+    assert "invalid OCR line geometry" not in str(raised.value)
+    assert PRIVATE not in str(raised.value)
+    assert raised.value.__cause__ is None
