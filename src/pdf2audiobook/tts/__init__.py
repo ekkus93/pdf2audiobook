@@ -41,10 +41,10 @@ class KittenProvider:
     def __init__(self, model: str = "mini"):
         try:
             from kittenml import KittenTTS  # type: ignore[import-not-found]
-        except ImportError as exc:
+        except ImportError:
             raise AudioError(
                 "Kitten TTS is not installed. Run 'uv sync --extra kitten' first."
-            ) from exc
+            ) from None
         model_id = KITTEN_MODEL_ALIASES.get(model, model)
         self.model_id = model_id
         try:
@@ -58,22 +58,34 @@ class KittenProvider:
         return list(dict.fromkeys([*KITTEN_MODEL_ALIASES, self.model_id]))
 
     def list_voices(self) -> list[str]:
-        voices = getattr(self.model, "available_voices", None)
-        if isinstance(voices, (list, tuple, dict)):
-            return [name for name in voices if isinstance(name, str)]
+        try:
+            voices = getattr(self.model, "available_voices", None)
+            if isinstance(voices, (list, tuple, dict)):
+                return [name for name in voices if isinstance(name, str)]
+        except Exception:
+            # A backend property may raise with local paths or model details.
+            pass
         return []
 
     def health(self) -> bool:
-        return callable(getattr(self.model, "generate", None))
+        try:
+            return callable(getattr(self.model, "generate", None))
+        except Exception:
+            return False
 
     def generate(self, text: str, *, voice: str, speed: float) -> np.ndarray:
         if len(text) > self.max_chars_per_chunk:
             raise AudioError("Kitten text chunk exceeds configured engine limit")
         if not text.strip():
             raise AudioError("Cannot synthesize an empty text chunk")
-        voices = getattr(self.model, "available_voices", None)
-        if voices and voice not in voices:
-            raise AudioError(f"Unknown Kitten voice {voice!r}; available: {voices}")
+        try:
+            voices = getattr(self.model, "available_voices", None)
+            known_voice = not voices or voice in voices
+        except Exception:
+            # Third-party voice metadata may include private model diagnostics.
+            raise AudioError("Could not validate Kitten voice availability") from None
+        if not known_voice:
+            raise AudioError("Unknown Kitten voice; check the available voices with doctor")
         try:
             result = np.asarray(
                 self.model.generate(text, voice=voice, speed=speed), dtype=np.float32
