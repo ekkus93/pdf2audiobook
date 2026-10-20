@@ -94,8 +94,10 @@ def test_cost_budget_uses_explicit_rates(tmp_path):
         input_cost_usd_per_million_tokens=2,
         output_cost_usd_per_million_tokens=1,
     )
+    assert budget.complete_json(instructions='task', document_text='A') == {'headings': []}
     with pytest.raises(LLMError, match='cost budget'):
-        budget.complete_json(instructions='task', document_text='A')
+        budget.complete_json(instructions='task', document_text='B')
+    assert provider.calls == 1
     assert BookLLMBudgetLedger(
         tmp_path / 'budget.sqlite3'
     ).totals()['estimated_cost_usd'] == pytest.approx(0.00009)

@@ -56,13 +56,16 @@ def test_priced_cost_limit_uses_reported_usage_and_explicit_rates(tmp_path):
         output_cost_usd_per_million_tokens=1,
         usage_report=tmp_path / "usage.json",
     )
+    assert worker.complete_json(
+        instructions="task", document_text="Private source"
+    ) == {"headings": []}
     with pytest.raises(LLMError, match="cost budget"):
-        worker.complete_json(instructions="task", document_text="Private source")
+        worker.complete_json(instructions="task", document_text="Another source")
     assert provider.calls == 1
     record = json.loads((tmp_path / "usage.json").read_text())
     assert record["usage_verified"] is True
     assert record["estimated_cost_usd"] == pytest.approx(0.00009)
-    assert not list((tmp_path / "cache").glob("*.json"))
+    assert len(list((tmp_path / "cache").glob("*.json"))) == 1
 
 
 def test_missing_telemetry_fails_closed_when_token_limit_is_enabled(tmp_path):
