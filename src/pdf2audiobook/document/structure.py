@@ -546,7 +546,7 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
     assigned_spans: set[str] = set()
     for block in manifest.blocks:
         if known_spans and not block.span_ids:
-            raise ExtractionError("Source block has no span provenance")
+            raise ExtractionError("Source block has no source span provenance")
         for span_id in block.span_ids:
             if span_id not in known_spans:
                 raise ExtractionError("Source block references missing source spans")
