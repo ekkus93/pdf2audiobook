@@ -546,12 +546,12 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
     assigned_spans: set[str] = set()
     for block in manifest.blocks:
         if known_spans and not block.span_ids:
-            raise ExtractionError(f"Block {block.id} has no source span provenance")
+            raise ExtractionError("Source block has no span provenance")
         for span_id in block.span_ids:
             if span_id not in known_spans:
-                raise ExtractionError(f"Block {block.id} references missing source spans")
+                raise ExtractionError("Source block references missing source spans")
             if span_id in assigned_spans:
-                raise ExtractionError(f"Source span {span_id} is assigned more than once")
+                raise ExtractionError("Source span is assigned more than once")
             assigned_spans.add(span_id)
     if assigned_spans != known_spans:
         raise ExtractionError("Manifest contains unassigned source spans")
@@ -559,12 +559,12 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
     accepted: dict[str, str] = {}
     for edit in manifest.edits:
         if edit.block_id not in by_id:
-            raise ExtractionError(f"Cleanup edit references missing block: {edit.block_id}")
+            raise ExtractionError("Cleanup edit references missing source block")
         if edit.original != by_id[edit.block_id].text:
-            raise ExtractionError(f"Cleanup edit original does not match block {edit.block_id}")
+            raise ExtractionError("Cleanup edit original does not match source block")
         if edit.accepted:
             if edit.block_id in accepted:
-                raise ExtractionError(f"Multiple accepted edits for block {edit.block_id}")
+                raise ExtractionError("Multiple accepted edits for source block")
             accepted[edit.block_id] = edit.replacement
     return {
         "valid": True,
