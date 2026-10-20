@@ -46,6 +46,10 @@ class _SynthesisProgress(TypedDict):
 _PARAGRAPH_BREAK = re.compile(r"(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)+")
 
 
+# Short TTS chunks must never require a 128 MiB WAV cache entry.
+_MAX_CACHED_WAV_BYTES = 128 * 1024 * 1024
+
+
 def split_sentences(text: str, max_chars: int = 350) -> list[str]:
     """Split at sentence/word boundaries without crossing source paragraphs."""
     if max_chars < 40:
@@ -126,6 +130,8 @@ def wav_bytes(samples: np.ndarray, sample_rate: int) -> bytes:
 
 
 def read_wav(data: bytes, expected_rate: int) -> np.ndarray:
+    if len(data) > _MAX_CACHED_WAV_BYTES:
+        raise AudioError("Cached WAV exceeds safe size limit")
     try:
         with wave.open(io.BytesIO(data), "rb") as wav:
             if (
@@ -135,6 +141,8 @@ def read_wav(data: bytes, expected_rate: int) -> np.ndarray:
             ):
                 raise AudioError("Cached WAV has wrong sample rate/channels/format")
             frame_count = wav.getnframes()
+            if frame_count > _MAX_CACHED_WAV_BYTES // 2:
+                raise AudioError("Cached WAV declares excessive audio frames")
             raw_frames = wav.readframes(frame_count)
             # A WAV header may advertise more PCM data than the file actually
             # contains. A matching sidecar checksum alone cannot certify that
@@ -216,6 +224,9 @@ def synthesize_chunks(
         encoded_size = None
         if use_cache and chunk_path.is_file() and checksum_path.is_file():
             try:
+                # Check file size before loading untrusted cache bytes into RAM.
+                if chunk_path.stat().st_size > _MAX_CACHED_WAV_BYTES:
+                    raise AudioError("Cached WAV exceeds safe size limit")
                 cached_bytes = chunk_path.read_bytes()
                 candidate = digest_bytes(cached_bytes)
                 if candidate == checksum_path.read_text(encoding="utf-8").strip():
