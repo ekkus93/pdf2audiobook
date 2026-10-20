@@ -58,9 +58,10 @@ def test_audio_errors_redact_private_backend_diagnostics(
 
         monkeypatch.setattr(audio, "MP3", invalid_metadata)
 
-    with pytest.raises(AudioError, match=expected_message) as raised:
+    with pytest.raises(AudioError) as raised:
         _encode(tmp_path)
 
+    assert expected_message in str(raised.value)
     assert PRIVATE not in str(raised.value)
     assert PRIVATE not in repr(raised.value)
     assert raised.value.__cause__ is None
