@@ -361,7 +361,10 @@ def encode_mp3(
     """Encode once from PCM to MP3, tag and atomically publish final file."""
     if shutil.which("ffmpeg") is None:
         raise AudioError("FFmpeg executable not found in PATH")
-    output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise AudioError("Could not create MP3 output directory; check permissions") from None
     with tempfile.TemporaryDirectory(dir=output.parent) as temp_dir:
         wav_path = Path(temp_dir) / "chapter.wav"
         tmp_mp3 = Path(temp_dir) / "chapter.mp3"
@@ -409,7 +412,11 @@ def encode_mp3(
         except Exception:
             # Parser diagnostics can echo source-derived ID3 values or paths.
             raise AudioError("MP3 metadata validation failed; check encoded audio") from None
-        tmp_mp3.replace(output)
+        try:
+            tmp_mp3.replace(output)
+        except OSError:
+            # The OS error may reveal a private output directory or book title.
+            raise AudioError("Could not publish encoded MP3; check output permissions") from None
     return output
 
 
