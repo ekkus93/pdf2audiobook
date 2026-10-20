@@ -315,6 +315,44 @@ def synthesize_chunks(
     return np.concatenate(samples)
 
 
+
+def _write_chapter_wav(samples: np.ndarray, sample_rate: int, target: Path) -> None:
+    """Stream full-chapter PCM to WAV without applying the short-chunk cache cap.
+
+    Chapter audio may legitimately exceed 128 MiB. A fixed-size conversion
+    buffer prevents a second chapter-sized PCM allocation during encoding.
+    """
+    if (
+        isinstance(sample_rate, bool)
+        or not isinstance(sample_rate, int)
+        or not 8000 <= sample_rate <= 192000
+    ):
+        raise AudioError("Audio sample_rate must be an integer from 8000 to 192000")
+    try:
+        audio = np.asarray(samples, dtype=np.float32)
+    except Exception:
+        raise AudioError("TTS returned invalid audio sample data") from None
+    if audio.ndim != 1:
+        raise AudioError("TTS audio must be a one-dimensional mono sample buffer")
+    if audio.size == 0:
+        raise AudioError("TTS returned empty/nonfinite audio samples")
+    if audio.size > (0xFFFFFFFF - 36) // 2:
+        raise AudioError("Chapter audio exceeds the WAV RIFF size limit")
+    try:
+        with wave.open(str(target), "wb") as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(sample_rate)
+            for offset in range(0, audio.size, 65536):
+                part = audio[offset:offset + 65536]
+                if not np.isfinite(part).all():
+                    raise AudioError("TTS returned empty/nonfinite audio samples")
+                pcm = (np.clip(part, -1, 1) * 32767).astype("<i2")
+                out.writeframesraw(pcm.tobytes())
+    except (OSError, wave.Error):
+        raise AudioError("Could not write chapter PCM WAV") from None
+
+
 def encode_mp3(
     samples: np.ndarray, sample_rate: int, output: Path, *,
     bitrate: str, target_rate: int, title: str, artist: str | None,
@@ -327,7 +365,7 @@ def encode_mp3(
     with tempfile.TemporaryDirectory(dir=output.parent) as temp_dir:
         wav_path = Path(temp_dir) / "chapter.wav"
         tmp_mp3 = Path(temp_dir) / "chapter.mp3"
-        wav_path.write_bytes(wav_bytes(samples, sample_rate))
+        _write_chapter_wav(samples, sample_rate, wav_path)
         command = [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
             "-i", str(wav_path), "-ar", str(target_rate), "-ac", "1",
