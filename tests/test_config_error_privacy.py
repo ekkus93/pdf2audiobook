@@ -64,3 +64,37 @@ def test_cli_config_failure_redacts_private_path(tmp_path: Path, json_output: bo
     assert result.exit_code == 2
     assert "configuration file not found" in result.output
     assert SENTINEL not in result.output
+
+
+@pytest.mark.parametrize(
+    "bad_llm",
+    [
+        "SYNTHETIC_PRIVATE_CONFIG_VALUE_173",
+        ["SYNTHETIC_PRIVATE_CONFIG_VALUE_173"],
+        None,
+    ],
+)
+def test_malformed_cli_llm_section_has_redacted_domain_error(bad_llm) -> None:
+    with pytest.raises(ConfigError) as raised:
+        load_settings(no_config=True, environ={}, overrides={"llm": bad_llm})
+    assert str(raised.value) == "invalid configuration values; check field names and types"
+    assert SENTINEL not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+def test_nonmapping_cli_override_is_rejected_without_raw_exception() -> None:
+    with pytest.raises(ConfigError) as raised:
+        load_settings(no_config=True, environ={}, overrides=SENTINEL)
+    assert str(raised.value) == "invalid configuration values; check field names and types"
+    assert SENTINEL not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+def test_toml_scalar_llm_section_is_rejected_before_provider_selection(tmp_path: Path) -> None:
+    config = tmp_path / "private.toml"
+    config.write_text(f'llm = "{SENTINEL}"\n', encoding="utf-8")
+    with pytest.raises(ConfigError) as raised:
+        load_settings(config, environ={})
+    assert str(raised.value) == "invalid configuration values; check field names and types"
+    assert SENTINEL not in str(raised.value)
+    assert raised.value.__cause__ is None

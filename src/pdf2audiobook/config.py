@@ -179,6 +179,10 @@ def load_settings(
 ) -> tuple[Settings, dict[str, str]]:
     if no_config and config_path is not None:
         raise ConfigError("--config conflicts with --no-config")
+    # Reject non-mapping CLI data before merge or provider selection: arbitrary
+    # caller input must not trigger raw Python errors with private values.
+    if overrides is not None and not isinstance(overrides, dict):
+        raise ConfigError("invalid configuration values; check field names and types")
     data = Settings().model_dump()
     sources = {key: "built-in" for key in _flatten(data)}
     path = config_path or user_config_path()
@@ -195,8 +199,14 @@ def load_settings(
         _merge(data, toml)
         sources.update({key: f"file:{path}" for key in _flatten(toml)})
     env = environ if environ is not None else os.environ
-    selected = (overrides or {}).get("llm", {}).get(
-        "provider", env.get("PDF2AUDIOBOOK_LLM_PROVIDER", data["llm"]["provider"])
+    # TOML permits a scalar in place of [llm]; similarly untrusted CLI
+    # overrides may supply a list or scalar. Validate both before .get().
+    llm_data = data.get("llm")
+    llm_overrides = (overrides or {}).get("llm", {})
+    if not isinstance(llm_data, dict) or not isinstance(llm_overrides, dict):
+        raise ConfigError("invalid configuration values; check field names and types")
+    selected = llm_overrides.get(
+        "provider", env.get("PDF2AUDIOBOOK_LLM_PROVIDER", llm_data["provider"])
     )
     selected = str(selected).replace("-", "_")
     for env_name, setting_path in ENV_KEYS.items():
