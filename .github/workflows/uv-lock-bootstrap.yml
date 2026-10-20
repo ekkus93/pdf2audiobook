@@ -1,0 +1,28 @@
+name: Bootstrap reproducible uv lock
+on:
+  push:
+    branches: [master]
+    paths:
+      - .github/workflows/uv-lock-bootstrap.yml
+permissions:
+  contents: read
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Resolve all declared dependency groups
+        run: uv lock
+      - name: Export generated lockfile for Ralph reconciliation
+        run: |
+          python - <<'PY'
+          import base64
+          from pathlib import Path
+          raw = Path("uv.lock").read_bytes()
+          print(f"UVLOCK_BEGIN:{len(raw)}")
+          for index in range(0, len(raw), 96):
+              print("UVLOCK_DATA:" + base64.b64encode(raw[index:index + 96]).decode("ascii"))
+          print("UVLOCK_END")
+          PY
