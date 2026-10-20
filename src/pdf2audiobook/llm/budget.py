@@ -37,8 +37,9 @@ class BookLLMBudgetLedger:
                 connection.execute("PRAGMA user_version=1")
             connection.commit()
             return connection
-        except sqlite3.Error as exc:
-            raise LLMError("Cannot access per-book LLM budget ledger") from exc
+        except sqlite3.Error:
+            # SQLite diagnostics may contain private workspace paths.
+            raise LLMError("Cannot access per-book LLM budget ledger") from None
 
     @staticmethod
     def _stats(connection: sqlite3.Connection) -> dict:
@@ -121,8 +122,8 @@ class BookLLMBudgetLedger:
         try:
             with self._connect() as connection:
                 return self._stats(connection)
-        except (sqlite3.Error, InvalidOperation) as exc:
-            raise LLMError("Invalid per-book LLM budget ledger") from exc
+        except (sqlite3.Error, InvalidOperation):
+            raise LLMError("Invalid per-book LLM budget ledger") from None
 
     def reserve(
         self, *, request_hash: str, provider_hash: str,
@@ -144,8 +145,8 @@ class BookLLMBudgetLedger:
                 if reservation_id is None:
                     raise LLMError("LLM budget reservation did not return a row ID")
                 return reservation_id
-        except (sqlite3.Error, InvalidOperation) as exc:
-            raise LLMError("Cannot reserve per-book LLM budget") from exc
+        except (sqlite3.Error, InvalidOperation):
+            raise LLMError("Cannot reserve per-book LLM budget") from None
 
     def settle(
         self, call_id: int, *, usage: dict | None,
@@ -209,8 +210,8 @@ class BookLLMBudgetLedger:
                 )
                 if result.rowcount != 1:
                     raise LLMError("LLM ledger request was already settled or missing")
-        except sqlite3.Error as exc:
-            raise LLMError("Cannot settle per-book LLM budget") from exc
+        except sqlite3.Error:
+            raise LLMError("Cannot settle per-book LLM budget") from None
 
     def check_spend(self, *, max_tokens: int | None, max_usd: float | None) -> None:
         try:
@@ -220,5 +221,5 @@ class BookLLMBudgetLedger:
                     max_tokens=max_tokens, max_usd=max_usd,
                     postflight=True,
                 )
-        except (sqlite3.Error, InvalidOperation) as exc:
-            raise LLMError("Cannot inspect per-book LLM budget") from exc
+        except (sqlite3.Error, InvalidOperation):
+            raise LLMError("Cannot inspect per-book LLM budget") from None
