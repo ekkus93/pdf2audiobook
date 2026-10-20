@@ -42,7 +42,7 @@ class ExtractedDocument:
 
 def _open(source: Path, password_env: str | None = None) -> fitz.Document:
     if not source.is_file() or source.suffix.lower() != ".pdf":
-        raise InputError(f"not a readable PDF file: {source}")
+        raise InputError("not a readable PDF file; verify input path and permissions")
     try:
         document = fitz.open(source)
         if document.needs_pass:
@@ -63,20 +63,27 @@ def _open(source: Path, password_env: str | None = None) -> fitz.Document:
 
 def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
     with _open(source, password_env) as document:
-        return {
-            "title": document.metadata.get("title") or source.stem,
-            "author": document.metadata.get("author") or None,
-            "pages": len(document),
-            "outline": document.get_toc(),
-            "page_label_rules": document.get_page_labels(),
-            # PyMuPDF text bounding boxes use the unrotated page coordinate
-            # space, even when the viewer displays a rotated page.
-            "page_rotations": [page.rotation for page in document],
-            "page_sizes": [
-                (float(page.cropbox.width), float(page.cropbox.height))
-                for page in document
-            ],
-        }
+        try:
+            return {
+                "title": document.metadata.get("title") or source.stem,
+                "author": document.metadata.get("author") or None,
+                "pages": len(document),
+                "outline": document.get_toc(),
+                "page_label_rules": document.get_page_labels(),
+                # PyMuPDF text bounding boxes use the unrotated page coordinate
+                # space, even when the viewer displays a rotated page.
+                "page_rotations": [page.rotation for page in document],
+                "page_sizes": [
+                    (float(page.cropbox.width), float(page.cropbox.height))
+                    for page in document
+                ],
+            }
+        except Exception:
+            # Malformed PDF metadata or backend diagnostics can echo private
+            # document paths or content; inspection is read-only and fail-closed.
+            raise ExtractionError(
+                "Failed to inspect PDF metadata or page geometry"
+            ) from None
 
 
 def _positive_finite_number(value: object) -> float | None:
@@ -448,6 +455,7 @@ def _page_has_dominant_raster(page: fitz.Page) -> bool:
         for left, right in zip(x_coords, x_coords[1:]):
             intervals = sorted(
                 (rect.y0, rect.y1)
+
                 for rect in regions if rect.x0 < right and rect.x1 > left
             )
             if not intervals:

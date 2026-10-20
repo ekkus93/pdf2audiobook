@@ -90,3 +90,49 @@ def test_page_text_failure_reports_page_number(monkeypatch, tmp_path: Path):
     with pytest.raises(ExtractionError, match="Failed to extract embedded text from PDF page 1") as failure:
         extract_pdf(source, Pdf(ocr="never"))
     assert "broken page text stream" not in str(failure.value)
+
+
+def test_missing_pdf_error_does_not_echo_private_path(tmp_path: Path):
+    private = tmp_path / "CONFIDENTIAL_BOOK_TITLE_729.pdf"
+    with pytest.raises(InputError, match="not a readable PDF") as raised:
+        inspect_pdf(private)
+    assert private.name not in str(raised.value)
+    assert str(private) not in str(raised.value)
+
+
+@pytest.mark.parametrize("failed_method", ["get_toc", "get_page_labels"])
+def test_inspection_backend_failure_redacts_untrusted_diagnostics(
+    monkeypatch, failed_method: str,
+):
+    marker = "CONFIDENTIAL_DOCUMENT_CONTENT_729"
+
+    class BrokenInspection:
+        metadata = {"title": "Fixture", "author": "Example"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def __len__(self):
+            return 1
+
+        def get_toc(self):
+            if failed_method == "get_toc":
+                raise RuntimeError(f"backend exposed {marker}")
+            return []
+
+        def get_page_labels(self):
+            if failed_method == "get_page_labels":
+                raise RuntimeError(f"backend exposed {marker}")
+            return []
+
+    monkeypatch.setattr(
+        "pdf2audiobook.pdf._open",
+        lambda _source, _password_env=None: BrokenInspection(),
+    )
+    with pytest.raises(ExtractionError, match="Failed to inspect PDF metadata") as raised:
+        inspect_pdf(Path("fixture.pdf"))
+    assert marker not in str(raised.value)
+    assert raised.value.__cause__ is None
