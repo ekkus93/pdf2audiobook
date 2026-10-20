@@ -35,16 +35,16 @@ def test_config_failures_do_not_echo_untrusted_input(
     if scenario == "missing":
         pass
     elif scenario == "malformed":
-        config.write_text(f'[llm]\\nprovider = "ollama"\\n[private_{SENTINEL}\\n')
+        config.write_text(f'[llm]\nprovider = "ollama"\n[private_{SENTINEL}\n')
     elif scenario == "bad_type":
-        config.write_text(f'[general]\\nresume = "{SENTINEL}"\\n')
+        config.write_text(f'[general]\nresume = "{SENTINEL}"\n')
     elif scenario == "unknown_key":
-        config.write_text(f'[general]\\n{SENTINEL} = "value"\\n')
+        config.write_text(f'[general]\n{SENTINEL} = "value"\n')
     elif scenario == "invalid_env":
-        config.write_text("[general]\\nresume = true\\n")
+        config.write_text("[general]\nresume = true\n")
         environ = {"PDF2AUDIOBOOK_RESUME": SENTINEL}
     else:
-        config.write_text("[general]\\nresume = true\\n")
+        config.write_text("[general]\nresume = true\n")
         overrides = {"general": {"resume": SENTINEL}}
 
     with pytest.raises(ConfigError) as raised:
