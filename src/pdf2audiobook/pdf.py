@@ -73,10 +73,7 @@ def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
                 # PyMuPDF text bounding boxes use the unrotated page coordinate
                 # space, even when the viewer displays a rotated page.
                 "page_rotations": [page.rotation for page in document],
-                "page_sizes": [
-                    (float(page.cropbox.width), float(page.cropbox.height))
-                    for page in document
-                ],
+                "page_sizes": [_inspection_page_size(page) for page in document],
             }
         except Exception:
             # Malformed PDF metadata or backend diagnostics can echo private
@@ -95,6 +92,15 @@ def _positive_finite_number(value: object) -> float | None:
     except (OverflowError, TypeError, ValueError):
         return None
     return number if math.isfinite(number) and number > 0 else None
+
+
+def _inspection_page_size(page: fitz.Page) -> tuple[float, float]:
+    """Require usable, finite PDF dimensions even for metadata-only inspection."""
+    width = _positive_finite_number(page.cropbox.width)
+    height = _positive_finite_number(page.cropbox.height)
+    if width is None or height is None:
+        raise ValueError("invalid PDF page geometry")
+    return width, height
 
 
 def _lines(page: fitz.Page, textpage: fitz.TextPage | None = None) -> list[dict]:
