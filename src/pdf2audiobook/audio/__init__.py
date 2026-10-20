@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import math
 import re
 import shutil
 import subprocess
@@ -169,6 +170,15 @@ def synthesize_chunks(
 ) -> np.ndarray:
     """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
     samples: list[np.ndarray] = []
+    # Public synthesis is callable without Pydantic or the Kitten adapter.
+    # Invalid speed must never reach a third-party engine or cache identity.
+    if (
+        isinstance(speed, bool)
+        or not isinstance(speed, (int, float))
+        or not math.isfinite(speed)
+        or not 0 < speed <= 3
+    ):
+        raise AudioError("TTS speech speed must be finite and in (0, 3]")
     # Validate engine metadata before computing pause lengths or replaying
     # persisted WAVs. Invalid rates must never create bogus audio artifacts.
     rate = getattr(provider, "sample_rate", None)
