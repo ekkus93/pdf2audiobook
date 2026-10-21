@@ -1,6 +1,7 @@
 """Atomic content-addressed cache for LLM JSON responses (always revalidated by callers)."""
 
 import json
+import math
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,22 @@ from typing import Any
 from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 from pdf2audiobook.workspace import fingerprint, write_json
+
+
+# Cached provider output is untrusted even when its content-addressed filename
+# matches. Bound the read independently of an earlier stat() to handle races.
+_MAX_CACHED_LLM_JSON_BYTES = 2 * 1024 * 1024
+
+
+def _reject_nonstandard_json_constant(_value: str) -> None:
+    raise ValueError("Nonstandard JSON numeric constant")
+
+
+def _finite_json_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("Nonfinite JSON number")
+    return number
 
 
 class CachedLLMProvider:
@@ -126,9 +143,17 @@ class CachedLLMProvider:
         target = self.cache_dir / f"{key}.json"
         if self.enabled and target.is_file():
             try:
-                if target.stat().st_size > 2 * 1024 * 1024:
+                # A cache entry may grow between stat and read; enforce the
+                # byte ceiling on the actual read, not only filesystem metadata.
+                with target.open("rb") as cached:
+                    payload = cached.read(_MAX_CACHED_LLM_JSON_BYTES + 1)
+                if len(payload) > _MAX_CACHED_LLM_JSON_BYTES:
                     raise ValueError("oversized LLM cache")
-                entry = json.loads(target.read_text(encoding="utf-8"))
+                entry = json.loads(
+                    payload,
+                    parse_constant=_reject_nonstandard_json_constant,
+                    parse_float=_finite_json_float,
+                )
                 if (
                     isinstance(entry, dict)
                     and entry.get("schema_version") == 1
