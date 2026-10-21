@@ -7,6 +7,7 @@ No document text, prompt, response, credentials or raw model IDs are stored.
 
 from __future__ import annotations
 
+import math
 import sqlite3
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -76,6 +77,11 @@ class BookLLMBudgetLedger:
         if any(not amount.is_finite() or amount < 0 for amount in values):
             raise LLMError("Invalid per-book LLM cost entries")
         total_cost = sum(values, Decimal(0))
+        # Decimal values may be finite yet overflow binary64 to Infinity.
+        # Never serialize nonfinite cost estimates or weaken budget checks.
+        estimated_cost = float(total_cost)
+        if not math.isfinite(estimated_cost):
+            raise LLMError("Invalid per-book LLM cost entries")
         return {
             "requests_started": row[0],
             "unresolved_requests": row[1],
@@ -83,7 +89,7 @@ class BookLLMBudgetLedger:
             "prompt_tokens": row[3],
             "completion_tokens": row[4],
             "unpriced_requests": row[5],
-            "estimated_cost_usd": float(total_cost),
+            "estimated_cost_usd": estimated_cost,
             "scope": "persistent_book_workspace",
         }
 
