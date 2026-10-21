@@ -291,6 +291,7 @@ def convert_book(
                 import json
 
                 from mutagen import MutagenError
+                from mutagen.easyid3 import EasyID3
                 from mutagen.mp3 import MP3
 
                 # A cache sidecar is tiny (three scalar fields). Never parse
@@ -303,9 +304,21 @@ def convert_book(
                     and metadata.get("fingerprint") == identity
                     and metadata.get("bytes") == output.stat().st_size
                     and metadata.get("sha256") == digest_file(output)
-                    and (info := MP3(output).info) is not None
-                    and info.length > 0
                 )
+                if cached:
+                    mp3 = MP3(output, ID3=EasyID3)
+                    tags = mp3.tags
+                    # The sidecar is not sufficient evidence of correct chapter
+                    # identity: verify the actual audio tags before reusing it.
+                    cached = (
+                        mp3.info is not None
+                        and mp3.info.length > 0
+                        and tags is not None
+                        and tags.get("title") == [item.title]
+                        and tags.get("album") == [manifest.title]
+                        and tags.get("tracknumber") == [str(item.number)]
+                        and (not manifest.author or tags.get("artist") == [manifest.author])
+                    )
             except (OSError, ValueError, MutagenError):
                 # A corrupt MP3, even with a matching cache sidecar checksum,
                 # must be regenerated rather than aborting the entire book.
