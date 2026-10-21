@@ -10,7 +10,6 @@ from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 from pdf2audiobook.workspace import fingerprint, write_json
 
-
 # Cached provider output is untrusted even when its content-addressed filename
 # matches. Bound the read independently of an earlier stat() to handle races.
 _MAX_CACHED_LLM_JSON_BYTES = 2 * 1024 * 1024
