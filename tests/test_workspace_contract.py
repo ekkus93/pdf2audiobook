@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.workspace import atomic_write, fingerprint, read_manifest, write_manifest
