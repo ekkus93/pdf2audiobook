@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.workspace import fingerprint
 
@@ -118,6 +119,28 @@ def test_moderately_nested_cached_response_is_reused(tmp_path):
     assert worker.hits == 1
     assert worker.misses == 0
     assert provider.calls == 0
+
+
+def test_oversized_live_provider_structure_is_not_cached(tmp_path):
+    class _NestedProvider(_Provider):
+        def complete_json(self, *, instructions, document_text):
+            self.calls += 1
+            root = {}
+            cursor = root
+            for _ in range(80):
+                child = {}
+                cursor["nested"] = child
+                cursor = child
+            return root
+
+    provider = _NestedProvider()
+    worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="local")
+    with pytest.raises(LLMError, match="supported JSON nesting depth"):
+        worker.complete_json(instructions="schema", document_text="synthetic source")
+    assert provider.calls == 1
+    assert worker.hits == 0
+    assert worker.misses == 1
+    assert not list(tmp_path.glob("*.json"))
 
 
 def test_cache_path_probe_error_falls_back_without_disclosing_path(tmp_path, monkeypatch):

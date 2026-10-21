@@ -228,6 +228,8 @@ class CachedLLMProvider:
             self._write_usage()
         if not isinstance(reply, dict):
             raise ValueError("LLM cache requires a JSON-object response")
+        if not _bounded_cache_json_structure(reply):
+            raise LLMError("LLM response exceeds supported JSON nesting depth")
         if self.ledger is not None:
             self.ledger.check_spend(
                 max_tokens=self.max_reported_tokens,
