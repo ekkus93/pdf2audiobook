@@ -90,6 +90,9 @@ class BookLLMBudgetLedger:
             "completion_tokens": row[4],
             "unpriced_requests": row[5],
             "estimated_cost_usd": estimated_cost,
+            # Keep precise decimal accounting for budget authorization, but
+            # do not expose internal arithmetic state in the public report.
+            "_exact_cost_usd": str(total_cost),
             "scope": "persistent_book_workspace",
         }
 
@@ -119,7 +122,7 @@ class BookLLMBudgetLedger:
                 "Per-book cost budget has unpriced earlier requests; inspect ledger"
             )
         if max_usd is not None:
-            cost = Decimal(str(stats["estimated_cost_usd"]))
+            cost = Decimal(str(stats.get("_exact_cost_usd", stats["estimated_cost_usd"])))
             limit = Decimal(str(max_usd))
             if cost > limit if postflight else cost >= limit:
                 raise LLMError("Per-book LLM estimated cost budget reached or exceeded")
@@ -127,7 +130,9 @@ class BookLLMBudgetLedger:
     def totals(self) -> dict:
         try:
             with self._connect() as connection:
-                return self._stats(connection)
+                stats = self._stats(connection)
+                stats.pop("_exact_cost_usd", None)
+                return stats
         except (sqlite3.Error, InvalidOperation):
             raise LLMError("Invalid per-book LLM budget ledger") from None
 
