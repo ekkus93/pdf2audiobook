@@ -37,9 +37,16 @@ def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "KittenProvider", lambda _: SimpleNamespace(sample_rate=24000))
     monkeypatch.setattr(pipeline, "synthesize_chunks", synthesize)
     monkeypatch.setattr(pipeline, "encode_mp3", encode)
-    monkeypatch.setattr(
-        "mutagen.mp3.MP3", lambda _: SimpleNamespace(info=SimpleNamespace(length=1))
-    )
+    # Match the production MP3(ID3=EasyID3) call and expose the chapter
+    # identity required to reuse a cached audio file.
+    def read_mp3(_path, *, ID3):
+        assert ID3 is not None
+        return SimpleNamespace(
+            info=SimpleNamespace(length=1),
+            tags={"title": ["First"], "album": ["Book"], "tracknumber": ["1"]},
+        )
+
+    monkeypatch.setattr("mutagen.mp3.MP3", read_mp3)
 
     pipeline.convert_book(tmp_path / "book.pdf", settings)
     pipeline.convert_book(tmp_path / "book.pdf", settings)
