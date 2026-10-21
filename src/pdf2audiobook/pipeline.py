@@ -294,8 +294,18 @@ def convert_book(
         identity = chapter_audio_fingerprint(text, settings, manifest, item)
         record = output.with_suffix(".cache.json")
         cached = False
-        if (settings.general.resume and not force and output.is_file()
-                and output.stat().st_size > 0 and record.is_file()):
+        if settings.general.resume and not force:
+            # A file can disappear or become unreadable between is_file()
+            # and stat(). Treat this as a cache miss, not a book-path error.
+            try:
+                cache_files_ready = (
+                    output.is_file() and output.stat().st_size > 0 and record.is_file()
+                )
+            except OSError:
+                cache_files_ready = False
+        else:
+            cache_files_ready = False
+        if cache_files_ready:
             try:
                 import json
 
