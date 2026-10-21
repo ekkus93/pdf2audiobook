@@ -343,11 +343,23 @@ def convert_book(
                 # must be regenerated rather than aborting the entire book.
                 cached = False
         if not cached:
-            pending.append((item, output, text, record, identity))
+            # Retain the path and identity, not the full text of every chapter.
+            # A long book may have hundreds of pending chapters.
+            pending.append((item, output, text_file, record, identity))
+        del text
 
-    provider = KittenProvider(settings.tts.kitten.model) if pending else None
-    for item, output, text, record, identity in pending:
-        assert provider is not None
+    provider = None
+    for item, output, text_file, record, identity in pending:
+        try:
+            text = text_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            raise AudioError("Cannot read approved chapter text; check workspace files") from None
+        # Detect edits between the cache-check and synthesis passes. Never
+        # publish audio with a fingerprint computed from different prose.
+        if chapter_audio_fingerprint(text, settings, manifest, item) != identity:
+            raise AudioError("Approved chapter text changed during conversion; retry")
+        if provider is None:
+            provider = KittenProvider(settings.tts.kitten.model)
         samples = synthesize_chunks(
             text, provider, model=settings.tts.kitten.model,
             voice=settings.tts.kitten.voice, speed=settings.tts.kitten.speed,
