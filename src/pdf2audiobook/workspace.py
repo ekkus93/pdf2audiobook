@@ -44,7 +44,11 @@ def atomic_write(path: Path, data: bytes) -> None:
 
 
 def write_json(path: Path, obj: Any) -> None:
-    atomic_write(path, (json.dumps(obj, ensure_ascii=False, indent=2) + "\n").encode())
+    # Standard JSON has no NaN/Infinity tokens. Serialize before touching
+    # the destination so a malformed report cannot replace a valid artifact.
+    atomic_write(
+        path, (json.dumps(obj, ensure_ascii=False, indent=2, allow_nan=False) + "\n").encode()
+    )
 
 
 def read_manifest(path: Path) -> BookManifest:
