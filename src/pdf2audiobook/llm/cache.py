@@ -13,6 +13,24 @@ from pdf2audiobook.workspace import fingerprint, write_json
 # Cached provider output is untrusted even when its content-addressed filename
 # matches. Bound the read independently of an earlier stat() to handle races.
 _MAX_CACHED_LLM_JSON_BYTES = 2 * 1024 * 1024
+_MAX_CACHED_LLM_JSON_DEPTH = 64
+
+
+def _bounded_cache_json_structure(value: Any) -> bool:
+    """Check nested containers iteratively: CPython JSON may accept very deep input."""
+    pending = [(value, 0)]
+    while pending:
+        item, depth = pending.pop()
+        if isinstance(item, dict):
+            children = item.values()
+        elif isinstance(item, list):
+            children = item
+        else:
+            continue
+        if depth >= _MAX_CACHED_LLM_JSON_DEPTH:
+            return False
+        pending.extend((child, depth + 1) for child in children)
+    return True
 
 
 def _reject_nonstandard_json_constant(_value: str) -> None:
@@ -159,6 +177,7 @@ class CachedLLMProvider:
                         and entry.get("schema_version") == 1
                         and entry.get("fingerprint") == key
                         and isinstance(entry.get("response"), dict)
+                        and _bounded_cache_json_structure(entry)
                     ):
                         self.hits += 1
                         self._write_usage()

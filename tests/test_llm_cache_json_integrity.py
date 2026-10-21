@@ -86,6 +86,40 @@ def test_deeply_nested_cached_response_is_treated_as_a_miss(tmp_path):
     assert json.loads(path.read_text(encoding="utf-8"))["response"] == result
 
 
+def test_nesting_limit_checks_object_containers_as_well_as_arrays(tmp_path):
+    provider = _Provider()
+    worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="local")
+    key = fingerprint("llm-json-cache-v1", "local", "schema", "synthetic source")
+    nested = '{"next":' * 80 + "null" + "}" * 80
+    (tmp_path / f"{key}.json").write_text(
+        '{"schema_version":1,"fingerprint":"' + key
+        + '","response":{"nested":' + nested + "}}",
+        encoding="utf-8",
+    )
+
+    assert worker.complete_json(instructions="schema", document_text="synthetic source") == {
+        "headings": [], "recovered": True,
+    }
+    assert provider.calls == 1
+    assert worker.hits == 0
+
+
+def test_moderately_nested_cached_response_is_reused(tmp_path):
+    provider = _Provider()
+    worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="local")
+    key = fingerprint("llm-json-cache-v1", "local", "schema", "synthetic source")
+    response = {"nested": [{"text": "literal braces { } and [ ]"}]}
+    (tmp_path / f"{key}.json").write_text(
+        json.dumps({"schema_version": 1, "fingerprint": key, "response": response}),
+        encoding="utf-8",
+    )
+
+    assert worker.complete_json(instructions="schema", document_text="synthetic source") == response
+    assert worker.hits == 1
+    assert worker.misses == 0
+    assert provider.calls == 0
+
+
 def test_cache_path_probe_error_falls_back_without_disclosing_path(tmp_path, monkeypatch):
     provider = _Provider()
     worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="local")
