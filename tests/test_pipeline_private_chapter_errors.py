@@ -28,7 +28,7 @@ def test_missing_or_undecodable_chapter_text_is_private(tmp_path, monkeypatch, f
     if failure == "invalid_encoding":
         folder = root / "chapters"
         folder.mkdir(parents=True)
-        (folder / "001.txt").write_bytes(b"\\xff\\xfe")
+        (folder / "001.txt").write_bytes(bytes([0xFF, 0xFE]))
 
     settings = Settings()
     monkeypatch.setattr(pipeline, "analyze_book", lambda *args: manifest_path)
