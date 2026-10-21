@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
+from pdf2audiobook import workspace
 from pdf2audiobook.document import structure
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
-from pdf2audiobook import workspace
 
 
 def test_render_chapter_texts_streams_existing_artifact_comparison(tmp_path, monkeypatch):
