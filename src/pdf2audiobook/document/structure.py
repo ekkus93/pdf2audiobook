@@ -583,7 +583,7 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
 
 def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
     """Regenerate derived text from source-linked, verified edits and manual boundaries."""
-    from pdf2audiobook.workspace import atomic_write, write_json
+    from pdf2audiobook.workspace import atomic_write, digest_bytes, digest_file, write_json
 
     report = chapter_coverage_report(manifest)
     replacements = {
@@ -593,7 +593,9 @@ def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
         chapter_blocks = manifest.blocks[chapter.start_block:chapter.end_block]
         content = reflow_narration_lines(chapter_blocks, replacements).encode("utf-8")
         path = folder / "chapters" / f"{chapter.number:03d}.txt"
-        if not path.exists() or path.read_bytes() != content:
+        # Compare existing chapter text using bounded reads. read_bytes()
+        # would duplicate an entire long chapter in memory on every resume.
+        if not path.is_file() or digest_file(path) != digest_bytes(content):
             atomic_write(path, content)
     write_json(folder / "coverage.json", report)
 
