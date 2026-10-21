@@ -286,7 +286,11 @@ def convert_book(
         output = audio_output_path(manifest, item, manifest_path.parent)
         outputs.append(output)
         text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
-        text = text_file.read_text(encoding="utf-8")
+        try:
+            text = text_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            # PDF-derived filenames and source text must not escape in errors.
+            raise AudioError("Cannot read approved chapter text; check workspace files") from None
         identity = chapter_audio_fingerprint(text, settings, manifest, item)
         record = output.with_suffix(".cache.json")
         cached = False
