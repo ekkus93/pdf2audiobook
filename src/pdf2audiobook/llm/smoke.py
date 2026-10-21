@@ -38,12 +38,20 @@ def run(argv: list[str] | None = None) -> int:
             document_text="Synthetic smoke-test fixture; no user or book content.",
         )
         if not isinstance(result, dict) or result.get("ok") is not True:
-            print(json.dumps({"ok": False, "provider": args.provider, "error": "unexpected_schema"}))
+            print(
+                json.dumps({"ok": False, "provider": args.provider, "error": "unexpected_schema"})
+            )
             return 1
-        print(json.dumps({
-            "ok": True, "provider": args.provider,
-            "model": args.model, "reported_tokens": provider.last_usage,
-        }))
+        print(
+            json.dumps(
+                {
+                    "ok": True,
+                    "provider": args.provider,
+                    "model": args.model,
+                    "reported_tokens": provider.last_usage,
+                }
+            )
+        )
         return 0
 
 

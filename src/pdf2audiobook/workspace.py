@@ -1,4 +1,5 @@
 """Transactional local workspace persistence."""
+
 import hashlib
 import json
 import os
