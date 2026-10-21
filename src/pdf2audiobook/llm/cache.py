@@ -21,14 +21,11 @@ def _bounded_cache_json_structure(value: Any) -> bool:
     pending = [(value, 0)]
     while pending:
         item, depth = pending.pop()
-        if isinstance(item, dict):
-            children = item.values()
-        elif isinstance(item, list):
-            children = item
-        else:
+        if not isinstance(item, (dict, list)):
             continue
         if depth >= _MAX_CACHED_LLM_JSON_DEPTH:
             return False
+        children = item.values() if isinstance(item, dict) else item
         pending.extend((child, depth + 1) for child in children)
     return True
 
