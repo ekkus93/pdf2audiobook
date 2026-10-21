@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.models import BookManifest
 
 
@@ -47,7 +48,14 @@ def write_json(path: Path, obj: Any) -> None:
 
 
 def read_manifest(path: Path) -> BookManifest:
-    return BookManifest.model_validate_json(path.read_text(encoding="utf-8"))
+    """Fail closed without disclosing user book content or private file paths."""
+    try:
+        return BookManifest.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # Pydantic diagnostics can include untrusted field values and input
+        # fragments; filesystem exceptions may contain private workspace paths.
+        # Preserve the existing manifest for user recovery on read failures.
+        raise ExtractionError("Cannot read or validate audiobook manifest") from None
 
 
 def write_manifest(path: Path, manifest: BookManifest) -> None:
