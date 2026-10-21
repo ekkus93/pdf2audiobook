@@ -65,3 +65,43 @@ def test_cached_json_read_is_bounded_even_if_file_grows_after_stat(tmp_path, mon
     assert provider.calls == 1
     assert worker.hits == 0
     assert observed_reads == [2 * 1024 * 1024 + 1]
+
+def test_deeply_nested_cached_response_is_treated_as_a_miss(tmp_path):
+    provider = _Provider()
+    worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="local")
+    key = fingerprint("llm-json-cache-v1", "local", "schema", "synthetic source")
+    path = tmp_path / f"{key}.json"
+    nested = "[" * 1600 + "0" + "]" * 1600
+    path.write_text(
+        '{"schema_version":1,"fingerprint":"' + key
+        + '","response":{"nested":' + nested + "}}",
+        encoding="utf-8",
+    )
+
+    result = worker.complete_json(instructions="schema", document_text="synthetic source")
+    assert result == {"headings": [], "recovered": True}
+    assert provider.calls == 1
+    assert worker.hits == 0
+    assert worker.misses == 1
+    assert json.loads(path.read_text(encoding="utf-8"))["response"] == result
+
+
+def test_cache_path_probe_error_falls_back_without_disclosing_path(tmp_path, monkeypatch):
+    provider = _Provider()
+    worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="local")
+    key = fingerprint("llm-json-cache-v1", "local", "schema", "synthetic source")
+    path = tmp_path / f"{key}.json"
+    original_is_file = Path.is_file
+
+    def failing_is_file(self):
+        if self == path:
+            raise OSError("PRIVATE_WORKSPACE_PATH")
+        return original_is_file(self)
+
+    monkeypatch.setattr(Path, "is_file", failing_is_file)
+    result = worker.complete_json(instructions="schema", document_text="synthetic source")
+    assert result == {"headings": [], "recovered": True}
+    assert provider.calls == 1
+    assert worker.hits == 0
+    assert worker.misses == 1
+

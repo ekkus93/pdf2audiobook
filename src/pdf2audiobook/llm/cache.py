@@ -140,29 +140,31 @@ class CachedLLMProvider:
             preflight(instructions=instructions, document_text=document_text)
         key = fingerprint("llm-json-cache-v1", self.identity, instructions, document_text)
         target = self.cache_dir / f"{key}.json"
-        if self.enabled and target.is_file():
+        if self.enabled:
             try:
-                # A cache entry may grow between stat and read; enforce the
-                # byte ceiling on the actual read, not only filesystem metadata.
-                with target.open("rb") as cached:
-                    payload = cached.read(_MAX_CACHED_LLM_JSON_BYTES + 1)
-                if len(payload) > _MAX_CACHED_LLM_JSON_BYTES:
-                    raise ValueError("oversized LLM cache")
-                entry = json.loads(
-                    payload,
-                    parse_constant=_reject_nonstandard_json_constant,
-                    parse_float=_finite_json_float,
-                )
-                if (
-                    isinstance(entry, dict)
-                    and entry.get("schema_version") == 1
-                    and entry.get("fingerprint") == key
-                    and isinstance(entry.get("response"), dict)
-                ):
-                    self.hits += 1
-                    self._write_usage()
-                    return entry["response"]
-            except (OSError, ValueError, UnicodeError, TypeError):
+                if target.is_file():
+                    # A cache entry may grow between stat and read; enforce the
+                    # byte ceiling on the actual read, not only filesystem metadata.
+                    with target.open("rb") as cached:
+                        payload = cached.read(_MAX_CACHED_LLM_JSON_BYTES + 1)
+                    if len(payload) > _MAX_CACHED_LLM_JSON_BYTES:
+                        raise ValueError("oversized LLM cache")
+                    entry = json.loads(
+                        payload,
+                        parse_constant=_reject_nonstandard_json_constant,
+                        parse_float=_finite_json_float,
+                    )
+                    if (
+                        isinstance(entry, dict)
+                        and entry.get("schema_version") == 1
+                        and entry.get("fingerprint") == key
+                        and isinstance(entry.get("response"), dict)
+                    ):
+                        self.hits += 1
+                        self._write_usage()
+                        return entry["response"]
+            except (OSError, ValueError, UnicodeError, TypeError, RecursionError):
+                # Corrupt, hostile or inaccessible cache files are cache misses.
                 pass
         self.misses += 1
         reservation = None
