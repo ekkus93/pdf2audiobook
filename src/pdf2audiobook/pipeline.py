@@ -46,9 +46,14 @@ def _llm_cache_identity(settings: Settings) -> str:
 def analyze_book(source: Path, settings: Settings) -> Path:
     from pdf2audiobook.errors import InputError
 
-    if not source.is_file():
-        raise InputError(f"PDF not found: {source}")
-    book_hash = digest_file(source)
+    # These exceptions can include private book names and absolute paths.
+    # Avoid rendering user-supplied source identifiers in public diagnostics.
+    try:
+        if not source.is_file():
+            raise InputError("PDF not found; check the input path and permissions")
+        book_hash = digest_file(source)
+    except OSError:
+        raise InputError("Cannot access PDF; check the input path and permissions") from None
     root = Path(settings.general.output_dir).expanduser()
     folder = root / f"{source.stem}-{book_hash[:10]}"
     manifest_path = folder / "manifest.json"
