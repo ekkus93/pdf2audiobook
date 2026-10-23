@@ -19,9 +19,9 @@ _CAPTION = re.compile(
 
 
 def _valid_box(box: object) -> tuple[float, float, float, float] | None:
-    # PyMuPDF drawing rectangles are fitz.Rect iterables, not list/tuple.
+    # PyMuPDF drawing rectangles are pymupdf.Rect iterables, not list/tuple.
     if not isinstance(box, (list, tuple)):
-        # fitz.Rect supports tuple(rect) but does not register with the
+        # pymupdf.Rect supports tuple(rect) but does not register with the
         # collections.abc.Iterable runtime check. Validate by conversion.
         try:
             box = tuple(islice(cast(Iterable[object], box), 5))

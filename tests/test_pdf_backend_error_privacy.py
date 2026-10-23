@@ -17,7 +17,7 @@ def test_pdf_open_failure_redacts_third_party_diagnostics(monkeypatch, tmp_path)
     def fail_open(*args, **kwargs):
         raise RuntimeError(f"third-party parser saw {PRIVATE}")
 
-    monkeypatch.setattr(pdf.fitz, "open", fail_open)
+    monkeypatch.setattr(pdf.pymupdf, "open", fail_open)
     with pytest.raises(InputError) as raised:
         pdf._open(source)
     assert str(raised.value) == "cannot open PDF; verify file integrity and permissions"

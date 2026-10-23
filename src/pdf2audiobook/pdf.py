@@ -8,13 +8,14 @@ import re
 import shutil
 import statistics
 import subprocess
+import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
 from typing import Literal
 
-import fitz  # type: ignore[import-untyped]
+import pymupdf
 
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
@@ -28,6 +29,11 @@ from pdf2audiobook.special_material import (
 )
 from pdf2audiobook.workspace import digest_file, fingerprint, write_json
 
+# PyMuPDF prints advisory messages to stdout, which would corrupt --json
+# reports. Route its messages to stderr and skip the layout-package advert.
+pymupdf.set_messages(stream=sys.stderr)
+pymupdf.no_recommend_layout()
+
 
 @dataclass
 class ExtractedDocument:
@@ -40,11 +46,11 @@ class ExtractedDocument:
     page_sizes: list[tuple[float, float]]
 
 
-def _open(source: Path, password_env: str | None = None) -> fitz.Document:
+def _open(source: Path, password_env: str | None = None) -> pymupdf.Document:
     if not source.is_file() or source.suffix.lower() != ".pdf":
         raise InputError("not a readable PDF file; verify input path and permissions")
     try:
-        document = fitz.open(source)
+        document = pymupdf.open(source)
         if document.needs_pass:
             password = os.environ.get(password_env, "") if password_env else ""
             if not password or not document.authenticate(password):
@@ -94,7 +100,7 @@ def _positive_finite_number(value: object) -> float | None:
     return number if math.isfinite(number) and number > 0 else None
 
 
-def _inspection_page_size(page: fitz.Page) -> tuple[float, float]:
+def _inspection_page_size(page: pymupdf.Page) -> tuple[float, float]:
     """Require usable, finite PDF dimensions even for metadata-only inspection."""
     width = _positive_finite_number(page.cropbox.width)
     height = _positive_finite_number(page.cropbox.height)
@@ -103,7 +109,7 @@ def _inspection_page_size(page: fitz.Page) -> tuple[float, float]:
     return width, height
 
 
-def _lines(page: fitz.Page, textpage: fitz.TextPage | None = None) -> list[dict]:
+def _lines(page: pymupdf.Page, textpage: pymupdf.TextPage | None = None) -> list[dict]:
     structure = page.get_text("dict", sort=True, textpage=textpage)
     extracted = []
     for region in structure["blocks"]:
@@ -170,7 +176,7 @@ def page_review_warnings(
 
 
 def _table_regions(
-    page: fitz.Page, *, page_number: int
+    page: pymupdf.Page, *, page_number: int
 ) -> tuple[list[tuple[float, float, float, float]], list[str]]:
     """Locate high-confidence table rectangles without altering their text.
 
@@ -221,7 +227,7 @@ def _inside_table(
 
 
 def _special_material_warnings(
-    page: fitz.Page, lines: list[dict], *, page_number: int
+    page: pymupdf.Page, lines: list[dict], *, page_number: int
 ) -> list[str]:
     """Report likely non-prose content without deleting or inventing narration.
 
@@ -419,7 +425,7 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
     return True, None
 
 
-def _page_has_dominant_raster(page: fitz.Page) -> bool:
+def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
     """Find scan-sized raster coverage, including pages assembled from tiles.
 
     Compute the union of visible image rectangles so overlapping artwork cannot
@@ -430,7 +436,7 @@ def _page_has_dominant_raster(page: fitz.Page) -> bool:
     try:
         # Image bounds use unrotated page coordinates even when page.rect
         # reflects a 90/270-degree viewer rotation. Compare in one frame.
-        page_bounds = fitz.Rect(0, 0, page.cropbox.width, page.cropbox.height)
+        page_bounds = pymupdf.Rect(0, 0, page.cropbox.width, page.cropbox.height)
         page_area = float(page_bounds.get_area())
         if page_area <= 0:
             return False
@@ -443,8 +449,9 @@ def _page_has_dominant_raster(page: fitz.Page) -> bool:
             width, height = image.get("width", 0), image.get("height", 0)
             if width < 250 or height < 250:
                 continue
-            bounds = fitz.Rect(image["bbox"])
-            if not all(math.isfinite(float(value)) for value in bounds):
+            bounds = pymupdf.Rect(image["bbox"])
+            corners = (bounds.x0, bounds.y0, bounds.x1, bounds.y1)
+            if not all(math.isfinite(float(value)) for value in corners):
                 continue
             if bounds.width <= 0 or bounds.height <= 0:
                 continue
@@ -513,7 +520,7 @@ def _ocr_engine_version() -> str:
     )
 
 
-def _ocr_page_lines(page: fitz.Page, settings: PdfSettings) -> list[dict]:
+def _ocr_page_lines(page: pymupdf.Page, settings: PdfSettings) -> list[dict]:
     # OCR is performed in the PDF page's unrotated coordinate system, just
     # like embedded text and span bboxes. PyMuPDF's OCR otherwise rasterizes
     # the page rotation and can pass sideways text to Tesseract, which returns
@@ -582,7 +589,7 @@ class _InvalidOCRGeometry(ValueError):
 
 
 def _cached_ocr_lines(
-    page: fitz.Page, settings: PdfSettings, *,
+    page: pymupdf.Page, settings: PdfSettings, *,
     cache_dir: Path | None, input_sha256: str | None, page_index: int,
 ) -> list[dict]:
     """Cache OCR by exact source bytes, page index, language, DPI and engine version.
@@ -601,7 +608,7 @@ def _cached_ocr_lines(
     key = fingerprint(
         "ocr-lines-v1", input_sha256, page_index,
         settings.ocr_language, settings.ocr_dpi,
-        str(fitz.VersionBind), _ocr_engine_version(), int(page.rotation),
+        str(pymupdf.VersionBind), _ocr_engine_version(), int(page.rotation),
     )
     target = cache_dir / (key + ".json")
     if target.is_file():

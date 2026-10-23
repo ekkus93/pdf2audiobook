@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import math
 from typing import Protocol, runtime_checkable
 
@@ -34,6 +36,12 @@ class TTSProvider(Protocol):
         """Return mono float audio in [-1,1] at sample_rate."""
 
 
+def _quiet_stdout() -> contextlib.redirect_stdout[io.StringIO]:
+    """Discard backend prints: kittenml echoes every narration chunk to stdout,
+    which would leak book text into logs and corrupt --json reports."""
+    return contextlib.redirect_stdout(io.StringIO())
+
+
 class KittenProvider:
     """Lazy initialization avoids model downloads during CLI import and tests."""
 
@@ -50,7 +58,8 @@ class KittenProvider:
         model_id = KITTEN_MODEL_ALIASES.get(model, model)
         self.model_id = model_id
         try:
-            self.model = KittenTTS(model_id)
+            with _quiet_stdout():
+                self.model = KittenTTS(model_id)
         except Exception:
             # Third-party exceptions can echo model paths, credentials or
             # supplied text. Do not surface their contents or chained context.
@@ -107,9 +116,10 @@ class KittenProvider:
         if not known_voice:
             raise AudioError("Unknown Kitten voice; check the available voices with doctor")
         try:
-            result = np.asarray(
-                self.model.generate(text, voice=voice, speed=speed), dtype=np.float32
-            )
+            with _quiet_stdout():
+                result = np.asarray(
+                    self.model.generate(text, voice=voice, speed=speed), dtype=np.float32
+                )
         except Exception:
             # The backend may include private narration text in its exception.
             raise AudioError("Kitten speech generation failed; verify model and voice") from None
