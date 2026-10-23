@@ -53,7 +53,10 @@ def test_contents_entries_find_body_size_story_headings():
         "THE BOY WHO DREW CATS",
     ]
     assert chapters[1].confidence == 0.9
-    assert chapters[1].evidence == ["printed contents entry matched unique later heading"]
+    assert chapters[1].evidence == [
+        "printed contents entry matched unique later heading",
+        "opens a new page",
+    ]
 
 
 def test_titles_wrapped_differently_in_contents_and_body():
@@ -263,3 +266,37 @@ def test_bookmarked_label_on_number_heavy_page_is_kept():
     toc = [[1, "Chapter X", 1], [1, "Chapter XI", 2]]
     chapters, _ = propose_chapters(book.blocks, set(), toc, Chapters())
     assert [(c.title, c.start_block) for c in chapters][:2] == [("Chapter X", 0), ("Chapter XI", 4)]
+
+
+def _placed(index, page, text, top, size=12.0):
+    return DocumentBlock(
+        id=f"w{index}",
+        page_index=page,
+        text=text,
+        span_ids=[],
+        order=index,
+        kind="unknown",
+        font_size=size,
+        bbox=(72, top, 400, top + size),
+    )
+
+
+def test_whitespace_separates_display_headings_from_packed_display_lines():
+    blocks = [_placed(0, 0, "Opening Section", 72, 18)]
+    blocks += [
+        _placed(n, 0, f"Ordinary body sentence {n} runs on.", 72 + 14 * n) for n in range(1, 6)
+    ]
+    # Packed against the body line above: a drop-cap or advert line.
+    blocks.append(_placed(6, 0, "Packed Display Words", 72 + 14 * 6 - 1, 18))
+    blocks += [
+        _placed(n, 0, f"More body sentence {n} runs on.", 72 + 14 * n + 8) for n in range(7, 10)
+    ]
+    # Separated by a gap: a real section opening mid-page.
+    blocks.append(_placed(10, 0, "Second Section", 72 + 14 * 10 + 30, 18))
+    blocks += [
+        _placed(n, 0, f"Final body sentence {n} runs on.", 72 + 14 * n + 50) for n in range(11, 14)
+    ]
+    chapters, _ = propose_chapters(blocks, set(), [], Chapters())
+    assert [c.title for c in chapters] == ["Opening Section", "Second Section"]
+    assert chapters[0].evidence[-1] == "opens a new page"
+    assert chapters[1].evidence[-1] == "vertical whitespace above"

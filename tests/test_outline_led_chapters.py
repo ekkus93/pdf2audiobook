@@ -105,4 +105,4 @@ def test_llm_only_heading_is_labelled_advisory_without_outline():
     chapters, _ = propose_chapters(blocks, set(), [], Chapters(), extra_heading_ids={"b5"})
     assert [c.title for c in chapters] == ["Chapter 1", "The Quiet Interlude"]
     assert chapters[1].confidence == 0.8
-    assert chapters[1].evidence == ["LLM structure classification (advisory)"]
+    assert chapters[1].evidence == ["LLM structure classification (advisory)", "opens a new page"]

@@ -644,6 +644,27 @@ def pagination_cleanup(
     return edits
 
 
+def _space_above(blocks: list[DocumentBlock], index: int, omitted: set[str]) -> str | None:
+    """Describe the whitespace separating a line from the text above it.
+
+    Returns "page" when it is the first retained line of its page, "gap"
+    when at least half its own line height of space precedes it, "tight"
+    when it is packed against the line above, and None without geometry.
+    """
+    block = blocks[index]
+    previous = next(
+        (blocks[j] for j in range(index - 1, -1, -1) if blocks[j].id not in omitted), None
+    )
+    if previous is None or previous.page_index != block.page_index:
+        return "page"
+    if not block.bbox or not previous.bbox:
+        return None
+    if not _valid_bbox(block.bbox) or not _valid_bbox(previous.bbox):
+        return None
+    height = block.bbox[3] - block.bbox[1]
+    return "gap" if block.bbox[1] - previous.bbox[3] >= 0.5 * height else "tight"
+
+
 def propose_chapters(
     blocks: list[DocumentBlock],
     omitted: set[str],
@@ -686,6 +707,10 @@ def propose_chapters(
             and not text.isdecimal()
             and not PAGE_REFERENCE_END.search(text)
             and (_wordlike(text) or text in {"I", "V", "X"})
+            # A display line packed against the text above it (advert copy,
+            # a drop-cap line) does not open a chapter; whitespace or a new
+            # page does.
+            and _space_above(blocks, i, omitted) != "tight"
             and block.kind not in {"table", "footnote", "caption", "equation", "list"}
         )
         if is_typographic_heading:
@@ -946,6 +971,11 @@ def propose_chapters(
                 if start in llm_only
                 else ["explicit heading text"]
             )
+            space = _space_above(blocks, start, omitted)
+            if space == "page":
+                evidence = [*evidence, "opens a new page"]
+            elif space == "gap":
+                evidence = [*evidence, "vertical whitespace above"]
         else:
             name = "Full Book"
             confidence = 0.5
