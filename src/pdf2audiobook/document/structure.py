@@ -463,7 +463,13 @@ def propose_chapters(
             "No reliable chapter boundaries found. Edit a manifest or retry "
             "with --allow-single-chapter; no text was silently grouped."
         )
-    starts = ([0] if 0 not in heading_indices else []) + heading_indices
+    # Removed pagination noise above the first heading (e.g. a running header)
+    # is not front matter. Fold it into the first chapter rather than creating
+    # an empty, low-confidence chapter that blocks synthesis.
+    noise_prefix = bool(heading_indices) and heading_indices[0] != 0 and all(
+        block.id in omitted for block in blocks[:heading_indices[0]]
+    )
+    starts = ([0] if 0 not in heading_indices and not noise_prefix else []) + heading_indices
     if not heading_indices:
         warnings.append("Single-chapter mode explicitly requested")
     elif starts[0] == 0 and heading_indices[0] != 0:
@@ -496,7 +502,7 @@ def propose_chapters(
             evidence = ["explicit single chapter override"]
         chapters.append(Chapter(
             id=f"c{number:04d}", number=number, title=name,
-            start_block=start, end_block=end, confidence=confidence,
+            start_block=0 if number == 1 else start, end_block=end, confidence=confidence,
             evidence=evidence
         ))
     return chapters, warnings

@@ -62,3 +62,34 @@ def test_bookmark_boundary_mid_page_and_exact_coverage():
     assert chapters[1].title == "A New Beginning"
     assert "PDF bookmark" in chapters[1].evidence[0]
     assert "New chapter prose" not in chapter_text(blocks, chapters[0], set())
+
+
+def test_removed_running_header_before_first_heading_is_not_front_matter():
+    blocks = [
+        block(0, 0, "THE KEEPER OF THE LIGHT"),
+        block(1, 0, "Chapter 1"),
+        block(2, 0, "Opening prose."),
+        block(3, 1, "Chapter 2"),
+        block(4, 1, "More prose."),
+    ]
+    chapters, warnings = propose_chapters(blocks, {"b0"}, [], Chapters())
+    validate_chapter_coverage(blocks, chapters)
+    assert [c.title for c in chapters] == ["Chapter 1", "Chapter 2"]
+    assert [(c.start_block, c.end_block) for c in chapters] == [(0, 3), (3, 5)]
+    assert all(c.confidence >= 0.75 for c in chapters)
+    assert not any("Pre-chapter material retained" in warning for warning in warnings)
+    first = chapter_text(blocks, chapters[0], {"b0"})
+    assert first.startswith("Chapter 1") and "KEEPER" not in first
+
+
+def test_retained_text_before_first_heading_still_gets_front_matter():
+    blocks = [
+        block(0, 0, "RUNNING HEADER"),
+        block(1, 0, "A dedication that must not be dropped."),
+        block(2, 0, "Chapter 1"),
+        block(3, 0, "Opening prose."),
+    ]
+    chapters, warnings = propose_chapters(blocks, {"b0"}, [], Chapters())
+    validate_chapter_coverage(blocks, chapters)
+    assert [c.title for c in chapters] == ["Front Matter", "Chapter 1"]
+    assert any("Pre-chapter material retained" in warning for warning in warnings)
