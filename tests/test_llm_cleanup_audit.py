@@ -25,7 +25,7 @@ def item(block_id, original, replacement, confidence=0.99):
 
 
 def test_audit_retains_pending_review_and_omits_source_text():
-    source = DocumentBlock(id="p1", page_index=0, text="A mispeIIed word.")
+    source = DocumentBlock(id="p1", page_index=0, text="A rnisspelled word.")
     decisions = []
     edits, warnings = propose_llm_cleanup(
         [source],
@@ -53,7 +53,7 @@ def test_audit_records_rejection_reason_without_accepting_hallucinations():
         (item("p1", "fabricated", "Changed statement."), "source_text_mismatch"),
         (item("p1", source.text, ""), "proposed_deletion"),
         (item("p1", source.text, "Entirely unrelated invented paragraphs."), "excessive_change"),
-        (item("p1", source.text, "Real source statement!", 0.1), "low_confidence"),
+        (item("p1", source.text, "Real source staternent.", 0.1), "low_confidence"),
     ]
     for proposal, expected in scenarios:
         decisions = []

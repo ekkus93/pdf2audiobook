@@ -125,7 +125,11 @@ Non-loopback plain HTTP is prohibited even with consent. Local `--no-llm`
 is available for deterministic analysis, and no provider is required for
 `inspect`, `doctor` or `config show`. LLM heading and OCR-cleanup
 suggestions are untrusted proposals; source anchors are validated and
-non-deterministic cleanup edits remain unapproved until reviewed.
+non-deterministic cleanup edits remain unapproved until reviewed. A cleanup
+proposal is kept for review only when every change is a known OCR glyph
+confusion (`b00k`, `tlie`, `rn`/`m`, ligatures, long s) or a split/joined
+word; rewording, tense, case, quote style, punctuation and completing a
+hyphenated word from the next line are rejected as `not_ocr_correction`.
 
 ## Configuration and precedence
 

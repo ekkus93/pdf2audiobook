@@ -99,7 +99,7 @@ def test_invalid_window_limits_rejected_before_provider_call():
 
 
 def test_long_full_source_is_verified_without_legacy_truncation():
-    original = "Nasa " + ("long OCR source sentence. " * 28)
+    original = "Tbe " + ("long OCR source sentence. " * 28)
     block = DocumentBlock(id="long", page_index=0, text=original)
     observed = []
 
@@ -114,7 +114,7 @@ def test_long_full_source_is_verified_without_legacy_truncation():
                         {
                             "block_id": "long",
                             "original": original,
-                            "replacement": original.replace("Nasa", "NASA", 1),
+                            "replacement": original.replace("Tbe", "The", 1),
                             "reason": "OCR casing",
                             "confidence": 0.95,
                         }
@@ -125,7 +125,7 @@ def test_long_full_source_is_verified_without_legacy_truncation():
                     {
                         "block_id": "long",
                         "original": original,
-                        "spoken": original.replace("Nasa", "NASA", 1),
+                        "spoken": original.replace("Tbe", "The", 1),
                         "reason": "Acronym pronunciation",
                         "confidence": 0.95,
                     }

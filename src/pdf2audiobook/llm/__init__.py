@@ -441,6 +441,54 @@ def _diagnostic_block_id(candidate: str, known_ids: set[str]) -> str:
     return "<unrecognized>"
 
 
+# Glyph shapes OCR engines confuse. Anything else (word choice, tense, quote
+# style, punctuation, completing a hyphenated word from the next line) is an
+# edit to the author's text, not a transcription fix.
+_OCR_CONFUSIONS = {
+    frozenset(pair)
+    for pair in (
+        ("0", "O"), ("0", "o"), ("1", "l"), ("1", "I"), ("l", "I"), ("|", "l"),
+        ("|", "I"), ("i", "l"), ("i", "j"), ("5", "S"), ("5", "s"), ("8", "B"),
+        ("6", "b"), ("9", "g"), ("2", "Z"), ("h", "b"), ("c", "e"), ("n", "u"),
+        ("f", "t"), ("ſ", "s"), ("ſ", "f"), ("f", "s"), ("rn", "m"), ("in", "m"),
+        ("ni", "m"), ("cl", "d"), ("li", "h"), ("ri", "n"), ("ii", "u"), ("ii", "n"),
+        ("vv", "w"), ("ﬁ", "fi"), ("ﬂ", "fl"), ("ﬀ", "ff"), ("ﬃ", "ffi"), ("ﬄ", "ffl"),
+        ("c", "C"), ("o", "O"), ("s", "S"), ("v", "V"), ("w", "W"), ("x", "X"),
+        ("z", "Z"),
+    )
+}  # fmt: skip
+_OCR_CONFUSION_PAIRS = [(a, b) for pair in _OCR_CONFUSIONS for a in pair for b in pair if a != b]
+
+
+def _ocr_plausible(original: str, replacement: str) -> bool:
+    """Whether ``replacement`` differs from ``original`` only by OCR misreads.
+
+    Aligns the two lines allowing identical characters, known glyph
+    confusions and added or removed whitespace (split or joined words).
+    """
+    n, m = len(original), len(replacement)
+    reachable: list[set[int]] = [set() for _ in range(n + 1)]
+    reachable[0].add(0)
+    for i in range(n + 1):
+        pending = list(reachable[i])
+        while pending:
+            j = pending.pop()
+            if j < m and replacement[j].isspace() and j + 1 not in reachable[i]:
+                reachable[i].add(j + 1)
+                pending.append(j + 1)
+        if i == n:
+            break
+        for j in reachable[i]:
+            if original[i].isspace():
+                reachable[i + 1].add(j)
+            if j < m and original[i] == replacement[j]:
+                reachable[i + 1].add(j + 1)
+            for a, b in _OCR_CONFUSION_PAIRS:
+                if original.startswith(a, i) and replacement.startswith(b, j):
+                    reachable[i + len(a)].add(j + len(b))
+    return m in reachable[n]
+
+
 def detect_llm_headings(
     blocks: list,
     provider: LLMProvider,
@@ -597,6 +645,10 @@ def propose_llm_cleanup(
             ):
                 warnings.append(f"LLM cleanup modified too much text in {source.id}")
                 audit(source.id, "rejected", "excessive_change", suggestion.confidence, source)
+                continue
+            if not _ocr_plausible(source.text, suggestion.replacement):
+                warnings.append(f"LLM cleanup change is not an OCR misread in {source.id}")
+                audit(source.id, "rejected", "not_ocr_correction", suggestion.confidence, source)
                 continue
             if suggestion.confidence < 0.80:
                 warnings.append(f"LLM cleanup confidence too low in {source.id}")
