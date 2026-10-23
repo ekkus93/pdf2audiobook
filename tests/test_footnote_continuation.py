@@ -78,3 +78,43 @@ def test_extraction_keeps_wrapped_footnote_spans_unchanged(tmp_path: Path):
         for block in footnotes
     )
     assert any("footnote anchor(s)/continuation" in warning for warning in extracted.warnings)
+
+
+def _scan_page(note_lines, *, after=()):
+    """A scanned history page: 8.8pt body, then 7pt notes 8pt below it."""
+    lines = [
+        _line(f"Body prose line {n} of the history.", 40 + 10 * n, size=8.8) for n in range(30)
+    ]
+    y = 40 + 10 * 30 + 8
+    for text in note_lines:
+        lines.append(_line(text, y, size=7.0))
+        y += 7.5
+    for text in after:
+        lines.append(_line(text, y + 4, size=8.8))
+        y += 10
+    return lines
+
+
+def test_scanned_page_note_zone_with_spill_over_and_three_digit_numbers():
+    lines = _scan_page(
+        [
+            "continuation of a note from the previous page, unnumbered.",
+            "103  See the original letter, in the Augustan History.",
+            "a second line of that note.",
+            "104Missilia spargunt, Tacit. Germ. c. 6.",
+        ]
+    )
+    assert _footnote_line_indices(lines, page_height=505, table_regions=[]) == {30, 31, 32, 33}
+
+
+def test_small_type_passage_followed_by_body_text_is_not_a_note_zone():
+    lines = _scan_page(
+        ["1 Then would he sing achievements high,", "And circumstance of chivalry,"],
+        after=["The body text resumes after the quotation."],
+    )
+    assert _footnote_line_indices(lines, page_height=505, table_regions=[]) == set()
+
+
+def test_unnumbered_small_type_closing_a_page_is_not_a_note_zone():
+    lines = _scan_page(["A small-type epigraph closing the page", "without any note marker"])
+    assert _footnote_line_indices(lines, page_height=505, table_regions=[]) == set()

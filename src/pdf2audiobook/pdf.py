@@ -473,7 +473,76 @@ def _footnote_line_indices(
                 break
             result.add(next_index)
             previous_box = bounds
-    return result
+    return result | _footnote_zone(lines, validated, height, body_size, table_regions)
+
+
+_NOTE_ANCHOR = re.compile(r"^(?:\d{1,3}[.)]?\s+\S|\d{1,3}(?=[A-Z])|[*†‡§]\s*\S)")
+
+
+def _footnote_zone(
+    lines: list[dict],
+    validated: list[tuple[tuple[float, float, float, float] | None, float | None]],
+    height: float,
+    body_size: float,
+    table_regions: list[tuple[float, float, float, float]],
+) -> set[int]:
+    """Tag the run of small-type notes that closes a page.
+
+    Scanned books set notes only slightly smaller than the body and close
+    beneath it, so a per-line test misses them. Instead require the whole
+    run: it starts low on the page after a visible gap, holds at least one
+    note marker, is set in smaller type overall and continues to the foot
+    of the page. Unnumbered lines at its top continue a note from the
+    previous page. A small-type passage followed by body text is not a zone.
+    """
+    # Unverifiable geometry anywhere on the page: keep every line as text.
+    if any(bounds is None or size is None for bounds, size in validated):
+        return set()
+    boxes = {
+        index: (bounds, size)
+        for index, (bounds, size) in enumerate(validated)
+        if bounds is not None and size is not None
+    }
+    order = sorted(boxes, key=lambda index: boxes[index][0][1])
+    position = len(order) - 1
+    # Big-type furniture (a printer's signature mark) may sit under the notes.
+    while position >= 0 and boxes[order[position]][1] > 0.95 * body_size:
+        if boxes[order[position]][0][1] < height * 0.85:
+            return set()
+        position -= 1
+    zone: list[int] = []
+    while position >= 0:
+        index = order[position]
+        bounds, size = boxes[index]
+        text = lines[index].get("text")
+        if (
+            size > 0.95 * body_size
+            or bounds[1] < height * 0.5
+            or not isinstance(text, str)
+            or not text.strip()
+            or _inside_table(bounds, table_regions)
+        ):
+            break
+        if zone:
+            # Notes are one tight, single-column run; a gap or a side column
+            # ends it.
+            below = boxes[zone[-1]][0]
+            overlap = min(bounds[2], below[2]) - max(bounds[0], below[0])
+            if below[1] - bounds[3] > max(8.0, body_size) or overlap <= 0:
+                return set()
+        zone.append(index)
+        position -= 1
+    if not zone or position < 0:
+        return set()
+    above_bounds, above_size = boxes[order[position]]
+    top = boxes[zone[-1]][0]
+    if above_size <= 0.95 * body_size or top[1] - above_bounds[3] < max(4.0, 0.5 * body_size):
+        return set()
+    if statistics.median(boxes[index][1] for index in zone) > 0.86 * body_size:
+        return set()
+    if not any(_NOTE_ANCHOR.match(str(lines[index]["text"]).strip()) for index in zone):
+        return set()
+    return set(zone)
 
 
 def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
