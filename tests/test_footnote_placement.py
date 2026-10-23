@@ -42,14 +42,14 @@ def test_inline_moves_note_after_its_anchoring_paragraph():
 def test_end_moves_every_note_after_the_chapter_body():
     ordered, relocated, kept = place_footnotes(chapter(), "end")
     assert [b.id for b in ordered] == ["b0", "b1", "b2", "b3", "b4", "b5", "b6"]
-    assert (relocated, kept) == (3, 0)
+    assert (relocated, kept) == (2, 0)  # note 5 (two lines) and note 9
 
 
 @pytest.mark.parametrize("policy", ["warn", "omit"])
 def test_other_policies_keep_pdf_order(policy):
     blocks = chapter()
     ordered, relocated, kept = place_footnotes(blocks, policy)
-    assert ordered == blocks and (relocated, kept) == (0, 3)
+    assert ordered == blocks and (relocated, kept) == (0, 2)
 
 
 def test_ambiguous_or_other_page_anchors_keep_pdf_position():

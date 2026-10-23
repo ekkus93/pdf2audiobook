@@ -73,7 +73,7 @@ def analyze_book(
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
         chosen_provider.model,
         chosen_provider.base_url,
-        "analysis-v15",
+        "analysis-v16",
         # A replacement backend must never reuse the default extractor's analysis.
         *(() if extractor is None else ("extractor", extractor.name)),
     )

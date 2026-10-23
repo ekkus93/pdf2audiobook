@@ -1085,14 +1085,10 @@ def place_footnotes(
     the end of the paragraph holding its anchor ("world.5" for note "5 ...")
     when exactly one such anchor precedes it on the same page; otherwise the
     note keeps its PDF position. Other policies keep PDF order. Returns the
-    narration order and the counts of relocated and kept-in-place notes.
+    narration order and the counts of relocated and kept-in-place notes
+    (a note is its marker line plus continuation lines).
     """
     notes = [block for block in blocks if block.kind == "footnote"]
-    if policy not in {"inline", "end"} or not notes:
-        return blocks, 0, len(notes)
-    body = [block for block in blocks if block.kind != "footnote"]
-    if policy == "end":
-        return body + notes, len(notes), 0
     # Group each numbered note with its unnumbered continuation lines; lines
     # before the first marker continue a note from the previous page.
     items: list[list[DocumentBlock]] = []
@@ -1105,6 +1101,11 @@ def place_footnotes(
             items.append([block])
         else:
             items[-1].append(block)
+    if policy not in {"inline", "end"} or not notes:
+        return blocks, 0, len(items)
+    body = [block for block in blocks if block.kind != "footnote"]
+    if policy == "end":
+        return body + notes, len(items), 0
     position = {block.id: index for index, block in enumerate(blocks)}
     after: dict[int, list[DocumentBlock]] = defaultdict(list)  # body index -> notes
     relocated = kept = 0
