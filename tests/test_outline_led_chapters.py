@@ -78,3 +78,31 @@ def test_wrapped_large_font_lines_are_not_typographic_headings():
     ]
     chapters, _ = propose_chapters(blocks, set(), [], Chapters())
     assert [c.title for c in chapters] == ["Chapter 1"]
+
+
+def test_llm_only_headings_ignored_when_outline_matches():
+    blocks = [
+        block(0, 0, "The Opening", 18),
+        *body(1, 0),
+        block(5, 0, "***"),
+        *body(6, 0),
+        block(10, 1, "The Ending", 18),
+        *body(11, 1),
+    ]
+    toc = [[1, "The Opening", 1], [1, "The Ending", 2]]
+    chapters, warnings = propose_chapters(blocks, set(), toc, Chapters(), extra_heading_ids={"b5"})
+    assert [c.title for c in chapters] == ["The Opening", "The Ending"]
+    assert any("Ignored 1 LLM-proposed heading" in w for w in warnings)
+
+
+def test_llm_only_heading_is_labelled_advisory_without_outline():
+    blocks = [
+        block(0, 0, "Chapter 1"),
+        *body(1, 0),
+        block(5, 1, "The Quiet Interlude"),
+        *body(6, 1),
+    ]
+    chapters, _ = propose_chapters(blocks, set(), [], Chapters(), extra_heading_ids={"b5"})
+    assert [c.title for c in chapters] == ["Chapter 1", "The Quiet Interlude"]
+    assert chapters[1].confidence == 0.8
+    assert chapters[1].evidence == ["LLM structure classification (advisory)"]

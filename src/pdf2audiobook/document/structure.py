@@ -20,6 +20,7 @@ HEADING = re.compile(
     r"seven|eight|nine|ten)\b.*|prologue|epilogue|preface|introduction)$",
     re.IGNORECASE,
 )
+CHAPTER_TEXT_NAME = re.compile(r"\d{3,}\.txt")
 WRAPPED_LINE_END = re.compile(r"[^\W\d_]-$")
 PAGE_NUMBER = re.compile(r"^(?:\d{1,5}|[ivxlcdm]{1,10})$", re.IGNORECASE)
 
@@ -618,24 +619,34 @@ def propose_chapters(
             f"Skipped {malformed_bookmarks} malformed PDF bookmark "
             "record(s); verify chapter boundaries manually"
         )
+    # Candidates supported only by font size or by LLM classification.
+    llm_ids = extra_heading_ids or set()
+    weak = {
+        i
+        for i in heading_indices
+        if (i in typography_ids or blocks[i].id in llm_ids)
+        and i not in bookmark_titles
+        and i not in contents_titles
+        and not HEADING.match(blocks[i].text.strip())
+    }
+    llm_only = {i for i in weak if i not in typography_ids}
     if len(bookmark_titles) >= 2 or contents_titles:
         # A PDF outline or printed contents that matches the text is stronger
-        # evidence than font size alone. Do not let large-font material the outline omits (e.g.
-        # catalogue entries) split the book into spurious chapters.
-        typography_only = {
-            i
-            for i in typography_ids
-            if i not in bookmark_titles
-            and i not in contents_titles
-            and not HEADING.match(blocks[i].text.strip())
-            and blocks[i].id not in (extra_heading_ids or set())
-        }
-        if typography_only:
-            heading_indices = [i for i in heading_indices if i not in typography_only]
-            warnings.append(
-                f"Ignored {len(typography_only)} font-size-only heading candidate(s) "
-                "not in the PDF outline or printed contents; verify chapter boundaries"
-            )
+        # evidence than font size or LLM classification. Do not let material
+        # it omits (catalogue entries, scene breaks, stray running heads)
+        # split the book into spurious chapters.
+        if weak:
+            heading_indices = [i for i in heading_indices if i not in weak]
+            if weak - llm_only:
+                warnings.append(
+                    f"Ignored {len(weak - llm_only)} font-size-only heading candidate(s) "
+                    "not in the PDF outline or printed contents; verify chapter boundaries"
+                )
+            if llm_only:
+                warnings.append(
+                    f"Ignored {len(llm_only)} LLM-proposed heading(s) not in the PDF "
+                    "outline or printed contents; verify chapter boundaries"
+                )
     # A contents entry naming the line right after another heading is that
     # chapter's subtitle ("CHAPTER III." / "ON RELATIVE GROWINGS."), not a
     # new boundary.
@@ -691,6 +702,8 @@ def propose_chapters(
                 if start in contents_titles
                 else 0.82
                 if start in typography_ids
+                else 0.8
+                if start in llm_only
                 else 0.9
             )
             evidence = (
@@ -700,6 +713,8 @@ def propose_chapters(
                 if start in contents_titles
                 else ["typographic size contrast with body text"]
                 if start in typography_ids
+                else ["LLM structure classification (advisory)"]
+                if start in llm_only
                 else ["explicit heading text"]
             )
         else:
@@ -813,6 +828,12 @@ def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
         # would duplicate an entire long chapter in memory on every resume.
         if not path.is_file() or digest_file(path) != digest_bytes(content):
             atomic_write(path, content)
+    # A re-plan with fewer chapters must not leave stale derived text behind.
+    # Only remove files named like derived chapter text; others are untouched.
+    current = {f"{chapter.number:03d}.txt" for chapter in manifest.chapters}
+    for stale in (folder / "chapters").glob("[0-9][0-9][0-9]*.txt"):
+        if CHAPTER_TEXT_NAME.fullmatch(stale.name) and stale.name not in current:
+            stale.unlink(missing_ok=True)
     write_json(folder / "coverage.json", report)
 
 
