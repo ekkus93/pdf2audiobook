@@ -1076,6 +1076,74 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
 NOTE_MARKER = re.compile(r"^\s*(?P<marker>\d{1,3}|[*†‡§])")
 
 
+def _anchor_pattern(marker: str) -> re.Pattern[str]:
+    """A note anchor glued to a word or its punctuation: "world.5", "secrecy,26"."""
+    return re.compile(rf"(?P<lead>[^\W\d_][.,;:!?\"'”’)\]]?){re.escape(marker)}(?!\d)")
+
+
+def _unique_anchor(
+    head: DocumentBlock, body: list[DocumentBlock], position: dict[str, int]
+) -> int | None:
+    """Index in body of the one line before the note, on its page, holding its anchor."""
+    match = NOTE_MARKER.match(head.text)
+    if match is None:
+        return None
+    anchor = _anchor_pattern(match.group("marker"))
+    candidates = [
+        index
+        for index, block in enumerate(body)
+        if block.page_index == head.page_index
+        and position[block.id] < position[head.id]
+        and len(anchor.findall(block.text)) == 1
+    ]
+    others = [
+        block
+        for block in body
+        if block.page_index == head.page_index
+        and position[block.id] < position[head.id]
+        and anchor.search(block.text)
+    ]
+    return candidates[0] if len(candidates) == 1 and len(others) == 1 else None
+
+
+def footnote_anchor_edits(blocks: list[DocumentBlock], edited: set[str]) -> list[CleanupEdit]:
+    """Audited removal of note-anchor digits from narration ("world.5" -> "world.").
+
+    Only an anchor that uniquely matches a classified note on its page is
+    removed, only the marker characters are deleted, and blocks that already
+    carry an accepted edit are left alone. Source blocks are never changed.
+    """
+    position = {block.id: index for index, block in enumerate(blocks)}
+    body = [block for block in blocks if block.kind != "footnote"]
+    markers: dict[int, list[str]] = defaultdict(list)
+    for block in blocks:
+        if block.kind != "footnote":
+            continue
+        index = _unique_anchor(block, body, position)
+        if index is not None and body[index].id not in edited:
+            match = NOTE_MARKER.match(block.text)
+            assert match is not None
+            markers[index].append(match.group("marker"))
+    edits = []
+    for index, found in sorted(markers.items()):
+        original = body[index].text
+        replacement = original
+        for marker in found:
+            replacement = _anchor_pattern(marker).sub(r"\g<lead>", replacement, count=1)
+        if replacement != original:
+            edits.append(
+                CleanupEdit(
+                    block_id=body[index].id,
+                    original=original,
+                    replacement=replacement,
+                    reason="footnote anchor marker " + ", ".join(found) + " (note handled)",
+                    confidence=0.9,
+                    accepted=True,
+                )
+            )
+    return edits
+
+
 def place_footnotes(
     blocks: list[DocumentBlock], policy: str
 ) -> tuple[list[DocumentBlock], int, int]:
@@ -1111,34 +1179,20 @@ def place_footnotes(
     relocated = kept = 0
     for item in items:
         head = item[0]
-        match = NOTE_MARKER.match(head.text)
-        anchor_index: int | None = None
-        if match:
-            marker = re.escape(match.group("marker"))
-            # The anchor is glued to a word or its punctuation: "world.5".
-            anchor = re.compile(rf"[^\W\d_][.,;:!?\"'”’)\]]?{marker}(?!\d)")
-            candidates = [
-                index
-                for index, block in enumerate(body)
-                if block.page_index == head.page_index
-                and position[block.id] < position[head.id]
-                and anchor.search(block.text)
-            ]
-            if len(candidates) == 1:
-                anchor_index = candidates[0]
-                while anchor_index + 1 < len(body) and _is_wrapped_line(
-                    body[anchor_index], body[anchor_index + 1]
-                ):
-                    anchor_index += 1
-        if anchor_index is None:
+        anchor_index = _unique_anchor(head, body, position)
+        if anchor_index is not None:
+            while anchor_index + 1 < len(body) and _is_wrapped_line(
+                body[anchor_index], body[anchor_index + 1]
+            ):
+                anchor_index += 1
+            relocated += 1
+        else:
             # Keep the PDF position: after the last body line that preceded it.
             anchor_index = max(
                 (i for i, block in enumerate(body) if position[block.id] < position[head.id]),
                 default=-1,
             )
             kept += 1
-        else:
-            relocated += 1
         after[anchor_index].extend(item)
     ordered = list(after.get(-1, []))
     for index, block in enumerate(body):

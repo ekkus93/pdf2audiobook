@@ -70,3 +70,28 @@ def test_placement_is_a_permutation_of_the_chapter():
     for policy in ("inline", "end"):
         ordered, _, _ = place_footnotes(blocks, policy)
         assert sorted(b.id for b in ordered) == sorted(b.id for b in blocks)
+
+
+def test_anchor_digits_are_removed_by_audited_edits_only_when_unique():
+    from pdf2audiobook.document.structure import footnote_anchor_edits
+
+    blocks = [
+        block(0, "readily identified in every part of the world.5 So"),
+        block(1, "the secrecy,26 calculated to awaken attention."),
+        block(2, "In 1876 the edition appeared and 26 copies sold."),  # not glued
+        block(3, "First mention.7 Second mention.7"),
+        block(4, "5 See Caesar de Bell. Gall. vi. 17.", kind="footnote"),
+        block(5, "26 Even the servants of the house.", kind="footnote"),
+        block(6, "7 An ambiguous note.", kind="footnote"),
+        block(7, "9 A note without any anchor.", kind="footnote"),
+    ]
+    before = [b.text for b in blocks]
+    edits = footnote_anchor_edits(blocks, edited=set())
+    assert [(e.block_id, e.replacement) for e in edits] == [
+        ("b0", "readily identified in every part of the world. So"),
+        ("b1", "the secrecy, calculated to awaken attention."),
+    ]
+    assert all(e.accepted and e.original == before[int(e.block_id[1:])] for e in edits)
+    assert [b.text for b in blocks] == before
+    # A block already carrying an accepted edit is left alone.
+    assert [e.block_id for e in footnote_anchor_edits(blocks, edited={"b0"})] == ["b1"]

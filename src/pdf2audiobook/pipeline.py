@@ -7,6 +7,7 @@ from pathlib import Path
 from pdf2audiobook.audio import AudioEncoder, audio_output_path, encode_mp3, synthesize_chunks
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import (
+    footnote_anchor_edits,
     pagination_cleanup,
     place_footnotes,
     propose_chapters,
@@ -73,7 +74,7 @@ def analyze_book(
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
         chosen_provider.model,
         chosen_provider.base_url,
-        "analysis-v16",
+        "analysis-v17",
         # A replacement backend must never reuse the default extractor's analysis.
         *(() if extractor is None else ("extractor", extractor.name)),
     )
@@ -123,6 +124,14 @@ def analyze_book(
                 accepted=True,
             )
             for block in footnotes
+        )
+    if footnotes and settings.pdf.footnotes in {"inline", "end", "omit"}:
+        # Once notes are handled, their anchor digits ("world.5") would only
+        # be read aloud as numbers. Removal is per anchor, audited, reversible.
+        edits.extend(
+            footnote_anchor_edits(
+                extracted.blocks, {edit.block_id for edit in edits if edit.accepted}
+            )
         )
     omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
 
