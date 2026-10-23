@@ -269,7 +269,9 @@ class OpenAICompatibleProvider:
                     payload.pop("response_format")
                     format_fallback_used = True
                     continue
-                if response.status_code in (429, 502, 503, 504):
+                # Ollama reports an aborted generation ("token repeat limit
+                # reached") as HTTP 500; a resample usually succeeds.
+                if response.status_code in (429, 500, 502, 503, 504):
                     if retry_count < self.max_retries:
                         time.sleep(min(0.2 * (2**retry_count), 2.0))
                         retry_count += 1

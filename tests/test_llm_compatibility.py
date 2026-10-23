@@ -91,3 +91,34 @@ def test_exhausted_rate_limit_is_error(monkeypatch):
         with pytest.raises(LLMError):
             client.complete_json(instructions="x", document_text="y")
     assert len(calls) == 2
+
+
+def test_aborted_generation_server_error_is_retried(monkeypatch):
+    monkeypatch.setattr("pdf2audiobook.llm.time.sleep", lambda _: None)
+    calls = []
+    aborted = {"error": {"message": "prediction aborted, token repeat limit reached"}}
+
+    def handler(request):
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(500, json=aborted)
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
+
+    with make_client(handler) as client:
+        assert client.complete_json(instructions="x", document_text="y") == {"headings": []}
+    assert len(calls) == 2
+
+
+def test_persistent_server_error_fails_after_bounded_retries(monkeypatch):
+    monkeypatch.setattr("pdf2audiobook.llm.time.sleep", lambda _: None)
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(500, json={"error": "private book text"})
+
+    with make_client(handler, max_retries=2) as client:
+        with pytest.raises(LLMError) as exc:
+            client.complete_json(instructions="x", document_text="y")
+    assert len(calls) == 3
+    assert "private book text" not in str(exc.value)
