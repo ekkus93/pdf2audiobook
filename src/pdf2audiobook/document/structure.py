@@ -20,12 +20,141 @@ HEADING = re.compile(
     r"seven|eight|nine|ten)\b.*|prologue|epilogue|preface|introduction)$",
     re.IGNORECASE,
 )
+WRAPPED_LINE_END = re.compile(r"[^\W\d_]-$")
 PAGE_NUMBER = re.compile(r"^(?:\d{1,5}|[ivxlcdm]{1,10})$", re.IGNORECASE)
 
 CANONICAL_ROMAN = re.compile(
     r"^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})"
     r"(?:IX|IV|V?I{0,3})$"
 )
+
+
+def _title_key(text: str) -> str:
+    """Compare outline titles to headings ignoring case, spacing and trailing
+    punctuation ("Chapter I" matches "CHAPTER I.")."""
+    return " ".join(text.casefold().split()).rstrip(".:;, ")
+
+
+CONTENTS_HEADINGS = frozenset({"contents", "table of contents"})
+CONTENTS_PAGE_REF = re.compile(r"[\s.·…]+(?:\d{1,4}|[ivxlcdm]{1,8})$", re.IGNORECASE)
+
+
+def _loose_key(text: str) -> str:
+    """Letters and digits only, tolerating OCR-dropped spaces and stray marks
+    ("THE SILLYJELLY-FISH", "‘THE TEA-KETTLE")."""
+    return "".join(ch for ch in text.casefold() if ch.isalnum())
+
+
+def _printed_contents(
+    blocks: list[DocumentBlock], omitted: set[str], typical_size: float | None
+) -> tuple[set[int], dict[int, str]]:
+    """Find a printed contents page and the unique later headings it lists.
+
+    Returns the contents-page line indices and {later heading index: title}.
+    Titles are trusted only when at least two entries match uniquely.
+    """
+    start = next(
+        (
+            i
+            for i, block in enumerate(blocks)
+            if block.id not in omitted and _title_key(block.text) in CONTENTS_HEADINGS
+        ),
+        None,
+    )
+    if start is None:
+        return set(), {}
+
+    # Entries and their headings are at least body size; smaller lines are
+    # running heads, column labels or footnotes.
+    def heading_size(index: int) -> bool:
+        size = blocks[index].font_size
+        return typical_size is None or size is None or float(size) >= typical_size * 0.95
+
+    contents_page = blocks[start].page_index
+    lines = {start}
+    # (block index, normalized entry, tentative). Entries on the following
+    # page are tentative: that page may instead open the first chapter, so
+    # they count only if they name a later heading other than themselves.
+    entries: list[tuple[int, str, bool]] = []
+    for i in range(start + 1, len(blocks)):
+        block = blocks[i]
+        if block.page_index > contents_page + 1:
+            break
+        if block.id in omitted:
+            continue
+        tentative = block.page_index != contents_page
+        text = block.text.rstrip()
+        if tentative and (
+            len(text.split()) > 10
+            or text.endswith((".", "?", "!"))
+            and not CONTENTS_PAGE_REF.search(text)
+        ):
+            break
+        if not tentative:
+            lines.add(i)
+        entry = _title_key(CONTENTS_PAGE_REF.sub("", text))
+        if (
+            heading_size(i)
+            and _loose_key(entry)
+            and not entry.isdecimal()
+            and not PAGE_NUMBER.match(entry)
+        ):
+            entries.append((i, entry, tentative))
+    after = max(lines) + 1
+
+    # Later heading lines, alone or joined with the next line on the same page,
+    # since titles may wrap differently on the contents page and in the body.
+    # Exact keys are tried first; letters-only keys tolerate OCR noise but
+    # collide more easily with body text, so they are only a fallback.
+    exact: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    loose: dict[str, list[tuple[int, int]]] = defaultdict(list)
+    for i in range(after, len(blocks)):
+        if blocks[i].id in omitted or not heading_size(i):
+            continue
+        texts = [(blocks[i].text, 1)]
+        j = i + 1
+        if (
+            j < len(blocks)
+            and blocks[j].id not in omitted
+            and blocks[j].page_index == blocks[i].page_index
+            and heading_size(j)
+        ):
+            texts.append((f"{blocks[i].text} {blocks[j].text}", 2))
+        for text, width in texts:
+            exact[_title_key(text)].append((i, width))
+            loose[_loose_key(text)].append((i, width))
+
+    def unique(key: str, own: set[int]) -> tuple[int, int] | None:
+        for spans, normalized in ((exact, _title_key(key)), (loose, _loose_key(key))):
+            found = [span for span in spans.get(normalized, []) if span[0] not in own]
+            if len(found) == 1:
+                return found[0]
+        return None
+
+    titles: dict[int, str] = {}
+    position = 0
+    while position < len(entries):
+        own_index, key, tentative = entries[position]
+        own = {own_index}
+        match = None
+        consumed = 1
+        if position + 1 < len(entries):
+            next_index, next_key, next_tentative = entries[position + 1]
+            match = unique(f"{key} {next_key}", own | {next_index})
+            if match is not None:
+                consumed = 2
+                tentative = tentative or next_tentative
+        if match is None:
+            match = unique(key, own)
+        if match is None or match[0] <= own_index:
+            position += 1
+            continue
+        index, width = match
+        if tentative:
+            lines.update(entries[k][0] for k in range(position, position + consumed))
+        titles[index] = " ".join(blocks[k].text.strip() for k in range(index, index + width))
+        position += consumed
+    return lines, titles if len(titles) >= 2 else {}
 
 
 def _number_value(raw: str) -> tuple[int, str] | None:
@@ -371,9 +500,11 @@ def propose_chapters(
         and 5 <= float(block.font_size) <= 40
     )
     typical_size = body_sizes[(len(body_sizes) - 1) // 2] if len(body_sizes) >= 3 else None
+    contents_lines, contents_titles = _printed_contents(blocks, omitted, typical_size)
     typography_ids: set[int] = set()
     for i, block in enumerate(blocks):
-        if block.id in omitted:
+        if block.id in omitted or i in contents_lines:
+            # Entries on a printed contents page are references, not headings.
             continue
         text = block.text.strip()
         is_typographic_heading = (
@@ -384,6 +515,10 @@ def propose_chapters(
             and 1 <= len(text.split()) <= 9
             and len(text) <= 90
             and not text.endswith((".", "?", "!", ",", ";", ":"))
+            # A hyphenated line break or lowercase start marks a wrapped
+            # large-font line (e.g. catalogue entries), not a heading.
+            and not WRAPPED_LINE_END.search(text)
+            and not text[:1].islower()
             and not text.isdecimal()
             and block.kind not in {"table", "footnote", "caption", "equation", "list"}
         )
@@ -393,6 +528,7 @@ def propose_chapters(
             HEADING.match(text)
             or block.id in (extra_heading_ids or set())
             or is_typographic_heading
+            or i in contents_titles
         ):
             heading_indices.append(i)
     # Combine confirmed bookmark anchors with textual headings. Some books mix
@@ -428,12 +564,11 @@ def propose_chapters(
     # matched textual headings and no conflicting unique heading evidence.
     offset_evidence: dict[int, set[str]] = defaultdict(set)
     for title, page_num in valid_bookmarks:
-        normalized = " ".join(title.casefold().split())
+        normalized = _title_key(title)
         matches = [
             i
             for i in heading_indices
-            if blocks[i].id not in omitted
-            and " ".join(blocks[i].text.casefold().split()) == normalized
+            if blocks[i].id not in omitted and _title_key(blocks[i].text) == normalized
         ]
         if len(matches) == 1:
             offset = blocks[matches[0]].page_index - (page_num - 1)
@@ -451,14 +586,13 @@ def propose_chapters(
 
     for title, page_num in valid_bookmarks:
         page_index = page_num - 1
-        title_normalized = " ".join(title.casefold().split())
+        title_normalized = _title_key(title)
         if not title_normalized:
             continue
         matching = [
             i
             for i, block in enumerate(blocks)
-            if block.id not in omitted
-            and " ".join(block.text.casefold().split()) == title_normalized
+            if block.id not in omitted and _title_key(block.text) == title_normalized
         ]
         exact = [i for i in matching if blocks[i].page_index == page_index]
         # A TOC page number may refer to printed rather than physical pages.
@@ -484,6 +618,34 @@ def propose_chapters(
             f"Skipped {malformed_bookmarks} malformed PDF bookmark "
             "record(s); verify chapter boundaries manually"
         )
+    if len(bookmark_titles) >= 2 or contents_titles:
+        # A PDF outline or printed contents that matches the text is stronger
+        # evidence than font size alone. Do not let large-font material the outline omits (e.g.
+        # catalogue entries) split the book into spurious chapters.
+        typography_only = {
+            i
+            for i in typography_ids
+            if i not in bookmark_titles
+            and i not in contents_titles
+            and not HEADING.match(blocks[i].text.strip())
+            and blocks[i].id not in (extra_heading_ids or set())
+        }
+        if typography_only:
+            heading_indices = [i for i in heading_indices if i not in typography_only]
+            warnings.append(
+                f"Ignored {len(typography_only)} font-size-only heading candidate(s) "
+                "not in the PDF outline or printed contents; verify chapter boundaries"
+            )
+    # A contents entry naming the line right after another heading is that
+    # chapter's subtitle ("CHAPTER III." / "ON RELATIVE GROWINGS."), not a
+    # new boundary.
+    detected = set(heading_indices)
+    subtitles = set()
+    for i in contents_titles:
+        previous = next((j for j in range(i - 1, -1, -1) if blocks[j].id not in omitted), None)
+        if previous in detected and previous not in contents_titles:
+            subtitles.add(i)
+    heading_indices = [i for i in heading_indices if i not in subtitles]
     heading_indices = sorted(set(heading_indices))
     if not blocks:
         raise ExtractionError("No text found in PDF; no chapters can be created")
@@ -513,7 +675,9 @@ def propose_chapters(
             confidence = 0.7
             evidence = ["unassigned material before chapter heading"]
         elif start in heading_indices:
-            name = bookmark_titles.get(start, blocks[start].text.strip())
+            name = bookmark_titles.get(start) or contents_titles.get(
+                start, blocks[start].text.strip()
+            )
             confidence = (
                 0.95
                 if start in bookmark_titles
@@ -523,6 +687,8 @@ def propose_chapters(
                 )
                 else 0.85
                 if start in bookmark_titles
+                else 0.9
+                if start in contents_titles
                 else 0.82
                 if start in typography_ids
                 else 0.9
@@ -530,6 +696,8 @@ def propose_chapters(
             evidence = (
                 ["PDF bookmark/TOC matched unique source title"]
                 if start in bookmark_titles
+                else ["printed contents entry matched unique later heading"]
+                if start in contents_titles
                 else ["typographic size contrast with body text"]
                 if start in typography_ids
                 else ["explicit heading text"]

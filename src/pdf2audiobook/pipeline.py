@@ -70,7 +70,7 @@ def analyze_book(source: Path, settings: Settings) -> Path:
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
         chosen_provider.model,
         chosen_provider.base_url,
-        "analysis-v8",
+        "analysis-v9",
     )
     if manifest_path.is_file():
         existing = read_manifest(manifest_path)
