@@ -272,7 +272,10 @@ to stderr at their adapter so `--json` output stays parseable and narration
 text never reaches logs.
 
 `.github/workflows/ci.yml` runs these offline checks on `master`, installing
-FFmpeg, Tesseract and English language data. It does **not** install Kitten
+FFmpeg, Tesseract and English language data. The apt install is time-bounded,
+retried against archive.ubuntu.com and served from an `actions/cache` of the
+`.deb` files (bump the `apt-…-v1` key when the package list changes), because
+the runners' regional mirror intermittently stalls for hours. It does **not** install Kitten
 models, call external LLMs, or validate all real scanned-book layouts. Record
 the exact commit SHA and Actions run when claiming CI acceptance. Before
 marking a TODO complete, add a deterministic regression test or explicitly
