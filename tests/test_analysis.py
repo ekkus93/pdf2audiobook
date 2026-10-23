@@ -45,8 +45,9 @@ def test_no_chapters_fails_unless_enabled(tmp_path: Path):
     settings = Settings()
     settings.pdf.ocr = "never"
     settings.llm.enabled = False
+    # Set before the failing call too: it writes a cleanup audit before failing.
+    settings.general.output_dir = str(tmp_path / "output")
     with pytest.raises(ExtractionError, match="No reliable"):
         analyze_book(pdf_file, settings)
     settings.chapters.allow_single_chapter = True
-    settings.general.output_dir = str(tmp_path / "output")
     assert read_manifest(analyze_book(pdf_file, settings)).chapters[0].title == "Full Book"
