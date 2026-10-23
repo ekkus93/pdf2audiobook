@@ -241,6 +241,11 @@ class OpenAICompatibleProvider:
         # Do not silently drop the response cap for an incompatible provider.
         if self.max_context_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
+        if self.provider == "ollama":
+            # Reasoning models (e.g. qwen3.5) otherwise spend the whole output
+            # cap on hidden thinking and return empty content. Answers are
+            # schema-validated JSON, so hidden reasoning adds no safety.
+            payload["reasoning_effort"] = "none"
         # A remote-content opt-in must be accompanied by a visible warning
         # before the first upload, not only after analysis has completed.
         if not _loopback(urlparse(self.base_url).hostname) and not self._remote_content_warned:
@@ -288,7 +293,15 @@ class OpenAICompatibleProvider:
                             # not crash accounting or authorize a false zero cost.
                             self.last_usage[field] = count
                             self.total_usage[field] += count
-                message = reply["choices"][0]["message"]["content"]
+                choice = reply["choices"][0]
+                message = choice["message"]["content"]
+                if choice.get("finish_reason") == "length" and not (
+                    isinstance(message, str) and message.strip()
+                ):
+                    raise LLMError(
+                        "LLM output cap reached before any answer; raise "
+                        "llm.max_output_tokens or disable model reasoning"
+                    )
                 decoded = json.loads(message)
                 if not isinstance(decoded, dict):
                     raise LLMError("Model response must be a JSON object")

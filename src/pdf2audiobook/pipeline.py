@@ -37,7 +37,7 @@ def _llm_cache_identity(settings: Settings) -> str:
     """Include response-cap settings in the model-specific request cache namespace."""
     selected = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
     return fingerprint(
-        "llm-provider-v2",
+        "llm-provider-v3",
         settings.llm.provider,
         selected.model,
         selected.base_url,
