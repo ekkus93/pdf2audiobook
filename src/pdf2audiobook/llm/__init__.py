@@ -295,14 +295,20 @@ class OpenAICompatibleProvider:
                             self.total_usage[field] += count
                 choice = reply["choices"][0]
                 message = choice["message"]["content"]
-                if choice.get("finish_reason") == "length" and not (
-                    isinstance(message, str) and message.strip()
-                ):
+                truncated = choice.get("finish_reason") == "length"
+                if truncated and not (isinstance(message, str) and message.strip()):
                     raise LLMError(
                         "LLM output cap reached before any answer; raise "
                         "llm.max_output_tokens or disable model reasoning"
                     )
-                decoded = json.loads(message)
+                try:
+                    decoded = json.loads(message)
+                except ValueError:
+                    if truncated:
+                        raise LLMError(
+                            "LLM answer was cut off at the output cap; raise llm.max_output_tokens"
+                        ) from None
+                    raise
                 if not isinstance(decoded, dict):
                     raise LLMError("Model response must be a JSON object")
                 self.request_count += 1

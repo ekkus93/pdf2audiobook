@@ -66,11 +66,27 @@ def test_output_cap_exhausted_by_reasoning_has_actionable_error(name, content):
     assert raised.value.__cause__ is None
 
 
-def test_truncated_nonempty_answer_still_reports_decoding_failure():
+@pytest.mark.parametrize("name", PROVIDERS)
+def test_answer_cut_off_at_output_cap_has_actionable_error(name):
+    def handler(request):
+        content = '{"edits":[{"original":"' + SENTINEL
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": content}, "finish_reason": "length"}]},
+        )
+
+    with _provider(name, handler) as provider:
+        with pytest.raises(LLMError, match="cut off at the output cap") as raised:
+            provider.complete_json(instructions="x", document_text="y")
+    assert SENTINEL not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
+def test_malformed_complete_answer_still_reports_decoding_failure():
     def handler(request):
         return httpx.Response(
             200,
-            json={"choices": [{"message": {"content": '{"ok":'}, "finish_reason": "length"}]},
+            json={"choices": [{"message": {"content": '{"ok":'}, "finish_reason": "stop"}]},
         )
 
     with _provider("ollama", handler) as provider:
