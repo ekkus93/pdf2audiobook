@@ -204,6 +204,11 @@ class CachedLLMProvider:
                 # Corrupt, hostile or inaccessible cache files are cache misses.
                 pass
         self.misses += 1
+        # Server-side limits need the server, so check them only on a miss:
+        # a fully cached rerun must not require a running provider.
+        served = getattr(self.provider, "validate_served_capacity", None)
+        if callable(served):
+            served(instructions=instructions, document_text=document_text)
         reservation = None
         if self.ledger is None:
             self._check_usage_budget()

@@ -104,6 +104,15 @@ ollama serve
 uv run pdf2audiobook analyze book.pdf --llm-provider ollama --llm-model qwen3.5:9b
 ```
 
+Ollama silently drops the start of a prompt longer than the context it
+serves (a plain `qwen3.5:9b` pull is served with 4096 tokens), so before the
+first uncached request the adapter loads the model with an empty prompt, reads
+its `context_length` from `/api/ps`, and refuses any request whose
+conservative byte bound plus output reserve exceeds the smaller of that and
+`llm.max_context_tokens`. Use a variant with a larger `num_ctx` (for example a
+Modelfile with `PARAMETER num_ctx 131072`) or lower `llm.chunk_tokens`. Fully
+cached reruns do not contact Ollama.
+
 For a local OpenAI-compatible `llama-server` listening on loopback:
 
 ```bash

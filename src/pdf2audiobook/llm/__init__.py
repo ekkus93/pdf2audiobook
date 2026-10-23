@@ -133,6 +133,7 @@ class OpenAICompatibleProvider:
         self.max_context_tokens = max_context_tokens
         self.max_output_tokens = max_output_tokens
         self._remote_content_warned = False
+        self._served_context: int | None = None
         self.request_count = 0
         self.last_usage: dict[str, int] = {}
         self.total_usage: dict[str, int] = {
@@ -223,11 +224,63 @@ class OpenAICompatibleProvider:
             ):
                 raise LLMError("LLM request exceeds configured context and output reserve")
 
+    def _ollama_served_context(self, model: str) -> int:
+        """Return the context length Ollama actually serves for ``model``.
+
+        Ollama silently drops the start of a prompt (including the system
+        instructions) that exceeds it, so the configured budget alone is unsafe.
+        """
+        if self._served_context is None:
+            root = self.base_url.removesuffix("/v1")
+            names = {model, model if ":" in model else f"{model}:latest"}
+            lengths: list[int] = []
+            try:
+                # An empty prompt only loads the model; no book text is sent.
+                self._client.post(
+                    f"{root}/api/generate", json={"model": model, "prompt": "", "stream": False}
+                ).raise_for_status()
+                response = self._client.get(f"{root}/api/ps")
+                response.raise_for_status()
+                for item in response.json()["models"]:
+                    length = item.get("context_length")
+                    if (
+                        names & {item.get("name"), item.get("model")}
+                        and isinstance(length, int)
+                        and not isinstance(length, bool)
+                        and length > 0
+                    ):
+                        lengths.append(length)
+            except (httpx.HTTPError, KeyError, ValueError, TypeError, AttributeError):
+                lengths = []
+            if not lengths:
+                raise LLMError("Could not read the context length Ollama serves for the model")
+            self._served_context = min(lengths)
+        return self._served_context
+
+    def validate_served_capacity(self, *, instructions: str, document_text: str) -> None:
+        """Check a request against the server's real context before uploading it."""
+        if self.provider != "ollama":
+            return
+        served = self._ollama_served_context(self._model())
+        limit = min(served, self.max_context_tokens or served)
+        if (
+            len(instructions.encode("utf-8"))
+            + len(document_text.encode("utf-8"))
+            + self.max_output_tokens
+            + 128
+            > limit
+        ):
+            raise LLMError(
+                "LLM request exceeds the context length the Ollama server serves; "
+                "lower llm.chunk_tokens or use a model with a larger num_ctx"
+            )
+
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
         # Never expose the previous request's usage when this attempt fails before
         # receiving a billable response. Accounted aggregate usage is unchanged.
         self.last_usage = {}
         self.validate_request_capacity(instructions=instructions, document_text=document_text)
+        self.validate_served_capacity(instructions=instructions, document_text=document_text)
         # The book is untrusted data; never send it as system instructions or as tools.
         payload = {
             "model": self._model(),
