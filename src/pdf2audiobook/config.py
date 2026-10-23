@@ -1,4 +1,5 @@
 """Strict TOML settings and source-aware CLI/environment overrides."""
+
 from __future__ import annotations
 
 import json
@@ -70,14 +71,11 @@ class LLM(ConfigModel):
         default_factory=lambda: RemoteLLM(model="gpt-4.1-mini", api_key_env="OPENAI_API_KEY")
     )
     ollama: RemoteLLM = Field(
-        default_factory=lambda: RemoteLLM(
-            model="qwen3.5:9b", base_url="http://127.0.0.1:11434/v1"
-        )
+        default_factory=lambda: RemoteLLM(model="qwen3.5:9b", base_url="http://127.0.0.1:11434/v1")
     )
     llama_server: RemoteLLM = Field(
         default_factory=lambda: RemoteLLM(
-            model="auto", base_url="http://127.0.0.1:8080/v1",
-            api_key_env="LLAMA_SERVER_API_KEY"
+            model="auto", base_url="http://127.0.0.1:8080/v1", api_key_env="LLAMA_SERVER_API_KEY"
         )
     )
 
@@ -197,7 +195,9 @@ def load_settings(
             # TOML parser diagnostics may contain configuration values or paths.
             raise ConfigError("invalid TOML configuration syntax") from None
         except (OSError, UnicodeError):
-            raise ConfigError("cannot read configuration file; check permissions and encoding") from None
+            raise ConfigError(
+                "cannot read configuration file; check permissions and encoding"
+            ) from None
         _merge(data, toml)
         sources.update({key: f"file:{path}" for key in _flatten(toml)})
     env = environ if environ is not None else os.environ
@@ -228,9 +228,7 @@ def load_settings(
         result.llm.input_cost_usd_per_million_tokens is None
         or result.llm.output_cost_usd_per_million_tokens is None
     ):
-        raise ConfigError(
-            "max_estimated_cost_usd requires explicit input/output token prices"
-        )
+        raise ConfigError("max_estimated_cost_usd requires explicit input/output token prices")
     if result.llm.chunk_tokens >= result.llm.max_context_tokens:
         raise ConfigError("llm.chunk_tokens must be smaller than llm.max_context_tokens")
     if result.llm.max_output_tokens + 128 >= result.llm.max_context_tokens:

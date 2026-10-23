@@ -1,4 +1,5 @@
 """Typer CLI for inspection, analysis, conversion and configuration."""
+
 from __future__ import annotations
 
 import json
@@ -28,10 +29,16 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
     log_event("command_failed", error_code=code)
     if json_output:
         # Diagnostics belong on stderr; stdout is reserved for successful JSON payloads.
-        typer.echo(json.dumps({
-            "ok": False,
-            "error": {"type": type(exc).__name__, "code": code, "message": str(exc)},
-        }, ensure_ascii=False), err=True)
+        typer.echo(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": {"type": type(exc).__name__, "code": code, "message": str(exc)},
+                },
+                ensure_ascii=False,
+            ),
+            err=True,
+        )
     else:
         console.print(f"[red]Error:[/red] {exc}")
     raise typer.Exit(code=code) from exc
@@ -48,7 +55,9 @@ def emit(payload: dict[str, Any], json_output: bool) -> None:
 def entry(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", help="Show version."),
-    verbose: bool = typer.Option(False, "--verbose", help="Emit privacy-safe debug events to stderr."),
+    verbose: bool = typer.Option(
+        False, "--verbose", help="Emit privacy-safe debug events to stderr."
+    ),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress non-error log events."),
 ) -> None:
     if verbose and quiet:
@@ -146,10 +155,17 @@ def inspect(
 
 
 def _overrides(
-    output: Path | None, ocr: str | None, no_llm: bool,
-    llm_provider: str | None, llm_model: str | None, llm_url: str | None,
-    allow_remote_content: bool, tts_model: str | None,
-    voice: str | None, bitrate: str | None, resume: bool | None,
+    output: Path | None,
+    ocr: str | None,
+    no_llm: bool,
+    llm_provider: str | None,
+    llm_model: str | None,
+    llm_url: str | None,
+    allow_remote_content: bool,
+    tts_model: str | None,
+    voice: str | None,
+    bitrate: str | None,
+    resume: bool | None,
     allow_single_chapter: bool,
 ) -> dict[str, Any]:
     value: dict[str, Any] = {}
@@ -203,8 +219,18 @@ def analyze(
         preliminary, _ = load_settings(config, no_config=no_config)
         provider = llm_provider or preliminary.llm.provider
         overrides = _overrides(
-            output, ocr, no_llm, llm_provider, llm_model, llm_url, allow_remote_content,
-            None, None, None, None, allow_single_chapter
+            output,
+            ocr,
+            no_llm,
+            llm_provider,
+            llm_model,
+            llm_url,
+            allow_remote_content,
+            None,
+            None,
+            None,
+            None,
+            allow_single_chapter,
         )
         if llm_model is not None or llm_url is not None:
             selected = provider.replace("-", "_")
@@ -265,8 +291,18 @@ def convert(
         preliminary, _ = load_settings(config, no_config=no_config)
         provider = llm_provider or preliminary.llm.provider
         overrides = _overrides(
-            output, ocr, no_llm, llm_provider, llm_model, llm_url, allow_remote_content,
-            tts_model, voice, bitrate, resume, allow_single_chapter
+            output,
+            ocr,
+            no_llm,
+            llm_provider,
+            llm_model,
+            llm_url,
+            allow_remote_content,
+            tts_model,
+            voice,
+            bitrate,
+            resume,
+            allow_single_chapter,
         )
         if llm_model is not None or llm_url is not None:
             selected = provider.replace("-", "_")
@@ -295,14 +331,17 @@ def convert(
                 manifest, settings, chapter=chapter, chapter_range=selected_range
             )
             output_files = [
-                str(audio_output_path(manifest, item, manifest_path.parent))
-                for item in chapters
+                str(audio_output_path(manifest, item, manifest_path.parent)) for item in chapters
             ]
-            emit({"dry_run": True, "chapters": len(chapters), "mp3_files": output_files},
-                 json_output)
+            emit(
+                {"dry_run": True, "chapters": len(chapters), "mp3_files": output_files}, json_output
+            )
         else:
             outputs = convert_book(
-                source, settings, chapter=chapter, chapter_range=selected_range,
+                source,
+                settings,
+                chapter=chapter,
+                chapter_range=selected_range,
                 force=force,
             )
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)

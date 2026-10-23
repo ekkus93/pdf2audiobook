@@ -3,6 +3,7 @@
 This module only labels source lines for human review; it never invents image
 descriptions, reorders table cells, or modifies narration/transcript text.
 """
+
 from __future__ import annotations
 
 import math
@@ -91,10 +92,7 @@ def _vector_caption_regions(page: object) -> list[tuple[float, float, float, flo
         if box is None:
             continue
         width, height = box[2] - box[0], box[3] - box[1]
-        if (
-            width >= 20 and height >= 20
-            and 0.001 * page_area <= width * height <= 0.6 * page_area
-        ):
+        if width >= 20 and height >= 20 and 0.001 * page_area <= width * height <= 0.6 * page_area:
             candidates.append(box)
             # Pairwise grouping is quadratic; bound it on vector-heavy PDFs.
             # Other substantial artwork remains flagged for manual review by
@@ -103,20 +101,18 @@ def _vector_caption_regions(page: object) -> list[tuple[float, float, float, flo
                 break
     regions: list[tuple[float, float, float, float]] = []
     for index, first in enumerate(candidates):
-        for second in candidates[index + 1:]:
+        for second in candidates[index + 1 :]:
             horizontal_overlap = min(first[2], second[2]) - max(first[0], second[0])
-            if horizontal_overlap < 0.25 * min(
-                first[2] - first[0], second[2] - second[0]
-            ):
+            if horizontal_overlap < 0.25 * min(first[2] - first[0], second[2] - second[0]):
                 continue
-            vertical_gap = max(
-                0.0, first[1] - second[3], second[1] - first[3]
-            )
+            vertical_gap = max(0.0, first[1] - second[3], second[1] - first[3])
             if vertical_gap > 40:
                 continue
             union = (
-                min(first[0], second[0]), min(first[1], second[1]),
-                max(first[2], second[2]), max(first[3], second[3]),
+                min(first[0], second[0]),
+                min(first[1], second[1]),
+                max(first[2], second[2]),
+                max(first[3], second[3]),
             )
             if (union[2] - union[0]) * (union[3] - union[1]) > 0.6 * page_area:
                 continue
@@ -145,7 +141,8 @@ def caption_line_indices(
             # Bound third-party image inventories just as PDF review does.
             # A malformed adapter may expose an unbounded iterable.
             image_boxes = [
-                box for item in islice(detector(), 5000)
+                box
+                for item in islice(detector(), 5000)
                 if isinstance(item, dict)
                 if (box := _valid_box(item.get("bbox"))) is not None
                 # Decorative icons or tiny raster noise are not reliable
@@ -156,10 +153,7 @@ def caption_line_indices(
             # _special_material_warnings handles image-inspection failures.
             pass
     vector_boxes = _vector_caption_regions(page)
-    table_boxes = [
-        box for item in table_regions
-        if (box := _valid_box(item)) is not None
-    ]
+    table_boxes = [box for item in table_regions if (box := _valid_box(item)) is not None]
     identified: set[int] = set()
     for index, item in enumerate(lines):
         text = item.get("text")
@@ -181,7 +175,6 @@ def caption_line_indices(
     ]
 
 
-
 # Conservative displayed-formula classification. This is not mathematical OCR,
 # a parser, or a source of automatically generated spoken descriptions.
 _FORMULA_LHS = re.compile(
@@ -192,7 +185,9 @@ _FORMULA_SIGNS = frozenset("∑∫√≈≤≥∞∂∇∈∉⊂⊆≠∝±×÷�
 
 
 def equation_line_indices(
-    lines: list[dict], *, page_number: int,
+    lines: list[dict],
+    *,
+    page_number: int,
 ) -> tuple[set[int], list[str]]:
     """Mark high-confidence short standalone formulas for review only.
 
@@ -218,8 +213,11 @@ def equation_line_indices(
             has_formula_signs
             and (
                 text[0] in "∑∫√∂∇∀∃"
-                or "=" in text or "≈" in text or "≠" in text
-                or "≤" in text or "≥" in text
+                or "=" in text
+                or "≈" in text
+                or "≠" in text
+                or "≤" in text
+                or "≥" in text
             )
             and len(text.split()) <= 12
             and (text[:1].isalpha() or text[0] in "∑∫√∂∇∀∃")
@@ -232,6 +230,7 @@ def equation_line_indices(
         f"Page {page_number}: {len(selected)} likely displayed equation(s) "
         "classified for review; verify spoken rendering; original text preserved"
     ]
+
 
 def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
     """Flag vector-only diagrams that image enumeration cannot see.
@@ -248,13 +247,11 @@ def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
         drawings = detector()
     except Exception:
         return [
-            f"Page {page_number}: vector drawing inspection unavailable; "
-            "review diagrams manually"
+            f"Page {page_number}: vector drawing inspection unavailable; review diagrams manually"
         ]
     if not isinstance(drawings, (list, tuple)):
         return [
-            f"Page {page_number}: vector drawing inspection unavailable; "
-            "review diagrams manually"
+            f"Page {page_number}: vector drawing inspection unavailable; review diagrams manually"
         ]
     count = 0
     for item in drawings[:5000]:

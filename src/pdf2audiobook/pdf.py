@@ -1,4 +1,5 @@
 """PDF inspection and provenance-preserving embedded-text / OCR extraction."""
+
 from __future__ import annotations
 
 import json
@@ -84,9 +85,7 @@ def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
         except Exception:
             # Malformed PDF metadata or backend diagnostics can echo private
             # document paths or content; inspection is read-only and fail-closed.
-            raise ExtractionError(
-                "Failed to inspect PDF metadata or page geometry"
-            ) from None
+            raise ExtractionError("Failed to inspect PDF metadata or page geometry") from None
 
 
 def _positive_finite_number(value: object) -> float | None:
@@ -126,16 +125,11 @@ def _lines(page: pymupdf.Page, textpage: pymupdf.TextPage | None = None) -> list
                 default=0.0,
             )
             font = spans[0].get("font") if spans else None
-            extracted.append(
-                {"text": text, "bbox": bbox, "font": font, "size": largest}
-            )
+            extracted.append({"text": text, "bbox": bbox, "font": font, "size": largest})
     return extracted
 
 
-
-def page_review_warnings(
-    lines: list[dict], *, page_number: int, origin: str
-) -> list[str]:
+def page_review_warnings(lines: list[dict], *, page_number: int, origin: str) -> list[str]:
     """Flag suspicious extraction without silently discarding any source text.
 
     These are review heuristics, not Tesseract confidence scores. In particular,
@@ -144,9 +138,10 @@ def page_review_warnings(
     """
     warnings: list[str] = []
     text = " ".join(line["text"] for line in lines)
-    if text.count("\ufffd") >= 2 or sum(
-        ord(char) < 32 and char not in "\t\n\r" for char in text
-    ) >= 2:
+    if (
+        text.count("\ufffd") >= 2
+        or sum(ord(char) < 32 and char not in "\t\n\r" for char in text) >= 2
+    ):
         warnings.append(
             f"Page {page_number}: suspicious replacement/control characters; "
             "review extracted text against the PDF"
@@ -202,8 +197,7 @@ def _table_regions(
                 boxes.append(bounds)
     except Exception:
         return [], [
-            f"Page {page_number}: table detection unavailable; "
-            "review complex layouts manually"
+            f"Page {page_number}: table detection unavailable; review complex layouts manually"
         ]
     if not boxes:
         return [], []
@@ -220,8 +214,7 @@ def _inside_table(
     if bbox is None:
         return False
     return any(
-        bbox[0] >= x0 - 2 and bbox[1] >= y0 - 2
-        and bbox[2] <= x1 + 2 and bbox[3] <= y1 + 2
+        bbox[0] >= x0 - 2 and bbox[1] >= y0 - 2 and bbox[2] <= x1 + 2 and bbox[3] <= y1 + 2
         for x0, y0, x1, y1 in regions
     )
 
@@ -254,8 +247,7 @@ def _special_material_warnings(
             boxes.append(box)
         page_area = max(1.0, float(page.cropbox.width * page.cropbox.height))
         large_image = any(
-            (box[2] - box[0]) * (box[3] - box[1]) / page_area >= 0.01
-            for box in boxes
+            (box[2] - box[0]) * (box[3] - box[1]) / page_area >= 0.01 for box in boxes
         )
     except Exception:
         result.append(
@@ -271,8 +263,7 @@ def _special_material_warnings(
     # Font and bbox metadata is advisory; reject unrepresentable numeric
     # values rather than allowing malformed PDF metadata to crash inspection.
     sizes = [
-        size for line in lines
-        if (size := _positive_finite_number(line.get("size"))) is not None
+        size for line in lines if (size := _positive_finite_number(line.get("size"))) is not None
     ]
     if len(sizes) >= 3:
         median_size = statistics.median(sizes)
@@ -297,11 +288,11 @@ def _special_material_warnings(
     return result
 
 
-
 def _footnote_line_indices(
-    lines: list[dict], *, page_height: float,
+    lines: list[dict],
+    *,
+    page_height: float,
     table_regions: list[tuple[float, float, float, float]],
-
 ) -> set[int]:
     """Conservatively tag numbered small-type notes separated from body prose.
 
@@ -337,7 +328,8 @@ def _footnote_line_indices(
         validated.append((bounds, size))
 
     body_sizes = [
-        size for bounds, size in validated
+        size
+        for bounds, size in validated
         if bounds is not None and size is not None and bounds[1] < height * 0.65
     ]
     if len(body_sizes) < 2:
@@ -348,7 +340,8 @@ def _footnote_line_indices(
         bounds, size = validated[index]
         text = line.get("text")
         if (
-            bounds is None or size is None
+            bounds is None
+            or size is None
             or size > 0.78 * body_size
             or bounds[1] < height * 0.70
             or _inside_table(bounds, table_regions)
@@ -359,8 +352,10 @@ def _footnote_line_indices(
         # Require a clear gap from preceding valid text, not merely small font.
         preceding_bottom = max(
             (
-                other_bounds[3] for other_index, (other_bounds, _) in enumerate(validated)
-                if other_index != index and other_bounds is not None
+                other_bounds[3]
+                for other_index, (other_bounds, _) in enumerate(validated)
+                if other_index != index
+                and other_bounds is not None
                 and other_bounds[3] <= bounds[1]
             ),
             default=None,
@@ -383,9 +378,11 @@ def _footnote_line_indices(
             bounds, size = validated[next_index]
             text = item.get("text")
             if (
-                bounds is None or size is None
+                bounds is None
+                or size is None
                 or size > 0.78 * body_size
-                or not isinstance(text, str) or not text.strip()
+                or not isinstance(text, str)
+                or not text.strip()
                 or bounds[1] < height * 0.70
                 or _inside_table(bounds, table_regions)
             ):
@@ -416,10 +413,7 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
     printable = sum(not char.isspace() for char in text)
     if printable < 24:
         return False, "too little selectable text"
-    damaged = sum(
-        char == "\ufffd" or (ord(char) < 32 and char not in "\t\n\r")
-        for char in text
-    )
+    damaged = sum(char == "\ufffd" or (ord(char) < 32 and char not in "\t\n\r") for char in text)
     if damaged >= max(2, math.ceil(printable * 0.05)):
         return False, "damaged selectable-text mapping"
     return True, None
@@ -467,9 +461,7 @@ def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
         covered = 0.0
         for left, right in zip(x_coords, x_coords[1:]):
             intervals = sorted(
-                (rect.y0, rect.y1)
-
-                for rect in regions if rect.x0 < right and rect.x1 > left
+                (rect.y0, rect.y1) for rect in regions if rect.x0 < right and rect.x1 > left
             )
             if not intervals:
                 continue
@@ -484,7 +476,6 @@ def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
             covered_height += end - start
             covered += (right - left) * covered_height
             if covered >= page_area * 0.65:
-
                 return True
     except (KeyError, TypeError, ValueError, RuntimeError, OverflowError, ZeroDivisionError):
         # Uninspectable image metadata must not replace selectable text.
@@ -493,7 +484,6 @@ def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
 
 
 @lru_cache(maxsize=1)
-
 def _ocr_engine_version() -> str:
     """Bind cached recognition to the installed Tesseract engine build.
 
@@ -505,7 +495,10 @@ def _ocr_engine_version() -> str:
     try:
         result = subprocess.run(
             ["tesseract", "--version"],
-            capture_output=True, text=True, timeout=10, check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
         return "tesseract-cli-unknown"
@@ -514,8 +507,11 @@ def _ocr_engine_version() -> str:
         return "tesseract-cli-unknown"
     # A successful CLI invocation may still produce no version text.
     return next(
-        (line.strip() for line in (result.stdout + "\n" + result.stderr).splitlines()
-         if line.strip()),
+        (
+            line.strip()
+            for line in (result.stdout + "\n" + result.stderr).splitlines()
+            if line.strip()
+        ),
         "tesseract-cli-unknown",
     )
 
@@ -575,12 +571,11 @@ def _valid_cached_lines(data: object) -> list[dict] | None:
             or size < 0
             or size > 1_000_000
             or not math.isfinite(size)
-            or font is not None and not isinstance(font, str)
+            or font is not None
+            and not isinstance(font, str)
         ):
             return None
-        checked.append({
-            "text": text, "bbox": list(bbox), "font": font, "size": size
-        })
+        checked.append({"text": text, "bbox": list(bbox), "font": font, "size": size})
     return checked
 
 
@@ -589,8 +584,12 @@ class _InvalidOCRGeometry(ValueError):
 
 
 def _cached_ocr_lines(
-    page: pymupdf.Page, settings: PdfSettings, *,
-    cache_dir: Path | None, input_sha256: str | None, page_index: int,
+    page: pymupdf.Page,
+    settings: PdfSettings,
+    *,
+    cache_dir: Path | None,
+    input_sha256: str | None,
+    page_index: int,
 ) -> list[dict]:
     """Cache OCR by exact source bytes, page index, language, DPI and engine version.
 
@@ -601,14 +600,21 @@ def _cached_ocr_lines(
         lines = _ocr_page_lines(page, settings)
         uncached_verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
         if uncached_verified is None:
-            raise _InvalidOCRGeometry("invalid OCR line geometry or metadata; no cache entry written")
+            raise _InvalidOCRGeometry(
+                "invalid OCR line geometry or metadata; no cache entry written"
+            )
         return uncached_verified
     if input_sha256 is None:
         raise ValueError("OCR caching requires the source PDF SHA-256")
     key = fingerprint(
-        "ocr-lines-v1", input_sha256, page_index,
-        settings.ocr_language, settings.ocr_dpi,
-        str(pymupdf.VersionBind), _ocr_engine_version(), int(page.rotation),
+        "ocr-lines-v1",
+        input_sha256,
+        page_index,
+        settings.ocr_language,
+        settings.ocr_dpi,
+        str(pymupdf.VersionBind),
+        _ocr_engine_version(),
+        int(page.rotation),
     )
     target = cache_dir / (key + ".json")
     if target.is_file():
@@ -636,8 +642,11 @@ def _cached_ocr_lines(
 
 
 def extract_pdf(
-    source: Path, settings: PdfSettings, *,
-    ocr_cache_dir: Path | None = None, source_sha256: str | None = None,
+    source: Path,
+    settings: PdfSettings,
+    *,
+    ocr_cache_dir: Path | None = None,
+    source_sha256: str | None = None,
 ) -> ExtractedDocument:
     """Extract all pages, using OCR only for pages lacking meaningful embedded text."""
     spans: list[SourceSpan] = []
@@ -658,7 +667,6 @@ def extract_pdf(
             # PyMuPDF parser failures can include embedded text or file paths.
             raise ExtractionError("Failed to read PDF outline or metadata") from None
         for page_index, page in enumerate(document):
-
             # page.get_text() coordinates are unrotated, unlike page.rect.
             # Margin cleanup must use the same coordinate system as spans.
             try:
@@ -670,11 +678,8 @@ def extract_pdf(
                 raise ExtractionError(
                     f"Page {page_index + 1}: cannot read PDF page geometry"
                 ) from None
-            if not (math.isfinite(width) and math.isfinite(height)
-                    and width > 0 and height > 0):
-                raise ExtractionError(
-                    f"Page {page_index + 1}: invalid PDF page geometry"
-                )
+            if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
+                raise ExtractionError(f"Page {page_index + 1}: invalid PDF page geometry")
             sizes.append((width, height))
             try:
                 page_lines = _lines(page)
@@ -688,10 +693,7 @@ def extract_pdf(
             # A scanned body can coexist with a short, perfectly valid
             # selectable heading. Character quality alone misses that body.
             if settings.ocr == "auto" and usable:
-                printable = sum(
-                    not char.isspace()
-                    for line in page_lines for char in line["text"]
-                )
+                printable = sum(not char.isspace() for line in page_lines for char in line["text"])
                 if printable < 120 and _page_has_dominant_raster(page):
                     usable = False
                     quality_issue = "sparse selectable text over dominant raster"
@@ -699,9 +701,7 @@ def extract_pdf(
                         f"Page {page_index + 1}: sparse selectable text overlays "
                         "a large raster; attempting OCR and requiring coverage review"
                     )
-            use_ocr = settings.ocr == "always" or (
-                settings.ocr == "auto" and not usable
-            )
+            use_ocr = settings.ocr == "always" or (settings.ocr == "auto" and not usable)
             if settings.ocr == "auto" and quality_issue == "damaged selectable-text mapping":
                 warnings.append(
                     f"Page {page_index + 1}: damaged embedded text layer; "
@@ -715,8 +715,11 @@ def extract_pdf(
                 embedded_lines = page_lines
                 try:
                     page_lines = _cached_ocr_lines(
-                        page, settings, cache_dir=ocr_cache_dir,
-                        input_sha256=source_sha256, page_index=page_index,
+                        page,
+                        settings,
+                        cache_dir=ocr_cache_dir,
+                        input_sha256=source_sha256,
+                        page_index=page_index,
                     )
                 except _InvalidOCRGeometry:
                     # Only our own validator can produce this safe, fixed error.
@@ -742,7 +745,8 @@ def extract_pdf(
                         )
                 elif (
                     settings.ocr == "auto"
-                    and quality_issue in (
+                    and quality_issue
+                    in (
                         "too little selectable text",
                         "sparse selectable text over dominant raster",
                     )
@@ -765,7 +769,8 @@ def extract_pdf(
                         )
                     elif (
                         quality_issue == "sparse selectable text over dominant raster"
-                        and selectable and recognized == selectable
+                        and selectable
+                        and recognized == selectable
                     ):
                         # Recognition may have recovered only the selectable
                         # overlay, leaving the scan's prose completely unread.
@@ -777,16 +782,12 @@ def extract_pdf(
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
             # Preserve table cell text and annotate only contained blocks.
-            table_regions, table_warnings = _table_regions(
-                page, page_number=page_index + 1
-            )
+            table_regions, table_warnings = _table_regions(page, page_number=page_index + 1)
             warnings.extend(table_warnings)
             warnings.extend(vector_artwork_warnings(page, page_number=page_index + 1))
             # Surface non-prose material without changing the raw transcript.
             warnings.extend(
-                _special_material_warnings(
-                    page, page_lines, page_number=page_index + 1
-                )
+                _special_material_warnings(page, page_lines, page_number=page_index + 1)
             )
             # Diagnose the original extraction order before changing it.
             warnings.extend(
@@ -799,15 +800,20 @@ def extract_pdf(
                     "review the transcript against the source page"
                 )
             caption_indices, caption_warnings = caption_line_indices(
-                page, page_lines, table_regions, page_number=page_index + 1,
+                page,
+                page_lines,
+                table_regions,
+                page_number=page_index + 1,
             )
             warnings.extend(caption_warnings)
             footnote_indices = _footnote_line_indices(
-                page_lines, page_height=height,
+                page_lines,
+                page_height=height,
                 table_regions=table_regions,
             )
             equation_indices, equation_warnings = equation_line_indices(
-                page_lines, page_number=page_index + 1,
+                page_lines,
+                page_number=page_index + 1,
             )
             warnings.extend(equation_warnings)
             if footnote_indices:
@@ -860,11 +866,16 @@ def extract_pdf(
                         font_size=line["size"],
                         order=len(blocks),
                         kind=(
-                            "table" if _inside_table(bbox, table_regions)
-                            else "footnote" if line_index in footnote_indices
-                            else "caption" if line_index in caption_indices
-                            else "equation" if line_index in equation_indices
-                            else "heading" if re.match(
+                            "table"
+                            if _inside_table(bbox, table_regions)
+                            else "footnote"
+                            if line_index in footnote_indices
+                            else "caption"
+                            if line_index in caption_indices
+                            else "equation"
+                            if line_index in equation_indices
+                            else "heading"
+                            if re.match(
                                 r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
                                 r"introduction|preface|part\s+[\divxlcdm]+)\b",
                                 line["text"],
@@ -875,10 +886,14 @@ def extract_pdf(
                     )
                 )
         return ExtractedDocument(
-            title=title, author=author, toc=toc, spans=spans,
-            blocks=blocks, warnings=warnings, page_sizes=sizes
+            title=title,
+            author=author,
+            toc=toc,
+            spans=spans,
+            blocks=blocks,
+            warnings=warnings,
+            page_sizes=sizes,
         )
-
 
 
 def tesseract_languages() -> list[str] | None:
@@ -888,17 +903,23 @@ def tesseract_languages() -> list[str] | None:
     try:
         run = subprocess.run(
             ["tesseract", "--list-langs"],
-            capture_output=True, text=True, check=False, timeout=10,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired):
         return []
     if run.returncode != 0:
         return []
     output = run.stdout + "\n" + run.stderr
-    return sorted({
-        line.strip() for line in output.splitlines()
-        if line.strip() and not line.startswith("List of available languages")
-    })
+    return sorted(
+        {
+            line.strip()
+            for line in output.splitlines()
+            if line.strip() and not line.startswith("List of available languages")
+        }
+    )
 
 
 def missing_ocr_languages(configured: str, installed: list[str] | None) -> list[str]:

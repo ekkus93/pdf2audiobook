@@ -1,12 +1,11 @@
 """Conservative geometric reading order for clearly separated prose columns."""
+
 from __future__ import annotations
 
 import math
 
 
-def order_two_columns(
-    lines: list[dict], page_width: float
-) -> tuple[list[dict], bool]:
+def order_two_columns(lines: list[dict], page_width: float) -> tuple[list[dict], bool]:
     """Preserve all lines; reorder only sustained aligned prose columns.
 
     Full-width text acts as a section boundary. Sparse notes, tables, and
@@ -87,9 +86,10 @@ def order_two_columns(
         if bottom <= top:
             return region, False
         aligned = sum(
-            any(abs((a[1] + a[3] - b[1] - b[3]) / 2)
-                <= max(a[3] - a[1], b[3] - b[1]) * 0.75
-                for _, _, b in right)
+            any(
+                abs((a[1] + a[3] - b[1] - b[3]) / 2) <= max(a[3] - a[1], b[3] - b[1]) * 0.75
+                for _, _, b in right
+            )
             for _, _, a in left
         )
         if aligned < 3:

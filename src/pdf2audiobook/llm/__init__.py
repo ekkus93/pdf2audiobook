@@ -1,4 +1,5 @@
 """OpenAI-compatible LLM providers with explicit transport and privacy boundaries."""
+
 from __future__ import annotations
 
 import hashlib
@@ -31,7 +32,6 @@ class HeadingProposal(BaseModel):
 class StructureProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")
     headings: list[HeadingProposal] = Field(default_factory=list)
-
 
 
 class CleanupSuggestion(BaseModel):
@@ -111,12 +111,19 @@ def validate_endpoint(url: str, allow_remote: bool) -> str:
 
 class OpenAICompatibleProvider:
     def __init__(
-        self, *,
-        provider: str, base_url: str, model: str, allow_remote: bool,
-        api_key: str | None = None, timeout: float = 60.0,
+        self,
+        *,
+        provider: str,
+        base_url: str,
+        model: str,
+        allow_remote: bool,
+        api_key: str | None = None,
+        timeout: float = 60.0,
         transport: httpx.BaseTransport | None = None,
-        temperature: float = 0.1, max_retries: int = 3,
-        max_context_tokens: int | None = None, max_output_tokens: int = 1024,
+        temperature: float = 0.1,
+        max_retries: int = 3,
+        max_context_tokens: int | None = None,
+        max_output_tokens: int = 1024,
     ):
         self.provider = provider
         self.base_url = validate_endpoint(base_url, allow_remote)
@@ -129,7 +136,9 @@ class OpenAICompatibleProvider:
         self.request_count = 0
         self.last_usage: dict[str, int] = {}
         self.total_usage: dict[str, int] = {
-            "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
         }
         self._client = httpx.Client(
             timeout=timeout,
@@ -153,9 +162,9 @@ class OpenAICompatibleProvider:
             if not isinstance(models, list):
                 raise ValueError("invalid model list")
             names = [
-                item["id"] for item in models
-                if isinstance(item, dict) and isinstance(item.get("id"), str)
-                and item["id"].strip()
+                item["id"]
+                for item in models
+                if isinstance(item, dict) and isinstance(item.get("id"), str) and item["id"].strip()
             ]
             return list(dict.fromkeys(names))
         except (httpx.HTTPError, KeyError, ValueError, TypeError):
@@ -192,16 +201,12 @@ class OpenAICompatibleProvider:
         except (ValueError, TypeError):
             return False
         explanation = detail.casefold()
-        return (
-            "response_format" in explanation
-            and any(term in explanation for term in (
-                "not support", "unsupported", "unrecognized", "unknown", "invalid"
-            ))
+        return "response_format" in explanation and any(
+            term in explanation
+            for term in ("not support", "unsupported", "unrecognized", "unknown", "invalid")
         )
 
-    def validate_request_capacity(
-        self, *, instructions: str, document_text: str
-    ) -> None:
+    def validate_request_capacity(self, *, instructions: str, document_text: str) -> None:
         """Check capacity before cache/ledger reservations or any book-text upload."""
         # Conservatively bound tokenized text by its UTF-8 byte length.
         # Reserve fixed chat-role overhead and generation capacity as well.
@@ -212,7 +217,9 @@ class OpenAICompatibleProvider:
                 or self.max_context_tokens < self.max_output_tokens + 128
                 or len(instructions.encode("utf-8"))
                 + len(document_text.encode("utf-8"))
-                + self.max_output_tokens + 128 > self.max_context_tokens
+                + self.max_output_tokens
+                + 128
+                > self.max_context_tokens
             ):
                 raise LLMError("LLM request exceeds configured context and output reserve")
 
@@ -236,10 +243,7 @@ class OpenAICompatibleProvider:
             payload["max_tokens"] = self.max_output_tokens
         # A remote-content opt-in must be accompanied by a visible warning
         # before the first upload, not only after analysis has completed.
-        if (
-            not _loopback(urlparse(self.base_url).hostname)
-            and not self._remote_content_warned
-        ):
+        if not _loopback(urlparse(self.base_url).hostname) and not self._remote_content_warned:
             safe_provider = json.dumps(str(self.provider)[:80], ensure_ascii=True)
             safe_model = json.dumps(str(payload["model"])[:80], ensure_ascii=True)
             print(
@@ -253,9 +257,7 @@ class OpenAICompatibleProvider:
         retry_count = 0
         while True:
             try:
-                response = self._client.post(
-                    f"{self.base_url}/chat/completions", json=payload
-                )
+                response = self._client.post(f"{self.base_url}/chat/completions", json=payload)
                 if self._unsupported_json_mode(response) and not format_fallback_used:
                     # Older OpenAI-compatible local servers sometimes lack JSON mode.
                     # Output is still schema-validated by callers after decoding.
@@ -264,7 +266,7 @@ class OpenAICompatibleProvider:
                     continue
                 if response.status_code in (429, 502, 503, 504):
                     if retry_count < self.max_retries:
-                        time.sleep(min(0.2 * (2 ** retry_count), 2.0))
+                        time.sleep(min(0.2 * (2**retry_count), 2.0))
                         retry_count += 1
                         continue
                 response.raise_for_status()
@@ -294,21 +296,25 @@ class OpenAICompatibleProvider:
                 return decoded
             except httpx.TransportError:
                 if retry_count < self.max_retries:
-                    time.sleep(min(0.2 * (2 ** retry_count), 2.0))
+                    time.sleep(min(0.2 * (2**retry_count), 2.0))
                     retry_count += 1
                     continue
-                label = self.provider if self.provider in (
-                    "openai", "ollama", "llama-server"
-                ) else "provider"
+                label = (
+                    self.provider
+                    if self.provider in ("openai", "ollama", "llama-server")
+                    else "provider"
+                )
                 raise LLMError(f"{label} LLM transport failure") from None
             except LLMError:
                 raise
             except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError):
                 # Never print raw response bodies, exception chains or untrusted
                 # provider labels: an API can echo book text or secrets.
-                label = self.provider if self.provider in (
-                    "openai", "ollama", "llama-server"
-                ) else "provider"
+                label = (
+                    self.provider
+                    if self.provider in ("openai", "ollama", "llama-server")
+                    else "provider"
+                )
                 raise LLMError(f"{label} LLM request or JSON decoding failed") from None
 
 
@@ -331,17 +337,24 @@ def create_provider(
         base_url = choice.base_url or ""
         api_key = os.getenv(choice.api_key_env) if choice.api_key_env else None
     return OpenAICompatibleProvider(
-        provider=selected, base_url=base_url, model=choice.model,
-        allow_remote=remote_consent, api_key=api_key, transport=transport,
-        temperature=settings.llm.temperature, max_retries=settings.llm.max_retries,
+        provider=selected,
+        base_url=base_url,
+        model=choice.model,
+        allow_remote=remote_consent,
+        api_key=api_key,
+        transport=transport,
+        temperature=settings.llm.temperature,
+        max_retries=settings.llm.max_retries,
         max_context_tokens=settings.llm.max_context_tokens,
         max_output_tokens=settings.llm.max_output_tokens,
     )
 
 
-
 def _bounded_block_windows(
-    blocks: list[DocumentBlock], *, window_size: int, max_json_bytes: int,
+    blocks: list[DocumentBlock],
+    *,
+    window_size: int,
+    max_json_bytes: int,
     record: Callable[[DocumentBlock], dict[str, Any]],
 ) -> Iterator[tuple[int, list[DocumentBlock], str]]:
     """Bound all serialized source records and add read-only lookback when feasible.
@@ -362,7 +375,8 @@ def _bounded_block_windows(
         if preceding is not None:
             context = json.dumps(
                 {**record(preceding), "context_only": True},
-                ensure_ascii=True, separators=(",", ":"),
+                ensure_ascii=True,
+                separators=(",", ":"),
             )
             if len(context) + 1 + size <= max_json_bytes:
                 parts.insert(0, context)
@@ -379,9 +393,7 @@ def _bounded_block_windows(
             preceding = None
             yield index, [], ""
             continue
-        if window and (
-            len(window) >= window_size or size + 1 + entry_size > max_json_bytes
-        ):
+        if window and (len(window) >= window_size or size + 1 + entry_size > max_json_bytes):
             yield start, window, payload()
             preceding = window[-1]
             window, encoded, size = [], [], 2
@@ -400,25 +412,35 @@ def _diagnostic_block_id(candidate: str, known_ids: set[str]) -> str:
     Existing canonical IDs may help trace a rejected context-only candidate,
     but values that are unknown or contain non-identifier text are untrusted.
     """
-    if (candidate in known_ids and len(candidate) <= 80
-            and candidate.isascii()
-            and all(char.isalnum() or char in "-_:." for char in candidate)):
+    if (
+        candidate in known_ids
+        and len(candidate) <= 80
+        and candidate.isascii()
+        and all(char.isalnum() or char in "-_:." for char in candidate)
+    ):
         return candidate
     return "<unrecognized>"
 
 
 def detect_llm_headings(
-    blocks: list, provider: LLMProvider, *,
-    window_size: int = 60, chunk_tokens: int = 4000,
+    blocks: list,
+    provider: LLMProvider,
+    *,
+    window_size: int = 60,
+    chunk_tokens: int = 4000,
 ) -> tuple[set[str], list[str]]:
     """LLM may nominate existing IDs, not invent chapter text or new source spans."""
     approved: set[str] = set()
     warnings = []
     known_ids = {block.id for block in blocks}
     for start, window, snippet in _bounded_block_windows(
-        blocks, window_size=window_size, max_json_bytes=chunk_tokens,
+        blocks,
+        window_size=window_size,
+        max_json_bytes=chunk_tokens,
         record=lambda item: {
-            "id": item.id, "page": item.page_index + 1, "text": item.text,
+            "id": item.id,
+            "page": item.page_index + 1,
+            "text": item.text,
         },
     ):
         if not window:
@@ -459,7 +481,8 @@ def propose_llm_cleanup(
     blocks: list[DocumentBlock],
     provider: LLMProvider,
     *,
-    window_size: int = 40, chunk_tokens: int = 4000,
+    window_size: int = 40,
+    chunk_tokens: int = 4000,
     decisions: list[CleanupDecision] | None = None,
 ) -> tuple[list[CleanupEdit], list[str]]:
     """Suggest strictly anchored text-level OCR corrections; never auto-approve edits.
@@ -472,20 +495,29 @@ def propose_llm_cleanup(
     known_ids = {block.id for block in blocks}
 
     def audit(
-        block_id: str, status: Literal["rejected", "pending_review"],
-        reason_code: str, confidence: float | None = None,
+        block_id: str,
+        status: Literal["rejected", "pending_review"],
+        reason_code: str,
+        confidence: float | None = None,
         source: DocumentBlock | None = None,
     ) -> None:
         if decisions is not None:
-            decisions.append(CleanupDecision(
-                block_id=block_id, status=status, reason_code=reason_code,
-                confidence=confidence,
-                source_sha256=hashlib.sha256(source.text.encode("utf-8")).hexdigest()
-                if source is not None else None,
-            ))
+            decisions.append(
+                CleanupDecision(
+                    block_id=block_id,
+                    status=status,
+                    reason_code=reason_code,
+                    confidence=confidence,
+                    source_sha256=hashlib.sha256(source.text.encode("utf-8")).hexdigest()
+                    if source is not None
+                    else None,
+                )
+            )
 
     for start, window, snippet in _bounded_block_windows(
-        blocks, window_size=window_size, max_json_bytes=chunk_tokens,
+        blocks,
+        window_size=window_size,
+        max_json_bytes=chunk_tokens,
         record=lambda block: {"id": block.id, "text": block.text},
     ):
         if not window:
@@ -520,47 +552,49 @@ def propose_llm_cleanup(
                     "LLM cleanup references unknown/duplicate block "
                     + _diagnostic_block_id(suggestion.block_id, known_ids)
                 )
-                audit(_diagnostic_block_id(suggestion.block_id, known_ids),
-                      "rejected", "unknown_or_duplicate_block",
-                      suggestion.confidence, source)
+                audit(
+                    _diagnostic_block_id(suggestion.block_id, known_ids),
+                    "rejected",
+                    "unknown_or_duplicate_block",
+                    suggestion.confidence,
+                    source,
+                )
                 continue
             seen.add(suggestion.block_id)
             if suggestion.original != source.text:
                 warnings.append(f"LLM cleanup original does not match source {source.id}")
-                audit(source.id, "rejected", "source_text_mismatch",
-                      suggestion.confidence, source)
+                audit(source.id, "rejected", "source_text_mismatch", suggestion.confidence, source)
                 continue
             if suggestion.replacement == source.text:
-                audit(source.id, "rejected", "no_change",
-                      suggestion.confidence, source)
+                audit(source.id, "rejected", "no_change", suggestion.confidence, source)
                 continue
             if not suggestion.replacement.strip():
                 warnings.append(f"LLM cleanup attempted to delete source {source.id}")
-                audit(source.id, "rejected", "proposed_deletion",
-                      suggestion.confidence, source)
+                audit(source.id, "rejected", "proposed_deletion", suggestion.confidence, source)
                 continue
-            if SequenceMatcher(
-                None, source.text, suggestion.replacement, autojunk=False
-            ).ratio() < 0.85:
+            if (
+                SequenceMatcher(None, source.text, suggestion.replacement, autojunk=False).ratio()
+                < 0.85
+            ):
                 warnings.append(f"LLM cleanup modified too much text in {source.id}")
-                audit(source.id, "rejected", "excessive_change",
-                      suggestion.confidence, source)
+                audit(source.id, "rejected", "excessive_change", suggestion.confidence, source)
                 continue
             if suggestion.confidence < 0.80:
                 warnings.append(f"LLM cleanup confidence too low in {source.id}")
-                audit(source.id, "rejected", "low_confidence",
-                      suggestion.confidence, source)
+                audit(source.id, "rejected", "low_confidence", suggestion.confidence, source)
                 continue
             edits.append(
                 CleanupEdit(
-                    block_id=source.id, original=source.text,
+                    block_id=source.id,
+                    original=source.text,
                     replacement=suggestion.replacement,
-                    reason=suggestion.reason, confidence=suggestion.confidence,
-                    accepted=False, provider="llm",
+                    reason=suggestion.reason,
+                    confidence=suggestion.confidence,
+                    accepted=False,
+                    provider="llm",
                 )
             )
-            audit(source.id, "pending_review", "verified_proposal",
-                  suggestion.confidence, source)
+            audit(source.id, "pending_review", "verified_proposal", suggestion.confidence, source)
     return edits, warnings
 
 
@@ -581,15 +615,20 @@ class NarrationSuggestions(BaseModel):
 
 
 def propose_llm_narration(
-    blocks: list[DocumentBlock], provider: LLMProvider, *,
-    window_size: int = 40, chunk_tokens: int = 4000,
+    blocks: list[DocumentBlock],
+    provider: LLMProvider,
+    *,
+    window_size: int = 40,
+    chunk_tokens: int = 4000,
 ) -> tuple[list[NarrationSuggestion], list[str]]:
     """Return review-only, verified speech suggestions keyed to exact source lines."""
     suggestions: list[NarrationSuggestion] = []
     warnings: list[str] = []
     known_ids = {block.id for block in blocks}
     for start, window, snippet in _bounded_block_windows(
-        blocks, window_size=window_size, max_json_bytes=chunk_tokens,
+        blocks,
+        window_size=window_size,
+        max_json_bytes=chunk_tokens,
         record=lambda block: {"id": block.id, "text": block.text},
     ):
         if not window:
@@ -639,15 +678,22 @@ def propose_llm_narration(
     return suggestions, warnings
 
 
-
 class ClassificationSuggestion(BaseModel):
     """Advisory block classification; never an automatic text-removal decision."""
 
     model_config = ConfigDict(extra="forbid")
     block_id: str
     category: Literal[
-        "body", "heading", "running_header", "running_footer", "page_number",
-        "footnote", "caption", "table", "bibliography", "unknown",
+        "body",
+        "heading",
+        "running_header",
+        "running_footer",
+        "page_number",
+        "footnote",
+        "caption",
+        "table",
+        "bibliography",
+        "unknown",
     ]
     confidence: float = Field(ge=0, le=1)
     reason: str
@@ -659,18 +705,25 @@ class ClassificationSuggestions(BaseModel):
 
 
 def propose_llm_classification(
-    blocks: list[DocumentBlock], provider: LLMProvider, *,
-    window_size: int = 40, chunk_tokens: int = 4000,
+    blocks: list[DocumentBlock],
+    provider: LLMProvider,
+    *,
+    window_size: int = 40,
+    chunk_tokens: int = 4000,
 ) -> tuple[list[ClassificationSuggestion], list[str]]:
     """Identify possible non-prose material without altering the source transcript."""
     accepted: list[ClassificationSuggestion] = []
     warnings: list[str] = []
     known_ids = {block.id for block in blocks}
     for start, window, snippet in _bounded_block_windows(
-        blocks, window_size=window_size, max_json_bytes=chunk_tokens,
+        blocks,
+        window_size=window_size,
+        max_json_bytes=chunk_tokens,
         record=lambda block: {
-            "id": block.id, "page": block.page_index + 1,
-            "kind": block.kind, "text": block.text,
+            "id": block.id,
+            "page": block.page_index + 1,
+            "kind": block.kind,
+            "text": block.text,
         },
     ):
         if not window:

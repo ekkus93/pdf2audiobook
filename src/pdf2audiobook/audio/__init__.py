@@ -1,4 +1,5 @@
 """Audio chunk generation, caching, and single-encode chapter MP3 assembly."""
+
 from __future__ import annotations
 
 import io
@@ -78,7 +79,8 @@ def split_sentences(text: str, max_chars: int = 350) -> list[str]:
 
 
 def chunk_source_ranges(
-    chapter_text: str, chunks: list[str],
+    chapter_text: str,
+    chunks: list[str],
 ) -> list[tuple[int, int, bool]]:
     """Map normalized spoken chunks to exact source character ranges, in order."""
     words = list(re.finditer(r"\S+", chapter_text))
@@ -87,13 +89,11 @@ def chunk_source_ranges(
     previous_end = 0
     for chunk in chunks:
         parts = chunk.split()
-        group = words[cursor:cursor + len(parts)]
+        group = words[cursor : cursor + len(parts)]
         if not group or [match.group() for match in group] != parts:
             raise AudioError("Narration chunk source alignment failed")
         start, end = group[0].start(), group[-1].end()
-        paragraph_boundary = bool(
-            _PARAGRAPH_BREAK.search(chapter_text[previous_end:start])
-        )
+        paragraph_boundary = bool(_PARAGRAPH_BREAK.search(chapter_text[previous_end:start]))
         positions.append((start, end, paragraph_boundary))
         previous_end = end
         cursor += len(parts)
@@ -165,9 +165,16 @@ def read_wav(data: bytes, expected_rate: int) -> np.ndarray:
 
 
 def synthesize_chunks(
-    chapter_text: str, provider: TTSProvider, *,
-    model: str, voice: str, speed: float, pause_ms: int, cache: Path,
-    use_cache: bool = True, progress_file: Path | None = None,
+    chapter_text: str,
+    provider: TTSProvider,
+    *,
+    model: str,
+    voice: str,
+    speed: float,
+    pause_ms: int,
+    cache: Path,
+    use_cache: bool = True,
+    progress_file: Path | None = None,
 ) -> np.ndarray:
     """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
     samples: list[np.ndarray] = []
@@ -213,25 +220,33 @@ def synthesize_chunks(
     # The version marker invalidates older engine-agnostic cache keys.
     engine = f"{type(provider).__module__}.{type(provider).__qualname__}"
     identities = [
-        fingerprint("tts-wav-v2", engine, text, model, voice, speed, rate)
-        for text in chunks
+        fingerprint("tts-wav-v2", engine, text, model, voice, speed, rate) for text in chunks
     ]
     # The ledger is diagnostic; it never authorizes reuse without WAV and SHA-256 validation.
     # No source text, voice content, or absolute paths are persisted in the ledger.
     progress: _SynthesisProgress = {
         "schema_version": 1,
         "fingerprint": fingerprint(
-            "tts-progress-v3", digest_bytes(chapter_text.encode("utf-8")), identities,
-            model, voice, speed, rate,
-            pause_ms, chunk_limit,
+            "tts-progress-v3",
+            digest_bytes(chapter_text.encode("utf-8")),
+            identities,
+            model,
+            voice,
+            speed,
+            rate,
+            pause_ms,
+            chunk_limit,
         ),
         "total_chunks": len(chunks),
         "completed_chunks": 0,
         "status": "in_progress",
         "chunks": [
             {
-                "number": index + 1, "cache_key": identity, "status": "pending",
-                "source_start": ranges[index][0], "source_end": ranges[index][1],
+                "number": index + 1,
+                "cache_key": identity,
+                "status": "pending",
+                "source_start": ranges[index][0],
+                "source_end": ranges[index][1],
                 "paragraph_boundary_before": ranges[index][2],
                 "text_sha256": digest_bytes(chunks[index].encode("utf-8")),
             }
@@ -279,10 +294,7 @@ def synthesize_chunks(
                 # Short model chunks must not generate enormous cache entries.
                 # Reject oversized ndarray outputs before PCM conversion and
                 # also check serialized size for other provider buffer types.
-                if (
-                    isinstance(audio, np.ndarray)
-                    and audio.size > (_MAX_CACHED_WAV_BYTES - 44) // 2
-                ):
+                if isinstance(audio, np.ndarray) and audio.size > (_MAX_CACHED_WAV_BYTES - 44) // 2:
                     raise AudioError("TTS chunk exceeds safe WAV cache limit")
                 encoded = wav_bytes(audio, rate)
                 if len(encoded) > _MAX_CACHED_WAV_BYTES:
@@ -301,9 +313,13 @@ def synthesize_chunks(
                 if progress_file is not None:
                     write_json(progress_file, progress)
                 raise
-        progress["chunks"][idx].update({
-            "sha256": checksum, "bytes": encoded_size, "status": "completed",
-        })
+        progress["chunks"][idx].update(
+            {
+                "sha256": checksum,
+                "bytes": encoded_size,
+                "status": "completed",
+            }
+        )
         progress["completed_chunks"] += 1
         if progress_file is not None:
             write_json(progress_file, progress)
@@ -314,7 +330,6 @@ def synthesize_chunks(
     if progress_file is not None:
         write_json(progress_file, progress)
     return np.concatenate(samples)
-
 
 
 def _write_chapter_wav(samples: np.ndarray, sample_rate: int, target: Path) -> None:
@@ -345,7 +360,7 @@ def _write_chapter_wav(samples: np.ndarray, sample_rate: int, target: Path) -> N
             out.setsampwidth(2)
             out.setframerate(sample_rate)
             for offset in range(0, audio.size, 65536):
-                part = audio[offset:offset + 65536]
+                part = audio[offset : offset + 65536]
                 if not np.isfinite(part).all():
                     raise AudioError("TTS returned empty/nonfinite audio samples")
                 pcm = (np.clip(part, -1, 1) * 32767).astype("<i2")
@@ -366,9 +381,16 @@ def _safe_chapter_workspace(parent: Path) -> Iterator[str]:
 
 
 def encode_mp3(
-    samples: np.ndarray, sample_rate: int, output: Path, *,
-    bitrate: str, target_rate: int, title: str, artist: str | None,
-    album: str, track: int,
+    samples: np.ndarray,
+    sample_rate: int,
+    output: Path,
+    *,
+    bitrate: str,
+    target_rate: int,
+    title: str,
+    artist: str | None,
+    album: str,
+    track: int,
 ) -> Path:
     """Encode once from PCM to MP3, tag and atomically publish final file."""
     if shutil.which("ffmpeg") is None:
@@ -382,18 +404,31 @@ def encode_mp3(
         tmp_mp3 = Path(temp_dir) / "chapter.mp3"
         _write_chapter_wav(samples, sample_rate, wav_path)
         command = [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
-            "-i", str(wav_path), "-ar", str(target_rate), "-ac", "1",
-            "-b:a", bitrate, str(tmp_mp3)
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(wav_path),
+            "-ar",
+            str(target_rate),
+            "-ac",
+            "1",
+            "-b:a",
+            bitrate,
+            str(tmp_mp3),
         ]
         try:
             result = subprocess.run(
-                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                check=False, timeout=1800
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=1800
             )
         except subprocess.TimeoutExpired:
             # Third-party exception text can expose output paths or PDF-derived data.
-            raise AudioError("FFmpeg encoding timed out; check the audio and system resources") from None
+            raise AudioError(
+                "FFmpeg encoding timed out; check the audio and system resources"
+            ) from None
         except OSError:
             raise AudioError("Cannot execute FFmpeg; check installation and permissions") from None
         if result.returncode != 0 or not tmp_mp3.is_file():

@@ -2,6 +2,7 @@
 
 Raw blocks are immutable. Cleanup decisions are stored as audited edits.
 """
+
 from __future__ import annotations
 
 import math
@@ -34,21 +35,19 @@ def _number_value(raw: str) -> tuple[int, str] | None:
     roman = raw.upper()
     if not roman or not CANONICAL_ROMAN.fullmatch(roman):
         return None
-    values = {"I": 1, "V": 5, "X": 10, "L": 50,
-              "C": 100, "D": 500, "M": 1000}
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
     total = 0
     for index, symbol in enumerate(roman):
         number = values[symbol]
-        total += -number if index + 1 < len(roman) and (
-            number < values[roman[index + 1]]
-        ) else number
+        total += (
+            -number if index + 1 < len(roman) and (number < values[roman[index + 1]]) else number
+        )
     return total, "roman"
 
 
 def _aligned_number_positions(first: float, second: float) -> bool:
     """Allow fixed placement or mirrored odd/even page-number positions."""
     return abs(first - second) <= 0.06 or abs(first + second - 1) <= 0.06
-
 
 
 def _valid_bbox(box: object) -> bool:
@@ -82,8 +81,12 @@ def _adjacent_body_line(
     x0, y0, x1, y1 = block.bbox
     line_height = max(1.0, y1 - y0)
     for other in page_blocks:
-        if (other.id == block.id or other.bbox is None
-                or not _valid_bbox(other.bbox) or not other.text.strip()):
+        if (
+            other.id == block.id
+            or other.bbox is None
+            or not _valid_bbox(other.bbox)
+            or not other.text.strip()
+        ):
             continue
         ox0, oy0, ox1, oy1 = other.bbox
         if band == "header":
@@ -97,9 +100,7 @@ def _adjacent_body_line(
         # is stronger evidence that the two lines form one body paragraph.
         x_overlap = min(x1, ox1) - max(x0, ox0)
         narrow = max(1.0, min(x1 - x0, ox1 - ox0))
-        if abs(ox0 - x0) <= max(18.0, 1.5 * line_height) or (
-            x_overlap >= 0.5 * narrow
-        ):
+        if abs(ox0 - x0) <= max(18.0, 1.5 * line_height) or (x_overlap >= 0.5 * narrow):
             return True
     return False
 
@@ -131,6 +132,7 @@ def pagination_cleanup(
             and math.isfinite(value)
             for value in dimensions
         )
+
     for block in blocks:
         blocks_by_page[block.page_index].append(block)
         if not block.bbox or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
@@ -143,9 +145,7 @@ def pagination_cleanup(
             continue
         height = sizes[block.page_index][1]
         top, bottom = block.bbox[1], block.bbox[3]
-        band = "header" if bottom < height * 0.12 else (
-            "footer" if top > height * 0.88 else None
-        )
+        band = "header" if bottom < height * 0.12 else ("footer" if top > height * 0.88 else None)
         if not band:
             continue
         # Fail closed when the apparent margin element is continuous with
@@ -158,20 +158,50 @@ def pagination_cleanup(
         # headings. These can legitimately occur in a page's margin band.
         if block.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
             continue
-        if raw.startswith((
-            '"', "'", "“", "‘", "«", "‹", "„", "‚", "「", "『", "《",
-            "•", "—", "–", "(", "[",
-        )):
+        if raw.startswith(
+            (
+                '"',
+                "'",
+                "“",
+                "‘",
+                "«",
+                "‹",
+                "„",
+                "‚",
+                "「",
+                "『",
+                "《",
+                "•",
+                "—",
+                "–",
+                "(",
+                "[",
+            )
+        ):
             continue
         if raw.startswith(("- ", "− ")):
             # Hyphen-led dialogue is substantive even when it repeats in margins.
             continue
         # A closing quote or unfinished dialogue clause is also prose, not
         # a title/folio, even when a short fragment repeats in a margin.
-        if raw.endswith((
-            '"', "'", "”", "’", "»", "›", "“", "‘", "」", "』", "》",
-            ",", ";", "—",
-        )):
+        if raw.endswith(
+            (
+                '"',
+                "'",
+                "”",
+                "’",
+                "»",
+                "›",
+                "“",
+                "‘",
+                "」",
+                "』",
+                "》",
+                ",",
+                ";",
+                "—",
+            )
+        ):
             continue
         # Short one-word dialogue or complete sentences can recur in page
         # margins; punctuation is stronger evidence of prose than repetition
@@ -189,8 +219,7 @@ def pagination_cleanup(
             continue
         # A full sentence or extended prose in the margin is not safe to
         # classify as a running title based on repetition alone.
-        if (len(raw.split()) >= 8 or
-                (len(raw.split()) >= 3 and raw.endswith((".", "?", "!", "…")))):
+        if len(raw.split()) >= 8 or (len(raw.split()) >= 3 and raw.endswith((".", "?", "!", "…"))):
             continue
         # Isolated list labels can repeat at page starts without being headers.
         if re.match(r"^(?:\(?\d{1,3}|[A-Za-z]|[IVXLCDMivxlcdm]{1,7})[.)](?:\s|$)", raw):
@@ -208,9 +237,7 @@ def pagination_cleanup(
                 and other.text.strip()
                 and other.bbox[0] >= block.bbox[2]
                 and 0 <= other.bbox[0] - block.bbox[2] <= sizes[block.page_index][0] * 0.12
-                and abs(other.bbox[1] - block.bbox[1]) <= max(
-                    5.0, block.bbox[3] - block.bbox[1]
-                )
+                and abs(other.bbox[1] - block.bbox[1]) <= max(5.0, block.bbox[3] - block.bbox[1])
                 for other in blocks_by_page[block.page_index]
             ):
                 continue
@@ -220,49 +247,41 @@ def pagination_cleanup(
             width = sizes[block.page_index][0]
             midpoint = (block.bbox[0] + block.bbox[2]) / 2
             position = midpoint / width if width > 0 else 0.5
-            if not (position <= 0.09 or position >= 0.91 or
-                    0.38 <= position <= 0.62):
+            if not (position <= 0.09 or position >= 0.91 or 0.38 <= position <= 0.62):
                 continue
         candidates[block.id] = (block, band)
         width = sizes[block.page_index][0]
         if width > 0 and height > 0:
             x_center = (block.bbox[0] + block.bbox[2]) / (2 * width)
             y_center = (block.bbox[1] + block.bbox[3]) / (2 * height)
-            text_occurrences[(band, val)].append(
-                (block.page_index, x_center, y_center)
-            )
+            text_occurrences[(band, val)].append((block.page_index, x_center, y_center))
         parsed = _number_value(raw)
         if parsed is not None:
             width = sizes[block.page_index][0]
             position = (block.bbox[0] + block.bbox[2]) / (2 * width)
-            numbered[band].append(
-                (block.page_index, parsed[0], position, parsed[1])
-            )
+            numbered[band].append((block.page_index, parsed[0], position, parsed[1]))
     # More than one standalone numeral in a single margin band on a page
     # is ambiguous (often a numbered list or page-local references), not
     # reliable evidence of one running folio. Do not use those numerals to
     # corroborate a sequence on adjacent pages either.
     numeric_counts: dict[tuple[str, int], int] = defaultdict(int)
     for block in blocks:
-        if (block.bbox is None or not _valid_bbox(block.bbox)
-                or not valid_page(block.page_index)):
+        if block.bbox is None or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
         band = (
-            "header" if block.bbox[3] < 0.12 * height else
-            "footer" if block.bbox[1] > 0.88 * height else None
+            "header"
+            if block.bbox[3] < 0.12 * height
+            else "footer"
+            if block.bbox[1] > 0.88 * height
+            else None
         )
         if band and _number_value(block.text.strip()) is not None:
             numeric_counts[(band, block.page_index)] += 1
-    ambiguous_numeric_bands = {
-        key for key, count in numeric_counts.items() if count > 1
-    }
+    ambiguous_numeric_bands = {key for key, count in numeric_counts.items() if count > 1}
     sequential_pages: dict[str, set[int]] = defaultdict(set)
     for band, entries in numbered.items():
-        entries = [
-            entry for entry in entries
-            if (band, entry[0]) not in ambiguous_numeric_bands
-        ]
+        entries = [entry for entry in entries if (band, entry[0]) not in ambiguous_numeric_bands]
         by_key: dict[tuple[int, int, str], list[float]] = defaultdict(list)
         for page, folio_number, position, notation in entries:
             by_key[(page, folio_number, notation)].append(position)
@@ -275,16 +294,11 @@ def pagination_cleanup(
                     sequential_pages[band].update((page, page + 1))
                 else:
                     # Two-page Roman sequences may be section markers.
-                    final_positions = by_key.get(
-                        (page + 2, folio_number + 2, notation), []
-                    )
+                    final_positions = by_key.get((page + 2, folio_number + 2, notation), [])
                     if any(
-                        _aligned_number_positions(next_position, final)
-                        for final in final_positions
+                        _aligned_number_positions(next_position, final) for final in final_positions
                     ):
-                        sequential_pages[band].update(
-                            (page, page + 1, page + 2)
-                        )
+                        sequential_pages[band].update((page, page + 1, page + 2))
     edits = []
     for block, band in candidates.values():
         bbox = block.bbox
@@ -324,10 +338,16 @@ def pagination_cleanup(
             reason = "repeated running " + band
         else:
             continue
-        edits.append(CleanupEdit(
-            block_id=block.id, original=block.text, replacement="",
-            reason=reason, confidence=0.98, accepted=True
-        ))
+        edits.append(
+            CleanupEdit(
+                block_id=block.id,
+                original=block.text,
+                replacement="",
+                reason=reason,
+                confidence=0.98,
+                accepted=True,
+            )
+        )
     return edits
 
 
@@ -344,8 +364,10 @@ def propose_chapters(
     # Typography is supporting evidence for unlabeled prose headings. Require
     # substantial size contrast with the body and reject sentence-like prose.
     body_sizes = sorted(
-        float(block.font_size) for block in blocks
-        if block.id not in omitted and block.font_size is not None
+        float(block.font_size)
+        for block in blocks
+        if block.id not in omitted
+        and block.font_size is not None
         and 5 <= float(block.font_size) <= 40
     )
     typical_size = body_sizes[(len(body_sizes) - 1) // 2] if len(body_sizes) >= 3 else None
@@ -355,16 +377,23 @@ def propose_chapters(
             continue
         text = block.text.strip()
         is_typographic_heading = (
-            typical_size is not None and block.font_size is not None
+            typical_size is not None
+            and block.font_size is not None
             and math.isfinite(float(block.font_size))
             and float(block.font_size) >= max(typical_size * 1.35, typical_size + 3)
-            and 1 <= len(text.split()) <= 9 and len(text) <= 90
+            and 1 <= len(text.split()) <= 9
+            and len(text) <= 90
             and not text.endswith((".", "?", "!", ",", ";", ":"))
-            and not text.isdecimal() and block.kind not in {"table", "footnote", "caption", "equation", "list"}
+            and not text.isdecimal()
+            and block.kind not in {"table", "footnote", "caption", "equation", "list"}
         )
         if is_typographic_heading:
             typography_ids.add(i)
-        if HEADING.match(text) or block.id in (extra_heading_ids or set()) or is_typographic_heading:
+        if (
+            HEADING.match(text)
+            or block.id in (extra_heading_ids or set())
+            or is_typographic_heading
+        ):
             heading_indices.append(i)
     # Combine confirmed bookmark anchors with textual headings. Some books mix
     # numbered headings and ornamental titles; do not discard the TOC merely
@@ -380,9 +409,13 @@ def propose_chapters(
             continue
         depth, title, page_num = entry[:3]
         if (
-            isinstance(depth, bool) or not isinstance(depth, int)
-            or isinstance(page_num, bool) or not isinstance(page_num, int)
-            or depth < 1 or page_num < 1 or not isinstance(title, str)
+            isinstance(depth, bool)
+            or not isinstance(depth, int)
+            or isinstance(page_num, bool)
+            or not isinstance(page_num, int)
+            or depth < 1
+            or page_num < 1
+            or not isinstance(title, str)
         ):
             malformed_bookmarks += 1
             continue
@@ -397,7 +430,8 @@ def propose_chapters(
     for title, page_num in valid_bookmarks:
         normalized = " ".join(title.casefold().split())
         matches = [
-            i for i in heading_indices
+            i
+            for i in heading_indices
             if blocks[i].id not in omitted
             and " ".join(blocks[i].text.casefold().split()) == normalized
         ]
@@ -421,25 +455,20 @@ def propose_chapters(
         if not title_normalized:
             continue
         matching = [
-            i for i, block in enumerate(blocks)
+            i
+            for i, block in enumerate(blocks)
             if block.id not in omitted
             and " ".join(block.text.casefold().split()) == title_normalized
         ]
         exact = [i for i in matching if blocks[i].page_index == page_index]
         # A TOC page number may refer to printed rather than physical pages.
         # Correct only a unique nearby title, never a duplicated phrase.
-        nearby = [
-            i for i in matching
-            if abs(blocks[i].page_index - page_index) <= 2
-        ]
-        match = exact[0] if len(exact) == 1 else (
-            nearby[0] if not exact and len(nearby) == 1 else None
+        nearby = [i for i in matching if abs(blocks[i].page_index - page_index) <= 2]
+        match = (
+            exact[0] if len(exact) == 1 else (nearby[0] if not exact and len(nearby) == 1 else None)
         )
         if match is None and not exact and not nearby and inferred_offset is not None:
-            shifted = [
-                i for i in matching
-                if blocks[i].page_index == page_index + inferred_offset
-            ]
+            shifted = [i for i in matching if blocks[i].page_index == page_index + inferred_offset]
             if len(shifted) == 1:
                 match = shifted[0]
         if match is not None:
@@ -466,8 +495,10 @@ def propose_chapters(
     # Removed pagination noise above the first heading (e.g. a running header)
     # is not front matter. Fold it into the first chapter rather than creating
     # an empty, low-confidence chapter that blocks synthesis.
-    noise_prefix = bool(heading_indices) and heading_indices[0] != 0 and all(
-        block.id in omitted for block in blocks[:heading_indices[0]]
+    noise_prefix = (
+        bool(heading_indices)
+        and heading_indices[0] != 0
+        and all(block.id in omitted for block in blocks[: heading_indices[0]])
     )
     starts = ([0] if 0 not in heading_indices and not noise_prefix else []) + heading_indices
     if not heading_indices:
@@ -484,43 +515,56 @@ def propose_chapters(
         elif start in heading_indices:
             name = bookmark_titles.get(start, blocks[start].text.strip())
             confidence = (
-                0.95 if start in bookmark_titles and not any(
+                0.95
+                if start in bookmark_titles
+                and not any(
                     f"TOC entry {bookmark_titles[start]!r} points" in warning
                     for warning in warnings
-                ) else 0.85 if start in bookmark_titles
-                else 0.82 if start in typography_ids else 0.9
+                )
+                else 0.85
+                if start in bookmark_titles
+                else 0.82
+                if start in typography_ids
+                else 0.9
             )
             evidence = (
                 ["PDF bookmark/TOC matched unique source title"]
                 if start in bookmark_titles
                 else ["typographic size contrast with body text"]
-                if start in typography_ids else ["explicit heading text"]
+                if start in typography_ids
+                else ["explicit heading text"]
             )
         else:
             name = "Full Book"
             confidence = 0.5
             evidence = ["explicit single chapter override"]
-        chapters.append(Chapter(
-            id=f"c{number:04d}", number=number, title=name,
-            start_block=0 if number == 1 else start, end_block=end, confidence=confidence,
-            evidence=evidence
-        ))
+        chapters.append(
+            Chapter(
+                id=f"c{number:04d}",
+                number=number,
+                title=name,
+                start_block=0 if number == 1 else start,
+                end_block=end,
+                confidence=confidence,
+                evidence=evidence,
+            )
+        )
     return chapters, warnings
 
 
-def chapter_text(
-    blocks: list[DocumentBlock], chapter: Chapter, omitted: set[str]
-) -> str:
+def chapter_text(blocks: list[DocumentBlock], chapter: Chapter, omitted: set[str]) -> str:
     """Only audibly retain blocks not removed by accepted audited edits."""
-    return "\n".join(
-        block.text for block in blocks[chapter.start_block:chapter.end_block]
-        if block.id not in omitted
-    ).strip() + "\n"
+    return (
+        "\n".join(
+            block.text
+            for block in blocks[chapter.start_block : chapter.end_block]
+            if block.id not in omitted
+        ).strip()
+        + "\n"
+    )
 
 
-def validate_chapter_coverage(
-    blocks: list[DocumentBlock], chapters: list[Chapter]
-) -> None:
+def validate_chapter_coverage(blocks: list[DocumentBlock], chapters: list[Chapter]) -> None:
     """Chapter boundaries are ordered, contiguous, nonempty, and cover every source block."""
     if not chapters:
         raise ExtractionError("Manifest does not contain any chapters")
@@ -592,11 +636,9 @@ def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
     from pdf2audiobook.workspace import atomic_write, digest_bytes, digest_file, write_json
 
     report = chapter_coverage_report(manifest)
-    replacements = {
-        edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted
-    }
+    replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
     for chapter in manifest.chapters:
-        chapter_blocks = manifest.blocks[chapter.start_block:chapter.end_block]
+        chapter_blocks = manifest.blocks[chapter.start_block : chapter.end_block]
         content = reflow_narration_lines(chapter_blocks, replacements).encode("utf-8")
         path = folder / "chapters" / f"{chapter.number:03d}.txt"
         # Compare existing chapter text using bounded reads. read_bytes()
@@ -604,7 +646,6 @@ def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
         if not path.is_file() or digest_file(path) != digest_bytes(content):
             atomic_write(path, content)
     write_json(folder / "coverage.json", report)
-
 
 
 def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
@@ -631,10 +672,7 @@ def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
     vertical_gap = after.bbox[1] - before.bbox[3]
     left_shift = after.bbox[0] - before.bbox[0]
     # Preserve indented paragraphs, section breaks and column transitions.
-    return (
-        -2 <= vertical_gap <= 0.8 * line_height
-        and abs(left_shift) <= max(12.0, line_height)
-    )
+    return -2 <= vertical_gap <= 0.8 * line_height and abs(left_shift) <= max(12.0, line_height)
 
 
 def reflow_narration_lines(

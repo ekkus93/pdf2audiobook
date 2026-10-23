@@ -98,29 +98,29 @@ class BookLLMBudgetLedger:
 
     @staticmethod
     def _check(
-        stats: dict, *, max_requests: int | None,
-        max_tokens: int | None, max_usd: float | None,
+        stats: dict,
+        *,
+        max_requests: int | None,
+        max_tokens: int | None,
+        max_usd: float | None,
         postflight: bool = False,
     ) -> None:
         # An exactly exhausted limit may return its already-paid response.
         # A subsequent reservation still rejects equality before the next call.
         if max_requests is not None and stats["requests_started"] >= max_requests:
             raise LLMError("Per-book LLM request budget exhausted")
-        if (max_tokens is not None or max_usd is not None) and stats[
-            "unresolved_requests"
-        ]:
+        if (max_tokens is not None or max_usd is not None) and stats["unresolved_requests"]:
             raise LLMError(
                 "Per-book LLM budget has unresolved requests; inspect ledger before retrying"
             )
         if max_tokens is not None and (
-            stats["reported_tokens"] > max_tokens if postflight
+            stats["reported_tokens"] > max_tokens
+            if postflight
             else stats["reported_tokens"] >= max_tokens
         ):
             raise LLMError("Per-book LLM reported token budget reached or exceeded")
         if max_usd is not None and stats["unpriced_requests"]:
-            raise LLMError(
-                "Per-book cost budget has unpriced earlier requests; inspect ledger"
-            )
+            raise LLMError("Per-book cost budget has unpriced earlier requests; inspect ledger")
         if max_usd is not None:
             cost = Decimal(str(stats.get("_exact_cost_usd", stats["estimated_cost_usd"])))
             limit = Decimal(str(max_usd))
@@ -137,15 +137,22 @@ class BookLLMBudgetLedger:
             raise LLMError("Invalid per-book LLM budget ledger") from None
 
     def reserve(
-        self, *, request_hash: str, provider_hash: str,
-        max_requests: int | None, max_tokens: int | None, max_usd: float | None,
+        self,
+        *,
+        request_hash: str,
+        provider_hash: str,
+        max_requests: int | None,
+        max_tokens: int | None,
+        max_usd: float | None,
     ) -> int:
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 self._check(
-                    self._stats(connection), max_requests=max_requests,
-                    max_tokens=max_tokens, max_usd=max_usd,
+                    self._stats(connection),
+                    max_requests=max_requests,
+                    max_tokens=max_tokens,
+                    max_usd=max_usd,
                 )
                 cursor = connection.execute(
                     "INSERT INTO calls (request_hash, provider_hash, status) "
@@ -160,8 +167,12 @@ class BookLLMBudgetLedger:
             raise LLMError("Cannot reserve per-book LLM budget") from None
 
     def settle(
-        self, call_id: int, *, usage: dict | None,
-        input_rate: float | None, output_rate: float | None,
+        self,
+        call_id: int,
+        *,
+        usage: dict | None,
+        input_rate: float | None,
+        output_rate: float | None,
     ) -> None:
         # Validate each provider counter independently before using any of
         # them for persistent accounting. A failed or malformed response is
@@ -172,10 +183,14 @@ class BookLLMBudgetLedger:
             completion = usage.get("completion_tokens")
             total = usage.get("total_tokens")
             if (
-                isinstance(prompt, int) and not isinstance(prompt, bool)
-                and isinstance(completion, int) and not isinstance(completion, bool)
-                and isinstance(total, int) and not isinstance(total, bool)
-                and prompt >= 0 and completion >= 0
+                isinstance(prompt, int)
+                and not isinstance(prompt, bool)
+                and isinstance(completion, int)
+                and not isinstance(completion, bool)
+                and isinstance(total, int)
+                and not isinstance(total, bool)
+                and prompt >= 0
+                and completion >= 0
                 # SQLite INTEGER is signed 64-bit. Never mark a provider
                 # report verified if it cannot be persisted without overflow.
                 and prompt <= (1 << 63) - 1
@@ -196,13 +211,18 @@ class BookLLMBudgetLedger:
                 input_price = Decimal(str(input_rate))
                 output_price = Decimal(str(output_rate))
                 if (
-                    input_price.is_finite() and input_price >= 0
-                    and output_price.is_finite() and output_price >= 0
+                    input_price.is_finite()
+                    and input_price >= 0
+                    and output_price.is_finite()
+                    and output_price >= 0
                 ):
-                    price = str((
-                        Decimal(verified["prompt_tokens"]) * input_price
-                        + Decimal(verified["completion_tokens"]) * output_price
-                    ) / Decimal(1_000_000))
+                    price = str(
+                        (
+                            Decimal(verified["prompt_tokens"]) * input_price
+                            + Decimal(verified["completion_tokens"]) * output_price
+                        )
+                        / Decimal(1_000_000)
+                    )
             except (InvalidOperation, ValueError, TypeError):
                 pass  # Preserve token counts; mark this request unpriced.
         try:
@@ -216,7 +236,8 @@ class BookLLMBudgetLedger:
                         verified["prompt_tokens"] if verified is not None else None,
                         verified["completion_tokens"] if verified is not None else None,
                         verified["total_tokens"] if verified is not None else None,
-                        price, call_id,
+                        price,
+                        call_id,
                     ),
                 )
                 if result.rowcount != 1:
@@ -228,8 +249,10 @@ class BookLLMBudgetLedger:
         try:
             with self._connect() as connection:
                 self._check(
-                    self._stats(connection), max_requests=None,
-                    max_tokens=max_tokens, max_usd=max_usd,
+                    self._stats(connection),
+                    max_requests=None,
+                    max_tokens=max_tokens,
+                    max_usd=max_usd,
                     postflight=True,
                 )
         except (sqlite3.Error, InvalidOperation):
