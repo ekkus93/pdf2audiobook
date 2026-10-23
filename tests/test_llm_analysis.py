@@ -30,9 +30,7 @@ def test_llm_assists_with_nonstandard_chapter_heading(monkeypatch, tmp_path: Pat
                 ]
             }
 
-    monkeypatch.setattr(
-        "pdf2audiobook.pipeline.create_provider", lambda settings: MockProvider()
-    )
+    monkeypatch.setattr("pdf2audiobook.pipeline.create_provider", lambda settings: MockProvider())
     settings = Settings()
     settings.general.output_dir = str(tmp_path / "out")
     settings.pdf.ocr = "never"

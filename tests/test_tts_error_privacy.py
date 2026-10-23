@@ -47,8 +47,12 @@ def test_provider_error_does_not_echo_narration_and_marks_progress_failed(tmp_pa
         synthesize_chunks(
             f"This is a private fictional example. {PRIVATE}",
             FailingProvider(),
-            model="fixture", voice="fixture", speed=1.0,
-            pause_ms=0, cache=tmp_path / "cache", progress_file=progress,
+            model="fixture",
+            voice="fixture",
+            speed=1.0,
+            pause_ms=0,
+            cache=tmp_path / "cache",
+            progress_file=progress,
         )
     assert str(raised.value) == "TTS synthesis failed; verify model and voice"
     assert PRIVATE not in str(raised.value)

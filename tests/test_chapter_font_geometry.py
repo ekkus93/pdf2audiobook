@@ -12,8 +12,12 @@ from pdf2audiobook.models import DocumentBlock
 
 def paragraph(number: int, text: str, font_size: float) -> DocumentBlock:
     return DocumentBlock(
-        id=f"p{number}", span_ids=[f"p{number}"],
-        text=text, page_index=0, font_size=font_size, kind="paragraph",
+        id=f"p{number}",
+        span_ids=[f"p{number}"],
+        text=text,
+        page_index=0,
+        font_size=font_size,
+        kind="paragraph",
     )
 
 
@@ -37,9 +41,7 @@ def test_finite_typographic_contrast_still_creates_heading():
         paragraph(4, "A Valid Unnumbered Heading", 20.0),
         paragraph(5, "Another normal paragraph", 12.0),
     ]
-    chapters, warnings = propose_chapters(
-        blocks, set(), [], Chapters(allow_single_chapter=False)
-    )
+    chapters, warnings = propose_chapters(blocks, set(), [], Chapters(allow_single_chapter=False))
     assert [chapter.start_block for chapter in chapters] == [0, 3]
     assert chapters[1].title == "A Valid Unnumbered Heading"
     assert chapters[1].evidence == ["typographic size contrast with body text"]

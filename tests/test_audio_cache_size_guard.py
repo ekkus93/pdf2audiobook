@@ -56,8 +56,13 @@ def test_oversized_cached_chunk_is_regenerated_without_reading_it(
     provider = StubTTS()
     cache = tmp_path / "cache"
     first = synthesize_chunks(
-        "A short synthetic passage.", provider, model="fixture", voice="voice",
-        speed=1.0, pause_ms=0, cache=cache,
+        "A short synthetic passage.",
+        provider,
+        model="fixture",
+        voice="voice",
+        speed=1.0,
+        pause_ms=0,
+        cache=cache,
     )
     assert provider.calls == 1
     assert first.size > 0
@@ -81,8 +86,13 @@ def test_oversized_cached_chunk_is_regenerated_without_reading_it(
     monkeypatch.setattr(Path, "stat", fake_stat)
     monkeypatch.setattr(Path, "read_bytes", guarded_read)
     second = synthesize_chunks(
-        "A short synthetic passage.", provider, model="fixture", voice="voice",
-        speed=1.0, pause_ms=0, cache=cache,
+        "A short synthetic passage.",
+        provider,
+        model="fixture",
+        voice="voice",
+        speed=1.0,
+        pause_ms=0,
+        cache=cache,
     )
     assert provider.calls == 2
     assert np.array_equal(first, second)

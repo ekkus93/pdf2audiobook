@@ -15,9 +15,7 @@ def _pdf_with_shapes(path: Path, rectangles: list[fitz.Rect], caption_y: int) ->
     page.insert_text((55, 130), "Another full line of ordinary prose.", fontsize=12)
     for rect in rectangles:
         page.draw_rect(rect, color=(0, 0, 0), width=1)
-    page.insert_text(
-        (100, caption_y), "Figure 1: A vector-only diagram", fontsize=11
-    )
+    page.insert_text((100, caption_y), "Figure 1: A vector-only diagram", fontsize=11)
     document.save(path)
     document.close()
 

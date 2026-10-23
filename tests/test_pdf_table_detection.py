@@ -1,4 +1,5 @@
 """Non-destructive table detection with synthetic vector-grid PDFs."""
+
 from pathlib import Path
 
 import fitz

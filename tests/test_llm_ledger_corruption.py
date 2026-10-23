@@ -11,7 +11,9 @@ from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 @pytest.mark.parametrize("column", ["prompt_tokens", "completion_tokens", "total_tokens"])
 @pytest.mark.parametrize("bad_value", ["not-an-integer", 1.25, b"binary-counter"])
 def test_corrupt_complete_counter_blocks_reporting_and_reservation(
-    tmp_path, column, bad_value,
+    tmp_path,
+    column,
+    bad_value,
 ):
     path = tmp_path / "book-llm.sqlite3"
     ledger = BookLLMBudgetLedger(path)
@@ -24,16 +26,24 @@ def test_corrupt_complete_counter_blocks_reporting_and_reservation(
             "INSERT INTO calls (request_hash, provider_hash, status, "
             "prompt_tokens, completion_tokens, total_tokens) "
             "VALUES (?, ?, 'complete', ?, ?, ?)",
-            ("request", "provider", counters["prompt_tokens"],
-             counters["completion_tokens"], counters["total_tokens"]),
+            (
+                "request",
+                "provider",
+                counters["prompt_tokens"],
+                counters["completion_tokens"],
+                counters["total_tokens"],
+            ),
         )
 
     with pytest.raises(LLMError, match="Invalid per-book LLM budget ledger entries"):
         ledger.totals()
     with pytest.raises(LLMError, match="Invalid per-book LLM budget ledger entries"):
         ledger.reserve(
-            request_hash="next", provider_hash="provider",
-            max_requests=10, max_tokens=100, max_usd=None,
+            request_hash="next",
+            provider_hash="provider",
+            max_requests=10,
+            max_tokens=100,
+            max_usd=None,
         )
     with pytest.raises(LLMError, match="Invalid per-book LLM budget ledger entries"):
         ledger.check_spend(max_tokens=100, max_usd=None)

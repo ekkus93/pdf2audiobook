@@ -11,7 +11,9 @@ def _margin_blocks(text, band):
     top = 20.0 if band == "header" else 760.0
     return [
         DocumentBlock(
-            id=f"p{page}", page_index=page, text=text,
+            id=f"p{page}",
+            page_index=page,
+            text=text,
             bbox=(40.0, top, 205.0, top + 12.0),
         )
         for page in range(3)

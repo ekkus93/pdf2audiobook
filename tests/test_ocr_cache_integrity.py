@@ -58,7 +58,7 @@ def test_degenerate_cached_geometry_triggers_fresh_recognition(monkeypatch, tmp_
     monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", recognize)
     cache = tmp_path / "cache"
     extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
-    entry, = cache.glob("*.json")
+    (entry,) = cache.glob("*.json")
     data = json.loads(entry.read_text())
     data["lines"][0]["bbox"] = [40, 50, 40, 64]
     entry.write_text(json.dumps(data))

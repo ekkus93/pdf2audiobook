@@ -12,7 +12,8 @@ def test_vector_figure_and_equation_preserve_source_text(tmp_path):
         page = document.new_page(width=600, height=800)
         page.insert_text((72, 80), "Chapter One", fontsize=15)
         page.insert_text(
-            (72, 110), "This is a normal paragraph that must remain intact.",
+            (72, 110),
+            "This is a normal paragraph that must remain intact.",
             fontsize=12,
         )
         # Two overlapping vector paths: no raster images and no text inferred

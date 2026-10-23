@@ -27,8 +27,7 @@ def test_nonfinite_cached_provider_values_are_regenerated(tmp_path, number):
     key = fingerprint("llm-json-cache-v1", "local", "schema", "synthetic source")
     path = tmp_path / f"{key}.json"
     path.write_text(
-        '{"schema_version":1,"fingerprint":"' + key
-        + '","response":{"confidence":' + number + '}}',
+        '{"schema_version":1,"fingerprint":"' + key + '","response":{"confidence":' + number + "}}",
         encoding="utf-8",
     )
 
@@ -67,6 +66,7 @@ def test_cached_json_read_is_bounded_even_if_file_grows_after_stat(tmp_path, mon
     assert worker.hits == 0
     assert observed_reads == [2 * 1024 * 1024 + 1]
 
+
 def test_deeply_nested_cached_response_is_treated_as_a_miss(tmp_path):
     provider = _Provider()
     worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="local")
@@ -74,8 +74,7 @@ def test_deeply_nested_cached_response_is_treated_as_a_miss(tmp_path):
     path = tmp_path / f"{key}.json"
     nested = "[" * 1600 + "0" + "]" * 1600
     path.write_text(
-        '{"schema_version":1,"fingerprint":"' + key
-        + '","response":{"nested":' + nested + "}}",
+        '{"schema_version":1,"fingerprint":"' + key + '","response":{"nested":' + nested + "}}",
         encoding="utf-8",
     )
 
@@ -93,13 +92,13 @@ def test_nesting_limit_checks_object_containers_as_well_as_arrays(tmp_path):
     key = fingerprint("llm-json-cache-v1", "local", "schema", "synthetic source")
     nested = '{"next":' * 80 + "null" + "}" * 80
     (tmp_path / f"{key}.json").write_text(
-        '{"schema_version":1,"fingerprint":"' + key
-        + '","response":{"nested":' + nested + "}}",
+        '{"schema_version":1,"fingerprint":"' + key + '","response":{"nested":' + nested + "}}",
         encoding="utf-8",
     )
 
     assert worker.complete_json(instructions="schema", document_text="synthetic source") == {
-        "headings": [], "recovered": True,
+        "headings": [],
+        "recovered": True,
     }
     assert provider.calls == 1
     assert worker.hits == 0
@@ -161,4 +160,3 @@ def test_cache_path_probe_error_falls_back_without_disclosing_path(tmp_path, mon
     assert provider.calls == 1
     assert worker.hits == 0
     assert worker.misses == 1
-

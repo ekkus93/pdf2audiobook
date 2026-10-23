@@ -56,8 +56,12 @@ def test_auto_ocr_mixed_pdf_without_duplicates_and_with_clean_folios(tmp_path, m
         assert page.number == 1  # Page 1 has sufficient embedded text.
         return [
             {"text": "Chapter 2", "bbox": (70, 52, 170, 76), "font": "FakeOCR", "size": 18},
-            {"text": "Scanned second chapter recovered via OCR.",
-             "bbox": (70, 108, 410, 123), "font": "FakeOCR", "size": 11},
+            {
+                "text": "Scanned second chapter recovered via OCR.",
+                "bbox": (70, 108, 410, 123),
+                "font": "FakeOCR",
+                "size": 11,
+            },
             {"text": "2", "bbox": (294, 766, 304, 781), "font": "FakeOCR", "size": 10},
         ]
 
@@ -65,7 +69,8 @@ def test_auto_ocr_mixed_pdf_without_duplicates_and_with_clean_folios(tmp_path, m
     monkeypatch.setattr(pipeline, "KittenProvider", FakeVoice)
     settings = Settings(
         general=General(output_dir=str(tmp_path / "output")),
-        pdf=Pdf(ocr="auto"), llm=LLM(enabled=False),
+        pdf=Pdf(ocr="auto"),
+        llm=LLM(enabled=False),
     )
     outputs = convert_book(source, settings)
     assert len(outputs) == 2
@@ -76,8 +81,7 @@ def test_auto_ocr_mixed_pdf_without_duplicates_and_with_clean_folios(tmp_path, m
     assert {span.origin for span in manifest.spans if span.page_index == 0} == {"embedded"}
     assert {span.origin for span in manifest.spans if span.page_index == 1} == {"ocr"}
     combined = " ".join(
-        (manifest_path.parent / "chapters" / f"{number:03d}.txt").read_text()
-        for number in (1, 2)
+        (manifest_path.parent / "chapters" / f"{number:03d}.txt").read_text() for number in (1, 2)
     )
     assert combined.count("Embedded first chapter") == 1
     assert combined.count("Scanned second chapter") == 1
@@ -110,15 +114,20 @@ def test_image_only_scanned_book_uses_ocr_auto(tmp_path, monkeypatch):
         calls.append(page.number)
         return [
             {"text": "Chapter 1", "bbox": (70, 52, 170, 76), "font": "OCR", "size": 18},
-            {"text": "Image only book narration from OCR.",
-             "bbox": (70, 108, 410, 123), "font": "OCR", "size": 11},
+            {
+                "text": "Image only book narration from OCR.",
+                "bbox": (70, 108, 410, 123),
+                "font": "OCR",
+                "size": 11,
+            },
         ]
 
     monkeypatch.setattr(pdf, "_ocr_page_lines", stub_ocr)
     monkeypatch.setattr(pipeline, "KittenProvider", FakeVoice)
     settings = Settings(
         general=General(output_dir=str(tmp_path / "out")),
-        pdf=Pdf(ocr="auto"), llm=LLM(enabled=False),
+        pdf=Pdf(ocr="auto"),
+        llm=LLM(enabled=False),
     )
     outputs = convert_book(source, settings)
     assert len(outputs) == 1

@@ -35,10 +35,18 @@ def test_synthetic_fixture_only_and_no_credentials_in_output(monkeypatch, capsys
             return {"ok": True}
 
     monkeypatch.setattr(smoke, "create_provider", lambda settings: FakeProvider())
-    assert smoke.run([
-        "--provider", "llama-server", "--model", "local",
-        "--execute",
-    ]) == 0
+    assert (
+        smoke.run(
+            [
+                "--provider",
+                "llama-server",
+                "--model",
+                "local",
+                "--execute",
+            ]
+        )
+        == 0
+    )
     output = json.loads(capsys.readouterr().out)
     assert output["ok"] is True
     assert output["provider"] == "llama-server"
@@ -47,7 +55,9 @@ def test_synthetic_fixture_only_and_no_credentials_in_output(monkeypatch, capsys
 
 @pytest.mark.parametrize("invalid_reply", [None, [], "not-json-object", {}, {"ok": False}])
 def test_smoke_runner_rejects_invalid_provider_payload_without_echo(
-    monkeypatch, capsys, invalid_reply,
+    monkeypatch,
+    capsys,
+    invalid_reply,
 ):
     class FakeProvider:
         last_usage = {}
@@ -63,12 +73,23 @@ def test_smoke_runner_rejects_invalid_provider_payload_without_echo(
             return invalid_reply
 
     monkeypatch.setattr(smoke, "create_provider", lambda settings: FakeProvider())
-    assert smoke.run([
-        "--provider", "ollama", "--model", "local", "--execute",
-    ]) == 1
+    assert (
+        smoke.run(
+            [
+                "--provider",
+                "ollama",
+                "--model",
+                "local",
+                "--execute",
+            ]
+        )
+        == 1
+    )
     output = capsys.readouterr()
     parsed = json.loads(output.out)
     assert parsed == {
-        "ok": False, "provider": "ollama", "error": "unexpected_schema",
+        "ok": False,
+        "provider": "ollama",
+        "error": "unexpected_schema",
     }
     assert output.err == ""

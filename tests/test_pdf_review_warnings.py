@@ -1,4 +1,5 @@
 """Review warnings must never remove or rewrite extracted PDF content."""
+
 from pdf2audiobook.pdf import page_review_warnings
 
 
@@ -15,24 +16,18 @@ def test_normal_embedded_page_has_no_review_warning() -> None:
 
 
 def test_short_ocr_page_requires_review_not_silent_acceptance() -> None:
-    warnings = page_review_warnings(
-        [line("x")], page_number=4, origin="ocr"
-    )
+    warnings = page_review_warnings([line("x")], page_number=4, origin="ocr")
     assert len(warnings) == 1
     assert "Page 4" in warnings[0]
     assert "very little text" in warnings[0]
 
 
 def test_short_embedded_heading_does_not_trigger_ocr_warning() -> None:
-    assert page_review_warnings(
-        [line("Chapter 1")], page_number=2, origin="embedded"
-    ) == []
+    assert page_review_warnings([line("Chapter 1")], page_number=2, origin="embedded") == []
 
 
 def test_suspicious_unicode_replacement_requires_review() -> None:
-    warnings = page_review_warnings(
-        [line("Bad \ufffd\ufffd glyphs")], page_number=7, origin="ocr"
-    )
+    warnings = page_review_warnings([line("Bad \ufffd\ufffd glyphs")], page_number=7, origin="ocr")
     assert any("replacement/control" in warning for warning in warnings)
 
 

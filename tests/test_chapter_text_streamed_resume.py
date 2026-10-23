@@ -11,12 +11,19 @@ def test_render_chapter_texts_streams_existing_artifact_comparison(tmp_path, mon
     text = "Synthetic long paragraph. " * 60000
     block = DocumentBlock(id="body", page_index=0, text=text, kind="paragraph")
     chapter = Chapter(
-        id="chapter-one", number=1, title="Chapter One",
-        start_block=0, end_block=1, confidence=1.0,
+        id="chapter-one",
+        number=1,
+        title="Chapter One",
+        start_block=0,
+        end_block=1,
+        confidence=1.0,
     )
     manifest = BookManifest(
-        input_sha256="synthetic", title="Synthetic", source_path="synthetic.pdf",
-        blocks=[block], chapters=[chapter],
+        input_sha256="synthetic",
+        title="Synthetic",
+        source_path="synthetic.pdf",
+        blocks=[block],
+        chapters=[chapter],
     )
     chapter_path = tmp_path / "chapters" / "001.txt"
     structure.render_chapter_texts(manifest, tmp_path)

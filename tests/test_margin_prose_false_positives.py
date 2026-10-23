@@ -1,4 +1,5 @@
 """Fail-closed running-header checks for prose and quotation fragments."""
+
 from __future__ import annotations
 
 from pathlib import Path

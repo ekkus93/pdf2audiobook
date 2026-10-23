@@ -21,8 +21,11 @@ from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 def test_invalid_usage_is_unresolved_and_blocks_new_budgeted_request(tmp_path, usage):
     ledger = BookLLMBudgetLedger(tmp_path / "budget.sqlite3")
     call_id = ledger.reserve(
-        request_hash="one", provider_hash="provider",
-        max_requests=None, max_tokens=100, max_usd=None,
+        request_hash="one",
+        provider_hash="provider",
+        max_requests=None,
+        max_tokens=100,
+        max_usd=None,
     )
     ledger.settle(call_id, usage=usage, input_rate=2.0, output_rate=1.0)
     stats = ledger.totals()
@@ -31,21 +34,28 @@ def test_invalid_usage_is_unresolved_and_blocks_new_budgeted_request(tmp_path, u
     assert stats["reported_tokens"] == 0
     with pytest.raises(LLMError, match="unresolved requests"):
         ledger.reserve(
-            request_hash="two", provider_hash="provider",
-            max_requests=None, max_tokens=100, max_usd=None,
+            request_hash="two",
+            provider_hash="provider",
+            max_requests=None,
+            max_tokens=100,
+            max_usd=None,
         )
 
 
 def test_valid_usage_settles_without_undercharging(tmp_path):
     ledger = BookLLMBudgetLedger(tmp_path / "budget.sqlite3")
     call_id = ledger.reserve(
-        request_hash="one", provider_hash="provider",
-        max_requests=None, max_tokens=100, max_usd=None,
+        request_hash="one",
+        provider_hash="provider",
+        max_requests=None,
+        max_tokens=100,
+        max_usd=None,
     )
     ledger.settle(
         call_id,
         usage={"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
-        input_rate=2.0, output_rate=1.0,
+        input_rate=2.0,
+        output_rate=1.0,
     )
     stats = ledger.totals()
     assert stats["requests_started"] == 1

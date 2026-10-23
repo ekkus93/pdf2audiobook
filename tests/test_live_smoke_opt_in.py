@@ -30,8 +30,14 @@ class FakeProvider:
         ["--provider", "ollama", "--model", "test-model"],
         ["--provider", "openai", "--model", "test-model", "--execute"],
         [
-            "--provider", "openai", "--model", "test-model", "--execute",
-            "--allow-remote-content", "--base-url", "http://localhost:8080/v1",
+            "--provider",
+            "openai",
+            "--model",
+            "test-model",
+            "--execute",
+            "--allow-remote-content",
+            "--base-url",
+            "http://localhost:8080/v1",
         ],
     ],
 )
@@ -62,9 +68,9 @@ def test_live_smoke_uses_only_synthetic_text(monkeypatch, capsys, provider, extr
         return fake
 
     monkeypatch.setattr(smoke, "create_provider", make_provider)
-    assert smoke.run(
-        ["--provider", provider, "--model", "synthetic-model", "--execute", *extra]
-    ) == 0
+    assert (
+        smoke.run(["--provider", provider, "--model", "synthetic-model", "--execute", *extra]) == 0
+    )
     assert len(captured_settings) == 1
     assert captured_settings[0].llm.provider == provider
     assert captured_settings[0].llm.allow_remote_content == (provider == "openai")

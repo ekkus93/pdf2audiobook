@@ -48,24 +48,26 @@ def test_json_completion_contract(name):
 
     url = "https://api.openai.com/v1" if name == "openai" else "http://localhost:8080/v1"
     with OpenAICompatibleProvider(
-        provider=name, base_url=url, model="mock",
+        provider=name,
+        base_url=url,
+        model="mock",
         allow_remote=name == "openai",
         transport=httpx.MockTransport(handler),
     ) as provider:
-        assert provider.complete_json(
-            instructions="Classify only", document_text="chapter"
-        ) == {"headings": []}
+        assert provider.complete_json(instructions="Classify only", document_text="chapter") == {
+            "headings": []
+        }
 
 
 def test_bad_llm_output_is_rejected():
     def handler(request):
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": "non-json"}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": "non-json"}}]})
 
     with OpenAICompatibleProvider(
-        provider="ollama", base_url="http://127.0.0.1:11434/v1",
-        model="mock", allow_remote=False,
+        provider="ollama",
+        base_url="http://127.0.0.1:11434/v1",
+        model="mock",
+        allow_remote=False,
         transport=httpx.MockTransport(handler),
     ) as provider:
         with pytest.raises(LLMError):
@@ -98,13 +100,13 @@ def test_remote_book_content_warning_precedes_first_upload_only(capsys):
     def handler(request):
         # Observe stderr at the instant the mocked remote upload occurs.
         seen.append(capsys.readouterr().err)
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
 
     with OpenAICompatibleProvider(
-        provider="openai", base_url="https://api.openai.com/v1",
-        model="mock-remote", allow_remote=True,
+        provider="openai",
+        base_url="https://api.openai.com/v1",
+        model="mock-remote",
+        allow_remote=True,
         transport=httpx.MockTransport(handler),
     ) as provider:
         provider.complete_json(instructions="analyse", document_text="PRIVATE_BOOK_TEXT")
@@ -120,13 +122,13 @@ def test_remote_book_content_warning_precedes_first_upload_only(capsys):
 
 def test_loopback_model_never_emits_remote_upload_warning(capsys):
     def handler(request):
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
 
     with OpenAICompatibleProvider(
-        provider="ollama", base_url="http://127.0.0.1:11434/v1",
-        model="mock-local", allow_remote=False,
+        provider="ollama",
+        base_url="http://127.0.0.1:11434/v1",
+        model="mock-local",
+        allow_remote=False,
         transport=httpx.MockTransport(handler),
     ) as provider:
         provider.complete_json(instructions="analyse", document_text="Book text")

@@ -40,9 +40,7 @@ def test_tiny_rasters_do_not_affect_table_caption_classification():
             return [{"bbox": (10, 90, 19, 99)}]
 
     lines = [{"text": "Table 2: Results", "bbox": (10, 100, 110, 112)}]
-    indices, warnings = caption_line_indices(
-        Page(), lines, [(10, 10, 110, 90)], page_number=4
-    )
+    indices, warnings = caption_line_indices(Page(), lines, [(10, 10, 110, 90)], page_number=4)
 
     assert indices == {0}
     assert len(warnings) == 1

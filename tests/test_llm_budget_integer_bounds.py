@@ -18,8 +18,11 @@ from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 def test_out_of_range_provider_usage_becomes_unknown_without_sqlite_overflow(tmp_path, usage):
     ledger = BookLLMBudgetLedger(tmp_path / "llm.sqlite3")
     call_id = ledger.reserve(
-        request_hash="request", provider_hash="provider",
-        max_requests=None, max_tokens=100, max_usd=None,
+        request_hash="request",
+        provider_hash="provider",
+        max_requests=None,
+        max_tokens=100,
+        max_usd=None,
     )
     ledger.settle(call_id, usage=usage, input_rate=1.0, output_rate=1.0)
     stats = ledger.totals()
@@ -28,21 +31,28 @@ def test_out_of_range_provider_usage_becomes_unknown_without_sqlite_overflow(tmp
     assert stats["reported_tokens"] == 0
     with pytest.raises(LLMError, match="unresolved"):
         ledger.reserve(
-            request_hash="next", provider_hash="provider",
-            max_requests=None, max_tokens=100, max_usd=None,
+            request_hash="next",
+            provider_hash="provider",
+            max_requests=None,
+            max_tokens=100,
+            max_usd=None,
         )
 
 
 def test_valid_provider_usage_remains_accounted(tmp_path):
     ledger = BookLLMBudgetLedger(tmp_path / "llm.sqlite3")
     call_id = ledger.reserve(
-        request_hash="request", provider_hash="provider",
-        max_requests=None, max_tokens=100, max_usd=None,
+        request_hash="request",
+        provider_hash="provider",
+        max_requests=None,
+        max_tokens=100,
+        max_usd=None,
     )
     ledger.settle(
         call_id,
         usage={"prompt_tokens": 2, "completion_tokens": 3, "total_tokens": 5},
-        input_rate=1.0, output_rate=1.0,
+        input_rate=1.0,
+        output_rate=1.0,
     )
     stats = ledger.totals()
     assert stats["requests_started"] == 1

@@ -24,9 +24,7 @@ PRIVATE = "SYNTHETIC_PRIVATE_INSPECTION_208"
         (10**500, 842),
     ],
 )
-def test_inspect_pdf_rejects_unusable_page_sizes(
-    monkeypatch, width, height
-) -> None:
+def test_inspect_pdf_rejects_unusable_page_sizes(monkeypatch, width, height) -> None:
     class Crop:
         pass
 

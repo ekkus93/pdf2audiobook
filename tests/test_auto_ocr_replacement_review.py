@@ -2,6 +2,7 @@
 
 Uses a synthetic PDF and deterministic recognition stubs; no downloads.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -35,12 +36,14 @@ def test_auto_ocr_flags_missing_selectable_headings_without_mixing_layers(
         doc.save(source)
 
     def recognized(*args, **kwargs):
-        return [{
-            "text": recognized_text,
-            "bbox": [45, 60, 350, 76],
-            "font": "OCR",
-            "size": 16.0,
-        }]
+        return [
+            {
+                "text": recognized_text,
+                "bbox": [45, 60, 350, 76],
+                "font": "OCR",
+                "size": 16.0,
+            }
+        ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", recognized)
     extracted = extract_pdf(source, Pdf(ocr=mode))
@@ -56,7 +59,8 @@ def test_auto_ocr_flags_missing_selectable_headings_without_mixing_layers(
 
 
 def test_auto_ocr_on_image_only_page_does_not_claim_missing_selectable_text(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     source = tmp_path / "blank.pdf"
     with fitz.open() as doc:
@@ -64,12 +68,14 @@ def test_auto_ocr_on_image_only_page_does_not_claim_missing_selectable_text(
         doc.save(source)
     monkeypatch.setattr(
         "pdf2audiobook.pdf._cached_ocr_lines",
-        lambda *args, **kwargs: [{
-            "text": "A scanned line without a selectable counterpart.",
-            "bbox": [45, 60, 355, 76],
-            "font": "OCR",
-            "size": 16.0,
-        }],
+        lambda *args, **kwargs: [
+            {
+                "text": "A scanned line without a selectable counterpart.",
+                "bbox": [45, 60, 355, 76],
+                "font": "OCR",
+                "size": 16.0,
+            }
+        ],
     )
     extracted = extract_pdf(source, Pdf(ocr="auto"))
     assert len(extracted.spans) == 1

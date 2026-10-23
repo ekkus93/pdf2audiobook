@@ -1,4 +1,5 @@
 """Integration coverage for conservative two-column PDF reading order."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -41,9 +42,7 @@ def test_embedded_columns_flow_into_blocks_without_loss(tmp_path: Path) -> None:
     assert any("reconstructed two-column" in message for message in first.warnings)
 
 
-def test_ocr_columns_share_ordering_and_provenance(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_ocr_columns_share_ordering_and_provenance(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "scanned.pdf"
     doc = fitz.open()
     doc.new_page(width=600, height=800)
@@ -52,12 +51,14 @@ def test_ocr_columns_share_ordering_and_provenance(
     rows = []
     for n in range(5):
         for x, side in ((50, "Left"), (335, "Right")):
-            rows.append({
-                "text": f"{side} passage number {n} with sustained text.",
-                "bbox": (x, 100 + n * 24, x + 180, 112 + n * 24),
-                "font": "OCR",
-                "size": 12.0,
-            })
+            rows.append(
+                {
+                    "text": f"{side} passage number {n} with sustained text.",
+                    "bbox": (x, 100 + n * 24, x + 180, 112 + n * 24),
+                    "font": "OCR",
+                    "size": 12.0,
+                }
+            )
     monkeypatch.setattr(
         "pdf2audiobook.pdf._ocr_page_lines",
         lambda page, settings: list(rows),
@@ -65,9 +66,7 @@ def test_ocr_columns_share_ordering_and_provenance(
     result = extract_pdf(source, Pdf(ocr="always"))
     assert [span.text for span in result.spans] == _expected()
     assert all(span.origin == "ocr" and span.page_index == 0 for span in result.spans)
-    assert [block.span_ids for block in result.blocks] == [
-        [span.id] for span in result.spans
-    ]
+    assert [block.span_ids for block in result.blocks] == [[span.id] for span in result.spans]
 
 
 def test_single_column_is_not_reordered(tmp_path: Path) -> None:
@@ -83,7 +82,6 @@ def test_single_column_is_not_reordered(tmp_path: Path) -> None:
     doc.close()
     result = extract_pdf(source, Pdf(ocr="never"))
     assert [span.text for span in result.spans] == [
-        f"Single column paragraph line {n} with sufficient text."
-        for n in range(10)
+        f"Single column paragraph line {n} with sufficient text." for n in range(10)
     ]
     assert not any("reconstructed two-column" in msg for msg in result.warnings)

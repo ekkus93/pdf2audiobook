@@ -1,4 +1,5 @@
 """Test preservation of printed page labels and Tesseract language diagnostics."""
+
 from pathlib import Path
 from types import SimpleNamespace
 

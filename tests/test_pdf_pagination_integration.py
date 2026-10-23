@@ -1,4 +1,5 @@
 """End-to-end PDF extraction + conservative pagination classification fixtures."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -15,7 +16,8 @@ def make_folio_pdf(path: Path, folios: list[str], *, mirrored: bool = False) -> 
     for index, label in enumerate(folios):
         page = doc.new_page(width=600, height=840)
         page.insert_text(
-            (72, 160), f"Ordinary prose from page {index + 1} must be retained.",
+            (72, 160),
+            f"Ordinary prose from page {index + 1} must be retained.",
             fontsize=12,
         )
         x = (18 if index % 2 == 0 else 570) if mirrored else 290
@@ -32,11 +34,11 @@ def check_folios(source: Path, expected: list[str]) -> None:
     assert [block.text for block in removed_blocks] == expected
     assert all(edit.original in expected and edit.replacement == "" for edit in edits)
     assert all(
-        block.id not in removed
-        for block in extracted.blocks if "Ordinary prose" in block.text
+        block.id not in removed for block in extracted.blocks if "Ordinary prose" in block.text
     )
-    assert len([block for block in extracted.blocks
-                if "Ordinary prose" in block.text]) == len(expected)
+    assert len([block for block in extracted.blocks if "Ordinary prose" in block.text]) == len(
+        expected
+    )
 
 
 def test_pdf_roman_frontmatter_folios_are_audited(tmp_path: Path):

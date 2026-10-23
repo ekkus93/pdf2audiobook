@@ -1,4 +1,5 @@
 """OCR cache regression tests, using deterministic OCR stubs instead of a model."""
+
 from __future__ import annotations
 
 import json
@@ -25,9 +26,14 @@ def ocr_stub(calls):
         calls.append((page.number, settings.ocr_language, settings.ocr_dpi))
         return [
             {"text": "Chapter 1", "bbox": (60, 60, 140, 75), "size": 14.0, "font": "OCR"},
-            {"text": "A scanned passage.", "bbox": (60, 100, 190, 114),
-             "size": 12.0, "font": "OCR"},
+            {
+                "text": "A scanned passage.",
+                "bbox": (60, 100, 190, 114),
+                "size": 12.0,
+                "font": "OCR",
+            },
         ]
+
     return run
 
 
@@ -101,8 +107,12 @@ def test_empty_ocr_is_retried_not_cached(monkeypatch, tmp_path: Path):
         if len(calls) == 1:
             return []
         return [
-            {"text": "Recovered OCR text.", "bbox": (60, 100, 220, 114),
-             "size": 12.0, "font": "OCR"},
+            {
+                "text": "Recovered OCR text.",
+                "bbox": (60, 100, 220, 114),
+                "size": 12.0,
+                "font": "OCR",
+            },
         ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", transient_ocr)

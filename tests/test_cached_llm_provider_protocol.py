@@ -29,7 +29,9 @@ class DiscoveryProvider:
 def test_cache_wrapper_exposes_discovery_and_health_without_upload(tmp_path):
     underlying = DiscoveryProvider()
     cached = CachedLLMProvider(
-        underlying, cache_dir=tmp_path / "cache", identity="synthetic",
+        underlying,
+        cache_dir=tmp_path / "cache",
+        identity="synthetic",
     )
     assert isinstance(cached, LLMProvider)
     assert cached.list_models() == ["synthetic-model"]
@@ -41,7 +43,9 @@ def test_cache_wrapper_exposes_discovery_and_health_without_upload(tmp_path):
 
 def test_cache_wrapper_fails_closed_for_missing_discovery(tmp_path):
     cached = CachedLLMProvider(
-        object(), cache_dir=tmp_path / "cache", identity="synthetic",
+        object(),
+        cache_dir=tmp_path / "cache",
+        identity="synthetic",
     )
     assert cached.health() is False
     with pytest.raises(LLMError, match="model discovery"):
@@ -55,7 +59,9 @@ def test_cache_wrapper_rejects_invalid_model_list(tmp_path, bad):
             return bad
 
     cached = CachedLLMProvider(
-        InvalidProvider(), cache_dir=tmp_path / "cache", identity="synthetic",
+        InvalidProvider(),
+        cache_dir=tmp_path / "cache",
+        identity="synthetic",
     )
     with pytest.raises(LLMError, match="Invalid LLM provider model discovery"):
         cached.list_models()

@@ -1,4 +1,5 @@
 """Real PDF fixture: repeated running titles must not erase prose."""
+
 from pathlib import Path
 
 import fitz
@@ -20,7 +21,9 @@ def test_running_title_and_prose(tmp_path: Path):
     extracted = extract_pdf(source, Pdf(ocr="never"))
     edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, Pdf())
     removed = {edit.block_id for edit in edits if edit.accepted}
-    assert sum(block.id in removed for block in extracted.blocks
-               if block.text == "Sample Book") == 3
-    assert all(block.id not in removed for block in extracted.blocks
-               if "Original passage" in block.text)
+    assert (
+        sum(block.id in removed for block in extracted.blocks if block.text == "Sample Book") == 3
+    )
+    assert all(
+        block.id not in removed for block in extracted.blocks if "Original passage" in block.text
+    )

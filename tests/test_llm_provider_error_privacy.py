@@ -19,8 +19,11 @@ def test_completion_errors_hide_backend_and_server_details(failure: str) -> None
         return httpx.Response(200, text=PRIVATE)
 
     with OpenAICompatibleProvider(
-        provider="ollama", base_url="http://127.0.0.1:11434/v1",
-        model="offline-test", allow_remote=False, max_retries=0,
+        provider="ollama",
+        base_url="http://127.0.0.1:11434/v1",
+        model="offline-test",
+        allow_remote=False,
+        max_retries=0,
         transport=httpx.MockTransport(handler),
     ) as provider:
         with pytest.raises(LLMError) as raised:
@@ -35,8 +38,10 @@ def test_discovery_error_suppresses_raw_transport_context() -> None:
         raise httpx.ConnectError(f"discovery text {PRIVATE}", request=request)
 
     with OpenAICompatibleProvider(
-        provider="ollama", base_url="http://127.0.0.1:11434/v1",
-        model="offline-test", allow_remote=False,
+        provider="ollama",
+        base_url="http://127.0.0.1:11434/v1",
+        model="offline-test",
+        allow_remote=False,
         transport=httpx.MockTransport(handler),
     ) as provider:
         with pytest.raises(LLMError, match="Could not discover") as raised:
@@ -51,8 +56,11 @@ def test_untrusted_direct_provider_label_is_not_echoed() -> None:
         raise httpx.ConnectError(f"private diagnostic {PRIVATE}", request=request)
 
     with OpenAICompatibleProvider(
-        provider=PRIVATE, base_url="http://127.0.0.1:11434/v1",
-        model="offline-test", allow_remote=False, max_retries=0,
+        provider=PRIVATE,
+        base_url="http://127.0.0.1:11434/v1",
+        model="offline-test",
+        allow_remote=False,
+        max_retries=0,
         transport=httpx.MockTransport(handler),
     ) as provider:
         with pytest.raises(LLMError) as raised:

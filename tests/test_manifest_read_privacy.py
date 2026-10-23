@@ -15,7 +15,7 @@ from pdf2audiobook.workspace import read_manifest, write_manifest
         b'{"title":"PRIVATE_BOOK_TEXT", bad-json',
         b'{"schema_version":99,"input_sha256":"abc","title":"PRIVATE_BOOK_TEXT","source_path":"private.pdf"}',
         b'{"title":"PRIVATE_BOOK_TEXT","source_path":"private.pdf","chapters":[{"id":"chapter","number":0,"title":"PRIVATE_BOOK_TEXT","start_block":0,"end_block":1,"confidence":1.0}]}',
-        b'\\xff\\xfePRIVATE_BOOK_TEXT',
+        b"\\xff\\xfePRIVATE_BOOK_TEXT",
     ],
 )
 def test_untrusted_manifest_failures_are_content_free(tmp_path, payload):

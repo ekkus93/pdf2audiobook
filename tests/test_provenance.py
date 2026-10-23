@@ -36,11 +36,17 @@ def test_report_exact_coverage_and_accepted_replacements(tmp_path):
     from pdf2audiobook.models import CleanupEdit
 
     original = manifest.blocks[1]
-    manifest.edits.append(CleanupEdit(
-        block_id=original.id, original=original.text,
-        replacement="Corrected prose.", reason="manual verified correction",
-        confidence=1, accepted=True, provider="human"
-    ))
+    manifest.edits.append(
+        CleanupEdit(
+            block_id=original.id,
+            original=original.text,
+            replacement="Corrected prose.",
+            reason="manual verified correction",
+            confidence=1,
+            accepted=True,
+            provider="human",
+        )
+    )
     write_manifest(path, manifest)
     analyze_book(source, settings)
     text = (path.parent / "chapters" / "001.txt").read_text()
@@ -59,7 +65,10 @@ def test_invalid_cleanup_edit_rejected(tmp_path, invalid):
     edit = CleanupEdit(
         block_id="unknown" if invalid == "unknown" else first.id,
         original="wrong original" if invalid == "mismatch" else first.text,
-        replacement="", reason="test", confidence=1, accepted=True,
+        replacement="",
+        reason="test",
+        confidence=1,
+        accepted=True,
     )
     manifest.edits.append(edit)
     if invalid == "duplicate":

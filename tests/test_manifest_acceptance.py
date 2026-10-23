@@ -37,7 +37,8 @@ def fixture_book(tmp_path):
     doc.close()
     settings = Settings(
         general=General(output_dir=str(tmp_path / "out")),
-        pdf=Pdf(ocr="never"), llm=LLM(enabled=False),
+        pdf=Pdf(ocr="never"),
+        llm=LLM(enabled=False),
     )
     return source, settings
 

@@ -17,9 +17,7 @@ def test_chat_context_budget_reserves_output_and_caps_response(provider_name):
     def handler(request):
         body = json.loads(request.content)
         seen.append(body)
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
 
     settings = Settings()
     settings.llm.provider = provider_name
@@ -53,9 +51,9 @@ def test_context_reserve_validation_and_environment_override():
     with pytest.raises(ConfigError, match="no context room"):
         load_settings(
             no_config=True,
-            overrides={"llm": {
-                "max_context_tokens": 512, "chunk_tokens": 100, "max_output_tokens": 384
-            }},
+            overrides={
+                "llm": {"max_context_tokens": 512, "chunk_tokens": 100, "max_output_tokens": 384}
+            },
         )
     settings, sources = load_settings(
         no_config=True, environ={"PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS": "256"}
@@ -72,14 +70,15 @@ def test_json_mode_fallback_keeps_output_cap():
         seen.append(body)
         if len(seen) == 1:
             return httpx.Response(
-                400, json={"error": {
-                    "message": "response_format unsupported",
-                    "param": "response_format",
-                }}
+                400,
+                json={
+                    "error": {
+                        "message": "response_format unsupported",
+                        "param": "response_format",
+                    }
+                },
             )
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
 
     settings = Settings()
     with create_provider(settings, transport=httpx.MockTransport(handler)) as provider:
@@ -131,17 +130,18 @@ def test_oversized_request_does_not_reserve_unknown_ledger_charge(tmp_path):
     ledger = tmp_path / "llm_budget.sqlite3"
     with create_provider(settings, transport=httpx.MockTransport(handler)) as provider:
         worker = CachedLLMProvider(
-            provider, cache_dir=tmp_path / "cache",
-            identity="context-budget-v1", ledger_path=ledger, max_requests=1,
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="context-budget-v1",
+            ledger_path=ledger,
+            max_requests=1,
         )
         with pytest.raises(LLMError, match="context"):
             worker.complete_json(instructions="i" * 250, document_text="d" * 10)
         assert not ledger.exists()
         assert worker.requests_started == 0
         assert requests == []
-        assert worker.complete_json(instructions="short", document_text="book") == {
-            "headings": []
-        }
+        assert worker.complete_json(instructions="short", document_text="book") == {"headings": []}
     assert len(requests) == 1
     with sqlite3.connect(ledger) as connection:
         assert connection.execute("SELECT COUNT(*) FROM calls").fetchone()[0] == 1

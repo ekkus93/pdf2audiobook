@@ -28,10 +28,11 @@ def test_cli_env_file_priority(tmp_path: Path):
 
 def test_env_selected_provider_model():
     settings, sources = load_settings(
-        no_config=True, environ={
+        no_config=True,
+        environ={
             "PDF2AUDIOBOOK_LLM_PROVIDER": "llama-server",
             "PDF2AUDIOBOOK_LLM_MODEL": "tiny",
-        }
+        },
     )
     assert settings.llm.llama_server.model == "tiny"
     assert sources["llm.llama_server.model"] == "env:PDF2AUDIOBOOK_LLM_MODEL"

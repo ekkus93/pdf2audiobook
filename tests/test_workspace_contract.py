@@ -32,6 +32,4 @@ def test_atomic_write_and_stage_fingerprints(tmp_path: Path):
     assert fingerprint("text", {"voice": "Jasper", "speed": 1}) == fingerprint(
         "text", {"speed": 1, "voice": "Jasper"}
     )
-    assert fingerprint("text", {"voice": "Jasper"}) != fingerprint(
-        "text", {"voice": "Bella"}
-    )
+    assert fingerprint("text", {"voice": "Jasper"}) != fingerprint("text", {"voice": "Bella"})

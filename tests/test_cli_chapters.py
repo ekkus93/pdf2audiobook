@@ -1,4 +1,5 @@
 """CLI chapter selection, dry-run and speech-setting override acceptance."""
+
 from __future__ import annotations
 
 import json
@@ -31,9 +32,21 @@ def test_dry_run_plans_selected_chapters_without_tts(tmp_path):
     document.close()
     runner = CliRunner()
     args = [
-        "convert", str(source), "--no-llm", "--ocr", "never",
-        "--output", str(tmp_path / "out"), "--chapter-range", "2:3",
-        "--speed", "1.25", "--sample-rate", "22050", "--dry-run", "--json",
+        "convert",
+        str(source),
+        "--no-llm",
+        "--ocr",
+        "never",
+        "--output",
+        str(tmp_path / "out"),
+        "--chapter-range",
+        "2:3",
+        "--speed",
+        "1.25",
+        "--sample-rate",
+        "22050",
+        "--dry-run",
+        "--json",
     ]
     result = runner.invoke(app, args)
     assert result.exit_code == 0, result.output
@@ -55,8 +68,19 @@ def test_out_of_bounds_range_is_error(tmp_path):
     page.insert_text((80, 140), "A first chapter.")
     document.save(source)
     document.close()
-    result = CliRunner().invoke(app, [
-        "convert", str(source), "--no-llm", "--ocr", "never",
-        "--output", str(tmp_path / "out"), "--chapter-range", "1:2", "--dry-run",
-    ])
+    result = CliRunner().invoke(
+        app,
+        [
+            "convert",
+            str(source),
+            "--no-llm",
+            "--ocr",
+            "never",
+            "--output",
+            str(tmp_path / "out"),
+            "--chapter-range",
+            "1:2",
+            "--dry-run",
+        ],
+    )
     assert result.exit_code == 6

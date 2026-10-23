@@ -30,9 +30,20 @@ def test_repeated_headers_and_sequential_folios_do_not_remove_numbered_body(tmp_
     assert len(edits) == 6
     assert all(edit.accepted and edit.replacement == "" for edit in edits)
     assert {edit.original for edit in edits} == {"Field Guide", "1", "2", "3"}
-    assert sum("Preserve the numbered first step" in block.text
-               for block in extracted.blocks if block.id not in removed) == 3
-    assert sum("Preserve the numbered second step" in block.text
-               for block in extracted.blocks if block.id not in removed) == 3
-    assert all(block.id in {span.id for span in extracted.spans}
-               for block in extracted.blocks)
+    assert (
+        sum(
+            "Preserve the numbered first step" in block.text
+            for block in extracted.blocks
+            if block.id not in removed
+        )
+        == 3
+    )
+    assert (
+        sum(
+            "Preserve the numbered second step" in block.text
+            for block in extracted.blocks
+            if block.id not in removed
+        )
+        == 3
+    )
+    assert all(block.id in {span.id for span in extracted.spans} for block in extracted.blocks)

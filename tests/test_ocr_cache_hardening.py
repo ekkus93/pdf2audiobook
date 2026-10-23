@@ -1,4 +1,5 @@
 """Corrupt OCR cache and unusual Tesseract CLI output must fail closed."""
+
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -51,15 +52,20 @@ def test_invalid_ocr_cache_lines_trigger_recognition(monkeypatch, tmp_path: Path
     def fake_ocr(page, settings):
         calls.append(page.number)
         return [
-            {"text": "Valid recognized text.", "bbox": [10, 20, 30, 40],
-             "size": 12.0, "font": "OCR"},
+            {
+                "text": "Valid recognized text.",
+                "bbox": [10, 20, 30, 40],
+                "size": 12.0,
+                "font": "OCR",
+            },
         ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", fake_ocr)
     cache_dir = tmp_path / "ocr"
     extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache_dir)
-    entry, = list(cache_dir.glob("*.json"))
+    (entry,) = list(cache_dir.glob("*.json"))
     import json
+
     data = json.loads(entry.read_text())
     data["lines"][0] = mutate(data["lines"][0])
     entry.write_text(json.dumps(data, allow_nan=True))

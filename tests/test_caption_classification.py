@@ -62,8 +62,10 @@ def test_synthetic_pdf_caption_is_source_linked_and_non_destructive(tmp_path):
     assert len(captions) == 1
     assert captions[0].text == "Figure 1: A simple rectangular diagram."
     assert captions[0].span_ids == [captions[0].id]
-    assert any(span.id == captions[0].id and span.text == captions[0].text
-               for span in extracted.spans)
+    assert any(
+        span.id == captions[0].id and span.text == captions[0].text for span in extracted.spans
+    )
     assert any("geometry-backed caption" in warning for warning in extracted.warnings)
-    assert any("Figure 1 shows" in block.text and block.kind != "caption"
-               for block in extracted.blocks)
+    assert any(
+        "Figure 1 shows" in block.text and block.kind != "caption" for block in extracted.blocks
+    )

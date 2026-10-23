@@ -22,18 +22,19 @@ from pdf2audiobook.llm.cache import CachedLLMProvider
 def test_incomplete_usage_cannot_authorize_cost_budget(tmp_path, usage):
     def handler(request):
         return httpx.Response(
-            200, json={
+            200,
+            json={
                 "choices": [{"message": {"content": '{"ok":true}'}}],
                 "usage": usage,
             },
         )
 
-    with create_provider(
-        Settings(), transport=httpx.MockTransport(handler)
-    ) as provider:
+    with create_provider(Settings(), transport=httpx.MockTransport(handler)) as provider:
         worker = CachedLLMProvider(
-            provider, cache_dir=tmp_path / "cache",
-            identity="incomplete-usage-v1", enabled=False,
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="incomplete-usage-v1",
+            enabled=False,
             max_estimated_cost_usd=1.0,
             input_cost_usd_per_million_tokens=1.0,
             output_cost_usd_per_million_tokens=1.0,
@@ -47,26 +48,23 @@ def test_incomplete_usage_cannot_authorize_cost_budget(tmp_path, usage):
 def test_complete_consistent_usage_can_qualify_cost_budget(tmp_path):
     def handler(request):
         return httpx.Response(
-            200, json={
+            200,
+            json={
                 "choices": [{"message": {"content": '{"ok":true}'}}],
-                "usage": {
-                    "prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7
-                },
+                "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
             },
         )
 
-    with create_provider(
-        Settings(), transport=httpx.MockTransport(handler)
-    ) as provider:
+    with create_provider(Settings(), transport=httpx.MockTransport(handler)) as provider:
         worker = CachedLLMProvider(
-            provider, cache_dir=tmp_path / "cache",
-            identity="complete-usage-v1", enabled=False,
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="complete-usage-v1",
+            enabled=False,
             max_estimated_cost_usd=1.0,
             input_cost_usd_per_million_tokens=1.0,
             output_cost_usd_per_million_tokens=1.0,
         )
-        assert worker.complete_json(instructions="test", document_text="synthetic") == {
-            "ok": True
-        }
+        assert worker.complete_json(instructions="test", document_text="synthetic") == {"ok": True}
         assert worker.usage_verified is True
         assert worker._reported_cost_usd() == pytest.approx(0.000007)

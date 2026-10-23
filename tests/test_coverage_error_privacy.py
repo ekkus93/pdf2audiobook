@@ -17,14 +17,20 @@ def _manifest() -> BookManifest:
         spans=[SourceSpan(id="span-1", page_index=0, text="A synthetic passage.")],
         blocks=[
             DocumentBlock(
-                id="block-1", span_ids=["span-1"],
-                page_index=0, text="A synthetic passage.",
+                id="block-1",
+                span_ids=["span-1"],
+                page_index=0,
+                text="A synthetic passage.",
             )
         ],
         chapters=[
             Chapter(
-                id="chapter-1", number=1, title="Test", start_block=0,
-                end_block=1, confidence=1.0,
+                id="chapter-1",
+                number=1,
+                title="Test",
+                start_block=0,
+                end_block=1,
+                confidence=1.0,
             )
         ],
     )
@@ -44,9 +50,7 @@ def _manifest() -> BookManifest:
 def test_coverage_error_redacts_untrusted_ids(case: str, diagnostic: str) -> None:
     manifest = _manifest()
     if case == "missing_provenance":
-        manifest.blocks[0] = manifest.blocks[0].model_copy(
-            update={"id": PRIVATE, "span_ids": []}
-        )
+        manifest.blocks[0] = manifest.blocks[0].model_copy(update={"id": PRIVATE, "span_ids": []})
     elif case == "missing_span":
         manifest.blocks[0] = manifest.blocks[0].model_copy(
             update={"id": PRIVATE, "span_ids": [PRIVATE]}
@@ -54,28 +58,27 @@ def test_coverage_error_redacts_untrusted_ids(case: str, diagnostic: str) -> Non
     elif case == "duplicate_span":
         manifest.blocks.append(
             DocumentBlock(
-                id=PRIVATE, span_ids=["span-1"],
-                page_index=0, text="Second synthetic passage.",
+                id=PRIVATE,
+                span_ids=["span-1"],
+                page_index=0,
+                text="Second synthetic passage.",
             )
         )
-        manifest.chapters[0] = manifest.chapters[0].model_copy(
-            update={"end_block": 2}
-        )
+        manifest.chapters[0] = manifest.chapters[0].model_copy(update={"end_block": 2})
         manifest.spans[0] = manifest.spans[0].model_copy(update={"id": PRIVATE})
-        manifest.blocks[0] = manifest.blocks[0].model_copy(
-            update={"span_ids": [PRIVATE]}
-        )
-        manifest.blocks[1] = manifest.blocks[1].model_copy(
-            update={"span_ids": [PRIVATE]}
-        )
+        manifest.blocks[0] = manifest.blocks[0].model_copy(update={"span_ids": [PRIVATE]})
+        manifest.blocks[1] = manifest.blocks[1].model_copy(update={"span_ids": [PRIVATE]})
     else:
         manifest.blocks[0] = manifest.blocks[0].model_copy(update={"id": PRIVATE})
         original = "A synthetic passage."
         if case == "missing_edit_block":
             manifest.edits = [
                 CleanupEdit(
-                    block_id="unknown-" + PRIVATE, original=original,
-                    replacement="", reason="test", confidence=1.0,
+                    block_id="unknown-" + PRIVATE,
+                    original=original,
+                    replacement="",
+                    reason="test",
+                    confidence=1.0,
                     accepted=True,
                 )
             ]
@@ -83,7 +86,9 @@ def test_coverage_error_redacts_untrusted_ids(case: str, diagnostic: str) -> Non
             edit = CleanupEdit(
                 block_id=PRIVATE,
                 original="incorrect" if case == "mismatched_original" else original,
-                replacement="", reason="test", confidence=1.0,
+                replacement="",
+                reason="test",
+                confidence=1.0,
                 accepted=True,
             )
             manifest.edits = [edit, edit.model_copy()] if case == "duplicate_edit" else [edit]

@@ -28,10 +28,7 @@ def test_sentence_chunking_preserves_words():
 
 def test_cache_reuses_pcm_chunks(tmp_path):
     provider = FakeProvider()
-    kwargs = dict(
-        model="mini", voice="Jasper", speed=1.0,
-        pause_ms=100, cache=tmp_path
-    )
+    kwargs = dict(model="mini", voice="Jasper", speed=1.0, pause_ms=100, cache=tmp_path)
     first = synthesize_chunks("Hi there. Another sentence.", provider, **kwargs)
     count = provider.calls
     second = synthesize_chunks("Hi there. Another sentence.", provider, **kwargs)
@@ -48,9 +45,15 @@ def test_ffmpeg_mp3_encodes_and_tags(tmp_path):
 
     audio = np.zeros(24000, dtype=np.float32) + 0.01
     result = encode_mp3(
-        audio, 24000, tmp_path / "chapter.mp3",
-        bitrate="128k", target_rate=24000,
-        title="Chapter One", artist="Example Author", album="Example Book", track=1
+        audio,
+        24000,
+        tmp_path / "chapter.mp3",
+        bitrate="128k",
+        target_rate=24000,
+        title="Chapter One",
+        artist="Example Author",
+        album="Example Book",
+        track=1,
     )
     assert MP3(result).info.length > 0
     assert EasyID3(result)["album"] == ["Example Book"]
@@ -104,8 +107,11 @@ class AlternateFakeProvider(FakeProvider):
 
 def test_wav_cache_isolated_by_tts_engine_with_identical_public_settings(tmp_path):
     options = dict(
-        model="mini", voice="Jasper", speed=1.0,
-        pause_ms=0, cache=tmp_path / "wav",
+        model="mini",
+        voice="Jasper",
+        speed=1.0,
+        pause_ms=0,
+        cache=tmp_path / "wav",
     )
     first_engine = FakeProvider()
     first_audio = synthesize_chunks("The same synthetic sentence.", first_engine, **options)
@@ -133,7 +139,11 @@ class FractionalVoice(FakeProvider):
 def test_fresh_and_cached_synthesis_use_identical_canonical_pcm(tmp_path):
     voice = FractionalVoice()
     options = dict(
-        model="mini", voice="Jasper", speed=1.0, pause_ms=0, cache=tmp_path,
+        model="mini",
+        voice="Jasper",
+        speed=1.0,
+        pause_ms=0,
+        cache=tmp_path,
     )
     first = synthesize_chunks("A deterministic synthetic sentence.", voice, **options)
     assert voice.calls == 1

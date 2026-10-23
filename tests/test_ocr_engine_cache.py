@@ -1,4 +1,5 @@
 """OCR cache identity includes the Tesseract engine version."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,15 +18,17 @@ def test_tesseract_version_invalidates_page_ocr_cache(monkeypatch, tmp_path: Pat
     doc.close()
     calls = []
     version = {"value": "tesseract 5.4.0"}
-    monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_engine_version", lambda: version["value"]
-    )
+    monkeypatch.setattr("pdf2audiobook.pdf._ocr_engine_version", lambda: version["value"])
 
     def fake_ocr(page, settings):
         calls.append((page.number, settings.ocr_dpi))
         return [
-            {"text": "Recognized page contents.", "bbox": (55, 80, 200, 100),
-             "font": "OCR", "size": 11.0}
+            {
+                "text": "Recognized page contents.",
+                "bbox": (55, 80, 200, 100),
+                "font": "OCR",
+                "size": 11.0,
+            }
         ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", fake_ocr)

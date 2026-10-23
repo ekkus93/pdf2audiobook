@@ -29,9 +29,15 @@ def test_chapter_wav_streaming_exceeds_chunk_cache_limit(monkeypatch, tmp_path):
 def test_mp3_chapter_encode_is_not_limited_by_wav_chunk_cache(monkeypatch, tmp_path):
     monkeypatch.setattr(audio_module, "_MAX_CACHED_WAV_BYTES", 512)
     result = encode_mp3(
-        np.full(24000, 0.05, dtype=np.float32), 24000,
-        tmp_path / "long-chapter.mp3", bitrate="128k", target_rate=24000,
-        title="Synthetic Chapter", artist=None, album="Synthetic Book", track=1,
+        np.full(24000, 0.05, dtype=np.float32),
+        24000,
+        tmp_path / "long-chapter.mp3",
+        bitrate="128k",
+        target_rate=24000,
+        title="Synthetic Chapter",
+        artist=None,
+        album="Synthetic Book",
+        track=1,
     )
     assert result.is_file()
     assert result.stat().st_size > 0

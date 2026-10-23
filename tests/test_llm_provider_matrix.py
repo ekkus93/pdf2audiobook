@@ -1,4 +1,5 @@
 """Offline provider contract matrix for OpenAI, Ollama and llama-server."""
+
 from __future__ import annotations
 
 import json
@@ -14,12 +15,13 @@ PROVIDERS = ("openai", "ollama", "llama-server")
 
 
 def _provider(name, handler, *, retries=0):
-    url = "https://api.openai.com/v1" if name == "openai" else (
-        "http://127.0.0.1:11434/v1"
-    )
+    url = "https://api.openai.com/v1" if name == "openai" else ("http://127.0.0.1:11434/v1")
     return OpenAICompatibleProvider(
-        provider=name, base_url=url, model="mock",
-        allow_remote=name == "openai", max_retries=retries,
+        provider=name,
+        base_url=url,
+        model="mock",
+        allow_remote=name == "openai",
+        max_retries=retries,
         transport=httpx.MockTransport(handler),
     )
 
@@ -30,9 +32,8 @@ def test_successful_json_contract(name):
         payload = json.loads(request.content)
         assert payload["model"] == "mock"
         assert [m["role"] for m in payload["messages"]] == ["system", "user"]
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
+
     with _provider(name, handler) as provider:
         assert provider.complete_json(
             instructions="Classify", document_text="Untrusted book text"
@@ -43,9 +44,8 @@ def test_successful_json_contract(name):
 @pytest.mark.parametrize("bad_content", ["not-json", '{"headings":['])
 def test_invalid_or_truncated_json_is_rejected(name, bad_content):
     def handler(request):
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": bad_content}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": bad_content}}]})
+
     with _provider(name, handler) as provider:
         with pytest.raises(LLMError, match="decoding failed"):
             provider.complete_json(instructions="x", document_text="y")
@@ -54,9 +54,8 @@ def test_invalid_or_truncated_json_is_rejected(name, bad_content):
 @pytest.mark.parametrize("name", PROVIDERS)
 def test_api_error_is_sanitized(name):
     def handler(request):
-        return httpx.Response(
-            500, json={"error": "secret book content and bearer token"}
-        )
+        return httpx.Response(500, json={"error": "secret book content and bearer token"})
+
     with _provider(name, handler) as provider:
         with pytest.raises(LLMError) as exc:
             provider.complete_json(instructions="x", document_text="y")
@@ -67,9 +66,11 @@ def test_api_error_is_sanitized(name):
 @pytest.mark.parametrize("name", PROVIDERS)
 def test_timeout_is_bounded_and_sanitized(name):
     calls = []
+
     def handler(request):
         calls.append(1)
         raise httpx.ReadTimeout("private book text")
+
     with _provider(name, handler, retries=1) as provider:
         with pytest.raises(LLMError, match="transport failure") as exc:
             provider.complete_json(instructions="x", document_text="y")
@@ -80,20 +81,16 @@ def test_timeout_is_bounded_and_sanitized(name):
 @pytest.mark.parametrize("name", PROVIDERS)
 def test_json_mode_rejection_falls_back_once(name):
     formats = []
+
     def handler(request):
         payload = json.loads(request.content)
         formats.append(payload.get("response_format"))
         if len(formats) == 1:
-            return httpx.Response(
-                400, json={"error": {"message": "response_format unsupported"}}
-            )
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+            return httpx.Response(400, json={"error": {"message": "response_format unsupported"}})
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
+
     with _provider(name, handler) as provider:
-        assert provider.complete_json(
-            instructions="x", document_text="y"
-        ) == {"headings": []}
+        assert provider.complete_json(instructions="x", document_text="y") == {"headings": []}
     assert formats == [{"type": "json_object"}, None]
 
 
@@ -101,11 +98,19 @@ def test_json_mode_rejection_falls_back_once(name):
 def test_schema_incompatibility_rejected_by_structure_verifier(name):
     def handler(request):
         return httpx.Response(
-            200, json={"choices": [{"message": {
-                "content": '{"headings":[{"block_id":"b1","title":"Chapter",'
-                           '"confidence":"not-a-number"}]}'
-            }}]}
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"headings":[{"block_id":"b1","title":"Chapter",'
+                            '"confidence":"not-a-number"}]}'
+                        }
+                    }
+                ]
+            },
         )
+
     with _provider(name, handler) as provider:
         accepted, warnings = detect_llm_headings(
             [DocumentBlock(id="b1", page_index=0, text="Chapter")],

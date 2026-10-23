@@ -50,9 +50,14 @@ def test_provider_property_failures_are_sanitized_and_nonmutating(
     progress = tmp_path / "progress.json"
     with pytest.raises(AudioError, match=message) as raised:
         synthesize_chunks(
-            "Synthetic sample sentence.", provider,
-            model="test", voice="test", speed=1.0, pause_ms=100,
-            cache=tmp_path / "cache", progress_file=progress,
+            "Synthetic sample sentence.",
+            provider,
+            model="test",
+            voice="test",
+            speed=1.0,
+            pause_ms=100,
+            cache=tmp_path / "cache",
+            progress_file=progress,
         )
     assert PRIVATE not in str(raised.value)
     assert raised.value.__cause__ is None
@@ -78,9 +83,14 @@ class SingleReadRate(Engine):
 def test_synthesis_uses_one_validated_rate_snapshot(tmp_path: Path):
     provider = SingleReadRate()
     result = synthesize_chunks(
-        "Synthetic sample sentence.", provider,
-        model="test", voice="test", speed=1.0, pause_ms=100,
-        cache=tmp_path / "cache", progress_file=tmp_path / "progress.json",
+        "Synthetic sample sentence.",
+        provider,
+        model="test",
+        voice="test",
+        speed=1.0,
+        pause_ms=100,
+        cache=tmp_path / "cache",
+        progress_file=tmp_path / "progress.json",
     )
     assert result.size > 0
     assert provider.rate_reads == 1

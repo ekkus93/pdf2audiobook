@@ -6,8 +6,11 @@ def make_block(
     ident: str, text: str, y: float, *, x: float = 60, kind: str = "paragraph"
 ) -> DocumentBlock:
     return DocumentBlock(
-        id=ident, text=text, page_index=0,
-        bbox=(x, y, x + 200, y + 11), kind=kind,
+        id=ident,
+        text=text,
+        page_index=0,
+        bbox=(x, y, x + 200, y + 11),
+        kind=kind,
     )
 
 

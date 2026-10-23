@@ -17,9 +17,7 @@ class FakeImagePage:
 
 def test_image_inventory_is_bounded_and_review_warning_survives():
     images = [{"bbox": (0, 0, 120, 120)}] * 5001
-    warnings = _special_material_warnings(
-        FakeImagePage(images), [], page_number=7
-    )
+    warnings = _special_material_warnings(FakeImagePage(images), [], page_number=7)
     assert any("image inventory truncated" in warning for warning in warnings)
     assert any("embedded image detected" in warning for warning in warnings)
 
@@ -27,7 +25,8 @@ def test_image_inventory_is_bounded_and_review_warning_survives():
 def test_small_image_inventory_is_not_marked_truncated():
     warnings = _special_material_warnings(
         FakeImagePage([{"bbox": (0, 0, 120, 120)}]),
-        [], page_number=2,
+        [],
+        page_number=2,
     )
     assert not any("truncated" in warning for warning in warnings)
     assert any("embedded image detected" in warning for warning in warnings)
@@ -36,6 +35,7 @@ def test_small_image_inventory_is_not_marked_truncated():
 def test_nonsequence_image_metadata_keeps_manual_review_warning():
     warnings = _special_material_warnings(
         FakeImagePage(iter([{"bbox": (0, 0, 120, 120)}])),
-        [], page_number=3,
+        [],
+        page_number=3,
     )
     assert any("could not inspect embedded images" in warning for warning in warnings)

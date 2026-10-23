@@ -1,4 +1,5 @@
 """Non-destructive PDF special-material review warnings."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -42,6 +43,5 @@ def test_plain_text_page_does_not_emit_special_material_warnings(tmp_path: Path)
     doc.close()
     extracted = extract_pdf(source, Pdf(ocr="never"))
     assert not any(
-        "embedded image" in item or "small-font footnote" in item
-        for item in extracted.warnings
+        "embedded image" in item or "small-font footnote" in item for item in extracted.warnings
     )

@@ -25,7 +25,12 @@ def test_malformed_endpoints_are_rejected_without_parser_exceptions(endpoint):
     with pytest.raises(LLMError, match="Invalid LLM endpoint URL or port") as raised:
         validate_endpoint(endpoint, allow_remote=True)
     assert raised.value.__cause__ is None
-    assert raised.value.__suppress_context__ or endpoint in (None, "", "   ", "http://localhost:0/v1")
+    assert raised.value.__suppress_context__ or endpoint in (
+        None,
+        "",
+        "   ",
+        "http://localhost:0/v1",
+    )
 
 
 @pytest.mark.parametrize(

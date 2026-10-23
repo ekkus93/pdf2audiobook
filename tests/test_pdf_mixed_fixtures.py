@@ -1,4 +1,5 @@
 """Offline PDF fixtures for text, scanned, and mixed-page extraction."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,18 +26,19 @@ def _mixed_pdf(path: Path) -> None:
 def _fake_ocr(calls: list[int]):
     def recognize(page, settings):
         calls.append(page.number)
-        return [{
-            "text": f"Scanned page {page.number + 1} has an independent readable passage.",
-            "bbox": (70.0, 90.0, 510.0, 110.0),
-            "font": "OCR",
-            "size": 12.0,
-        }]
+        return [
+            {
+                "text": f"Scanned page {page.number + 1} has an independent readable passage.",
+                "bbox": (70.0, 90.0, 510.0, 110.0),
+                "font": "OCR",
+                "size": 12.0,
+            }
+        ]
+
     return recognize
 
 
-def test_auto_ocr_mixed_pdf_does_not_duplicate_embedded_text(
-    monkeypatch, tmp_path: Path
-):
+def test_auto_ocr_mixed_pdf_does_not_duplicate_embedded_text(monkeypatch, tmp_path: Path):
     source = tmp_path / "mixed.pdf"
     _mixed_pdf(source)
     calls = []
@@ -47,13 +49,12 @@ def test_auto_ocr_mixed_pdf_does_not_duplicate_embedded_text(
     assert [span.page_index for span in extracted.spans] == [0, 1]
     assert len({span.id for span in extracted.spans}) == 2
     assert len(extracted.blocks) == len(extracted.spans)
-    assert all(block.span_ids == [span.id] for block, span in
-               zip(extracted.blocks, extracted.spans))
+    assert all(
+        block.span_ids == [span.id] for block, span in zip(extracted.blocks, extracted.spans)
+    )
 
 
-def test_always_ocr_replaces_embedded_layer_instead_of_appending(
-    monkeypatch, tmp_path: Path
-):
+def test_always_ocr_replaces_embedded_layer_instead_of_appending(monkeypatch, tmp_path: Path):
     source = tmp_path / "always.pdf"
     _mixed_pdf(source)
     calls = []
@@ -65,9 +66,7 @@ def test_always_ocr_replaces_embedded_layer_instead_of_appending(
     assert not any("digitally typeset" in span.text for span in extracted.spans)
 
 
-def test_never_ocr_keeps_embedded_page_and_reports_scan(
-    monkeypatch, tmp_path: Path
-):
+def test_never_ocr_keeps_embedded_page_and_reports_scan(monkeypatch, tmp_path: Path):
     source = tmp_path / "never.pdf"
     _mixed_pdf(source)
     calls = []

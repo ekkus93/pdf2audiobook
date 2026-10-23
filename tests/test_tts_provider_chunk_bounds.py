@@ -24,8 +24,12 @@ class BoundedVoice:
 
 def _options(tmp_path):
     return dict(
-        model="small", voice="Default", speed=1.0, pause_ms=15,
-        cache=tmp_path / "wav", progress_file=tmp_path / "progress.json",
+        model="small",
+        voice="Default",
+        speed=1.0,
+        pause_ms=15,
+        cache=tmp_path / "wav",
+        progress_file=tmp_path / "progress.json",
     )
 
 
@@ -77,7 +81,8 @@ def test_invalid_provider_limits_fail_closed(tmp_path, limit):
 
 @pytest.mark.parametrize("rate", [0, -1, 7999, 192001, True, 24000.5, "24000"])
 def test_invalid_tts_sample_rate_does_not_write_cache_or_start_synthesis(
-    tmp_path, rate,
+    tmp_path,
+    rate,
 ):
     voice = BoundedVoice()
     voice.sample_rate = rate

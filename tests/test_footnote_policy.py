@@ -1,4 +1,5 @@
 """Conservative typed footnotes and opt-in audited omission."""
+
 from pathlib import Path
 
 import fitz
@@ -31,8 +32,7 @@ def test_typed_footnote_preserves_source_and_warn_policy(tmp_path: Path):
     notes = [block for block in result.blocks if block.kind == "footnote"]
     assert len(notes) == 1
     assert notes[0].text == "1 This is a separate footnote."
-    assert any(span.id == notes[0].id and span.text == notes[0].text
-               for span in result.spans)
+    assert any(span.id == notes[0].id and span.text == notes[0].text for span in result.spans)
     assert any("likely footnote anchor" in w for w in result.warnings)
 
 

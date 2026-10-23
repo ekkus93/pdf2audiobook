@@ -1,4 +1,5 @@
 """Chapter segmentation regression: front matter, parts, prologue and mid-page starts."""
+
 from pdf2audiobook.config import Chapters
 from pdf2audiobook.document.structure import (
     chapter_text,
@@ -10,8 +11,12 @@ from pdf2audiobook.models import DocumentBlock
 
 def block(index: int, page: int, text: str) -> DocumentBlock:
     return DocumentBlock(
-        id=f"b{index}", page_index=page, text=text,
-        span_ids=[], order=index, kind="unknown",
+        id=f"b{index}",
+        page_index=page,
+        text=text,
+        span_ids=[],
+        order=index,
+        kind="unknown",
     )
 
 
@@ -34,8 +39,14 @@ def test_front_matter_prologue_multiple_parts_and_epilogue():
     chapters, warnings = propose_chapters(blocks, set(), [], Chapters())
     validate_chapter_coverage(blocks, chapters)
     assert [c.title for c in chapters] == [
-        "Front Matter", "Prologue", "Part I", "Chapter 1",
-        "Chapter 2", "Part II", "Chapter 3", "Epilogue",
+        "Front Matter",
+        "Prologue",
+        "Part I",
+        "Chapter 1",
+        "Chapter 2",
+        "Part II",
+        "Chapter 3",
+        "Epilogue",
     ]
     assert [c.start_block for c in chapters] == [0, 1, 3, 4, 6, 8, 9, 11]
     assert [c.end_block for c in chapters] == [1, 3, 4, 6, 8, 9, 11, 13]

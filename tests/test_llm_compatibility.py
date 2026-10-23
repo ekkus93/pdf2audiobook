@@ -1,4 +1,5 @@
 """LLM provider compatibility, retry and configuration regression coverage."""
+
 import json
 
 import httpx
@@ -10,9 +11,12 @@ from pdf2audiobook.llm import OpenAICompatibleProvider
 
 def make_client(handler, *, temperature=0.1, max_retries=2):
     return OpenAICompatibleProvider(
-        provider="llama_server", base_url="http://127.0.0.1:8080/v1",
-        model="test", allow_remote=False,
-        temperature=temperature, max_retries=max_retries,
+        provider="llama_server",
+        base_url="http://127.0.0.1:8080/v1",
+        model="test",
+        allow_remote=False,
+        temperature=temperature,
+        max_retries=max_retries,
         transport=httpx.MockTransport(handler),
     )
 
@@ -26,14 +30,14 @@ def test_unsupported_json_mode_fallback_is_bounded():
         if "response_format" in payload:
             return httpx.Response(
                 400,
-                json={"error": {
-                    "message": "response_format is not supported by this server",
-                    "param": "response_format",
-                }},
+                json={
+                    "error": {
+                        "message": "response_format is not supported by this server",
+                        "param": "response_format",
+                    }
+                },
             )
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
 
     with make_client(handler, max_retries=0, temperature=0.25) as client:
         assert client.complete_json(instructions="system", document_text="raw") == {
@@ -65,9 +69,7 @@ def test_rate_limited_request_retried_without_content_loss(monkeypatch):
         inputs.append(json.loads(request.content))
         if len(inputs) <= 2:
             return httpx.Response(429, json={"error": "busy"})
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
 
     with make_client(handler) as client:
         assert client.complete_json(instructions="sys", document_text="book") == {

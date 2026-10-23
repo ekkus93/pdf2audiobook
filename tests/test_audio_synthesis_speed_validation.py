@@ -1,4 +1,5 @@
 """Validate public synthesis speed independently of the concrete TTS engine."""
+
 from __future__ import annotations
 
 import math
@@ -27,17 +28,20 @@ class UncheckedEngine:
     "speed",
     [0, -1, 3.00001, math.nan, math.inf, -math.inf, True, False, None, "1", [], {}],
 )
-def test_invalid_speed_fails_before_synthesis_cache_and_progress(
-    tmp_path: Path, speed
-):
+def test_invalid_speed_fails_before_synthesis_cache_and_progress(tmp_path: Path, speed):
     engine = UncheckedEngine()
     cache = tmp_path / "cache"
     progress = tmp_path / "progress.json"
     with pytest.raises(AudioError, match="speech speed") as raised:
         synthesize_chunks(
-            "An ordinary synthetic passage.", engine,
-            model="fixture", voice="fixture", speed=speed, pause_ms=0,
-            cache=cache, progress_file=progress,
+            "An ordinary synthetic passage.",
+            engine,
+            model="fixture",
+            voice="fixture",
+            speed=speed,
+            pause_ms=0,
+            cache=cache,
+            progress_file=progress,
         )
     assert raised.value.__cause__ is None
     assert engine.calls == 0
@@ -49,7 +53,10 @@ def test_invalid_speed_fails_before_synthesis_cache_and_progress(
 def test_valid_speed_remains_supported_and_reusable(tmp_path: Path, speed):
     engine = UncheckedEngine()
     opts = dict(
-        model="fixture", voice="fixture", speed=speed, pause_ms=0,
+        model="fixture",
+        voice="fixture",
+        speed=speed,
+        pause_ms=0,
         cache=tmp_path,
     )
     first = synthesize_chunks("An ordinary synthetic passage.", engine, **opts)

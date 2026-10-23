@@ -8,23 +8,38 @@ from pdf2audiobook.logging import EventFormatter, configure_logging, log_event
 
 def test_allowlisted_fields_and_event():
     record = logging.LogRecord(
-        "pdf2audiobook", logging.INFO, __file__, 1,
-        {"event": "command_started", "fields": {
-            "command": "analyze", "stage": "extract", "count": 3,
-            "unrecognized_field": "not for output",
-        }},
-        (), None,
+        "pdf2audiobook",
+        logging.INFO,
+        __file__,
+        1,
+        {
+            "event": "command_started",
+            "fields": {
+                "command": "analyze",
+                "stage": "extract",
+                "count": 3,
+                "unrecognized_field": "not for output",
+            },
+        },
+        (),
+        None,
     )
     assert json.loads(EventFormatter().format(record)) == {
-        "level": "info", "event": "command_started",
+        "level": "info",
+        "event": "command_started",
         "fields": {"command": "analyze", "stage": "extract", "count": 3},
     }
 
 
 def test_unstructured_message_redacted():
     record = logging.LogRecord(
-        "pdf2audiobook", logging.INFO, __file__, 1,
-        "unstructured private content", (), None,
+        "pdf2audiobook",
+        logging.INFO,
+        __file__,
+        1,
+        "unstructured private content",
+        (),
+        None,
     )
     assert "private content" not in EventFormatter().format(record)
 

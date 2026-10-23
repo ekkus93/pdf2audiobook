@@ -25,15 +25,17 @@ class StubVoice:
 
 def _synthesize(tmp_path, provider: StubVoice):
     return synthesize_chunks(
-        "A short, synthetic spoken sentence.", provider,
-        model="synthetic", voice="Test", speed=1.0, pause_ms=0,
+        "A short, synthetic spoken sentence.",
+        provider,
+        model="synthetic",
+        voice="Test",
+        speed=1.0,
+        pause_ms=0,
         cache=tmp_path,
     )
 
 
-def test_oversized_checksum_sidecar_regenerates_without_unbounded_read(
-    monkeypatch, tmp_path
-):
+def test_oversized_checksum_sidecar_regenerates_without_unbounded_read(monkeypatch, tmp_path):
     voice = StubVoice()
     _synthesize(tmp_path, voice)
     sidecar = next(tmp_path.glob("*.sha256"))
@@ -51,6 +53,7 @@ def test_oversized_checksum_sidecar_regenerates_without_unbounded_read(
         return original_read_bytes(path)
 
     monkeypatch.setattr(Path, "read_bytes", reject_sidecar_unbounded_read)
+
     def reject_sidecar_text_read(path, *args, **kwargs):
         if path == sidecar:
             raise AssertionError("unbounded sidecar text read")
@@ -81,8 +84,14 @@ def test_generated_chunk_exceeding_cache_bound_fails_with_progress(monkeypatch, 
     progress = tmp_path / "progress.json"
     with pytest.raises(AudioError, match="TTS chunk exceeds safe WAV cache limit"):
         synthesize_chunks(
-            "Synthetic short text.", voice, model="synthetic", voice="Test",
-            speed=1.0, pause_ms=0, cache=tmp_path, progress_file=progress,
+            "Synthetic short text.",
+            voice,
+            model="synthetic",
+            voice="Test",
+            speed=1.0,
+            pause_ms=0,
+            cache=tmp_path,
+            progress_file=progress,
         )
     assert voice.calls == 1
     assert not list(tmp_path.glob("*.wav"))

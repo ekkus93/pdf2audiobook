@@ -15,7 +15,10 @@ from pdf2audiobook.llm.budget import BookLLMBudgetLedger
     ],
 )
 def test_budget_gates_use_exact_cost(
-    tmp_path, stored_cost, postflight_reject, reserve_reject,
+    tmp_path,
+    stored_cost,
+    postflight_reject,
+    reserve_reject,
 ):
     ledger = BookLLMBudgetLedger(tmp_path / "ledger.sqlite3")
     with ledger._connect() as connection:
@@ -40,8 +43,11 @@ def test_budget_gates_use_exact_cost(
 
     def reserve():
         return ledger.reserve(
-            request_hash="next", provider_hash="provider",
-            max_requests=None, max_tokens=None, max_usd=0.3,
+            request_hash="next",
+            provider_hash="provider",
+            max_requests=None,
+            max_tokens=None,
+            max_usd=0.3,
         )
 
     if reserve_reject:

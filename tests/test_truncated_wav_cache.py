@@ -43,13 +43,16 @@ def test_truncated_wav_with_matching_checksum_is_regenerated(tmp_path: Path) -> 
     checksum_path.write_text(digest_bytes(incomplete) + "\n", encoding="utf-8")
 
     result = synthesize_chunks(
-        text, provider, model="mini", voice="voice", speed=1.0,
-        pause_ms=0, cache=cache,
+        text,
+        provider,
+        model="mini",
+        voice="voice",
+        speed=1.0,
+        pause_ms=0,
+        cache=cache,
     )
 
     assert provider.calls == 1
     assert result.size == 500
     assert read_wav(wav_path.read_bytes(), provider.sample_rate).size == 500
-    assert checksum_path.read_text(encoding="utf-8").strip() == digest_bytes(
-        wav_path.read_bytes()
-    )
+    assert checksum_path.read_text(encoding="utf-8").strip() == digest_bytes(wav_path.read_bytes())

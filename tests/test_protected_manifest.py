@@ -1,4 +1,5 @@
 """Approved manifest edits must survive cached analysis and reject destructive reruns."""
+
 from pathlib import Path
 
 import fitz

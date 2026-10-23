@@ -1,4 +1,5 @@
 """Empty automatic OCR must not silently discard available embedded prose."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,7 +20,9 @@ def _short_text_pdf(path: Path) -> None:
 
 @pytest.mark.parametrize("mode", ["auto", "always", "never"])
 def test_empty_ocr_preserves_short_embedded_prose_only_in_auto_mode(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mode: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
 ) -> None:
     source = tmp_path / "short-heading.pdf"
     _short_text_pdf(source)
@@ -41,9 +44,7 @@ def test_empty_ocr_preserves_short_embedded_prose_only_in_auto_mode(
         assert result.spans[0].origin == "embedded"
         assert result.spans[0].bbox is not None
     if mode == "auto":
-        assert any(
-            "retained unverified embedded text" in warning for warning in result.warnings
-        )
+        assert any("retained unverified embedded text" in warning for warning in result.warnings)
     else:
         assert not any(
             "retained unverified embedded text" in warning for warning in result.warnings
@@ -51,7 +52,8 @@ def test_empty_ocr_preserves_short_embedded_prose_only_in_auto_mode(
 
 
 def test_auto_ocr_empty_on_scanned_page_still_reports_no_text(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "blank.pdf"
     with fitz.open() as doc:
@@ -61,6 +63,4 @@ def test_auto_ocr_empty_on_scanned_page_still_reports_no_text(
     result = extract_pdf(source, Pdf(ocr="auto"))
     assert not result.spans
     assert any("OCR produced no text" in warning for warning in result.warnings)
-    assert not any(
-        "retained unverified embedded text" in warning for warning in result.warnings
-    )
+    assert not any("retained unverified embedded text" in warning for warning in result.warnings)

@@ -13,11 +13,13 @@ def test_raster_figure_warning_preserves_embedded_paragraph(tmp_path):
     with fitz.open() as document:
         page = document.new_page(width=600, height=800)
         page.insert_text(
-            (72, 80), "This source paragraph is present and must remain intact.",
+            (72, 80),
+            "This source paragraph is present and must remain intact.",
             fontsize=12,
         )
         page.insert_image(
-            fitz.Rect(100, 150, 350, 400), stream=pixmap.tobytes("png"),
+            fitz.Rect(100, 150, 350, 400),
+            stream=pixmap.tobytes("png"),
         )
         document.save(source)
 

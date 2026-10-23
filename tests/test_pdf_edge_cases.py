@@ -1,4 +1,5 @@
 """Deterministic malformed, encrypted, rotated and blank PDF acceptance."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -87,7 +88,9 @@ def test_page_text_failure_reports_page_number(monkeypatch, tmp_path: Path):
         raise RuntimeError("broken page text stream")
 
     monkeypatch.setattr("pdf2audiobook.pdf._lines", fail_text)
-    with pytest.raises(ExtractionError, match="Failed to extract embedded text from PDF page 1") as failure:
+    with pytest.raises(
+        ExtractionError, match="Failed to extract embedded text from PDF page 1"
+    ) as failure:
         extract_pdf(source, Pdf(ocr="never"))
     assert "broken page text stream" not in str(failure.value)
 
@@ -102,7 +105,8 @@ def test_missing_pdf_error_does_not_echo_private_path(tmp_path: Path):
 
 @pytest.mark.parametrize("failed_method", ["get_toc", "get_page_labels"])
 def test_inspection_backend_failure_redacts_untrusted_diagnostics(
-    monkeypatch, failed_method: str,
+    monkeypatch,
+    failed_method: str,
 ):
     marker = "CONFIDENTIAL_DOCUMENT_CONTENT_729"
 

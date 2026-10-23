@@ -1,4 +1,5 @@
 """Synthetic scanned/mixed-PDF integration acceptance (no copyrighted content)."""
+
 from __future__ import annotations
 
 import shutil
@@ -38,8 +39,5 @@ def test_mixed_embedded_and_scanned_text(tmp_path: Path):
     manifest = read_manifest(analyze_book(source, settings))
     assert len(manifest.chapters) == 2
     assert any(span.origin == "ocr" and span.page_index == 0 for span in manifest.spans)
-    assert any(
-        span.origin == "embedded" and span.page_index == 1
-        for span in manifest.spans
-    )
+    assert any(span.origin == "embedded" and span.page_index == 1 for span in manifest.spans)
     assert "scanned story" in " ".join(s.text.lower() for s in manifest.spans)

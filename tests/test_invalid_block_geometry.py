@@ -11,8 +11,11 @@ from pdf2audiobook.models import DocumentBlock
 
 def _block(page: int, text: str, box=(280.0, 760.0, 320.0, 772.0)):
     return DocumentBlock(
-        id=f"p{page}-{text}", page_index=page, text=text,
-        bbox=box, font_size=11.0,
+        id=f"p{page}-{text}",
+        page_index=page,
+        text=text,
+        bbox=box,
+        font_size=11.0,
     )
 
 
@@ -58,6 +61,4 @@ def test_invalid_reflow_bbox_preserves_separate_lines():
     second = _block(0, "Second prose line", (60.0, 115.0, 200.0, 129.0))
     assert reflow_narration_lines([first, second]) == "First prose line Second prose line\n"
     invalid = first.model_copy(update={"bbox": (60.0, 100.0, math.inf, 114.0)})
-    assert reflow_narration_lines([invalid, second]) == (
-        "First prose line\n\nSecond prose line\n"
-    )
+    assert reflow_narration_lines([invalid, second]) == ("First prose line\n\nSecond prose line\n")

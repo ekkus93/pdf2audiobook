@@ -43,14 +43,16 @@ def test_multi_page_chapter_analysis_exact_coverage_and_repeat_cache(tmp_path):
             fontsize=11,
         )
         page.insert_text(
-            (70, 142), "A second paragraph ensures there are multiple source text spans.",
+            (70, 142),
+            "A second paragraph ensures there are multiple source text spans.",
             fontsize=11,
         )
     pdf.save(source)
     pdf.close()
     settings = Settings(
         general=General(output_dir=str(tmp_path / "audio")),
-        pdf=Pdf(ocr="never"), llm=LLM(enabled=False),
+        pdf=Pdf(ocr="never"),
+        llm=LLM(enabled=False),
     )
     output = analyze_book(source, settings)
     original = output.read_bytes()
@@ -69,14 +71,17 @@ def test_multi_page_chapter_analysis_exact_coverage_and_repeat_cache(tmp_path):
 
 def test_many_chunk_interruption_resumes_only_valid_checkpoints(tmp_path):
     narration = " ".join(
-        f"Sentence {index} provides unique and complete text."
-        for index in range(300)
+        f"Sentence {index} provides unique and complete text." for index in range(300)
     )
     chunk_count = len(split_sentences(narration))
     assert chunk_count >= 20
     args = dict(
-        model="mini", voice="Jasper", speed=1.0,
-        pause_ms=30, cache=tmp_path / "wav", progress_file=tmp_path / "progress.json",
+        model="mini",
+        voice="Jasper",
+        speed=1.0,
+        pause_ms=30,
+        cache=tmp_path / "wav",
+        progress_file=tmp_path / "progress.json",
     )
     failed = InterruptibleVoice(fail_at=7)
     with pytest.raises(AudioError, match="TTS synthesis failed"):
@@ -104,7 +109,8 @@ def test_invalid_pdf_fail_closed_and_does_not_emit_manifest(tmp_path):
         extract_pdf(path, Pdf(ocr="never"))
     settings = Settings(
         general=General(output_dir=str(tmp_path / "output")),
-        pdf=Pdf(ocr="never"), llm=LLM(enabled=False),
+        pdf=Pdf(ocr="never"),
+        llm=LLM(enabled=False),
     )
     with pytest.raises(InputError):
         analyze_book(path, settings)
@@ -118,14 +124,20 @@ def test_transient_provider_error_retries_then_succeeds():
         calls.append(request)
         if len(calls) == 1:
             return httpx.Response(503, json={"error": "transient"})
-        return httpx.Response(200, json={
-            "choices": [{"message": {"content": '{"headings":[]}'}}],
-        })
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"headings":[]}'}}],
+            },
+        )
 
     with OpenAICompatibleProvider(
-        provider="ollama", base_url="http://127.0.0.1:11434/v1",
-        model="fixed", allow_remote=False,
-        transport=httpx.MockTransport(handler), max_retries=2,
+        provider="ollama",
+        base_url="http://127.0.0.1:11434/v1",
+        model="fixed",
+        allow_remote=False,
+        transport=httpx.MockTransport(handler),
+        max_retries=2,
     ) as provider:
         assert provider.complete_json(
             instructions="classification task", document_text="Fixture"

@@ -38,9 +38,14 @@ def settings(tmp_path, fallback):
         general=General(output_dir=str(tmp_path / "out")),
         chapters=Chapters(allow_single_chapter=True),
         pdf=Pdf(ocr="never"),
-        llm=LLM(enabled=True, structure=True, cleanup=True,
-                classification=False, narration=False,
-                fallback_to_deterministic=fallback),
+        llm=LLM(
+            enabled=True,
+            structure=True,
+            cleanup=True,
+            classification=False,
+            narration=False,
+            fallback_to_deterministic=fallback,
+        ),
     )
 
 
@@ -88,13 +93,18 @@ def test_fallback_preserves_unrelated_footnote_review_warnings(tmp_path, monkeyp
     monkeypatch.setattr(pipeline, "create_provider", lambda _: FailingModel())
     sample = fixture(tmp_path)
     fake = ExtractedDocument(
-        title="Book", author=None, toc=[], spans=[],
+        title="Book",
+        author=None,
+        toc=[],
+        spans=[],
         blocks=[
             DocumentBlock(id="h1", page_index=0, kind="heading", text="Chapter 1"),
-            DocumentBlock(id="f1", page_index=0, kind="footnote",
-                          text="1. Explanatory note retained."),
+            DocumentBlock(
+                id="f1", page_index=0, kind="footnote", text="1. Explanatory note retained."
+            ),
         ],
-        page_sizes=[(600, 800)], warnings=[],
+        page_sizes=[(600, 800)],
+        warnings=[],
     )
     monkeypatch.setattr(pipeline, "extract_pdf", lambda *a, **k: fake)
     options = settings(tmp_path, fallback=True)

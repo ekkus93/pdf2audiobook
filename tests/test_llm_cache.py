@@ -25,9 +25,9 @@ def test_cache_key_includes_content_prompt_and_provider(tmp_path):
     assert original.calls == 1
     worker.complete_json(instructions="schema2", document_text="Book text")
     worker.complete_json(instructions="schema1", document_text="Other book")
-    CachedLLMProvider(
-        original, cache_dir=tmp_path, identity="model-v2"
-    ).complete_json(instructions="schema1", document_text="Book text")
+    CachedLLMProvider(original, cache_dir=tmp_path, identity="model-v2").complete_json(
+        instructions="schema1", document_text="Book text"
+    )
     assert original.calls == 4
     assert worker.hits == 1
     assert len(list(tmp_path.glob("*.json"))) == 4
@@ -43,9 +43,7 @@ def test_corruption_and_forged_fingerprint_cause_regeneration(tmp_path):
     worker.complete_json(instructions="prompt", document_text="source")
     assert provider.calls == 2
     data = json.loads(path.read_text())
-    assert data["fingerprint"] == fingerprint(
-        "llm-json-cache-v1", "model", "prompt", "source"
-    )
+    assert data["fingerprint"] == fingerprint("llm-json-cache-v1", "model", "prompt", "source")
     data["fingerprint"] = "forged"
     path.write_text(json.dumps(data))
     worker.complete_json(instructions="prompt", document_text="source")
@@ -55,7 +53,10 @@ def test_corruption_and_forged_fingerprint_cause_regeneration(tmp_path):
 def test_disabled_cache_and_failed_response_are_not_persisted(tmp_path):
     provider = Stub()
     worker = CachedLLMProvider(
-        provider, cache_dir=tmp_path, identity="model", enabled=False,
+        provider,
+        cache_dir=tmp_path,
+        identity="model",
+        enabled=False,
     )
     worker.complete_json(instructions="prompt", document_text="source")
     worker.complete_json(instructions="prompt", document_text="source")
@@ -68,10 +69,11 @@ def test_disabled_cache_and_failed_response_are_not_persisted(tmp_path):
 
     with pytest.raises(RuntimeError, match="backend failed"):
         CachedLLMProvider(
-            Failure(), cache_dir=tmp_path, identity="model",
+            Failure(),
+            cache_dir=tmp_path,
+            identity="model",
         ).complete_json(instructions="prompt", document_text="source")
     assert not list(tmp_path.glob("*.json"))
-
 
 
 def test_request_budget_counts_misses_but_allows_cache_hits(tmp_path):
@@ -81,15 +83,14 @@ def test_request_budget_counts_misses_but_allows_cache_hits(tmp_path):
     report = tmp_path / "reports" / "llm_usage.json"
     provider = Stub()
     worker = CachedLLMProvider(
-        provider, cache_dir=tmp_path / "cache", identity="model",
-        max_requests=1, usage_report=report,
+        provider,
+        cache_dir=tmp_path / "cache",
+        identity="model",
+        max_requests=1,
+        usage_report=report,
     )
-    assert worker.complete_json(instructions="classify", document_text=source) == {
-        "headings": []
-    }
-    assert worker.complete_json(instructions="classify", document_text=source) == {
-        "headings": []
-    }
+    assert worker.complete_json(instructions="classify", document_text=source) == {"headings": []}
+    assert worker.complete_json(instructions="classify", document_text=source) == {"headings": []}
     with pytest.raises(LLMError, match="request budget exhausted"):
         worker.complete_json(instructions="classify", document_text="Different passage")
     assert provider.calls == 1
@@ -115,8 +116,12 @@ def test_request_budget_counts_failed_provider_attempts(tmp_path):
 
     provider = FailingProvider()
     worker = CachedLLMProvider(
-        provider, cache_dir=tmp_path / "cache", identity="model",
-        enabled=False, max_requests=1, usage_report=tmp_path / "usage.json",
+        provider,
+        cache_dir=tmp_path / "cache",
+        identity="model",
+        enabled=False,
+        max_requests=1,
+        usage_report=tmp_path / "usage.json",
     )
     with pytest.raises(LLMError, match="offline"):
         worker.complete_json(instructions="x", document_text="secret")
@@ -131,13 +136,15 @@ def test_request_budget_config_env_and_validation():
     from pdf2audiobook.errors import ConfigError
 
     settings, sources = load_settings(
-        no_config=True, environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "2"},
+        no_config=True,
+        environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "2"},
     )
     assert settings.llm.max_requests == 2
     assert sources["llm.max_requests"] == "env:PDF2AUDIOBOOK_LLM_MAX_REQUESTS"
     with pytest.raises(ConfigError, match="invalid configuration values"):
         load_settings(
-            no_config=True, environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "0"},
+            no_config=True,
+            environ={"PDF2AUDIOBOOK_LLM_MAX_REQUESTS": "0"},
         )
 
 
@@ -149,16 +156,22 @@ def test_cached_provider_identity_invalidates_on_output_token_cap_change(tmp_pat
     settings = Settings()
     first_identity = _llm_cache_identity(settings)
     CachedLLMProvider(
-        provider, cache_dir=tmp_path, identity=first_identity,
+        provider,
+        cache_dir=tmp_path,
+        identity=first_identity,
     ).complete_json(instructions="schema", document_text="text")
     settings.llm.max_output_tokens = 256
     updated_identity = _llm_cache_identity(settings)
     assert first_identity != updated_identity
     CachedLLMProvider(
-        provider, cache_dir=tmp_path, identity=updated_identity,
+        provider,
+        cache_dir=tmp_path,
+        identity=updated_identity,
     ).complete_json(instructions="schema", document_text="text")
     assert provider.calls == 2
     CachedLLMProvider(
-        provider, cache_dir=tmp_path, identity=updated_identity,
+        provider,
+        cache_dir=tmp_path,
+        identity=updated_identity,
     ).complete_json(instructions="schema", document_text="text")
     assert provider.calls == 2

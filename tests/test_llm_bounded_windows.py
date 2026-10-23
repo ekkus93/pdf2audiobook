@@ -26,8 +26,9 @@ from pdf2audiobook.models import DocumentBlock
 def test_json_windows_bounded_and_complete(task, response_key):
     blocks = [
         DocumentBlock(
-            id=f"b{index}", page_index=index // 4,
-            text=f"Source line {index}: café \\n\\t \"quoted\" text",
+            id=f"b{index}",
+            page_index=index // 4,
+            text=f'Source line {index}: café \\n\\t "quoted" text',
         )
         for index in range(12)
     ]
@@ -47,8 +48,7 @@ def test_json_windows_bounded_and_complete(task, response_key):
     assert not result and not warnings
     assert len(recorder.windows) > 1
     records = [
-        record for window in recorder.windows for record in window
-        if not record.get("context_only")
+        record for window in recorder.windows for record in window if not record.get("context_only")
     ]
     assert [record["id"] for record in records] == [block.id for block in blocks]
     assert [record["text"] for record in records] == [block.text for block in blocks]
@@ -109,16 +109,28 @@ def test_long_full_source_is_verified_without_legacy_truncation():
             assert records == [{"id": "long", "text": original}]
             observed.append(document_text)
             if "edits" in instructions:
-                return {"edits": [{
-                    "block_id": "long", "original": original,
-                    "replacement": original.replace("Nasa", "NASA", 1),
-                    "reason": "OCR casing", "confidence": 0.95,
-                }]}
-            return {"suggestions": [{
-                "block_id": "long", "original": original,
-                "spoken": original.replace("Nasa", "NASA", 1),
-                "reason": "Acronym pronunciation", "confidence": 0.95,
-            }]}
+                return {
+                    "edits": [
+                        {
+                            "block_id": "long",
+                            "original": original,
+                            "replacement": original.replace("Nasa", "NASA", 1),
+                            "reason": "OCR casing",
+                            "confidence": 0.95,
+                        }
+                    ]
+                }
+            return {
+                "suggestions": [
+                    {
+                        "block_id": "long",
+                        "original": original,
+                        "spoken": original.replace("Nasa", "NASA", 1),
+                        "reason": "Acronym pronunciation",
+                        "confidence": 0.95,
+                    }
+                ]
+            }
 
     provider = FullSource()
     edits, warnings = propose_llm_cleanup([block], provider, chunk_tokens=1600)
@@ -144,17 +156,19 @@ def test_escaped_untrusted_text_cannot_create_additional_json_records():
     approved, warnings = detect_llm_headings(blocks, Recorder(), chunk_tokens=300)
     assert not approved and not warnings
 
+
 def test_lookback_is_context_only_not_an_editable_primary_record():
     from pdf2audiobook.llm import _bounded_block_windows
 
-    blocks = [
-        DocumentBlock(id=f"b{i}", page_index=0, text=f"Text {i}.")
-        for i in range(5)
-    ]
-    windows = list(_bounded_block_windows(
-        blocks, window_size=2, max_json_bytes=450,
-        record=lambda item: {"id": item.id, "text": item.text},
-    ))
+    blocks = [DocumentBlock(id=f"b{i}", page_index=0, text=f"Text {i}.") for i in range(5)]
+    windows = list(
+        _bounded_block_windows(
+            blocks,
+            window_size=2,
+            max_json_bytes=450,
+            record=lambda item: {"id": item.id, "text": item.text},
+        )
+    )
     assert len(windows) == 3
     assert [block.id for _, group, _ in windows for block in group] == [
         block.id for block in blocks
@@ -179,13 +193,15 @@ def test_oversized_source_record_breaks_context_overlap():
         DocumentBlock(id="huge", page_index=0, text="x" * 1000),
         DocumentBlock(id="b", page_index=0, text="Small again."),
     ]
-    windows = list(_bounded_block_windows(
-        blocks, window_size=1, max_json_bytes=150,
-        record=lambda item: {"id": item.id, "text": item.text},
-    ))
-    assert [group[0].id if group else None for _, group, _ in windows] == [
-        "a", None, "b"
-    ]
+    windows = list(
+        _bounded_block_windows(
+            blocks,
+            window_size=1,
+            max_json_bytes=150,
+            record=lambda item: {"id": item.id, "text": item.text},
+        )
+    )
+    assert [group[0].id if group else None for _, group, _ in windows] == ["a", None, "b"]
     assert json.loads(windows[-1][2]) == [{"id": "b", "text": "Small again."}]
 
 
@@ -206,29 +222,42 @@ def test_llm_cannot_nominate_read_only_context_source(task, response_key):
 
     class ContextOnly:
         def complete_json(self, *, instructions, document_text):
-            contexts = [row for row in json.loads(document_text)
-                        if row.get("context_only")]
+            contexts = [row for row in json.loads(document_text) if row.get("context_only")]
             if not contexts:
                 return {response_key: []}
             row = contexts[0]
             if response_key == "headings":
-                proposal = {"block_id": row["id"], "title": row["text"],
-                            "confidence": 0.99}
+                proposal = {"block_id": row["id"], "title": row["text"], "confidence": 0.99}
             elif response_key == "edits":
-                proposal = {"block_id": row["id"], "original": row["text"],
-                            "replacement": "New content", "confidence": 0.99,
-                            "reason": "not authorized"}
+                proposal = {
+                    "block_id": row["id"],
+                    "original": row["text"],
+                    "replacement": "New content",
+                    "confidence": 0.99,
+                    "reason": "not authorized",
+                }
             elif response_key == "labels":
-                proposal = {"block_id": row["id"], "category": "heading",
-                            "confidence": 0.99, "reason": "not authorized"}
+                proposal = {
+                    "block_id": row["id"],
+                    "category": "heading",
+                    "confidence": 0.99,
+                    "reason": "not authorized",
+                }
             else:
-                proposal = {"block_id": row["id"], "original": row["text"],
-                            "spoken": "Unauthorized narration",
-                            "confidence": 0.99, "reason": "not authorized"}
+                proposal = {
+                    "block_id": row["id"],
+                    "original": row["text"],
+                    "spoken": "Unauthorized narration",
+                    "confidence": 0.99,
+                    "reason": "not authorized",
+                }
             return {response_key: [proposal]}
 
     result, warnings = task(
-        blocks, ContextOnly(), window_size=1, chunk_tokens=500,
+        blocks,
+        ContextOnly(),
+        window_size=1,
+        chunk_tokens=500,
     )
     assert result == set() if response_key == "headings" else result == []
     assert len(warnings) == 1

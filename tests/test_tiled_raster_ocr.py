@@ -13,8 +13,9 @@ HEADING = "An unusually long selectable heading for this page"
 RECOGNIZED = "Synthetic scanned prose recovered from the raster tiles."
 
 
-def _tiled_pdf(path: Path, *, pixels: int, placements: list[tuple[int, int]],
-               substantial_text: bool = False) -> None:
+def _tiled_pdf(
+    path: Path, *, pixels: int, placements: list[tuple[int, int]], substantial_text: bool = False
+) -> None:
     pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, pixels, pixels), False)
     pix.clear_with(255)
     raster = pix.tobytes("png")
@@ -46,7 +47,10 @@ QUADRANTS = [(0, 0), (200, 0), (0, 200), (200, 200)]
     ],
 )
 def test_raster_union_uses_visible_coverage_not_sum_of_tiles(
-    tmp_path: Path, pixels: int, placements: list[tuple[int, int]], expected: bool,
+    tmp_path: Path,
+    pixels: int,
+    placements: list[tuple[int, int]],
+    expected: bool,
 ) -> None:
     source = tmp_path / "tiled.pdf"
     _tiled_pdf(source, pixels=pixels, placements=placements)
@@ -64,9 +68,12 @@ def test_raster_union_uses_visible_coverage_not_sum_of_tiles(
     ],
 )
 def test_tiled_scan_auto_ocr_does_not_discard_valid_embedded_prose(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-    pixels: int, placements: list[tuple[int, int]],
-    substantial: bool, should_ocr: bool,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    pixels: int,
+    placements: list[tuple[int, int]],
+    substantial: bool,
+    should_ocr: bool,
 ) -> None:
     source = tmp_path / "tiled.pdf"
     _tiled_pdf(source, pixels=pixels, placements=placements, substantial_text=substantial)
@@ -74,10 +81,14 @@ def test_tiled_scan_auto_ocr_does_not_discard_valid_embedded_prose(
 
     def fake_ocr(*args: object, **kwargs: object) -> list[dict]:
         calls.append(True)
-        return [{
-            "text": RECOGNIZED, "bbox": [30, 110, 350, 125],
-            "font": "OCR", "size": 12.0,
-        }]
+        return [
+            {
+                "text": RECOGNIZED,
+                "bbox": [30, 110, 350, 125],
+                "font": "OCR",
+                "size": 12.0,
+            }
+        ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", fake_ocr)
     result = extract_pdf(source, Pdf(ocr="auto"))
@@ -86,8 +97,9 @@ def test_tiled_scan_auto_ocr_does_not_discard_valid_embedded_prose(
         assert result.spans and result.spans[0].origin == "ocr"
         assert result.spans[0].text == RECOGNIZED
         assert any("sparse selectable text overlays" in w for w in result.warnings)
-        assert any("automatic OCR did not reproduce short selectable text" in w
-                   for w in result.warnings)
+        assert any(
+            "automatic OCR did not reproduce short selectable text" in w for w in result.warnings
+        )
     else:
         assert result.spans and all(span.origin == "embedded" for span in result.spans)
         assert HEADING in " ".join(span.text for span in result.spans)
@@ -108,7 +120,8 @@ def test_real_tesseract_recovers_prose_from_four_scanned_tiles(tmp_path: Path) -
                 elif index == 2:
                     tile_page.insert_text((18, 110), "Another sentence survives.", fontsize=13)
                 image = tile_page.get_pixmap(
-                    matrix=fitz.Matrix(2, 2), alpha=False,
+                    matrix=fitz.Matrix(2, 2),
+                    alpha=False,
                 ).tobytes("png")
                 page.insert_image(fitz.Rect(x, y, x + 200, y + 200), stream=image)
         page.insert_text((30, 60), HEADING, fontsize=10)
@@ -127,7 +140,9 @@ def test_real_tesseract_recovers_prose_from_four_scanned_tiles(tmp_path: Path) -
 
 @pytest.mark.parametrize("rotation", [90, 270])
 def test_rotated_wide_scans_use_unrotated_raster_coverage(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rotation: int,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    rotation: int,
 ) -> None:
     """Auto OCR must not clip unrotated image bounds to rotated page.rect."""
     source = tmp_path / f"wide-rotated-{rotation}.pdf"
@@ -151,10 +166,14 @@ def test_rotated_wide_scans_use_unrotated_raster_coverage(
 
     def fake_ocr(*args: object, **kwargs: object) -> list[dict]:
         calls.append(1)
-        return [{
-            "text": RECOGNIZED, "bbox": [30, 100, 650, 115],
-            "font": "OCR", "size": 12.0,
-        }]
+        return [
+            {
+                "text": RECOGNIZED,
+                "bbox": [30, 100, 650, 115],
+                "font": "OCR",
+                "size": 12.0,
+            }
+        ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", fake_ocr)
     result = extract_pdf(source, Pdf(ocr="auto"))

@@ -19,8 +19,14 @@ from pdf2audiobook.llm import smoke
         ),
         (
             [
-                "--provider", "openai", "--model", "test", "--execute",
-                "--allow-remote-content", "--base-url", "https://example.invalid/v1",
+                "--provider",
+                "openai",
+                "--model",
+                "test",
+                "--execute",
+                "--allow-remote-content",
+                "--base-url",
+                "https://example.invalid/v1",
             ],
             "endpoint cannot be overridden",
         ),
@@ -110,7 +116,5 @@ def test_smoke_unexpected_model_schema_fails_without_leaking_response(
     monkeypatch.setattr(smoke, "create_provider", lambda settings: FakeProvider())
     assert smoke.run(["--provider", "ollama", "--model", "test", "--execute"]) == 1
     output = capsys.readouterr().out
-    assert json.loads(output) == {
-        "ok": False, "provider": "ollama", "error": "unexpected_schema"
-    }
+    assert json.loads(output) == {"ok": False, "provider": "ollama", "error": "unexpected_schema"}
     assert "must-not-be-printed" not in output

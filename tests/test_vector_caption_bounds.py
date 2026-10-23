@@ -11,10 +11,7 @@ class DenseVectorPage:
     def get_drawings(self):
         # Many sizable but horizontally disjoint paths; without a bound the
         # pairwise region scan would grow quadratically with page complexity.
-        return [
-            {"rect": (i * 100.0, 10.0, i * 100.0 + 40.0, 50.0)}
-            for i in range(3000)
-        ]
+        return [{"rect": (i * 100.0, 10.0, i * 100.0 + 40.0, 50.0)} for i in range(3000)]
 
 
 def test_complex_vector_page_caps_caption_candidates_but_flags_review(monkeypatch):

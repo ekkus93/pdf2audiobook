@@ -2,6 +2,7 @@
 
 The fixture is generated from synthetic text, not copyrighted book content.
 """
+
 from __future__ import annotations
 
 import shutil
@@ -17,7 +18,8 @@ from pdf2audiobook.pdf import _ocr_page_lines, extract_pdf
 @pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract unavailable")
 @pytest.mark.parametrize("rotation", [0, 90, 180, 270])
 def test_real_ocr_preserves_rotated_scan_and_mixed_page_provenance(
-    tmp_path: Path, rotation: int,
+    tmp_path: Path,
+    rotation: int,
 ):
     source = tmp_path / "rotated-mixed.pdf"
     raster_source = fitz.open()

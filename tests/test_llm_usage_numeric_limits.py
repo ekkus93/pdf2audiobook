@@ -17,18 +17,24 @@ def response(usage):
 
 
 def test_oversized_usage_does_not_poison_valid_fields_or_followup():
-    responses = iter([
-        response({
-            "prompt_tokens": 10**400,
-            "completion_tokens": 3,
-            "total_tokens": 10**400,
-        }),
-        response({
-            "prompt_tokens": 5,
-            "completion_tokens": 2,
-            "total_tokens": 7,
-        }),
-    ])
+    responses = iter(
+        [
+            response(
+                {
+                    "prompt_tokens": 10**400,
+                    "completion_tokens": 3,
+                    "total_tokens": 10**400,
+                }
+            ),
+            response(
+                {
+                    "prompt_tokens": 5,
+                    "completion_tokens": 2,
+                    "total_tokens": 7,
+                }
+            ),
+        ]
+    )
 
     def handler(request):
         return next(responses)
@@ -39,25 +45,33 @@ def test_oversized_usage_does_not_poison_valid_fields_or_followup():
         }
         assert provider.last_usage == {"completion_tokens": 3}
         assert provider.total_usage == {
-            "prompt_tokens": 0, "completion_tokens": 3, "total_tokens": 0
+            "prompt_tokens": 0,
+            "completion_tokens": 3,
+            "total_tokens": 0,
         }
         assert provider.complete_json(instructions="test", document_text="synthetic") == {
             "ok": True
         }
         assert provider.last_usage == {
-            "prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7
+            "prompt_tokens": 5,
+            "completion_tokens": 2,
+            "total_tokens": 7,
         }
         assert provider.total_usage == {
-            "prompt_tokens": 5, "completion_tokens": 5, "total_tokens": 7
+            "prompt_tokens": 5,
+            "completion_tokens": 5,
+            "total_tokens": 7,
         }
 
 
 def test_aggregate_usage_overflow_does_not_wrap_or_overwrite():
     max_signed = 2**63 - 1
-    responses = iter([
-        response({"prompt_tokens": max_signed, "completion_tokens": 0, "total_tokens": 0}),
-        response({"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 2}),
-    ])
+    responses = iter(
+        [
+            response({"prompt_tokens": max_signed, "completion_tokens": 0, "total_tokens": 0}),
+            response({"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 2}),
+        ]
+    )
 
     with create_provider(
         Settings(), transport=httpx.MockTransport(lambda request: next(responses))
@@ -82,5 +96,7 @@ def test_boolean_negative_and_noninteger_usage_stays_unknown():
         provider.complete_json(instructions="test", document_text="synthetic")
         assert provider.last_usage == {}
         assert provider.total_usage == {
-            "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
         }

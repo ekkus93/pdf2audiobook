@@ -13,14 +13,18 @@ class Metered:
     def __init__(self):
         self.calls = 0
         self.total_usage = {
-            "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
         }
         self.last_usage = {}
 
     def complete_json(self, *, instructions, document_text):
         self.calls += 1
         self.last_usage = {
-            "prompt_tokens": 40, "completion_tokens": 10, "total_tokens": 50,
+            "prompt_tokens": 40,
+            "completion_tokens": 10,
+            "total_tokens": 50,
         }
         for key, value in self.last_usage.items():
             self.total_usage[key] += value
@@ -30,8 +34,11 @@ class Metered:
 def test_reported_token_limit_blocks_future_requests_and_fails_overshoot(tmp_path):
     provider = Metered()
     worker = CachedLLMProvider(
-        provider, cache_dir=tmp_path / "cache", identity="model",
-        max_reported_tokens=70, usage_report=tmp_path / "usage.json",
+        provider,
+        cache_dir=tmp_path / "cache",
+        identity="model",
+        max_reported_tokens=70,
+        usage_report=tmp_path / "usage.json",
     )
     worker.complete_json(instructions="task", document_text="Private source A")
     with pytest.raises(LLMError, match="token budget"):
@@ -50,15 +57,17 @@ def test_reported_token_limit_blocks_future_requests_and_fails_overshoot(tmp_pat
 def test_priced_cost_limit_uses_reported_usage_and_explicit_rates(tmp_path):
     provider = Metered()
     worker = CachedLLMProvider(
-        provider, cache_dir=tmp_path / "cache", identity="model",
+        provider,
+        cache_dir=tmp_path / "cache",
+        identity="model",
         max_estimated_cost_usd=0.00009,
         input_cost_usd_per_million_tokens=2,
         output_cost_usd_per_million_tokens=1,
         usage_report=tmp_path / "usage.json",
     )
-    assert worker.complete_json(
-        instructions="task", document_text="Private source"
-    ) == {"headings": []}
+    assert worker.complete_json(instructions="task", document_text="Private source") == {
+        "headings": []
+    }
     with pytest.raises(LLMError, match="cost budget"):
         worker.complete_json(instructions="task", document_text="Another source")
     assert provider.calls == 1
@@ -79,7 +88,9 @@ def test_missing_telemetry_fails_closed_when_token_limit_is_enabled(tmp_path):
 
     provider = Silent()
     worker = CachedLLMProvider(
-        provider, cache_dir=tmp_path, identity="model",
+        provider,
+        cache_dir=tmp_path,
+        identity="model",
         max_reported_tokens=100,
     )
     with pytest.raises(LLMError, match="requires provider-reported usage"):

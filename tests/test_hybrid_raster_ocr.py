@@ -1,4 +1,5 @@
 """Hybrid scanned pages with short selectable overlays require OCR review."""
+
 from __future__ import annotations
 
 import shutil
@@ -54,12 +55,14 @@ def test_dominant_raster_with_selectable_heading(
 
     def fake_ocr(*args: object, **kwargs: object) -> list[dict]:
         calls.append(True)
-        return [{
-            "text": RECOGNIZED,
-            "bbox": [30, 85, 350, 105],
-            "font": "OCR",
-            "size": 12.0,
-        }]
+        return [
+            {
+                "text": RECOGNIZED,
+                "bbox": [30, 85, 350, 105],
+                "font": "OCR",
+                "size": 12.0,
+            }
+        ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", fake_ocr)
     extracted = extract_pdf(source, Pdf(ocr=mode))
@@ -73,15 +76,15 @@ def test_dominant_raster_with_selectable_heading(
         assert extracted.spans[0].origin == "embedded"
     hybrid_warning = any("sparse selectable text overlays" in w for w in extracted.warnings)
     missing_heading_warning = any(
-        "automatic OCR did not reproduce short selectable text" in w
-        for w in extracted.warnings
+        "automatic OCR did not reproduce short selectable text" in w for w in extracted.warnings
     )
     assert hybrid_warning is (mode == "auto" and image_width == 600)
     assert missing_heading_warning is (mode == "auto" and image_width == 600)
 
 
 def test_dominant_raster_with_substantial_selectable_text_stays_embedded(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "text-with-raster.pdf"
     _hybrid_page(source, image_width=600, long_text=True)
@@ -105,10 +108,14 @@ def test_real_tesseract_recovers_scanned_body_beneath_selectable_heading(
     with fitz.open() as raster_doc:
         page = raster_doc.new_page(width=400, height=400)
         page.insert_text(
-            (35, 160), "The scanner captured this hidden body.", fontsize=17,
+            (35, 160),
+            "The scanner captured this hidden body.",
+            fontsize=17,
         )
         page.insert_text(
-            (35, 195), "More prose belongs in the audiobook.", fontsize=17,
+            (35, 195),
+            "More prose belongs in the audiobook.",
+            fontsize=17,
         )
         raster = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False).tobytes("png")
 
@@ -131,18 +138,21 @@ def test_real_tesseract_recovers_scanned_body_beneath_selectable_heading(
 
 
 def test_hybrid_raster_ocr_only_selectable_overlay_requires_specific_review(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     source = tmp_path / "heading-only-ocr.pdf"
     _hybrid_page(source, image_width=600)
 
     def heading_only_ocr(*args: object, **kwargs: object) -> list[dict]:
-        return [{
-            "text": HEADING,
-            "bbox": [30, 50, 340, 65],
-            "font": "OCR",
-            "size": 10.0,
-        }]
+        return [
+            {
+                "text": HEADING,
+                "bbox": [30, 50, 340, 65],
+                "font": "OCR",
+                "size": 10.0,
+            }
+        ]
 
     monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", heading_only_ocr)
     result = extract_pdf(source, Pdf(ocr="auto"))

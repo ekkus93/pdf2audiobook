@@ -21,8 +21,11 @@ def test_finite_but_unrepresentable_cost_fails_closed(tmp_path, cost):
     actions = [
         ledger.totals,
         lambda: ledger.reserve(
-            request_hash="new", provider_hash="provider",
-            max_requests=None, max_tokens=None, max_usd=1.0,
+            request_hash="new",
+            provider_hash="provider",
+            max_requests=None,
+            max_tokens=None,
+            max_usd=1.0,
         ),
         lambda: ledger.check_spend(max_tokens=None, max_usd=1.0),
     ]

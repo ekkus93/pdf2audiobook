@@ -53,10 +53,21 @@ def test_analyze_json_stdout_is_pure_json(tmp_path):
     _book(source)
     result = subprocess.run(
         [
-            sys.executable, "-c", "from pdf2audiobook.cli import app; app()",
-            "analyze", str(source), "--no-config", "--no-llm", "--output", str(tmp_path / "out"), "--json",
+            sys.executable,
+            "-c",
+            "from pdf2audiobook.cli import app; app()",
+            "analyze",
+            str(source),
+            "--no-config",
+            "--no-llm",
+            "--output",
+            str(tmp_path / "out"),
+            "--json",
         ],
-        capture_output=True, text=True, timeout=120, check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)

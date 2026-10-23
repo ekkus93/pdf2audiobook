@@ -1,4 +1,5 @@
 """Atomic TTS chunk progress ledgers and interruption recovery."""
+
 import json
 
 import numpy as np
@@ -27,8 +28,11 @@ class Provider:
 
 def options(tmp_path):
     return {
-        "model": "mini", "voice": "Jasper", "speed": 1.0,
-        "pause_ms": 50, "cache": tmp_path / "wav",
+        "model": "mini",
+        "voice": "Jasper",
+        "speed": 1.0,
+        "pause_ms": 50,
+        "cache": tmp_path / "wav",
         "progress_file": tmp_path / "progress" / "chapter.json",
     }
 

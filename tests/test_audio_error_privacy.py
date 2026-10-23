@@ -53,6 +53,7 @@ def test_audio_errors_redact_private_backend_diagnostics(
     monkeypatch.setattr(audio.subprocess, "run", fake_run)
 
     if failure == "metadata":
+
         def invalid_metadata(*args, **kwargs):
             raise ValueError(f"invalid ID3 book content {PRIVATE}")
 

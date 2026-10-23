@@ -28,8 +28,7 @@ def test_default_config_and_cli_config_show(monkeypatch):
 def test_explicit_false_wins_over_env_and_toml(tmp_path: Path):
     config = tmp_path / "config.toml"
     config.write_text(
-        "[general]\nresume = true\n"
-        "[llm]\nenabled = true\nallow_remote_content = true\n",
+        "[general]\nresume = true\n[llm]\nenabled = true\nallow_remote_content = true\n",
         encoding="utf-8",
     )
     settings, sources = load_settings(
@@ -55,8 +54,7 @@ def test_explicit_false_wins_over_env_and_toml(tmp_path: Path):
 def test_environment_explicit_false_overrides_file(tmp_path: Path):
     config = tmp_path / "config.toml"
     config.write_text(
-        "[general]\nresume = true\n[llm]\nenabled = true\n"
-        "allow_remote_content = true\n",
+        "[general]\nresume = true\n[llm]\nenabled = true\nallow_remote_content = true\n",
         encoding="utf-8",
     )
     settings, sources = load_settings(
@@ -82,10 +80,17 @@ def test_convert_no_llm_and_no_resume_cli_are_explicit_false(monkeypatch):
         return []
 
     monkeypatch.setattr("pdf2audiobook.pipeline.convert_book", fake_convert)
-    result = runner.invoke(app, [
-        "convert", "synthetic.pdf", "--no-config", "--no-llm",
-        "--no-resume", "--json",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "convert",
+            "synthetic.pdf",
+            "--no-config",
+            "--no-llm",
+            "--no-resume",
+            "--json",
+        ],
+    )
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == {"mp3_files": []}
     assert captured["source"] == Path("synthetic.pdf")
@@ -102,10 +107,19 @@ def test_analyze_model_override_targets_env_selected_provider(monkeypatch):
 
     monkeypatch.setenv("PDF2AUDIOBOOK_LLM_PROVIDER", "llama-server")
     monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", fake_analyze)
-    result = runner.invoke(app, [
-        "analyze", "synthetic.pdf", "--no-config", "--llm-model", "local-model",
-        "--llm-url", "http://127.0.0.1:8080/v1", "--json",
-    ])
+    result = runner.invoke(
+        app,
+        [
+            "analyze",
+            "synthetic.pdf",
+            "--no-config",
+            "--llm-model",
+            "local-model",
+            "--llm-url",
+            "http://127.0.0.1:8080/v1",
+            "--json",
+        ],
+    )
     assert result.exit_code == 0, result.output
     assert captured["settings"].llm.provider == "llama-server"
     assert captured["settings"].llm.llama_server.model == "local-model"
@@ -124,9 +138,7 @@ def test_remote_content_requires_consent_and_approval_sends_only_requested_text(
 
     def handler(request):
         requests.append(request)
-        return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]}
-        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"headings":[]}'}}]})
 
     transport = httpx.MockTransport(handler)
     try:

@@ -19,20 +19,26 @@ def test_extracted_span_invalid_font_size_is_conservative(invalid):
     class Page(FakePage):
         def get_text(self, *args, **kwargs):
             return {
-                "blocks": [{
-                    "lines": [{
-                        "bbox": (40, 700, 250, 712),
-                        "spans": [{"text": "Preserved footnote content", "size": invalid}],
-                    }],
-                }],
+                "blocks": [
+                    {
+                        "lines": [
+                            {
+                                "bbox": (40, 700, 250, 712),
+                                "spans": [{"text": "Preserved footnote content", "size": invalid}],
+                            }
+                        ],
+                    }
+                ],
             }
 
-    assert _lines(Page()) == [{
-        "text": "Preserved footnote content",
-        "bbox": (40, 700, 250, 712),
-        "font": None,
-        "size": 0.0,
-    }]
+    assert _lines(Page()) == [
+        {
+            "text": "Preserved footnote content",
+            "bbox": (40, 700, 250, 712),
+            "font": None,
+            "size": 0.0,
+        }
+    ]
 
 
 @pytest.mark.parametrize("invalid", [10**400, float("inf"), float("nan"), True, "7", None])
@@ -46,9 +52,7 @@ def test_special_material_warning_ignores_invalid_font_size(invalid):
         "size": invalid,
         "bbox": (40, 720, 300, 730),
     }
-    assert _special_material_warnings(
-        FakePage(), body + [invalid_note], page_number=1
-    ) == []
+    assert _special_material_warnings(FakePage(), body + [invalid_note], page_number=1) == []
 
 
 @pytest.mark.parametrize(
@@ -63,10 +67,7 @@ def test_special_material_warning_ignores_invalid_font_size(invalid):
     ],
 )
 def test_review_warning_ignores_invalid_bbox(invalid_bbox):
-    lines = [
-        {"text": f"Preserved line {n}", "bbox": invalid_bbox}
-        for n in range(5)
-    ]
+    lines = [{"text": f"Preserved line {n}", "bbox": invalid_bbox} for n in range(5)]
     assert page_review_warnings(lines, page_number=2, origin="embedded") == []
 
 

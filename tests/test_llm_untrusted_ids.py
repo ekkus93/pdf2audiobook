@@ -23,19 +23,25 @@ def test_unknown_model_identifier_is_not_reflected_in_warnings_or_audit(kind):
                 item = {"block_id": forged, "title": block.text, "confidence": 0.99}
             elif kind == "edits":
                 item = {
-                    "block_id": forged, "original": block.text,
-                    "replacement": "A different chapter.", "confidence": 0.99,
+                    "block_id": forged,
+                    "original": block.text,
+                    "replacement": "A different chapter.",
+                    "confidence": 0.99,
                     "reason": "OCR correction",
                 }
             elif kind == "labels":
                 item = {
-                    "block_id": forged, "category": "heading",
-                    "confidence": 0.99, "reason": "layout evidence",
+                    "block_id": forged,
+                    "category": "heading",
+                    "confidence": 0.99,
+                    "reason": "layout evidence",
                 }
             else:
                 item = {
-                    "block_id": forged, "original": block.text,
-                    "spoken": "Chapter one.", "confidence": 0.99,
+                    "block_id": forged,
+                    "original": block.text,
+                    "spoken": "Chapter one.",
+                    "confidence": 0.99,
                     "reason": "pronunciation guidance",
                 }
             return {kind: [item]}
@@ -46,7 +52,9 @@ def test_unknown_model_identifier_is_not_reflected_in_warnings_or_audit(kind):
         result, warnings = detect_llm_headings([block], provider)
     elif kind == "edits":
         result, warnings = propose_llm_cleanup(
-            [block], provider, decisions=decisions,
+            [block],
+            provider,
+            decisions=decisions,
         )
     elif kind == "labels":
         result, warnings = propose_llm_classification([block], provider)

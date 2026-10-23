@@ -1,4 +1,5 @@
 """Preserve dialogue, scene breaks, lists and headings during safe PDF reflow."""
+
 from pdf2audiobook.document.structure import reflow_narration_lines
 from pdf2audiobook.models import DocumentBlock
 
@@ -6,8 +7,13 @@ from pdf2audiobook.models import DocumentBlock
 def block(index: int, text: str, *, kind: str = "unknown") -> DocumentBlock:
     top = 100 + index * 14
     return DocumentBlock(
-        id=f"b{index}", span_ids=[], text=text, page_index=0,
-        bbox=(72, top, 400, top + 12), order=index, kind=kind,
+        id=f"b{index}",
+        span_ids=[],
+        text=text,
+        page_index=0,
+        bbox=(72, top, 400, top + 12),
+        order=index,
+        kind=kind,
     )
 
 
@@ -28,8 +34,11 @@ def test_dialogue_and_scene_markers_stay_separate():
     ]
     result = reflow_narration_lines(lines)
     assert result.split("\n\n") == [
-        "The room was quiet.", "“Who is there?”", "— Someone replied.",
-        "* * *", "The next scene began.\n",
+        "The room was quiet.",
+        "“Who is there?”",
+        "— Someone replied.",
+        "* * *",
+        "The next scene began.\n",
     ]
 
 
@@ -81,6 +90,4 @@ def test_large_vertical_gap_stays_separate():
     first = block(0, "A short paragraph.")
     second = block(1, "Another paragraph.")
     second.bbox = (72, 160, 400, 172)
-    assert reflow_narration_lines([first, second]) == (
-        "A short paragraph.\n\nAnother paragraph.\n"
-    )
+    assert reflow_narration_lines([first, second]) == ("A short paragraph.\n\nAnother paragraph.\n")

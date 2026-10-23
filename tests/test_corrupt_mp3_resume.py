@@ -25,7 +25,9 @@ from pdf2audiobook.workspace import digest_bytes
     ],
 )
 def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
-    tmp_path, monkeypatch, sidecar_override,
+    tmp_path,
+    monkeypatch,
+    sidecar_override,
 ):
     settings = Settings()
     settings.general.resume = True
@@ -34,14 +36,25 @@ def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
     root = tmp_path / "book-output"
     manifest_path = root / "manifest.json"
     chapter = Chapter(
-        id="chapter-1", number=1, title="Synthetic Chapter",
-        start_block=0, end_block=1, confidence=1.0,
+        id="chapter-1",
+        number=1,
+        title="Synthetic Chapter",
+        start_block=0,
+        end_block=1,
+        confidence=1.0,
     )
     manifest = BookManifest(
-        input_sha256="synthetic-sha", title="Synthetic Book", source_path=str(source),
-        blocks=[DocumentBlock(
-            id="paragraph", text="Synthetic text.", span_ids=[], page_index=0,
-        )],
+        input_sha256="synthetic-sha",
+        title="Synthetic Book",
+        source_path=str(source),
+        blocks=[
+            DocumentBlock(
+                id="paragraph",
+                text="Synthetic text.",
+                span_ids=[],
+                page_index=0,
+            )
+        ],
         chapters=[chapter],
     )
     chapter_dir = root / "chapters"
@@ -53,13 +66,18 @@ def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
     invalid_mp3 = b"not an MPEG audio frame"
     output.write_bytes(invalid_mp3)
     record = output.with_suffix(".cache.json")
-    valid_record = json.dumps({
-        "fingerprint": pipeline.chapter_audio_fingerprint(
-            chapter_text, settings, manifest, chapter,
-        ),
-        "bytes": len(invalid_mp3),
-        "sha256": digest_bytes(invalid_mp3),
-    })
+    valid_record = json.dumps(
+        {
+            "fingerprint": pipeline.chapter_audio_fingerprint(
+                chapter_text,
+                settings,
+                manifest,
+                chapter,
+            ),
+            "bytes": len(invalid_mp3),
+            "sha256": digest_bytes(invalid_mp3),
+        }
+    )
     record.write_text(
         valid_record if sidecar_override is None else sidecar_override,
         encoding="utf-8",
@@ -77,7 +95,8 @@ def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
     monkeypatch.setattr(pipeline, "render_chapter_texts", lambda *_: None)
     monkeypatch.setattr(pipeline, "KittenProvider", StubKitten)
     monkeypatch.setattr(
-        pipeline, "synthesize_chunks",
+        pipeline,
+        "synthesize_chunks",
         lambda *_args, **_kwargs: np.full(2400, 0.01, dtype=np.float32),
     )
 

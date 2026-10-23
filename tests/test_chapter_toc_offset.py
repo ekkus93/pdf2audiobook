@@ -19,14 +19,13 @@ def offset_book():
 def test_consistent_printed_page_offset_recovers_unmarked_chapter():
     blocks = offset_book()
     chapters, warnings = propose_chapters(
-        blocks, set(),
+        blocks,
+        set(),
         [[1, "Chapter 1", 1], [1, "Chapter 2", 2], [1, "The Quiet Forest", 3]],
         Chapters(),
     )
     validate_chapter_coverage(blocks, chapters)
-    assert [chapter.title for chapter in chapters] == [
-        "Chapter 1", "Chapter 2", "The Quiet Forest"
-    ]
+    assert [chapter.title for chapter in chapters] == ["Chapter 1", "Chapter 2", "The Quiet Forest"]
     assert [chapter.start_block for chapter in chapters] == [0, 2, 4]
     assert [chapter.confidence for chapter in chapters] == [0.85, 0.85, 0.85]
     assert any("page offset +5 inferred from 2 unique headings" in w for w in warnings)
@@ -35,7 +34,8 @@ def test_consistent_printed_page_offset_recovers_unmarked_chapter():
 def test_conflicting_offsets_do_not_invent_chapter_boundary():
     blocks = offset_book()
     chapters, warnings = propose_chapters(
-        blocks, set(),
+        blocks,
+        set(),
         [[1, "Chapter 1", 1], [1, "Chapter 2", 10], [1, "The Quiet Forest", 3]],
         Chapters(),
     )

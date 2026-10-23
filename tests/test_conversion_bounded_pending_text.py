@@ -17,14 +17,20 @@ def _setup_conversion(tmp_path, monkeypatch, chapter_texts):
     manifest_path = root / "manifest.json"
     chapters = [
         Chapter(
-            id=f"chapter-{index}", number=index, title=f"Chapter {index}",
-            start_block=index - 1, end_block=index, confidence=1.0,
+            id=f"chapter-{index}",
+            number=index,
+            title=f"Chapter {index}",
+            start_block=index - 1,
+            end_block=index,
+            confidence=1.0,
         )
         for index in range(1, len(chapter_texts) + 1)
     ]
     manifest = BookManifest(
-        input_sha256="synthetic", title="Synthetic book",
-        source_path=str(source), chapters=chapters,
+        input_sha256="synthetic",
+        title="Synthetic book",
+        source_path=str(source),
+        chapters=chapters,
     )
 
     def render(_manifest, folder):
@@ -37,7 +43,8 @@ def _setup_conversion(tmp_path, monkeypatch, chapter_texts):
     monkeypatch.setattr(pipeline, "read_manifest", lambda *_args: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", render)
     monkeypatch.setattr(
-        pipeline, "audio_output_path",
+        pipeline,
+        "audio_output_path",
         lambda _manifest, chapter, _folder: root / "audio" / f"{chapter.number:03d}.mp3",
     )
     return source, Settings(), root
@@ -45,14 +52,19 @@ def _setup_conversion(tmp_path, monkeypatch, chapter_texts):
 
 def test_multiple_chapters_render_in_order_without_retaining_pending_text(tmp_path, monkeypatch):
     source, settings, root = _setup_conversion(
-        tmp_path, monkeypatch, ["First chapter.", "Second chapter.", "Third chapter."],
+        tmp_path,
+        monkeypatch,
+        ["First chapter.", "Second chapter.", "Third chapter."],
     )
     seen = []
     monkeypatch.setattr(
-        pipeline, "KittenProvider", lambda *_args: SimpleNamespace(sample_rate=24000),
+        pipeline,
+        "KittenProvider",
+        lambda *_args: SimpleNamespace(sample_rate=24000),
     )
     monkeypatch.setattr(
-        pipeline, "synthesize_chunks",
+        pipeline,
+        "synthesize_chunks",
         lambda text, *_args, **_kwargs: seen.append(text) or [0.0],
     )
 
@@ -69,7 +81,9 @@ def test_multiple_chapters_render_in_order_without_retaining_pending_text(tmp_pa
 
 def test_chapter_edit_between_preflight_and_synthesis_fails_closed(tmp_path, monkeypatch):
     source, settings, root = _setup_conversion(
-        tmp_path, monkeypatch, ["Original approved chapter."],
+        tmp_path,
+        monkeypatch,
+        ["Original approved chapter."],
     )
     chapter_file = root / "chapters" / "001.txt"
     original_read = Path.read_text
@@ -84,7 +98,8 @@ def test_chapter_edit_between_preflight_and_synthesis_fails_closed(tmp_path, mon
 
     monkeypatch.setattr(Path, "read_text", change_after_preflight)
     monkeypatch.setattr(
-        pipeline, "KittenProvider",
+        pipeline,
+        "KittenProvider",
         lambda *_args: pytest.fail("TTS must not load for changed chapter text"),
     )
     with pytest.raises(AudioError, match="Approved chapter text changed") as exc:

@@ -15,14 +15,25 @@ def test_missing_or_undecodable_chapter_text_is_private(tmp_path, monkeypatch, f
     root = tmp_path / "workspace-PRIVATE_BOOK_TITLE"
     manifest_path = root / "manifest.json"
     chapter = Chapter(
-        id="chapter-one", number=1, title="Private synthetic chapter",
-        start_block=0, end_block=1, confidence=1.0,
+        id="chapter-one",
+        number=1,
+        title="Private synthetic chapter",
+        start_block=0,
+        end_block=1,
+        confidence=1.0,
     )
     manifest = BookManifest(
-        input_sha256="synthetic-input", title="Synthetic book", source_path=str(source),
-        blocks=[DocumentBlock(
-            id="body", page_index=0, text="Synthetic words", span_ids=[],
-        )],
+        input_sha256="synthetic-input",
+        title="Synthetic book",
+        source_path=str(source),
+        blocks=[
+            DocumentBlock(
+                id="body",
+                page_index=0,
+                text="Synthetic words",
+                span_ids=[],
+            )
+        ],
         chapters=[chapter],
     )
     if failure == "invalid_encoding":
@@ -35,7 +46,8 @@ def test_missing_or_undecodable_chapter_text_is_private(tmp_path, monkeypatch, f
     monkeypatch.setattr(pipeline, "read_manifest", lambda _path: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", lambda *args: None)
     monkeypatch.setattr(
-        pipeline, "KittenProvider",
+        pipeline,
+        "KittenProvider",
         lambda *_args: pytest.fail("Kitten model must not load on invalid chapter text"),
     )
 

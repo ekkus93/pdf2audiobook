@@ -20,12 +20,18 @@ def test_chunk_mapping_preserves_source_offsets_and_punctuation(tmp_path):
     assert spans[0][2] is False
     assert spans[1][2] is True
     assert [text[a:b].split() for (a, b, _) in spans] == [c.split() for c in chunks]
-    assert text[spans[0][1]:spans[1][0]] == "\n\n"
+    assert text[spans[0][1] : spans[1][0]] == "\n\n"
 
     ledger_path = tmp_path / "progress.json"
     audio = synthesize_chunks(
-        text, FakeVoice(), model="mini", voice="Jasper", speed=1,
-        pause_ms=100, cache=tmp_path / "wav", progress_file=ledger_path,
+        text,
+        FakeVoice(),
+        model="mini",
+        voice="Jasper",
+        speed=1,
+        pause_ms=100,
+        cache=tmp_path / "wav",
+        progress_file=ledger_path,
     )
     assert audio.size == 2400 * 2 + 4800  # Doubled paragraph pause.
     import json

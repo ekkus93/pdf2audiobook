@@ -24,12 +24,7 @@ class InterruptibleProvider:
 def _chapter():
     # Deliberately exceed the half-chunk sentence threshold for three
     # separate, stable cache keys rather than depending on punctuation alone.
-    return " ".join(
-        [
-            " ".join([word] * 38) + "."
-            for word in ("alpha", "bravo", "charlie")
-        ]
-    )
+    return " ".join([" ".join([word] * 38) + "." for word in ("alpha", "bravo", "charlie")])
 
 
 def test_interrupted_synthesis_reuses_only_completed_chunks(tmp_path):
@@ -37,8 +32,11 @@ def test_interrupted_synthesis_reuses_only_completed_chunks(tmp_path):
     chunks = split_sentences(chapter)
     assert len(chunks) == 3
     options = dict(
-        model="mini", voice="Jasper", speed=1.0,
-        pause_ms=0, cache=tmp_path,
+        model="mini",
+        voice="Jasper",
+        speed=1.0,
+        pause_ms=0,
+        cache=tmp_path,
     )
     interrupted = InterruptibleProvider(fail_at=2)
     with pytest.raises(AudioError, match="TTS synthesis failed"):
@@ -61,8 +59,11 @@ def test_interrupted_synthesis_reuses_only_completed_chunks(tmp_path):
 def test_no_resume_regenerates_all_chunks(tmp_path):
     chapter = _chapter()
     options = dict(
-        model="mini", voice="Jasper", speed=1.0,
-        pause_ms=0, cache=tmp_path,
+        model="mini",
+        voice="Jasper",
+        speed=1.0,
+        pause_ms=0,
+        cache=tmp_path,
     )
     synthesize_chunks(chapter, InterruptibleProvider(), **options)
     forced = InterruptibleProvider()

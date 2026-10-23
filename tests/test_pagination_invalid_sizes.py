@@ -11,18 +11,31 @@ from pdf2audiobook.models import DocumentBlock
 
 def folio(page: int) -> DocumentBlock:
     return DocumentBlock(
-        id=f"folio-{page + 1}", span_ids=[f"folio-{page + 1}"],
-        text=str(page + 1), page_index=page, kind="unknown",
-        bbox=(295.0, 807.0, 305.0, 820.0), font_size=10.0,
+        id=f"folio-{page + 1}",
+        span_ids=[f"folio-{page + 1}"],
+        text=str(page + 1),
+        page_index=page,
+        kind="unknown",
+        bbox=(295.0, 807.0, 305.0, 820.0),
+        font_size=10.0,
     )
 
 
 @pytest.mark.parametrize(
     "bad_dimensions",
     [
-        (0, 842), (-1, 842), (math.nan, 842), (math.inf, 842),
-        ("595", 842), (True, 842), (10**500, 842), (595, None),
-        (595,), None, (), (595, 842, 0),
+        (0, 842),
+        (-1, 842),
+        (math.nan, 842),
+        (math.inf, 842),
+        ("595", 842),
+        (True, 842),
+        (10**500, 842),
+        (595, None),
+        (595,),
+        None,
+        (),
+        (595, 842, 0),
     ],
 )
 def test_bad_page_sizes_never_authorize_folio_removal(bad_dimensions):

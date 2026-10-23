@@ -42,11 +42,13 @@ def test_pdf_equation_is_typed_and_kept_separate_for_narration(tmp_path: Path):
     equations = [block for block in extracted.blocks if block.kind == "equation"]
     assert len(equations) == 1
     assert equations[0].text == "E = mc^2"
-    assert any(span.id == equations[0].id and span.text == equations[0].text
-               for span in extracted.spans)
+    assert any(
+        span.id == equations[0].id and span.text == equations[0].text for span in extracted.spans
+    )
     assert any("displayed equation" in warning for warning in extracted.warnings)
-    assert not any(block.kind == "equation" and "relationship" in block.text
-                   for block in extracted.blocks)
+    assert not any(
+        block.kind == "equation" and "relationship" in block.text for block in extracted.blocks
+    )
 
     settings = Settings(
         general=General(output_dir=str(tmp_path / "output")),

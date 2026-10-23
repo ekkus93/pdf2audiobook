@@ -42,9 +42,7 @@ def test_unambiguous_sequential_folios_remain_removable():
         _block(2, 1, "3", 780),
     ]
     edits = pagination_cleanup(blocks, [(595, 842)] * 3, Pdf())
-    assert {edit.block_id for edit in edits} == {
-        "p0-n1", "p1-n1", "p2-n1"
-    }
+    assert {edit.block_id for edit in edits} == {"p0-n1", "p1-n1", "p2-n1"}
     assert all(edit.accepted and edit.replacement == "" for edit in edits)
 
 

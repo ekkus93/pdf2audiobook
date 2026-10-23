@@ -54,6 +54,10 @@ def test_vector_detector_failure_warns_without_crashing():
         def get_drawings(self):
             raise RuntimeError("malformed vector content")
 
-    assert "inspection unavailable" in vector_artwork_warnings(
-        Broken(), page_number=2,
-    )[0]
+    assert (
+        "inspection unavailable"
+        in vector_artwork_warnings(
+            Broken(),
+            page_number=2,
+        )[0]
+    )

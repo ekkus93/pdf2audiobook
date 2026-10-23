@@ -37,6 +37,7 @@ def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "KittenProvider", lambda _: SimpleNamespace(sample_rate=24000))
     monkeypatch.setattr(pipeline, "synthesize_chunks", synthesize)
     monkeypatch.setattr(pipeline, "encode_mp3", encode)
+
     # Match the production MP3(ID3=EasyID3) call and expose the chapter
     # identity required to reuse a cached audio file.
     def read_mp3(_path, *, ID3):
@@ -53,15 +54,17 @@ def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
     assert len(calls) == 1
     pipeline.convert_book(tmp_path / "book.pdf", settings, force=True)
     assert len(calls) == 2
-    disabled = settings.model_copy(update={
-        "general": settings.general.model_copy(update={"resume": False})
-    })
+    disabled = settings.model_copy(
+        update={"general": settings.general.model_copy(update={"resume": False})}
+    )
     pipeline.convert_book(tmp_path / "book.pdf", disabled)
     assert len(calls) == 3
-    changed = settings.model_copy(update={
-        "tts": settings.tts.model_copy(update={
-            "kitten": settings.tts.kitten.model_copy(update={"voice": "OtherVoice"})
-        })
-    })
+    changed = settings.model_copy(
+        update={
+            "tts": settings.tts.model_copy(
+                update={"kitten": settings.tts.kitten.model_copy(update={"voice": "OtherVoice"})}
+            )
+        }
+    )
     pipeline.convert_book(tmp_path / "book.pdf", changed)
     assert calls == ["Jasper", "Jasper", "Jasper", "OtherVoice"]

@@ -26,10 +26,14 @@ def test_confirmed_note_gathers_only_adjacent_continuation_lines():
 
 def test_other_columns_large_gaps_and_unanchored_small_text_are_not_notes():
     body = [_line("First body paragraph", 100), _line("Second body paragraph", 140)]
-    assert _footnote_line_indices(
-        body + [_line("Unnumbered small print", 640, size=8)],
-        page_height=842, table_regions=[],
-    ) == set()
+    assert (
+        _footnote_line_indices(
+            body + [_line("Unnumbered small print", 640, size=8)],
+            page_height=842,
+            table_regions=[],
+        )
+        == set()
+    )
     lines = body + [
         _line("1. Confirmed footnote", 640, size=8),
         _line("Remote annotation", 675, size=8),
@@ -38,7 +42,9 @@ def test_other_columns_large_gaps_and_unanchored_small_text_are_not_notes():
     assert _footnote_line_indices(lines, page_height=842, table_regions=[]) == {2}
     lines[3] = _line("Adjacent table cell", 651, size=8)
     assert _footnote_line_indices(
-        lines, page_height=842, table_regions=[(45, 648, 400, 665)],
+        lines,
+        page_height=842,
+        table_regions=[(45, 648, 400, 665)],
     ) == {2}
 
 

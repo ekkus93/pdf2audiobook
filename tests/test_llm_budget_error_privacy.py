@@ -23,12 +23,17 @@ def test_ledger_sqlite_failures_hide_raw_diagnostics(
     kwargs = {
         "totals": {},
         "reserve": {
-            "request_hash": "synthetic", "provider_hash": "test",
-            "max_requests": None, "max_tokens": None, "max_usd": None,
+            "request_hash": "synthetic",
+            "provider_hash": "test",
+            "max_requests": None,
+            "max_tokens": None,
+            "max_usd": None,
         },
         "settle": {
-            "call_id": 1, "usage": None,
-            "input_rate": None, "output_rate": None,
+            "call_id": 1,
+            "usage": None,
+            "input_rate": None,
+            "output_rate": None,
         },
         "check_spend": {"max_tokens": None, "max_usd": None},
     }[method]

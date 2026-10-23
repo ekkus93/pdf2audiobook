@@ -15,12 +15,18 @@ def test_resume_recovers_from_output_stat_race_without_leaking_path(tmp_path, mo
     root.mkdir()
     manifest_path = root / "manifest.json"
     chapter = Chapter(
-        id="chapter-one", number=1, title="Chapter One",
-        start_block=0, end_block=1, confidence=1.0,
+        id="chapter-one",
+        number=1,
+        title="Chapter One",
+        start_block=0,
+        end_block=1,
+        confidence=1.0,
     )
     manifest = BookManifest(
-        input_sha256="synthetic", title="Synthetic book",
-        source_path=str(source), chapters=[chapter],
+        input_sha256="synthetic",
+        title="Synthetic book",
+        source_path=str(source),
+        chapters=[chapter],
     )
     output = root / "audio" / "PRIVATE_BOOK_TITLE.mp3"
     output.parent.mkdir()
@@ -38,11 +44,14 @@ def test_resume_recovers_from_output_stat_race_without_leaking_path(tmp_path, mo
     monkeypatch.setattr(pipeline, "render_chapter_texts", render)
     monkeypatch.setattr(pipeline, "audio_output_path", lambda *_args: output)
     monkeypatch.setattr(
-        pipeline, "KittenProvider", lambda *_args: SimpleNamespace(sample_rate=24000),
+        pipeline,
+        "KittenProvider",
+        lambda *_args: SimpleNamespace(sample_rate=24000),
     )
     syntheses = []
     monkeypatch.setattr(
-        pipeline, "synthesize_chunks",
+        pipeline,
+        "synthesize_chunks",
         lambda text, *_args, **_kwargs: syntheses.append(text) or [0.0],
     )
 
