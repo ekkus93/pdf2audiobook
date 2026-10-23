@@ -45,7 +45,9 @@ when changing dependencies, as a separate, tested change.
 
 ## CLI workflows
 
-Inspect PDF metadata, page labels, geometry and bookmarks without TTS:
+Inspect PDF metadata, page labels, geometry, bookmarks and per-page text-layer
+counts (characters and images only, no book text; `image_only_pages` hints at
+OCR needs) without TTS:
 
 ```bash
 uv run pdf2audiobook inspect book.pdf --json

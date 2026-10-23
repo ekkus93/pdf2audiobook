@@ -123,11 +123,42 @@ def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
                 # space, even when the viewer displays a rotated page.
                 "page_rotations": [page.rotation for page in document],
                 "page_sizes": [_inspection_page_size(page) for page in document],
+                "page_labels": [
+                    _inspection_label(page, index) for index, page in enumerate(document)
+                ],
+                # Content-free counts only: how much selectable text each page
+                # carries and how many images, i.e. where OCR may be needed.
+                "embedded_text": _embedded_text_summary([page for page in document]),
             }
         except Exception:
             # Malformed PDF metadata or backend diagnostics can echo private
             # document paths or content; inspection is read-only and fail-closed.
             raise ExtractionError("Failed to inspect PDF metadata or page geometry") from None
+
+
+def _inspection_label(page: pymupdf.Page, index: int) -> str:
+    try:
+        return page.get_label() or str(index + 1)
+    except Exception:
+        # Page labels are advisory; fall back to the physical page number.
+        return str(index + 1)
+
+
+def _embedded_text_summary(pages: list[pymupdf.Page]) -> dict:
+    characters = []
+    images = []
+    for page in pages:
+        characters.append(sum(not char.isspace() for char in page.get_text("text")))
+        images.append(len(page.get_images(full=False)))
+    return {
+        "pages_with_text": sum(count > 0 for count in characters),
+        "pages_without_text": sum(count == 0 for count in characters),
+        "image_only_pages": sum(
+            count == 0 and image > 0 for count, image in zip(characters, images)
+        ),
+        "characters_per_page": characters,
+        "images_per_page": images,
+    }
 
 
 def _positive_finite_number(value: object) -> float | None:
