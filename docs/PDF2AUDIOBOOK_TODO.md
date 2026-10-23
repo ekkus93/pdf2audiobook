@@ -85,7 +85,7 @@
   - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries.
   - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
   - [x] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
-- [ ] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
+- [x] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
   - [x] P3.03a Track accepted/rejected edits, evidence, confidence, review flags and provenance.
   - [x] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
 - [x] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
