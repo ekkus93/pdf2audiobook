@@ -113,3 +113,77 @@ def order_two_columns(lines: list[dict], page_width: float) -> tuple[list[dict],
     ordered, done = region_order(segment)
     result.extend(ordered)
     return result, changed or done
+
+
+def _line_box(line: object) -> tuple[float, float, float, float] | None:
+    if not isinstance(line, dict) or not isinstance(line.get("text"), str):
+        return None
+    raw = line.get("bbox")
+    if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+        return None
+    if any(isinstance(n, bool) or not isinstance(n, (float, int)) for n in raw):
+        return None
+    try:
+        x0, y0, x1, y1 = map(float, raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not all(math.isfinite(n) for n in (x0, y0, x1, y1)) or x1 <= x0 or y1 <= y0:
+        return None
+    return x0, y0, x1, y1
+
+
+def merge_line_fragments(lines: list[dict]) -> list[dict]:
+    """Join word-group fragments that form one printed line.
+
+    Scanned-book text layers often split a line into several word groups,
+    which would otherwise read as separate paragraphs. Only consecutive,
+    left-to-right fragments sharing a baseline, separated by at most a wide
+    word space, are joined. A gap at an edge where several page lines also
+    end or start is a column gutter or table column and is never bridged.
+    Merged records keep their original fragments under "parts".
+    """
+    boxes = [_line_box(line) for line in lines]
+    starts = [box[0] for box in boxes if box]
+    ends = [box[2] for box in boxes if box]
+
+    def aligned(edges: list[float], value: float) -> bool:
+        # The fragment's own edge is included in the list, hence one extra.
+        return sum(abs(edge - value) <= 2.0 for edge in edges) >= 5
+
+    result: list[dict] = []
+    previous: tuple[float, float, float, float] | None = None
+    for line, box in zip(lines, boxes):
+        if box is not None and previous is not None and result:
+            height = min(previous[3] - previous[1], box[3] - box[1])
+            overlap = min(previous[3], box[3]) - max(previous[1], box[1])
+            gap = box[0] - previous[2]
+            if (
+                overlap >= 0.5 * height
+                and -0.25 * height <= gap <= 1.5 * height
+                and not aligned(ends, previous[2])
+                and not aligned(starts, box[0])
+            ):
+                target = result[-1]
+                parts = target.get("parts", [target])
+                union = (
+                    min(previous[0], box[0]),
+                    min(previous[1], box[1]),
+                    max(previous[2], box[2]),
+                    max(previous[3], box[3]),
+                )
+                size = max(
+                    (part.get("size") for part in (*parts, line)),
+                    key=lambda value: value if isinstance(value, (int, float)) else 0.0,
+                )
+                result[-1] = {
+                    "text": f"{target['text']} {line['text']}",
+                    "bbox": union,
+                    "font": target.get("font"),
+                    "size": size,
+                    "parts": [*parts, line],
+                }
+                previous = union
+                continue
+        result.append(line)
+        previous = box
+    return result

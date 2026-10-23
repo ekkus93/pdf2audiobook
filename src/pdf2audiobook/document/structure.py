@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 from collections import defaultdict
 from pathlib import Path
 
@@ -20,6 +21,9 @@ HEADING = re.compile(
     r"seven|eight|nine|ten)\b.*|prologue|epilogue|preface|introduction)$",
     re.IGNORECASE,
 )
+# "Chapter IV regarding ..." is a sentence that cites a chapter, not a label.
+ROMAN = re.compile(r"[IVXLCDM]+")
+LABEL_PROSE = re.compile(r"^(?i:chapter|part)\s+\S+\s+[a-z]")
 CHAPTER_TEXT_NAME = re.compile(r"\d{3,}\.txt")
 WRAPPED_LINE_END = re.compile(r"[^\W\d_]-$")
 PAGE_NUMBER = re.compile(r"^(?:\d{1,5}|[ivxlcdm]{1,10})$", re.IGNORECASE)
@@ -175,9 +179,32 @@ def _number_value(raw: str) -> tuple[int, str] | None:
     return total, "roman"
 
 
+def labelled_heading(text: str) -> bool:
+    """A chapter/part/prologue label line, not prose that cites one."""
+    return (
+        HEADING.match(text) is not None and len(text.split()) <= 12 and not LABEL_PROSE.match(text)
+    )
+
+
+def _wordlike(text: str) -> bool:
+    """Scan noise (rules, stray quotes, digit runs, mixed-script mojibake) is not a heading."""
+    letters = [char for char in text if char.isalpha()]
+    if len(letters) < 2 or len(letters) < 0.6 * sum(not char.isspace() for char in text):
+        return False
+    # A real title is written in one script; OCR failures mix Latin with
+    # Cyrillic, Oriya and similar look-alike glyphs.
+    scripts = {unicodedata.name(char, "UNKNOWN").split()[0] for char in letters}
+    return len(scripts) == 1
+
+
 def _aligned_number_positions(first: float, second: float) -> bool:
     """Allow fixed placement or mirrored odd/even page-number positions."""
     return abs(first - second) <= 0.06 or abs(first + second - 1) <= 0.06
+
+
+def _aligned_folios(first: tuple[float, float], second: tuple[float, float]) -> bool:
+    """Folios align on the paper, or relative to sideways-drifting scanned text."""
+    return any(_aligned_number_positions(a, b) for a, b in zip(first, second))
 
 
 def _valid_bbox(box: object) -> bool:
@@ -210,6 +237,7 @@ def _adjacent_body_line(
         return False
     x0, y0, x1, y1 = block.bbox
     line_height = max(1.0, y1 - y0)
+    numeral = PAGE_NUMBER.fullmatch(block.text.strip()) is not None
     for other in page_blocks:
         if (
             other.id == block.id
@@ -228,9 +256,19 @@ def _adjacent_body_line(
         # A centered folio/title and left-aligned body line are separate
         # regions. Matching indentation or substantial horizontal overlap
         # is stronger evidence that the two lines form one body paragraph.
+        # A list label shares the body's indentation almost exactly; a
+        # centered folio under a centered citation only roughly does.
+        indent = max(4.0, 0.5 * line_height) if numeral else max(18.0, 1.5 * line_height)
+        if abs(ox0 - x0) <= indent:
+            return True
+        # A lone folio sits under or over a full-width line, so it always
+        # overlaps it; only matching indentation ties a numeral to the body.
+        # Numerals still need a cross-page sequence before removal.
+        if numeral:
+            continue
         x_overlap = min(x1, ox1) - max(x0, ox0)
         narrow = max(1.0, min(x1 - x0, ox1 - ox0))
-        if abs(ox0 - x0) <= max(18.0, 1.5 * line_height) or (x_overlap >= 0.5 * narrow):
+        if x_overlap >= 0.5 * narrow:
             return True
     return False
 
@@ -243,7 +281,7 @@ def pagination_cleanup(
     """Remove only corroborated pagination patterns confined to margin bands."""
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
     text_occurrences: dict[tuple[str, str], list[tuple[int, float, float]]] = defaultdict(list)
-    numbered: dict[str, list[tuple[int, int, float, str]]] = defaultdict(list)
+    numbered: dict[str, list[tuple[int, int, tuple[float, float], str]]] = defaultdict(list)
     blocks_by_page: dict[int, list[DocumentBlock]] = defaultdict(list)
     body_text: set[str] = set()
 
@@ -263,8 +301,26 @@ def pagination_cleanup(
             for value in dimensions
         )
 
+    # Scanned pages drift sideways; measure folio placement against each
+    # page's text extent rather than the paper edge.
+    extents: dict[int, tuple[float, float]] = {}
     for block in blocks:
         blocks_by_page[block.page_index].append(block)
+        if block.bbox and _valid_bbox(block.bbox):
+            left, right = extents.get(block.page_index, (block.bbox[0], block.bbox[2]))
+            extents[block.page_index] = (min(left, block.bbox[0]), max(right, block.bbox[2]))
+
+    def positions(block: DocumentBlock) -> tuple[float, float]:
+        """Horizontal center relative to the paper and to the page's text."""
+        assert block.bbox is not None
+        center = (block.bbox[0] + block.bbox[2]) / 2
+        left, right = extents.get(block.page_index, (0.0, 0.0))
+        paper = center / sizes[block.page_index][0]
+        if right - left >= 0.4 * sizes[block.page_index][0]:
+            return paper, (center - left) / (right - left)
+        return paper, paper
+
+    for block in blocks:
         if not block.bbox or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
@@ -345,7 +401,9 @@ def pagination_cleanup(
             continue
         # A phrase appearing in the interior of any page is substantive text
         # somewhere in the book; do not delete identical margin occurrences.
-        if val in body_text:
+        # Folio numerals are exempt: contents pages and cross-references
+        # repeat them in body text, and they still need a page sequence.
+        if val in body_text and not PAGE_NUMBER.fullmatch(raw):
             continue
         # A full sentence or extended prose in the margin is not safe to
         # classify as a running title based on repetition alone.
@@ -374,10 +432,10 @@ def pagination_cleanup(
         # A lone numeric line at ordinary body indentation is not sufficient
         # evidence of pagination, even if another page starts with "2".
         if PAGE_NUMBER.fullmatch(raw):
-            width = sizes[block.page_index][0]
-            midpoint = (block.bbox[0] + block.bbox[2]) / 2
-            position = midpoint / width if width > 0 else 0.5
-            if not (position <= 0.09 or position >= 0.91 or 0.38 <= position <= 0.62):
+            if not any(
+                position <= 0.09 or position >= 0.91 or 0.38 <= position <= 0.62
+                for position in positions(block)
+            ):
                 continue
         candidates[block.id] = (block, band)
         width = sizes[block.page_index][0]
@@ -387,9 +445,7 @@ def pagination_cleanup(
             text_occurrences[(band, val)].append((block.page_index, x_center, y_center))
         parsed = _number_value(raw)
         if parsed is not None:
-            width = sizes[block.page_index][0]
-            position = (block.bbox[0] + block.bbox[2]) / (2 * width)
-            numbered[band].append((block.page_index, parsed[0], position, parsed[1]))
+            numbered[band].append((block.page_index, parsed[0], positions(block), parsed[1]))
     # More than one standalone numeral in a single margin band on a page
     # is ambiguous (often a numbered list or page-local references), not
     # reliable evidence of one running folio. Do not use those numerals to
@@ -412,22 +468,20 @@ def pagination_cleanup(
     sequential_pages: dict[str, set[int]] = defaultdict(set)
     for band, entries in numbered.items():
         entries = [entry for entry in entries if (band, entry[0]) not in ambiguous_numeric_bands]
-        by_key: dict[tuple[int, int, str], list[float]] = defaultdict(list)
+        by_key: dict[tuple[int, int, str], list[tuple[float, float]]] = defaultdict(list)
         for page, folio_number, position, notation in entries:
             by_key[(page, folio_number, notation)].append(position)
         for page, folio_number, position, notation in entries:
             successors = by_key.get((page + 1, folio_number + 1, notation), [])
             for next_position in successors:
-                if not _aligned_number_positions(position, next_position):
+                if not _aligned_folios(position, next_position):
                     continue
                 if notation == "arabic":
                     sequential_pages[band].update((page, page + 1))
                 else:
                     # Two-page Roman sequences may be section markers.
                     final_positions = by_key.get((page + 2, folio_number + 2, notation), [])
-                    if any(
-                        _aligned_number_positions(next_position, final) for final in final_positions
-                    ):
+                    if any(_aligned_folios(next_position, final) for final in final_positions):
                         sequential_pages[band].update((page, page + 1, page + 2))
     edits = []
     for block, band in candidates.values():
@@ -521,17 +575,31 @@ def propose_chapters(
             and not WRAPPED_LINE_END.search(text)
             and not text[:1].islower()
             and not text.isdecimal()
+            and (_wordlike(text) or text in {"I", "V", "X"})
             and block.kind not in {"table", "footnote", "caption", "equation", "list"}
         )
         if is_typographic_heading:
             typography_ids.add(i)
         if (
-            HEADING.match(text)
+            labelled_heading(text)
             or block.id in (extra_heading_ids or set())
             or is_typographic_heading
             or i in contents_titles
         ):
             heading_indices.append(i)
+    # A lone "I"/"V"/"X" is a chapter numeral only beside longer numerals
+    # such as "II"; in scans it is usually an OCR'd column rule.
+    if not any(
+        len(blocks[i].text.strip()) >= 2 and ROMAN.fullmatch(blocks[i].text.strip())
+        for i in typography_ids
+    ):
+        lone = {i for i in typography_ids if not _wordlike(blocks[i].text.strip())}
+        typography_ids -= lone
+        heading_indices = [
+            i
+            for i in heading_indices
+            if i not in lone or labelled_heading(blocks[i].text.strip()) or i in contents_titles
+        ]
     # Combine confirmed bookmark anchors with textual headings. Some books mix
     # numbered headings and ornamental titles; do not discard the TOC merely
     # because a subset of chapters matched the regular expression.
@@ -627,7 +695,7 @@ def propose_chapters(
         if (i in typography_ids or blocks[i].id in llm_ids)
         and i not in bookmark_titles
         and i not in contents_titles
-        and not HEADING.match(blocks[i].text.strip())
+        and not labelled_heading(blocks[i].text.strip())
     }
     llm_only = {i for i in weak if i not in typography_ids}
     if len(bookmark_titles) >= 2 or contents_titles:
@@ -843,11 +911,19 @@ def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
         return False
     if after.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
         return False
+    if not before.text.strip() or not after.text.strip():
+        return False
+    if after.page_index == before.page_index + 1:
+        # A sentence running over a page break: no closing punctuation before
+        # the break and a lowercase continuation after it (removed running
+        # heads and folios between them are already skipped).
+        return (
+            not before.text.rstrip().endswith((".", "?", "!", ":", ";", '"', "”", "’", ")", "]"))
+            and after.text.lstrip()[:1].islower()
+        )
     if before.page_index != after.page_index or not before.bbox or not after.bbox:
         return False
     if not _valid_bbox(before.bbox) or not _valid_bbox(after.bbox):
-        return False
-    if not before.text.strip() or not after.text.strip():
         return False
     next_text = after.text.lstrip()
     markers = ("“", '"', "‘", "'", "—", "–", "•", "*", "§", "#")

@@ -21,7 +21,7 @@ import pymupdf
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
-from pdf2audiobook.reading_order import order_two_columns
+from pdf2audiobook.reading_order import merge_line_fragments, order_two_columns
 from pdf2audiobook.special_material import (
     _valid_box,
     caption_line_indices,
@@ -147,6 +147,38 @@ def _inspection_page_size(page: pymupdf.Page) -> tuple[float, float]:
     if width is None or height is None:
         raise ValueError("invalid PDF page geometry")
     return width, height
+
+
+_HEADING_PREFIX = re.compile(
+    r"^(?:(?P<numbered>chapter\s+[\divxlcdm]+|part\s+[\divxlcdm]+)|prologue|epilogue|"
+    r"introduction|preface)\b[.:]?\s*(?P<rest>.*)$",
+    re.IGNORECASE,
+)
+
+
+def _heading_line(text: str) -> bool:
+    """A chapter/part label line, not prose that merely starts with one.
+
+    "Chapter IV regarding the change ..." continues as a sentence: after a
+    numbered label, a title starts with a capital, digit or punctuation.
+    """
+    match = _HEADING_PREFIX.match(text.strip())
+    if match is None or len(text.split()) > 12:
+        return False
+    rest = match.group("rest")
+    return not (match.group("numbered") and rest[:1].islower())
+
+
+def _finite_bbox(bounds: object) -> tuple[float, float, float, float] | None:
+    if isinstance(bounds, (tuple, list)) and len(bounds) == 4:
+        if all(
+            isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+            for value in bounds
+        ):
+            x0, y0, x1, y1 = (float(value) for value in bounds)
+            if x0 <= x1 and y0 <= y1:
+                return (x0, y0, x1, y1)
+    return None
 
 
 def _lines(page: pymupdf.Page, textpage: pymupdf.TextPage | None = None) -> list[dict]:
@@ -822,6 +854,7 @@ def extract_pdf(
                         )
             if not page_lines and not use_ocr:
                 warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
+            page_lines = merge_line_fragments(page_lines)
             # Preserve table cell text and annotate only contained blocks.
             table_regions, table_warnings = _table_regions(page, page_number=page_index + 1)
             warnings.extend(table_warnings)
@@ -873,34 +906,27 @@ def extract_pdf(
                 )
             for line_index, line in enumerate(page_lines):
                 ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
-                bounds = line["bbox"]
-                bbox: tuple[float, float, float, float] | None = None
-                if isinstance(bounds, (tuple, list)) and len(bounds) == 4:
-                    if all(
-                        isinstance(value, (int, float))
-                        and not isinstance(value, bool)
-                        and math.isfinite(value)
-                        for value in bounds
-                    ):
-                        x0, y0, x1, y1 = (float(value) for value in bounds)
-                        if x0 <= x1 and y0 <= y1:
-                            bbox = (x0, y0, x1, y1)
-                spans.append(
-                    SourceSpan(
-                        id=ident,
-                        page_index=page_index,
-                        page_label=page_label,
-                        text=line["text"],
-                        bbox=bbox,
-                        origin=origin,
-                        font=line["font"],
-                        font_size=line["size"],
+                bbox = _finite_bbox(line["bbox"])
+                # A merged printed line keeps one source span per fragment.
+                parts = line.get("parts") or [line]
+                span_ids = [ident] + [f"{ident}-f{n:03d}" for n in range(2, len(parts) + 1)]
+                for span_id, part in zip(span_ids, parts):
+                    spans.append(
+                        SourceSpan(
+                            id=span_id,
+                            page_index=page_index,
+                            page_label=page_label,
+                            text=part["text"],
+                            bbox=bbox if part is line else _finite_bbox(part.get("bbox")),
+                            origin=origin,
+                            font=part.get("font"),
+                            font_size=part.get("size"),
+                        )
                     )
-                )
                 blocks.append(
                     DocumentBlock(
                         id=ident,
-                        span_ids=[ident],
+                        span_ids=span_ids,
                         text=line["text"],
                         page_index=page_index,
                         bbox=bbox,
@@ -916,12 +942,7 @@ def extract_pdf(
                             else "equation"
                             if line_index in equation_indices
                             else "heading"
-                            if re.match(
-                                r"^(?:chapter\s+[\divxlcdm]+|prologue|epilogue|"
-                                r"introduction|preface|part\s+[\divxlcdm]+)\b",
-                                line["text"],
-                                re.IGNORECASE,
-                            )
+                            if _heading_line(line["text"])
                             else "unknown"
                         ),
                     )

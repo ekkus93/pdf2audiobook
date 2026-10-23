@@ -176,3 +176,40 @@ def test_single_matching_entry_is_not_trusted():
     )
     chapters, _ = propose_chapters(book.blocks, set(), [], Chapters(allow_single_chapter=True))
     assert [c.title for c in chapters] == ["Full Book"]
+
+
+def test_scan_noise_in_large_type_is_not_a_heading():
+    book = Book().line(0, "Opening Notice", 18).prose(0)
+    for noise in ("'", "I", "1 8", "' ., . • • •", "000 I", "=============="):
+        book.line(1, noise, 18).prose(1)
+    book.line(2, "Closing Notice", 18).prose(2)
+    chapters, _ = book.chapters()
+    assert [c.title for c in chapters] == ["Opening Notice", "Closing Notice"]
+
+
+def test_lone_roman_one_is_a_heading_beside_later_numerals():
+    book = Book().line(0, "I", 18).prose(0).line(1, "II", 18).prose(1).line(2, "III", 18).prose(2)
+    chapters, _ = book.chapters()
+    assert [c.title for c in chapters] == ["I", "II", "III"]
+
+
+def test_sentence_citing_a_chapter_is_not_a_chapter_label():
+    book = (
+        Book()
+        .line(0, "CHAPTER I THE NATURE OF VERSE", 14)
+        .prose(0)
+        .line(1, "CHAPTER II RHYME", 14)
+        .prose(1)
+        .line(2, "Chapter IV regarding the change in Shakespeare's blank", 12)
+        .prose(2)
+    )
+    chapters, _ = book.chapters()
+    assert [c.title for c in chapters] == ["CHAPTER I THE NATURE OF VERSE", "CHAPTER II RHYME"]
+
+
+def test_mixed_script_ocr_mojibake_is_not_a_heading():
+    book = Book().line(0, "Opening Notice", 18).prose(0)
+    book.line(1, "BŎrngD--;;ԎԍԌ", 18).prose(1).line(1, "1IѴѵѶ:ѷ Ѹѹre¥", 18).prose(1)
+    book.line(2, "Closing Notice", 18).prose(2).line(2, "Последняя глава", 18).prose(2)
+    chapters, _ = book.chapters()
+    assert [c.title for c in chapters] == ["Opening Notice", "Closing Notice", "Последняя глава"]

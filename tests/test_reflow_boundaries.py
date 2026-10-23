@@ -91,3 +91,28 @@ def test_large_vertical_gap_stays_separate():
     second = block(1, "Another paragraph.")
     second.bbox = (72, 160, 400, 172)
     assert reflow_narration_lines([first, second]) == ("A short paragraph.\n\nAnother paragraph.\n")
+
+
+def _on_page(index: int, page: int, text: str, *, kind: str = "unknown") -> DocumentBlock:
+    return block(index, text, kind=kind).model_copy(update={"page_index": page})
+
+
+def test_sentence_continuing_over_a_page_break_is_one_paragraph():
+    lines = [
+        _on_page(0, 0, "poems as Tennyson's In the Valley, Meredith's Love in"),
+        _on_page(1, 0, "22"),  # removed folio
+        _on_page(2, 1, "the Valley, and Kipling's Last Chantey explained."),
+    ]
+    assert reflow_narration_lines(lines, {"b1": ""}) == (
+        "poems as Tennyson's In the Valley, Meredith's Love in "
+        "the Valley, and Kipling's Last Chantey explained.\n"
+    )
+
+
+def test_page_break_keeps_paragraphs_that_end_or_restart():
+    ended = [_on_page(0, 0, "The chapter closes here."), _on_page(1, 1, "and then lowercase.")]
+    capital = [_on_page(0, 0, "a line without a stop"), _on_page(1, 1, "The next paragraph.")]
+    skipped = [_on_page(0, 0, "a line without a stop"), _on_page(1, 2, "lowercase two pages on.")]
+    note = [_on_page(0, 0, "a line without a stop"), _on_page(1, 1, "a note", kind="footnote")]
+    for lines in (ended, capital, skipped, note):
+        assert reflow_narration_lines(lines).count("\n\n") == 1
