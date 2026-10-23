@@ -39,7 +39,7 @@ def test_resume_recovers_from_output_stat_race_without_leaking_path(tmp_path, mo
         (folder / "chapters").mkdir(exist_ok=True)
         (folder / "chapters" / "001.txt").write_text("Speak this", encoding="utf-8")
 
-    monkeypatch.setattr(pipeline, "analyze_book", lambda *args: manifest_path)
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *args, **_kw: manifest_path)
     monkeypatch.setattr(pipeline, "read_manifest", lambda *_args: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", render)
     monkeypatch.setattr(pipeline, "audio_output_path", lambda *_args: output)

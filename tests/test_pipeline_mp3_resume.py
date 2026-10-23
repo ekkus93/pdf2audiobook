@@ -31,7 +31,7 @@ def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_bytes(b"fake-mp3")
 
-    monkeypatch.setattr(pipeline, "analyze_book", lambda *_: path)
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *_, **_kw: path)
     monkeypatch.setattr(pipeline, "read_manifest", lambda _: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", render)
     monkeypatch.setattr(pipeline, "KittenProvider", lambda _: SimpleNamespace(sample_rate=24000))

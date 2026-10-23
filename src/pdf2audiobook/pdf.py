@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol, runtime_checkable
 
 import pymupdf
 
@@ -45,6 +45,47 @@ class ExtractedDocument:
     blocks: list[DocumentBlock]
     warnings: list[str]
     page_sizes: list[tuple[float, float]]
+
+
+@runtime_checkable
+class DocumentExtractor(Protocol):
+    """Replaceable PDF backend: page inspection plus provenance-preserving extraction."""
+
+    name: str
+
+    def inspect(self, source: Path, password_env: str | None = None) -> dict:
+        """Return content-free document metadata, outline and page geometry."""
+
+    def extract(
+        self,
+        source: Path,
+        settings: PdfSettings,
+        *,
+        ocr_cache_dir: Path | None = None,
+        source_sha256: str | None = None,
+    ) -> ExtractedDocument:
+        """Return source spans and ordered blocks, with OCR only where needed."""
+
+
+class PyMuPDFExtractor:
+    """Default extractor: PyMuPDF text geometry with Tesseract OCR fallback."""
+
+    name = "pymupdf"
+
+    def inspect(self, source: Path, password_env: str | None = None) -> dict:
+        return inspect_pdf(source, password_env=password_env)
+
+    def extract(
+        self,
+        source: Path,
+        settings: PdfSettings,
+        *,
+        ocr_cache_dir: Path | None = None,
+        source_sha256: str | None = None,
+    ) -> ExtractedDocument:
+        return extract_pdf(
+            source, settings, ocr_cache_dir=ocr_cache_dir, source_sha256=source_sha256
+        )
 
 
 def _open(source: Path, password_env: str | None = None) -> pymupdf.Document:

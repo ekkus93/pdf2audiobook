@@ -42,7 +42,7 @@ def test_missing_or_undecodable_chapter_text_is_private(tmp_path, monkeypatch, f
         (folder / "001.txt").write_bytes(bytes([0xFF, 0xFE]))
 
     settings = Settings()
-    monkeypatch.setattr(pipeline, "analyze_book", lambda *args: manifest_path)
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *args, **_kw: manifest_path)
     monkeypatch.setattr(pipeline, "read_manifest", lambda _path: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", lambda *args: None)
     monkeypatch.setattr(

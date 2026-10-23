@@ -90,7 +90,7 @@ def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
             pass
 
     regenerated = []
-    monkeypatch.setattr(pipeline, "analyze_book", lambda *_: manifest_path)
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *_, **_kw: manifest_path)
     monkeypatch.setattr(pipeline, "read_manifest", lambda *_: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", lambda *_: None)
     monkeypatch.setattr(pipeline, "KittenProvider", StubKitten)

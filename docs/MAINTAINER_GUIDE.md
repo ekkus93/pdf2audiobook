@@ -214,16 +214,18 @@ The executable `pdf2audiobook` maps to `pdf2audiobook.cli:app`
 1. `config.py`: strict Pydantic TOML/env/CLI settings, provenance and
    validation; `errors.py` and `logging.py` provide domain diagnostics and
    privacy-safe structured events.
-2. `pdf.py` and `reading_order.py`: PyMuPDF inspection, embedded/OCR
-   extraction, provenance, geometry and conservative column-order decisions.
+2. `pdf.py` and `reading_order.py`: `DocumentExtractor` protocol with the
+   default `PyMuPDFExtractor`; PyMuPDF inspection, embedded/OCR extraction,
+   provenance, geometry and conservative column-order decisions.
 3. `models.py` and `document/structure.py`: source-aligned models,
    pagination edits, chapter proposals, coverage checks and chapter rendering.
 4. `llm/__init__.py`: `LLMProvider` protocol and OpenAI-compatible HTTP
    transport, endpoint validation, structured proposals and deterministic
    proposal verification. PDF text is untrusted user content, not instructions.
 5. `tts/__init__.py`: `TTSProvider` protocol and lazily loaded Kitten
-   adapter; `audio/__init__.py`: source-aligned chunks, WAV validation,
-   PCM assembly, FFmpeg MP3 encoding and ID3 metadata.
+   adapter; `audio/__init__.py`: `AudioEncoder` protocol, source-aligned
+   chunks, WAV validation, PCM assembly, FFmpeg MP3 encoding (`encode_mp3`)
+   and ID3 metadata.
 6. `workspace.py`: SHA-256 identities and atomic JSON writes;
    `pipeline.py`: analysis, approved-edit protection, stage fingerprints,
    chapter selection, resumable synthesis and output checksums.
@@ -233,7 +235,10 @@ Typical call path:
 document.structure -> optional llm -> workspace.write_manifest`.
 Conversion additionally calls `pipeline.convert_book -> tts.KittenProvider ->
 audio.synthesize_chunks -> audio.encode_mp3`. The TTS model is not loaded
-for an up-to-date cached MP3.
+for an up-to-date cached MP3. `analyze_book`/`convert_book` accept
+`extractor=`, `tts_provider=` and `encoder=` replacements; an injected adapter
+is folded into the analysis, chunk and MP3 cache identities so it never reuses
+artifacts made by the defaults.
 
 **Change safety:** Preserve raw spans/blocks and the one-time prose-coverage
 invariant. Introduce schema versions or migrations deliberately; update

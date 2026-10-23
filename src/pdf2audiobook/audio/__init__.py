@@ -11,7 +11,7 @@ import tempfile
 import wave
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, NotRequired, TypedDict
+from typing import Iterator, NotRequired, Protocol, TypedDict, runtime_checkable
 
 import numpy as np
 from mutagen.easyid3 import EasyID3
@@ -378,6 +378,26 @@ def _safe_chapter_workspace(parent: Path) -> Iterator[str]:
     except OSError:
         # Temporary-directory errors may embed book titles or private paths.
         raise AudioError("Could not manage temporary MP3 workspace; check permissions") from None
+
+
+@runtime_checkable
+class AudioEncoder(Protocol):
+    """Replaceable chapter encoder: one PCM chapter in, one tagged file out."""
+
+    def __call__(
+        self,
+        samples: np.ndarray,
+        sample_rate: int,
+        output: Path,
+        *,
+        bitrate: str,
+        target_rate: int,
+        title: str,
+        artist: str | None,
+        album: str,
+        track: int,
+    ) -> Path:
+        """Encode once, tag and atomically publish output; return its path."""
 
 
 def encode_mp3(

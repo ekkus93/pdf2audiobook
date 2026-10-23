@@ -39,7 +39,7 @@ def _setup_conversion(tmp_path, monkeypatch, chapter_texts):
         for index, content in enumerate(chapter_texts, 1):
             (directory / f"{index:03d}.txt").write_text(content, encoding="utf-8")
 
-    monkeypatch.setattr(pipeline, "analyze_book", lambda *_args: manifest_path)
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *_args, **_kw: manifest_path)
     monkeypatch.setattr(pipeline, "read_manifest", lambda *_args: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", render)
     monkeypatch.setattr(

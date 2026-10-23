@@ -110,7 +110,7 @@ def test_mp3_resume_checks_actual_chapter_id3_tags(
             pass
 
     generated = []
-    monkeypatch.setattr(pipeline, "analyze_book", lambda *_: manifest_path)
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *_, **_kw: manifest_path)
     monkeypatch.setattr(pipeline, "read_manifest", lambda *_: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", lambda *_: None)
     monkeypatch.setattr(pipeline, "KittenProvider", StubKitten)

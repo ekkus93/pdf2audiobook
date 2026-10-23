@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pdf2audiobook.audio import audio_output_path, encode_mp3, synthesize_chunks
+from pdf2audiobook.audio import AudioEncoder, audio_output_path, encode_mp3, synthesize_chunks
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import (
     pagination_cleanup,
@@ -22,8 +22,8 @@ from pdf2audiobook.llm import (
 )
 from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit
-from pdf2audiobook.pdf import extract_pdf
-from pdf2audiobook.tts import KittenProvider
+from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
+from pdf2audiobook.tts import KittenProvider, TTSProvider
 from pdf2audiobook.workspace import (
     digest_file,
     fingerprint,
@@ -48,7 +48,9 @@ def _llm_cache_identity(settings: Settings) -> str:
     )
 
 
-def analyze_book(source: Path, settings: Settings) -> Path:
+def analyze_book(
+    source: Path, settings: Settings, *, extractor: DocumentExtractor | None = None
+) -> Path:
     from pdf2audiobook.errors import InputError
 
     # These exceptions can include private book names and absolute paths.
@@ -71,6 +73,8 @@ def analyze_book(source: Path, settings: Settings) -> Path:
         chosen_provider.model,
         chosen_provider.base_url,
         "analysis-v10",
+        # A replacement backend must never reuse the default extractor's analysis.
+        *(() if extractor is None else ("extractor", extractor.name)),
     )
     if manifest_path.is_file():
         existing = read_manifest(manifest_path)
@@ -94,12 +98,15 @@ def analyze_book(source: Path, settings: Settings) -> Path:
                 "and use a new --output directory for a fresh analysis."
             )
 
-    extracted = extract_pdf(
-        source,
-        settings.pdf,
-        ocr_cache_dir=(folder / ".cache" / "ocr") if settings.cache.enabled else None,
-        source_sha256=book_hash,
-    )
+    ocr_cache_dir = (folder / ".cache" / "ocr") if settings.cache.enabled else None
+    if extractor is None:
+        extracted = extract_pdf(
+            source, settings.pdf, ocr_cache_dir=ocr_cache_dir, source_sha256=book_hash
+        )
+    else:
+        extracted = extractor.extract(
+            source, settings.pdf, ocr_cache_dir=ocr_cache_dir, source_sha256=book_hash
+        )
     edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, settings.pdf)
     # Only explicitly selected omit mode can remove a high-confidence note.
     # Source spans/blocks remain intact and every exclusion is audited.
@@ -311,8 +318,13 @@ def chapter_audio_fingerprint(
     settings: Settings,
     manifest: BookManifest,
     chapter: Chapter,
+    adapters: tuple[str, ...] = (),
 ) -> str:
-    """Key the final MP3 by audible content, encoding, and its ID3 metadata."""
+    """Key the final MP3 by audible content, encoding, and its ID3 metadata.
+
+    adapters names injected TTS/encoder replacements so their output never
+    shares an identity with the default Kitten/FFmpeg artifacts.
+    """
     return fingerprint(
         text,
         settings.tts.provider,
@@ -327,6 +339,7 @@ def chapter_audio_fingerprint(
         chapter.title,
         chapter.number,
         "mp3-v4",
+        *adapters,
     )
 
 
@@ -337,8 +350,16 @@ def convert_book(
     chapter_range: tuple[int, int] | None = None,
     *,
     force: bool = False,
+    extractor: DocumentExtractor | None = None,
+    tts_provider: TTSProvider | None = None,
+    encoder: AudioEncoder | None = None,
 ) -> list[Path]:
-    manifest_path = analyze_book(source, settings)
+    manifest_path = analyze_book(source, settings, extractor=extractor)
+    adapters = tuple(
+        f"{role}={type(adapter).__module__}.{type(adapter).__qualname__}"
+        for role, adapter in (("tts", tts_provider), ("encoder", encoder))
+        if adapter is not None
+    )
     manifest = read_manifest(manifest_path)
     render_chapter_texts(manifest, manifest_path.parent)
     chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
@@ -354,7 +375,7 @@ def convert_book(
         except (OSError, UnicodeError):
             # PDF-derived filenames and source text must not escape in errors.
             raise AudioError("Cannot read approved chapter text; check workspace files") from None
-        identity = chapter_audio_fingerprint(text, settings, manifest, item)
+        identity = chapter_audio_fingerprint(text, settings, manifest, item, adapters)
         record = output.with_suffix(".cache.json")
         cached = False
         if settings.general.resume and not force:
@@ -411,7 +432,8 @@ def convert_book(
             pending.append((item, output, text_file, record, identity))
         del text
 
-    provider = None
+    provider = tts_provider
+    encode = encode_mp3 if encoder is None else encoder
     for item, output, text_file, record, identity in pending:
         try:
             text = text_file.read_text(encoding="utf-8")
@@ -419,14 +441,17 @@ def convert_book(
             raise AudioError("Cannot read approved chapter text; check workspace files") from None
         # Detect edits between the cache-check and synthesis passes. Never
         # publish audio with a fingerprint computed from different prose.
-        if chapter_audio_fingerprint(text, settings, manifest, item) != identity:
+        if chapter_audio_fingerprint(text, settings, manifest, item, adapters) != identity:
             raise AudioError("Approved chapter text changed during conversion; retry")
         if provider is None:
             provider = KittenProvider(settings.tts.kitten.model)
         samples = synthesize_chunks(
             text,
             provider,
-            model=settings.tts.kitten.model,
+            # Chunk cache keys include the model; qualify it for injected engines.
+            model=":".join(
+                (settings.tts.kitten.model, *(a for a in adapters if a.startswith("tts=")))
+            ),
             voice=settings.tts.kitten.voice,
             speed=settings.tts.kitten.speed,
             pause_ms=settings.tts.pause_ms,
@@ -440,7 +465,7 @@ def convert_book(
                 / f"{fingerprint(item.id, item.number)[:32]}.json"
             ),
         )
-        encode_mp3(
+        encode(
             samples,
             provider.sample_rate,
             output,
