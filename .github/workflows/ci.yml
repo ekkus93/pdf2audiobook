@@ -21,13 +21,15 @@ jobs:
           enable-cache: true
           python-version: "${{ matrix.python-version }}"
       - name: Install FFmpeg for chapter MP3 acceptance tests
-        timeout-minutes: 20
+        timeout-minutes: 25
         run: |
           # man-db index triggers can stall hosted runners for hours.
           sudo rm -f /var/lib/man-db/auto-update
+          # A stalled mirror download must fail and retry in seconds, not hang.
+          APT_OPTS="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=5"
           for attempt in 1 2 3; do
-            if timeout 300 sudo apt-get update -qq \
-              && timeout 600 sudo apt-get install -y -qq ffmpeg tesseract-ocr tesseract-ocr-eng; then
+            if timeout 180 sudo apt-get $APT_OPTS update -q \
+              && timeout 300 sudo apt-get $APT_OPTS install -y -q ffmpeg tesseract-ocr tesseract-ocr-eng; then
               break
             fi
             echo "apt attempt $attempt failed; retrying"
