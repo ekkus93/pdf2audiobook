@@ -110,5 +110,7 @@ def test_fallback_preserves_unrelated_footnote_review_warnings(tmp_path, monkeyp
     options = settings(tmp_path, fallback=True)
     options.pdf.footnotes = "inline"
     manifest = read_manifest(analyze_book(sample, options))
-    assert any("Footnotes retained" in warning for warning in manifest.warnings)
+    assert any(
+        "after the paragraph holding their anchor" in warning for warning in manifest.warnings
+    )
     assert any("explicit deterministic fallback" in warning for warning in manifest.warnings)

@@ -8,6 +8,7 @@ from pdf2audiobook.audio import AudioEncoder, audio_output_path, encode_mp3, syn
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import (
     pagination_cleanup,
+    place_footnotes,
     propose_chapters,
     render_chapter_texts,
 )
@@ -72,7 +73,7 @@ def analyze_book(
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
         chosen_provider.model,
         chosen_provider.base_url,
-        "analysis-v13",
+        "analysis-v14",
         # A replacement backend must never reuse the default extractor's analysis.
         *(() if extractor is None else ("extractor", extractor.name)),
     )
@@ -87,7 +88,7 @@ def analyze_book(
         )
         if same_input and same_analysis and settings.general.resume:
             # Regenerate missing or stale derived texts without replacing user edits.
-            render_chapter_texts(existing, folder)
+            render_chapter_texts(existing, folder, settings.pdf.footnotes)
             return manifest_path
         if approved_content:
             from pdf2audiobook.errors import ExtractionError
@@ -132,11 +133,6 @@ def analyze_book(
         warnings.append(
             f"Excluded {len(footnotes)} conservatively classified footnote "
             "block(s) under explicit omit policy; inspect audited cleanup edits"
-        )
-    elif footnotes and settings.pdf.footnotes == "inline":
-        warnings.append(
-            "Footnotes retained at their PDF reading positions; "
-            "anchor relocation is not yet supported"
         )
     original_warning_count = len(warnings)
     try:
@@ -259,6 +255,24 @@ def analyze_book(
         extra_heading_ids=llm_ids,
     )
     warnings.extend(chapter_warnings)
+    if footnotes and settings.pdf.footnotes in {"inline", "end"}:
+        relocated = kept = 0
+        for chapter in chapters:
+            _, moved, stayed = place_footnotes(
+                extracted.blocks[chapter.start_block : chapter.end_block], settings.pdf.footnotes
+            )
+            relocated += moved
+            kept += stayed
+        if settings.pdf.footnotes == "end":
+            warnings.append(
+                f"Narrating {relocated} classified footnote(s) at the end of their chapter; "
+                "source blocks are unchanged"
+            )
+        else:
+            warnings.append(
+                f"Narrating {relocated} classified footnote(s) after the paragraph holding "
+                f"their anchor; {kept} without a unique anchor keep their PDF position"
+            )
     if settings.llm.enabled and not settings.llm.structure:
         warnings.append("LLM structure analysis disabled in settings")
     manifest = BookManifest(
@@ -273,7 +287,7 @@ def analyze_book(
         analysis_fingerprint=analysis_key,
         warnings=extracted.warnings + warnings,
     )
-    render_chapter_texts(manifest, folder)
+    render_chapter_texts(manifest, folder, settings.pdf.footnotes)
     write_manifest(manifest_path, manifest)
     return manifest_path
 
@@ -361,7 +375,7 @@ def convert_book(
         if adapter is not None
     )
     manifest = read_manifest(manifest_path)
-    render_chapter_texts(manifest, manifest_path.parent)
+    render_chapter_texts(manifest, manifest_path.parent, settings.pdf.footnotes)
     chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
     # Audio identities include all audible and encoding settings, not merely the PDF hash.
     pending = []

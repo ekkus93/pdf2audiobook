@@ -34,7 +34,7 @@ class Pdf(ConfigModel):
     remove_page_numbers: bool = True
     remove_headers: bool = True
     remove_footers: bool = True
-    footnotes: Literal["warn", "inline", "omit"] = "warn"
+    footnotes: Literal["warn", "inline", "end", "omit"] = "warn"
 
 
 class Chapters(ConfigModel):

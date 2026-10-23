@@ -35,7 +35,7 @@ def test_resume_recovers_from_output_stat_race_without_leaking_path(tmp_path, mo
     record.write_text('{"fingerprint":"stale"}', encoding="utf-8")
     settings = Settings()
 
-    def render(_manifest, folder):
+    def render(_manifest, folder, *_args):
         (folder / "chapters").mkdir(exist_ok=True)
         (folder / "chapters" / "001.txt").write_text("Speak this", encoding="utf-8")
 

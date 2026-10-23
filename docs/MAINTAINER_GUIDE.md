@@ -145,6 +145,8 @@ ocr = "auto"
 ocr_language = "eng"
 ocr_dpi = 300
 remove_page_numbers = true
+# warn: keep PDF position; inline: after the anchoring paragraph;
+# end: after the chapter body; omit: audited exclusion
 footnotes = "warn"
 
 [chapters]

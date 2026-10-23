@@ -18,7 +18,7 @@ def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
     settings = Settings()
     calls = []
 
-    def render(_manifest, folder):
+    def render(_manifest, folder, *_args):
         target = folder / "chapters" / "001.txt"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("A sentence.", encoding="utf-8")

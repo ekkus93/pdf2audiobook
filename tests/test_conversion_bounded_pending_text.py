@@ -33,7 +33,7 @@ def _setup_conversion(tmp_path, monkeypatch, chapter_texts):
         chapters=chapters,
     )
 
-    def render(_manifest, folder):
+    def render(_manifest, folder, *_args):
         directory = folder / "chapters"
         directory.mkdir(parents=True, exist_ok=True)
         for index, content in enumerate(chapter_texts, 1):

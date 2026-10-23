@@ -96,7 +96,7 @@ def _analyze_with_stubbed_llm(monkeypatch, tmp_path, policy, *, fail_cleanup=Fal
 @pytest.mark.parametrize(
     ("policy", "expected"),
     [
-        ("inline", "Footnotes retained at their PDF reading positions"),
+        ("inline", "after the paragraph holding their anchor"),
         ("omit", "Excluded 1 conservatively classified footnote"),
     ],
 )
@@ -125,8 +125,7 @@ def test_later_llm_failure_preserves_footnote_warning_but_discards_llm_warning(
         fail_cleanup=True,
     )
     assert any(
-        "Footnotes retained at their PDF reading positions" in warning
-        for warning in manifest.warnings
+        "after the paragraph holding their anchor" in warning for warning in manifest.warnings
     )
     assert "LLM heading requires manual review" not in manifest.warnings
     assert "LLM provider failed; explicit deterministic fallback used" in manifest.warnings

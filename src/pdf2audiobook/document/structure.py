@@ -1043,14 +1043,91 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
     }
 
 
-def render_chapter_texts(manifest: BookManifest, folder: Path) -> None:
+NOTE_MARKER = re.compile(r"^\s*(?P<marker>\d{1,3}|[*†‡§])")
+
+
+def place_footnotes(
+    blocks: list[DocumentBlock], policy: str
+) -> tuple[list[DocumentBlock], int, int]:
+    """Reorder a chapter's classified footnotes for narration; never drop any.
+
+    "end" moves every note after the chapter body. "inline" moves a note to
+    the end of the paragraph holding its anchor ("world.5" for note "5 ...")
+    when exactly one such anchor precedes it on the same page; otherwise the
+    note keeps its PDF position. Other policies keep PDF order. Returns the
+    narration order and the counts of relocated and kept-in-place notes.
+    """
+    notes = [block for block in blocks if block.kind == "footnote"]
+    if policy not in {"inline", "end"} or not notes:
+        return blocks, 0, len(notes)
+    body = [block for block in blocks if block.kind != "footnote"]
+    if policy == "end":
+        return body + notes, len(notes), 0
+    # Group each numbered note with its unnumbered continuation lines; lines
+    # before the first marker continue a note from the previous page.
+    items: list[list[DocumentBlock]] = []
+    for block in notes:
+        if (
+            NOTE_MARKER.match(block.text)
+            or not items
+            or items[-1][0].page_index != block.page_index
+        ):
+            items.append([block])
+        else:
+            items[-1].append(block)
+    position = {block.id: index for index, block in enumerate(blocks)}
+    after: dict[int, list[DocumentBlock]] = defaultdict(list)  # body index -> notes
+    relocated = kept = 0
+    for item in items:
+        head = item[0]
+        match = NOTE_MARKER.match(head.text)
+        anchor_index: int | None = None
+        if match:
+            marker = re.escape(match.group("marker"))
+            # The anchor is glued to a word or its punctuation: "world.5".
+            anchor = re.compile(rf"[^\W\d_][.,;:!?\"'”’)\]]?{marker}(?!\d)")
+            candidates = [
+                index
+                for index, block in enumerate(body)
+                if block.page_index == head.page_index
+                and position[block.id] < position[head.id]
+                and anchor.search(block.text)
+            ]
+            if len(candidates) == 1:
+                anchor_index = candidates[0]
+                while anchor_index + 1 < len(body) and _is_wrapped_line(
+                    body[anchor_index], body[anchor_index + 1]
+                ):
+                    anchor_index += 1
+        if anchor_index is None:
+            # Keep the PDF position: after the last body line that preceded it.
+            anchor_index = max(
+                (i for i, block in enumerate(body) if position[block.id] < position[head.id]),
+                default=-1,
+            )
+            kept += 1
+        else:
+            relocated += 1
+        after[anchor_index].extend(item)
+    ordered = list(after.get(-1, []))
+    for index, block in enumerate(body):
+        ordered.append(block)
+        ordered.extend(after.get(index, []))
+    if sorted(position[block.id] for block in ordered) != list(range(len(blocks))):
+        raise ExtractionError("Footnote placement must keep every source block exactly once")
+    return ordered, relocated, kept
+
+
+def render_chapter_texts(manifest: BookManifest, folder: Path, footnotes: str = "warn") -> None:
     """Regenerate derived text from source-linked, verified edits and manual boundaries."""
     from pdf2audiobook.workspace import atomic_write, digest_bytes, digest_file, write_json
 
     report = chapter_coverage_report(manifest)
     replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
     for chapter in manifest.chapters:
-        chapter_blocks = manifest.blocks[chapter.start_block : chapter.end_block]
+        chapter_blocks, _, _ = place_footnotes(
+            manifest.blocks[chapter.start_block : chapter.end_block], footnotes
+        )
         content = reflow_narration_lines(chapter_blocks, replacements).encode("utf-8")
         path = folder / "chapters" / f"{chapter.number:03d}.txt"
         # Compare existing chapter text using bounded reads. read_bytes()
