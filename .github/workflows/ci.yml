@@ -29,8 +29,8 @@ jobs:
         run: uv sync --locked --extra dev
       - name: Lint
         run: uv run --extra dev ruff check .
-      - name: Expanded Ruff format diff check
-        run: uv run --extra dev ruff format --diff src/pdf2audiobook/errors.py tests/test_equation_review.py src/pdf2audiobook/models.py src/pdf2audiobook/tts/__init__.py src/pdf2audiobook/workspace.py src/pdf2audiobook/logging.py src/pdf2audiobook/llm/smoke.py
+      - name: Ruff format check
+        run: uv run --extra dev ruff format --check .
       - name: Schema and error type checks
         run: uv run --extra dev mypy --python-version "${{ matrix.python-version }}"
       - name: Unit tests
