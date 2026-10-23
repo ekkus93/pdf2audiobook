@@ -20,23 +20,34 @@ jobs:
         with:
           enable-cache: true
           python-version: "${{ matrix.python-version }}"
+      - name: Restore apt package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-${{ runner.os }}-ffmpeg-tesseract-v1
       - name: Install FFmpeg for chapter MP3 acceptance tests
         timeout-minutes: 25
         run: |
           # man-db index triggers can stall hosted runners for hours.
           sudo rm -f /var/lib/man-db/auto-update
-          # A stalled mirror download must fail and retry in seconds, not hang.
-          APT_OPTS="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=5"
+          # Cached .deb files make the install offline after one good download.
+          mkdir -p ~/apt-archives
+          sudo cp ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          APT_OPTS="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=5 -o APT::Keep-Downloaded-Packages=true"
           for attempt in 1 2 3; do
             if timeout 180 sudo apt-get $APT_OPTS update -q \
               && timeout 300 sudo apt-get $APT_OPTS install -y -q ffmpeg tesseract-ocr tesseract-ocr-eng; then
               break
             fi
-            echo "apt attempt $attempt failed; retrying"
+            echo "apt attempt $attempt failed; retrying from archive.ubuntu.com"
+            # The runner's regional mirror can be slow for hours; use the primary.
+            sudo sed -i 's|http://[a-z.]*archive.ubuntu.com|http://archive.ubuntu.com|g' \
+              /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
             sleep 15
           done
           command -v ffmpeg
           command -v tesseract
+          cp /var/cache/apt/archives/*.deb ~/apt-archives/ 2>/dev/null || true
       - name: Verify committed dependency lockfile
         run: uv lock --check
       - name: Create uv environment and install project
