@@ -213,3 +213,53 @@ def test_mixed_script_ocr_mojibake_is_not_a_heading():
     book.line(2, "Closing Notice", 18).prose(2).line(2, "Последняя глава", 18).prose(2)
     chapters, _ = book.chapters()
     assert [c.title for c in chapters] == ["Opening Notice", "Closing Notice", "Последняя глава"]
+
+
+def _scan_history_book() -> Book:
+    """Contents pages listing chapter labels, then the chapters (Gibbon-like scan)."""
+    book = Book()
+    for page, labels in ((0, ("CHAPTER I", "CHAPTER II")), (1, ("CHAPTER III",))):
+        for label in labels:
+            book.line(page, label, 12)
+            for n in range(5):
+                book.line(page, f"Topic {n} of the listed chapter    {10 * n + 3}", 12)
+    for page, label in enumerate(("CHAPTEE I", "CHAPTER II", "CHAPTER III"), start=2):
+        book.line(page, label, 12).prose(page)
+        # A display-size marginal note mid-chapter is not a chapter opening.
+        book.line(page, "Dacia and Arabia", 18).prose(page)
+    return book
+
+
+def test_contents_listing_labels_yield_to_later_chapter_labels():
+    chapters, warnings = _scan_history_book().chapters()
+    assert [c.title for c in chapters] == ["Front Matter", "CHAPTEE I", "CHAPTER II", "CHAPTER III"]
+    assert [c.confidence for c in chapters[1:]] == [0.9, 0.9, 0.9]
+    assert any("numbered chapter labels" in warning for warning in warnings)
+
+
+def test_large_type_crowding_a_page_is_not_a_run_of_chapters():
+    book = Book().line(0, "Opening Notice", 18).prose(0)
+    for word in ("Harvesters", "Surgical", "Valuable Books", "Selections", "Fits"):
+        book.line(1, word, 18).line(1, "small print advertisement copy", 12)
+    book.line(2, "Closing Notice", 18).prose(2)
+    chapters, _ = book.chapters()
+    assert [c.title for c in chapters] == ["Opening Notice", "Closing Notice"]
+
+
+def test_large_type_contents_line_with_page_reference_is_not_a_heading():
+    book = Book().line(0, "Opening Notice", 18).prose(0)
+    book.line(1, "Conquests of Trajan in the East    6", 18).prose(1)
+    book.line(2, "Closing Notice", 18).prose(2)
+    chapters, _ = book.chapters()
+    assert [c.title for c in chapters] == ["Opening Notice", "Closing Notice"]
+
+
+def test_bookmarked_label_on_number_heavy_page_is_kept():
+    book = Book().line(0, "Chapter X", 12).prose(0)
+    book.line(1, "Chapter XI", 12)
+    for n in range(8):
+        book.line(1, f"y equals x squared plus {n}", 12)
+    book.line(2, "Chapter XI", 12).prose(2)  # later mention, e.g. an exercise heading
+    toc = [[1, "Chapter X", 1], [1, "Chapter XI", 2]]
+    chapters, _ = propose_chapters(book.blocks, set(), toc, Chapters())
+    assert [(c.title, c.start_block) for c in chapters][:2] == [("Chapter X", 0), ("Chapter XI", 4)]

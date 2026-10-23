@@ -19,6 +19,7 @@ from typing import Literal, Protocol, runtime_checkable
 import pymupdf
 
 from pdf2audiobook.config import Pdf as PdfSettings
+from pdf2audiobook.document.structure import CHAPTER_WORD
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.reading_order import merge_line_fragments, order_two_columns
@@ -150,7 +151,7 @@ def _inspection_page_size(page: pymupdf.Page) -> tuple[float, float]:
 
 
 _HEADING_PREFIX = re.compile(
-    r"^(?:(?P<numbered>chapter\s+[\divxlcdm]+|part\s+[\divxlcdm]+)|prologue|epilogue|"
+    rf"^(?:(?P<numbered>(?:{CHAPTER_WORD}|part)\s+[\divxlcdm]+)|prologue|epilogue|"
     r"introduction|preface)\b[.:]?\s*(?P<rest>.*)$",
     re.IGNORECASE,
 )

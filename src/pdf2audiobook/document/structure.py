@@ -16,14 +16,24 @@ from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, DocumentBlock
 
+# "Chapter" including common scan misreadings (CHAPTEE, CHAPTEK, CIIAPTER).
+CHAPTER_WORD = r"c(?:h|ii|li)apte[rek]"
 HEADING = re.compile(
-    r"^(?:(?:chapter|part)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|"
+    rf"^(?:(?:{CHAPTER_WORD}|part)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|"
     r"seven|eight|nine|ten)\b.*|prologue|epilogue|preface|introduction)$",
     re.IGNORECASE,
 )
-# "Chapter IV regarding ..." is a sentence that cites a chapter, not a label.
+NUMBERED_LABEL = re.compile(
+    rf"^(?:{CHAPTER_WORD}|part)\s+(?:\d+|[ivxlcdm]+|one|two|three|four|five|six|"
+    r"seven|eight|nine|ten)\b",
+    re.IGNORECASE,
+)
 ROMAN = re.compile(r"[IVXLCDM]+")
-LABEL_PROSE = re.compile(r"^(?i:chapter|part)\s+\S+\s+[a-z]")
+LABELLED_NUMBER = re.compile(rf"^(?i:{CHAPTER_WORD}|part|book|canto|section)\s+\S+$")
+# "Chapter IV regarding ..." is a sentence that cites a chapter, not a label.
+LABEL_PROSE = re.compile(rf"^(?i:{CHAPTER_WORD}|part)\s+\S+\s+[a-z]")
+# A contents line ends with its page reference ("Death of Niger ... 120").
+PAGE_REFERENCE_END = re.compile(r"[^\W\d_][\s.…·]*\s\d{1,4}$")
 CHAPTER_TEXT_NAME = re.compile(r"\d{3,}\.txt")
 WRAPPED_LINE_END = re.compile(r"[^\W\d_]-$")
 PAGE_NUMBER = re.compile(r"^(?:\d{1,5}|[ivxlcdm]{1,10})$", re.IGNORECASE)
@@ -32,6 +42,14 @@ CANONICAL_ROMAN = re.compile(
     r"^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})"
     r"(?:IX|IV|V?I{0,3})$"
 )
+
+
+def _label_key(text: str) -> str:
+    """Compare chapter labels across OCR misreadings: "CHAPTEE  XI" is "chapter xi"."""
+    words = text.casefold().split()
+    if words and re.fullmatch(CHAPTER_WORD, words[0]):
+        words[0] = "chapter"
+    return _title_key(" ".join(words))
 
 
 def _title_key(text: str) -> str:
@@ -202,8 +220,45 @@ def _aligned_number_positions(first: float, second: float) -> bool:
     return abs(first - second) <= 0.06 or abs(first + second - 1) <= 0.06
 
 
-def _aligned_folios(first: tuple[float, float], second: tuple[float, float]) -> bool:
-    """Folios align on the paper, or relative to sideways-drifting scanned text."""
+RUNNING_FOLIO = re.compile(
+    r"^(?:(?P<lead>\d{1,4}|[ivxlcdm]{1,8})\s+(?P<after>\S.*)|"
+    r"(?P<before>.*\S)\s+(?P<trail>\d{1,4}|[ivxlcdm]{1,8}))$",
+    re.IGNORECASE,
+)
+
+
+def _titled(text: str) -> bool:
+    """A running title has a real word; "x dx" or "dy dx" from a formula does not."""
+    words = re.findall(r"[^\W\d_]{3,}", text)
+    return _wordlike(text) and bool(words) and sum(len(word) for word in words) >= 4
+
+
+def _running_parts(text: str) -> tuple[str, str | None]:
+    """Split a margin line into its title key and an embedded folio, if any.
+
+    "OF THE ROMAN EMPIRE 27" and "30 THE DECLINE AND FALL" are a repeated
+    running title plus the page number. A numbered chapter/part label keeps
+    its numeral: "CHAPTER II" is a different title from "CHAPTER III".
+    """
+    raw = " ".join(text.split())
+    match = RUNNING_FOLIO.match(raw)
+    if match is None or LABELLED_NUMBER.match(raw):
+        return raw.casefold(), None
+    title = match.group("after") or match.group("before")
+    folio = match.group("lead") or match.group("trail")
+    if not _titled(title):
+        return raw.casefold(), None
+    return title.casefold(), folio
+
+
+def _aligned_folios(first: tuple[float, float] | None, second: tuple[float, float] | None) -> bool:
+    """Folios align on the paper, or relative to sideways-drifting scanned text.
+
+    None marks a folio embedded in a running title, whose repetition is the
+    positional evidence.
+    """
+    if first is None or second is None:
+        return True
     return any(_aligned_number_positions(a, b) for a, b in zip(first, second))
 
 
@@ -247,6 +302,14 @@ def _adjacent_body_line(
         ):
             continue
         ox0, oy0, ox1, oy1 = other.bbox
+        # A running head set in much larger type than the line beside it is
+        # a separate element, not the first line of a paragraph.
+        if (
+            block.font_size is not None
+            and other.font_size is not None
+            and block.font_size >= 1.4 * other.font_size
+        ):
+            continue
         if band == "header":
             gap = oy0 - y1
         else:
@@ -281,7 +344,7 @@ def pagination_cleanup(
     """Remove only corroborated pagination patterns confined to margin bands."""
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
     text_occurrences: dict[tuple[str, str], list[tuple[int, float, float]]] = defaultdict(list)
-    numbered: dict[str, list[tuple[int, int, tuple[float, float], str]]] = defaultdict(list)
+    numbered: dict[str, list[tuple[int, int, tuple[float, float] | None, str]]] = defaultdict(list)
     blocks_by_page: dict[int, list[DocumentBlock]] = defaultdict(list)
     body_text: set[str] = set()
 
@@ -320,12 +383,22 @@ def pagination_cleanup(
             return paper, (center - left) / (right - left)
         return paper, paper
 
+    # Titles repeated in a margin band on three or more pages are running
+    # heads, whether or not a folio shares their line.
+    title_pages: dict[tuple[str, str], set[int]] = defaultdict(set)
     for block in blocks:
         if not block.bbox or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
             continue
         height = sizes[block.page_index][1]
         if block.bbox[1] >= 0.12 * height and block.bbox[3] <= 0.88 * height:
             body_text.add(" ".join(block.text.split()).casefold())
+        elif block.bbox[3] < 0.12 * height or block.bbox[1] > 0.88 * height:
+            text = block.text.strip()
+            # Only short, unpunctuated title-like lines can be running heads.
+            if len(text.split()) < 8 and not text.endswith((".", "?", "!", ",", ";", ":")):
+                band_name = "header" if block.bbox[3] < 0.12 * height else "footer"
+                title_pages[(band_name, _running_parts(text)[0])].add(block.page_index)
+    running_titles = {key for key, pages in title_pages.items() if len(pages) >= 3}
     for block in blocks:
         if not block.bbox or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
             continue
@@ -334,15 +407,22 @@ def pagination_cleanup(
         band = "header" if bottom < height * 0.12 else ("footer" if top > height * 0.88 else None)
         if not band:
             continue
+        raw = block.text.strip()
+        val, embedded_folio = _running_parts(raw)
+        running_title = (band, val) in running_titles
         # Fail closed when the apparent margin element is continuous with
         # nearby body text; repeated dialogue and list labels are not folios.
-        if _adjacent_body_line(block, blocks_by_page[block.page_index], band):
+        # A title repeated on three or more pages with its folio is not.
+        if not (running_title and embedded_folio is not None) and _adjacent_body_line(
+            block, blocks_by_page[block.page_index], band
+        ):
             continue
-        val = " ".join(block.text.split()).casefold()
-        raw = block.text.strip()
         # Fail closed on standalone quotations, numbered list markers and
         # headings. These can legitimately occur in a page's margin band.
-        if block.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
+        # A heading-styled line repeated as a running head is the exception.
+        if block.kind in {"list", "table", "footnote", "caption", "equation"}:
+            continue
+        if block.kind == "heading" and not running_title:
             continue
         if raw.startswith(
             (
@@ -403,7 +483,15 @@ def pagination_cleanup(
         # somewhere in the book; do not delete identical margin occurrences.
         # Folio numerals are exempt: contents pages and cross-references
         # repeat them in body text, and they still need a page sequence.
-        if val in body_text and not PAGE_NUMBER.fullmatch(raw):
+        # A heading-styled running title, or one carrying its folio, also
+        # appears once in the body as its section's own heading; repetition
+        # on three or more margins outweighs that. Plain phrases stay.
+        styled_title = running_title and (block.kind == "heading" or embedded_folio is not None)
+        if (
+            " ".join(raw.split()).casefold() in body_text
+            and not PAGE_NUMBER.fullmatch(raw)
+            and not styled_title
+        ):
             continue
         # A full sentence or extended prose in the margin is not safe to
         # classify as a running title based on repetition alone.
@@ -415,23 +503,31 @@ def pagination_cleanup(
         # Standalone numerals may be section headings or list labels. Large
         # display type is not a folio; a same-line continuation suggests a
         # numbered list rather than a page number.
+        beside_title = False
         if PAGE_NUMBER.fullmatch(raw):
             if block.font_size is not None and block.font_size > 14:
                 continue
-            if any(
-                other.id != block.id
+            same_line = [
+                other
+                for other in blocks_by_page[block.page_index]
+                if other.id != block.id
                 and other.bbox is not None
                 and _valid_bbox(other.bbox)
                 and other.text.strip()
                 and other.bbox[0] >= block.bbox[2]
                 and 0 <= other.bbox[0] - block.bbox[2] <= sizes[block.page_index][0] * 0.12
                 and abs(other.bbox[1] - block.bbox[1]) <= max(5.0, block.bbox[3] - block.bbox[1])
-                for other in blocks_by_page[block.page_index]
-            ):
+            ]
+            # "28   THE DECLINE AND FALL": a folio beside a running title,
+            # rather than a list number beside its item.
+            beside_title = bool(same_line) and all(
+                (band, _running_parts(other.text)[0]) in running_titles for other in same_line
+            )
+            if same_line and not beside_title:
                 continue
         # A lone numeric line at ordinary body indentation is not sufficient
         # evidence of pagination, even if another page starts with "2".
-        if PAGE_NUMBER.fullmatch(raw):
+        if PAGE_NUMBER.fullmatch(raw) and not beside_title:
             if not any(
                 position <= 0.09 or position >= 0.91 or 0.38 <= position <= 0.62
                 for position in positions(block)
@@ -446,6 +542,12 @@ def pagination_cleanup(
         parsed = _number_value(raw)
         if parsed is not None:
             numbered[band].append((block.page_index, parsed[0], positions(block), parsed[1]))
+        elif embedded_folio is not None and running_title:
+            # The folio inside a running head still sequences its neighbours;
+            # its position is the title's, so alignment is not compared.
+            embedded = _number_value(embedded_folio)
+            if embedded is not None:
+                numbered[band].append((block.page_index, embedded[0], None, embedded[1]))
     # More than one standalone numeral in a single margin band on a page
     # is ambiguous (often a numbered list or page-local references), not
     # reliable evidence of one running folio. Do not use those numerals to
@@ -468,7 +570,7 @@ def pagination_cleanup(
     sequential_pages: dict[str, set[int]] = defaultdict(set)
     for band, entries in numbered.items():
         entries = [entry for entry in entries if (band, entry[0]) not in ambiguous_numeric_bands]
-        by_key: dict[tuple[int, int, str], list[tuple[float, float]]] = defaultdict(list)
+        by_key: dict[tuple[int, int, str], list[tuple[float, float] | None]] = defaultdict(list)
         for page, folio_number, position, notation in entries:
             by_key[(page, folio_number, notation)].append(position)
         for page, folio_number, position, notation in entries:
@@ -488,7 +590,7 @@ def pagination_cleanup(
         bbox = block.bbox
         if bbox is None:
             continue
-        value = " ".join(block.text.split()).casefold()
+        value, embedded_folio = _running_parts(block.text)
         is_number = _number_value(block.text.strip()) is not None
         confirmed_number = (
             is_number
@@ -512,14 +614,21 @@ def pagination_cleanup(
             reason = "sequential/repeated page number"
         elif (
             not PAGE_NUMBER.fullmatch(block.text.strip())
-            and len(block.text.split()) >= 2
+            and _titled(value)
+            and (
+                len(block.text.split()) >= 2
+                or (block.kind == "heading" and (band, value) in running_titles)
+            )
             and repeated
+            and (block.kind != "heading" or (band, value) in running_titles)
             and (
                 (band == "header" and settings.remove_headers)
                 or (band == "footer" and settings.remove_footers)
             )
         ):
             reason = "repeated running " + band
+            if embedded_folio is not None:
+                reason += " with page number"
         else:
             continue
         edits.append(
@@ -575,6 +684,7 @@ def propose_chapters(
             and not WRAPPED_LINE_END.search(text)
             and not text[:1].islower()
             and not text.isdecimal()
+            and not PAGE_REFERENCE_END.search(text)
             and (_wordlike(text) or text in {"I", "V", "X"})
             and block.kind not in {"table", "footnote", "caption", "equation", "list"}
         )
@@ -687,6 +797,55 @@ def propose_chapters(
             f"Skipped {malformed_bookmarks} malformed PDF bookmark "
             "record(s); verify chapter boundaries manually"
         )
+    # Large type crowding one page (a contents listing, an advert, a scanned
+    # cover read as text) is layout, not a run of chapter openings.
+    per_page: dict[int, list[int]] = defaultdict(list)
+    for i in typography_ids:
+        per_page[blocks[i].page_index].append(i)
+    crowded = {i for ids in per_page.values() if len(ids) >= 4 for i in ids}
+    if crowded:
+        typography_ids -= crowded
+        heading_indices = [
+            i
+            for i in heading_indices
+            if i not in crowded or labelled_heading(blocks[i].text.strip()) or i in contents_titles
+        ]
+    # A chapter label on a contents-style page (most lines end in a page
+    # reference) is a listing when the same label opens a chapter later.
+    lines_on_page: dict[int, list[str]] = defaultdict(list)
+    for block in blocks:
+        if block.id not in omitted and block.text.strip():
+            lines_on_page[block.page_index].append(block.text.strip())
+    listing_pages = {
+        page
+        for page, texts in lines_on_page.items()
+        if len(texts) >= 6
+        and sum(
+            bool(PAGE_REFERENCE_END.search(text) or re.fullmatch(r"\d{1,4}", text))
+            for text in texts
+        )
+        >= 0.3 * len(texts)
+    }
+    # A contents run spans consecutive pages; fill single-page gaps.
+    listing_pages |= {
+        page + 1
+        for page in listing_pages
+        if page + 2 in listing_pages and page + 1 in lines_on_page
+    }
+    label_positions: dict[str, list[int]] = defaultdict(list)
+    for i in heading_indices:
+        if NUMBERED_LABEL.match(blocks[i].text.strip()):
+            label_positions[_label_key(blocks[i].text)].append(i)
+    listed = {
+        i
+        for positions in label_positions.values()
+        for i in positions[:-1]
+        if blocks[i].page_index in listing_pages and i not in bookmark_titles
+    }
+    heading_indices = [i for i in heading_indices if i not in listed]
+    numbered_labels = sum(
+        1 for i in heading_indices if NUMBERED_LABEL.match(blocks[i].text.strip())
+    )
     # Candidates supported only by font size or by LLM classification.
     llm_ids = extra_heading_ids or set()
     weak = {
@@ -698,7 +857,7 @@ def propose_chapters(
         and not labelled_heading(blocks[i].text.strip())
     }
     llm_only = {i for i in weak if i not in typography_ids}
-    if len(bookmark_titles) >= 2 or contents_titles:
+    if len(bookmark_titles) >= 2 or contents_titles or numbered_labels >= 3:
         # A PDF outline or printed contents that matches the text is stronger
         # evidence than font size or LLM classification. Do not let material
         # it omits (catalogue entries, scene breaks, stray running heads)
@@ -708,12 +867,14 @@ def propose_chapters(
             if weak - llm_only:
                 warnings.append(
                     f"Ignored {len(weak - llm_only)} font-size-only heading candidate(s) "
-                    "not in the PDF outline or printed contents; verify chapter boundaries"
+                    "not in the PDF outline, printed contents or numbered chapter labels; "
+                    "verify chapter boundaries"
                 )
             if llm_only:
                 warnings.append(
                     f"Ignored {len(llm_only)} LLM-proposed heading(s) not in the PDF "
-                    "outline or printed contents; verify chapter boundaries"
+                    "outline, printed contents or numbered chapter labels; "
+                    "verify chapter boundaries"
                 )
     # A contents entry naming the line right after another heading is that
     # chapter's subtitle ("CHAPTER III." / "ON RELATIVE GROWINGS."), not a
