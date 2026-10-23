@@ -38,10 +38,10 @@ be available to the installed Kitten version. Offline CI mocks Kitten; it does
 **not** validate the real model's audio quality or download path.
 
 The project uses `uv sync` to manage `.venv`; do not manually install
-dependencies into the system interpreter. **A committed `uv.lock` is still
-missing**; dependency resolution is not yet strictly reproducible. Generate
-and validate it with `uv lock` when PyPI is available, then commit it as a
-separate, tested change.
+dependencies into the system interpreter. The committed `uv.lock` pins the
+default, `dev` and `kitten` dependency graphs; install with
+`uv sync --locked --extra dev` and regenerate deliberately with `uv lock`
+when changing dependencies, as a separate, tested change.
 
 ## CLI workflows
 
@@ -246,12 +246,22 @@ mock transports and audio with synthetic signals before real-model acceptance.
 ## Development, CI and troubleshooting
 
 ```bash
-uv sync --extra dev
+uv lock --check
+uv sync --locked --extra dev
 uv run --extra dev ruff check .
+uv run --extra dev ruff format --diff <files listed in ci.yml>
+uv run --extra dev mypy
 uv run --extra dev pytest -q
 uv run --extra dev pdf2audiobook --help
 uv run --extra dev pdf2audiobook doctor --json
 ```
+
+Ruff formatting is gated only for the explicit file list in `ci.yml`, widened
+file by file. Mypy checks the explicit `[tool.mypy].files` list in
+`pyproject.toml`; add every new module there. Third-party libraries that print
+to stdout (PyMuPDF messages, kittenml's per-chunk echo) are silenced or routed
+to stderr at their adapter so `--json` output stays parseable and narration
+text never reaches logs.
 
 `.github/workflows/ci.yml` runs these offline checks on `master`, installing
 FFmpeg, Tesseract and English language data. It does **not** install Kitten
@@ -275,7 +285,8 @@ bug reports.
 
 ## Outstanding release gates
 
-The TODO remains authoritative: no `uv.lock`, no static type-checking gate,
-and real Kitten/LLM/Tesseract acceptance plus broader special-material and
-long-book qualification are still outstanding. Documentation and offline CI
+The TODO remains authoritative: whole-repository formatting, capable-model
+LLM, llama-server and consented OpenAI acceptance, human listening review of
+real Kitten audio, and real-book/difficult-scan special-material qualification
+are still outstanding. Documentation and offline CI
 passing do not close these gates.
