@@ -1,7 +1,7 @@
 # PDF2Audiobook — Implementation TODO
 
-**Status:** Original items reopened by the third review are re-checked after review-fixes FX9, except F.06 (Piper-specific speaker validation deferred by the user; see docs/PDF2AUDIOBOOK_REVIEW_FIXES_TODO.md)
-**Date:** 2026-10-24
+**Status:** P5.05, F.01 and F.06 remain open; fourth-review reopenings are tracked in docs/PDF2AUDIOBOOK_FOURTH_REVIEW_TODO.md (FX10).
+**Date:** 2026-10-25
 **Specification:** docs/PDF2AUDIOBOOK_SPEC.md  
 **Target:** Python CLI, chapter MP3s, Kitten TTS, optional OpenAI/Ollama/llama-server intelligence.
 
@@ -23,10 +23,10 @@
 - [x] P0.02 Establish src/pdf2audiobook/{cli,config,pdf,document,llm,tts,audio,pipeline} and public adapter protocols.
   - [x] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics; CLI errors are content-free for non-domain exceptions.
   - [x] P0.02b Add structured logging with text/key redaction and --verbose/--quiet controls (review-fixes FX5.08; exact-head CI evidence in the review-fixes ledger).
-- [x] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
+- [ ] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
   - [x] P0.03a Implement lookup of per-user config directory; --config and --no-config (review-fixes FX5.02).
   - [x] P0.03b Implement precedence CLI > PDF2AUDIOBOOK_* env > TOML > built-ins, including explicit boolean false (review-fixes FX5.03, FX5.05).
-  - [x] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options (review-fixes FX5.06).
+  - [ ] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options (review-fixes FX5.06).
   - [x] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples (requalified by review-fixes FX8.03).
   - [x] P0.03e Unit-test overlay precedence, parsing, missing/unknown keys and path resolution (review-fixes FX5.01–FX5.03).
 - [x] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation (review-fixes FX7.01).
@@ -102,9 +102,9 @@
 
 ## Phase 4 — TTS, MP3 and resume (M4)
 
-- [x] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
+- [ ] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
   - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
-  - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate (review-fixes FX5.06).
+  - [ ] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate (review-fixes FX5.06).
 - [x] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking (requalified by review-fixes FX8.13 and FX8.15).
   - [x] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
   - [x] P4.02b Handle oversized sentences and TTS failures without silently dropping text.
@@ -153,7 +153,7 @@
 - [ ] F.06 Multi-speaker narration and pronunciation dictionaries (review-fixes FX6.05–FX6.06; Piper-specific speaker-count validation deferred under FX8.14c).
   - [x] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges (review-fixes FX6.05).
   - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity and survives review saves, including omitted fields in partial clients.
-  - [x] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval (review-fixes FX6.06).
+  - [ ] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval (review-fixes FX6.06).
 
 ## Progress ledger
 
@@ -439,3 +439,4 @@
 | 2026-10-25 | 5c8eff7160f3f02506b7092ac75196860df6bc13 | Requalified reopened P0.03d, P1.03a, P1.04c, P2.03a, P3.02a, P3.06, P4.02, P4.03c, F.04 and F.06 against FX8.03–FX8.13 evidence | Local 1240 passed and 1 optional Kitten smoke skipped; Ruff, formatting, mypy, uv lock check and wheel/sdist build passed. Exact-head CI [40186391382](https://github.com/ekkus93/pdf2audiobook/actions/runs/40186391382) passed on Python 3.11–3.13. | Piper-specific marker speaker-count validation is explicitly deferred by user |
 | 2026-10-25 | 1530a35 (docs state reviewed) | Reopened P0.03d, P1.03a, P1.04c, P2.03a, P3.02a, P3.06, P4.02, P4.03c, F.04 and F.06 (and parents P0.03, P1.03, P1.04, P2.03, P3.02, P4.03) per the third review (review-fixes FX9.00); they are re-checked only when the covering FX9 tasks are done | Docs only; no tests run | See docs/PDF2AUDIOBOOK_REVIEW_FIXES_TODO.md FX9 |
 | 2026-10-25 | 597ed1c86cccb89e0c541c9473619a9e6abeae71 | Re-checked P0.03d, P1.03a, P1.04c, P2.03a, P3.02a, P3.06, P4.02, P4.03c and F.04 (and parents P0.03, P1.03, P1.04, P2.03, P3.02, P4.03) after review-fixes FX9; F.06 stays open with the deferred Piper work | Exact-head CI [40214317792](https://github.com/ekkus93/pdf2audiobook/actions/runs/40214317792) passed on Python 3.11–3.13 | Piper-specific speaker validation deferred by user |
+| 2026-10-25 | 6eedfa4c283e5eb54c4e17100e1d16c7be894949 | Fourth-review correction: F.06 voice-marker subtask and prior items dependent on reopened FX work are unchecked; open P5.05, F.01 and F.06 are listed in the status. Correction: the "worktree after 1664fdd" row reports mypy on 21 modules, but the configured count was 19. | Docs-only status correction; no tests run | Piper speaker-count validation, live LLM checks, and fourth-review FX10 work remain open |
