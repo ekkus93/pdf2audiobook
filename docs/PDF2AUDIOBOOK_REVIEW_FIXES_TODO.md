@@ -199,4 +199,4 @@
 | --- | --- | --- | --- | --- |
 | 2026-10-25 | 689eb4937b94e14735298b8e8c3a7cbc71c279de | Review fixes spec and TODO drafted; no fixes implemented | Not run | None identified |
 | 2026-10-25 | 826a5cbb69284351e4d797a015c67ea42aaf85cb | FX0.02–FX0.03 (bounded cache JSON; manifest v2) | CI run [40173850676](https://github.com/ekkus93/pdf2audiobook/actions/runs/40173850676), success | None |
-| 2026-10-25 | pending | FX1.01–FX1.06 (review UI security, voice saves, CLI privacy, config redaction) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1038 tests passed | Exact-head CI pending |
+| 2026-10-25 | 9ab2c88034a1f85f1f4ac32d02a2029b7f3464a0 | FX1.01–FX1.06 (review UI security, voice saves, CLI privacy, config redaction) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1038 tests; CI run [40174161319](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174161319) passed | None |
