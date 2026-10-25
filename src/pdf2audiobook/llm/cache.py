@@ -8,7 +8,7 @@ from typing import Any
 
 from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm.budget import BookLLMBudgetLedger
-from pdf2audiobook.workspace import fingerprint, write_json
+from pdf2audiobook.workspace import digest_bytes, fingerprint, write_json
 
 # Cached provider output is untrusted even when its content-addressed filename
 # matches. Bound the read independently of an earlier stat() to handle races.
@@ -168,13 +168,46 @@ class CachedLLMProvider:
         )
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
+        return self._complete_json_call(
+            instructions=instructions, document_text=document_text, image_data=None
+        )
+
+    def complete_json_with_image(
+        self, *, instructions: str, document_text: str, image_data: bytes
+    ) -> dict[str, Any]:
+        return self._complete_json_call(
+            instructions=instructions, document_text=document_text, image_data=image_data
+        )
+
+    def _complete_json_call(
+        self, *, instructions: str, document_text: str, image_data: bytes | None
+    ) -> dict[str, Any]:
         # Reject known oversized requests before reserving a book-budget call.
         # Such requests cannot incur a charge and must not poison the ledger
         # with a false "unknown" charge. Apply this to cache hits as well.
         preflight = getattr(self.provider, "validate_request_capacity", None)
         if callable(preflight):
             preflight(instructions=instructions, document_text=document_text)
-        key = fingerprint("llm-json-cache-v1", self.identity, instructions, document_text)
+        image_preflight = getattr(self.provider, "validate_image_capacity", None)
+        if image_data is not None:
+            if callable(image_preflight):
+                image_preflight(
+                    instructions=instructions,
+                    document_text=document_text,
+                    image_data=image_data,
+                )
+            elif not callable(getattr(self.provider, "complete_json_with_image", None)):
+                raise LLMError("LLM provider does not support image requests")
+        if image_data is None:
+            key = fingerprint("llm-json-cache-v1", self.identity, instructions, document_text)
+        else:
+            key = fingerprint(
+                "llm-json-image-cache-v1",
+                self.identity,
+                instructions,
+                document_text,
+                digest_bytes(image_data),
+            )
         target = self.cache_dir / f"{key}.json"
         if self.enabled:
             try:
@@ -207,7 +240,14 @@ class CachedLLMProvider:
         # Server-side limits need the server, so check them only on a miss:
         # a fully cached rerun must not require a running provider.
         served = getattr(self.provider, "validate_served_capacity", None)
-        if callable(served):
+        served_image = getattr(self.provider, "validate_served_image_capacity", None)
+        if image_data is not None and callable(served_image):
+            served_image(
+                instructions=instructions,
+                document_text=document_text,
+                image_data=image_data,
+            )
+        elif callable(served):
             served(instructions=instructions, document_text=document_text)
         reservation = None
         if self.ledger is None:
@@ -229,10 +269,17 @@ class CachedLLMProvider:
         self.requests_started += 1
         self._write_usage()
         try:
-            reply = self.provider.complete_json(
-                instructions=instructions,
-                document_text=document_text,
-            )
+            if image_data is None:
+                reply = self.provider.complete_json(
+                    instructions=instructions,
+                    document_text=document_text,
+                )
+            else:
+                reply = self.provider.complete_json_with_image(
+                    instructions=instructions,
+                    document_text=document_text,
+                    image_data=image_data,
+                )
         finally:
             last = getattr(self.provider, "last_usage", None)
             # A total-token counter alone cannot prove a request's cost.

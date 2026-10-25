@@ -22,6 +22,55 @@ The `uv sync` command creates/manages `.venv` automatically. You can also explic
 
 The default LLM provider is local Ollama; OpenAI requires explicit consent before transmitting book contents. For consented non-loopback endpoints, a one-time stderr warning identifies the provider, selected model, and current analysis block-window scope *before* uploading book text. Local loopback analysis does not emit the remote-upload warning. See the specification for privacy and audit requirements.
 
+PDF and EPUB books use the same analysis commands. Kitten is the default TTS provider. Piper can be selected when its CLI and a voice model are installed separately; configure the ONNX model path in TOML:
+
+~~~toml
+[tts]
+provider = "piper"
+
+[tts.piper]
+model_path = "/path/to/en_US-lessac-medium.onnx"
+voice = "0" # optional multi-speaker ID
+speed = 1.0
+~~~
+
+Then run `uv run pdf2audiobook convert book.pdf --no-llm --tts-provider piper`. Piper is not installed or downloaded by the default project environment.
+
+Batch conversion accepts a directory of PDFs (nested folders are opt-in):
+
+~~~bash
+uv run pdf2audiobook batch ./books --no-llm --recursive --json
+~~~
+
+Use `tts.profiles` to select a voice and speed by exact PDF filename stem:
+
+~~~toml
+[tts.profiles."My Book"]
+provider = "kitten"
+kitten_model = "mini"
+voice = "Jasper"
+speed = 1.05
+
+[tts.pronunciations]
+"Māori" = "Mow-ree"
+~~~
+
+Pronunciation replacements apply only to speech output; they must be a single token. Source chapter text remains unchanged and progress ranges still point to the original words.
+
+After converting all chapters, package them as a single AAC audiobook with chapter navigation:
+
+~~~bash
+uv run pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b
+~~~
+
+Open a local browser editor for chapter titles and boundaries with:
+
+~~~bash
+uv run pdf2audiobook review ./audiobooks/BOOK/manifest.json
+~~~
+
+The review server binds only to loopback, requires a per-run token for manifest data, and marks saved chapter boundaries as manually approved. It also accepts an optional TTS voice ID per chapter; each chapter remains a single voice.
+
 **Lockfile:** The generated `uv.lock` is committed and pins the project's declared default, `dev`, and optional `kitten` dependency graphs. For reproducible development installs, run `uv sync --locked --extra dev`; for the heavyweight voice extra, run `uv sync --locked --extra kitten --extra dev`. Regenerate the lockfile deliberately with `uv lock` when changing dependencies and review the resulting diff. **CI verifies `uv lock --check` and installs development dependencies using `uv sync --locked --extra dev`** on Python 3.11, 3.12 and 3.13; the optional Kitten model remains an explicit heavyweight, environment-dependent acceptance gate.
 
 ## CLI workflow
@@ -32,10 +81,12 @@ uv run pdf2audiobook config show --sources
 uv run pdf2audiobook inspect path/to/book.pdf
 uv run pdf2audiobook analyze path/to/book.pdf --no-llm
 uv run pdf2audiobook convert path/to/book.pdf --no-llm --allow-single-chapter
+uv run pdf2audiobook batch ./books --no-llm --recursive
+uv run pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b
 uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
 ~~~
 
-`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with Kitten TTS. Models are loaded on demand.
+`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with the selected TTS provider. `batch` processes a directory of PDFs; `pack-m4b` packages completed chapters with chapter navigation. Models are loaded on demand.
 
 Install Tesseract separately for scanned pages. For synthesis, run `uv sync --extra kitten --extra dev` and install FFmpeg. The Kitten model alias `mini` resolves to the lightweight 0.8 mini model.
 
@@ -168,6 +219,10 @@ request does not leave a false unresolved provider charge. Changing the output
 cap also invalidates earlier LLM response-cache identities. Operators must verify actual
 context windows and `max_tokens` support against their selected live model.
 These checks do not guarantee that a misconfigured server honors its limit.
+
+## Optional visual review
+
+Set `llm.vision = true` (or `PDF2AUDIOBOOK_LLM_VISION=true`) to render up to 12 pages with detected images, vector art, or likely multi-column layouts for review-only descriptions. Use `--vision` for a one-command opt-in. Visual suggestions are saved in `reports/vision_review.json`; they do not change chapter text or narration. Select a vision-capable model. Remote page images follow the same explicit consent and HTTPS rules as other book content.
 
 ## Opt-in live LLM provider smoke tests
 

@@ -11,11 +11,12 @@ import tempfile
 import wave
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, NotRequired, Protocol, TypedDict, runtime_checkable
+from typing import Iterator, Mapping, NotRequired, Protocol, TypedDict, runtime_checkable
 
 import numpy as np
 from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
+from mutagen.mp4 import MP4
 
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import BookManifest, Chapter
@@ -47,13 +48,33 @@ class _SynthesisProgress(TypedDict):
 # Match pairs of logical line endings (CRLF, LF, or CR) with optional
 # indentation between them. The same rule controls chunking and source spans.
 _PARAGRAPH_BREAK = re.compile(r"(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)+")
+_PRONUNCIATION_TOKEN = re.compile(r"(?P<prefix>\W*)(?P<word>\w+(?:['’\-]\w+)*)(?P<suffix>\W*)")
 
 
 # Short TTS chunks must never require a 128 MiB WAV cache entry.
 _MAX_CACHED_WAV_BYTES = 128 * 1024 * 1024
 
 
-def split_sentences(text: str, max_chars: int = 350) -> list[str]:
+def _spoken_token(token: str, pronunciations: Mapping[str, str] | None = None) -> str:
+    match = _PRONUNCIATION_TOKEN.fullmatch(token)
+    if match is None or not pronunciations:
+        return token
+    word = match.group("word")
+    spoken = pronunciations.get(word.casefold())
+    if spoken is None:
+        return token
+    if word.isupper():
+        spoken = spoken.upper()
+    elif word.istitle():
+        spoken = spoken.capitalize()
+    return f"{match.group('prefix')}{spoken}{match.group('suffix')}"
+
+
+def split_sentences(
+    text: str,
+    max_chars: int = 350,
+    pronunciations: Mapping[str, str] | None = None,
+) -> list[str]:
     """Split at sentence/word boundaries without crossing source paragraphs."""
     if max_chars < 40:
         raise ValueError("max_chars must be at least 40")
@@ -63,7 +84,8 @@ def split_sentences(text: str, max_chars: int = 350) -> list[str]:
     for paragraph in _PARAGRAPH_BREAK.split(text.strip()):
         current = ""
         for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
-            for word in sentence.split():
+            for source_word in sentence.split():
+                word = _spoken_token(source_word, pronunciations)
                 if len(word) > max_chars:
                     raise AudioError("A single narration token exceeds the chunk limit")
                 if current and len(current) + len(word) + 1 > max_chars:
@@ -81,6 +103,7 @@ def split_sentences(text: str, max_chars: int = 350) -> list[str]:
 def chunk_source_ranges(
     chapter_text: str,
     chunks: list[str],
+    pronunciations: Mapping[str, str] | None = None,
 ) -> list[tuple[int, int, bool]]:
     """Map normalized spoken chunks to exact source character ranges, in order."""
     words = list(re.finditer(r"\S+", chapter_text))
@@ -90,7 +113,7 @@ def chunk_source_ranges(
     for chunk in chunks:
         parts = chunk.split()
         group = words[cursor : cursor + len(parts)]
-        if not group or [match.group() for match in group] != parts:
+        if not group or [_spoken_token(match.group(), pronunciations) for match in group] != parts:
             raise AudioError("Narration chunk source alignment failed")
         start, end = group[0].start(), group[-1].end()
         paragraph_boundary = bool(_PARAGRAPH_BREAK.search(chapter_text[previous_end:start]))
@@ -175,6 +198,7 @@ def synthesize_chunks(
     cache: Path,
     use_cache: bool = True,
     progress_file: Path | None = None,
+    pronunciations: Mapping[str, str] | None = None,
 ) -> np.ndarray:
     """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
     samples: list[np.ndarray] = []
@@ -208,13 +232,13 @@ def synthesize_chunks(
         raise AudioError("Could not inspect TTS provider chunk limit") from None
     if isinstance(chunk_limit, bool) or not isinstance(chunk_limit, int) or chunk_limit < 40:
         raise AudioError("TTS provider max_chars_per_chunk must be an integer >= 40")
-    chunks = split_sentences(chapter_text, max_chars=chunk_limit)
+    chunks = split_sentences(chapter_text, max_chars=chunk_limit, pronunciations=pronunciations)
     if not chunks:
         raise AudioError("Chapter has no speakable text")
     # Use one validated snapshot of the engine rate throughout the request.
     pause = np.zeros(int(rate * pause_ms / 1000), dtype=np.float32)
     paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
-    ranges = chunk_source_ranges(chapter_text, chunks)
+    ranges = chunk_source_ranges(chapter_text, chunks, pronunciations=pronunciations)
     # Chunk WAVs are shared across chapters, but never across different
     # synthesis engines even when their model/voice labels and rates coincide.
     # The version marker invalidates older engine-agnostic cache keys.
@@ -484,6 +508,145 @@ def encode_mp3(
         except OSError:
             # The OS error may reveal a private output directory or book title.
             raise AudioError("Could not publish encoded MP3; check output permissions") from None
+    return output
+
+
+def _ffmetadata_value(value: str) -> str:
+    """Escape a metadata value for FFmpeg's text metadata format."""
+    return (
+        value.replace("\\", "\\\\")
+        .replace("=", "\\=")
+        .replace(";", "\\;")
+        .replace("#", "\\#")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+    )
+
+
+def encode_m4b(
+    chapters: list[tuple[Path, str]],
+    output: Path,
+    *,
+    title: str,
+    artist: str | None,
+    bitrate: str = "96k",
+) -> Path:
+    """Package existing chapter MP3s as a tagged AAC audiobook with chapter marks."""
+    if shutil.which("ffmpeg") is None:
+        raise AudioError("FFmpeg executable not found in PATH")
+    if not chapters:
+        raise AudioError("Cannot package an audiobook with no chapters")
+    durations: list[float] = []
+    for path, _ in chapters:
+        try:
+            info = MP3(path).info
+            duration_seconds = float(info.length) if info is not None else 0.0
+            if not path.is_file() or not math.isfinite(duration_seconds) or duration_seconds <= 0:
+                raise ValueError("invalid duration")
+            durations.append(duration_seconds)
+        except Exception:
+            raise AudioError(
+                "An audiobook chapter is missing, invalid or has zero duration"
+            ) from None
+    try:
+        output.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise AudioError("Could not create audiobook output directory; check permissions") from None
+    with _safe_chapter_workspace(output.parent) as temp_dir:
+        workspace = Path(temp_dir)
+        concat_path = workspace / "chapters.txt"
+        metadata_path = workspace / "metadata.txt"
+        temp_output = workspace / "book.m4b"
+        concat_lines = []
+        metadata_lines = [";FFMETADATA1", f"title={_ffmetadata_value(title)}"]
+        if artist:
+            metadata_lines.append(f"artist={_ffmetadata_value(artist)}")
+        metadata_lines.append(f"album={_ffmetadata_value(title)}")
+        cursor_ms = 0
+        for index, ((chapter_path, chapter_title), duration) in enumerate(
+            zip(chapters, durations, strict=True), start=1
+        ):
+            staged = workspace / f"chapter-{index:05d}.mp3"
+            try:
+                staged.symlink_to(chapter_path.resolve())
+            except OSError:
+                try:
+                    shutil.copyfile(chapter_path, staged)
+                except OSError:
+                    raise AudioError("Could not stage audiobook chapter audio") from None
+            concat_lines.append(f"file '{staged.name}'")
+            end_ms = cursor_ms + max(1, round(duration * 1000))
+            metadata_lines.extend(
+                (
+                    "[CHAPTER]",
+                    "TIMEBASE=1/1000",
+                    f"START={cursor_ms}",
+                    f"END={end_ms}",
+                    f"title={_ffmetadata_value(chapter_title)}",
+                )
+            )
+            cursor_ms = end_ms
+        concat_path.write_text("\n".join(concat_lines) + "\n", encoding="utf-8")
+        metadata_path.write_text("\n".join(metadata_lines) + "\n", encoding="utf-8")
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(concat_path),
+            "-f",
+            "ffmetadata",
+            "-i",
+            str(metadata_path),
+            "-map",
+            "0:a:0",
+            "-map_metadata",
+            "1",
+            "-map_chapters",
+            "1",
+            "-c:a",
+            "aac",
+            "-b:a",
+            bitrate,
+            "-movflags",
+            "+faststart",
+            str(temp_output),
+        ]
+        try:
+            result = subprocess.run(
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=3600
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            raise AudioError("FFmpeg audiobook packaging failed or timed out") from None
+        if result.returncode != 0 or not temp_output.is_file() or temp_output.stat().st_size == 0:
+            raise AudioError(f"FFmpeg audiobook packaging failed (exit status {result.returncode})")
+        try:
+            container = MP4(temp_output)
+            if container.info is None or container.info.length <= 0:
+                raise ValueError("empty MP4 audio")
+            if container.tags is None:
+                container.add_tags()
+            container.tags["\xa9nam"] = title
+            container.tags["\xa9alb"] = title
+            if artist:
+                container.tags["\xa9ART"] = artist
+            container.save()
+            # Reparse after tagging before publication.
+            if MP4(temp_output).info is None:
+                raise ValueError("invalid MP4 audio")
+        except Exception:
+            raise AudioError("M4B metadata validation failed; check encoded audio") from None
+        try:
+            temp_output.replace(output)
+        except OSError:
+            raise AudioError("Could not publish M4B audiobook; check output permissions") from None
     return output
 
 

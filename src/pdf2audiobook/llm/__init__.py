@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import ipaddress
 import json
 import os
+import struct
 import sys
 import time
 from difflib import SequenceMatcher
@@ -276,6 +278,75 @@ class OpenAICompatibleProvider:
             )
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
+        return self._complete_json_request(
+            instructions=instructions,
+            document_text=document_text,
+            user_content=document_text,
+        )
+
+    @staticmethod
+    def _image_token_reserve(image_data: bytes) -> int:
+        if (
+            not isinstance(image_data, bytes)
+            or len(image_data) < 24
+            or len(image_data) > 4 * 1024 * 1024
+            or image_data[:8] != b"\x89PNG\r\n\x1a\n"
+            or image_data[12:16] != b"IHDR"
+        ):
+            raise LLMError("Vision request requires a valid PNG image no larger than 4 MiB")
+        width, height = struct.unpack(">II", image_data[16:24])
+        if not width or not height or width > 4096 or height > 4096 or width * height > 4_000_000:
+            raise LLMError("Vision image dimensions exceed the supported limit")
+        # Four tokens per 32px tile plus a fixed image/message allowance is a
+        # deliberately conservative bound for high-resolution visual patches.
+        return ((width * height + 1023) // 1024) * 4 + 256
+
+    def validate_image_capacity(
+        self, *, instructions: str, document_text: str, image_data: bytes
+    ) -> None:
+        reserve = self._image_token_reserve(image_data)
+        self.validate_request_capacity(
+            instructions=instructions,
+            document_text=document_text + (" " * reserve),
+        )
+
+    def validate_served_image_capacity(
+        self, *, instructions: str, document_text: str, image_data: bytes
+    ) -> None:
+        reserve = self._image_token_reserve(image_data)
+        self.validate_served_capacity(
+            instructions=instructions,
+            document_text=document_text + (" " * reserve),
+        )
+
+    def complete_json_with_image(
+        self,
+        *,
+        instructions: str,
+        document_text: str,
+        image_data: bytes,
+    ) -> dict[str, Any]:
+        reserve = self._image_token_reserve(image_data)
+        budget_text = document_text + (" " * reserve)
+        data_url = "data:image/png;base64," + base64.b64encode(image_data).decode("ascii")
+        return self._complete_json_request(
+            instructions=instructions,
+            document_text=budget_text,
+            user_content=[
+                {"type": "text", "text": document_text},
+                {"type": "image_url", "image_url": {"url": data_url}},
+            ],
+            vision=True,
+        )
+
+    def _complete_json_request(
+        self,
+        *,
+        instructions: str,
+        document_text: str,
+        user_content: str | list[dict[str, Any]],
+        vision: bool = False,
+    ) -> dict[str, Any]:
         # Never expose the previous request's usage when this attempt fails before
         # receiving a billable response. Accounted aggregate usage is unchanged.
         self.last_usage = {}
@@ -286,7 +357,7 @@ class OpenAICompatibleProvider:
             "model": self._model(),
             "messages": [
                 {"role": "system", "content": instructions},
-                {"role": "user", "content": document_text},
+                {"role": "user", "content": user_content},
             ],
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
@@ -305,9 +376,9 @@ class OpenAICompatibleProvider:
             safe_provider = json.dumps(str(self.provider)[:80], ensure_ascii=True)
             safe_model = json.dumps(str(payload["model"])[:80], ensure_ascii=True)
             print(
-                f"Warning: uploading PDF-derived book text to remote LLM "
+                f"Warning: uploading PDF-derived {'page image' if vision else 'book text'} to remote LLM "
                 f"provider {safe_provider}, model {safe_model}; "
-                "data scope: the current analysis block window.",
+                f"data scope: {'one rendered PDF page' if vision else 'the current analysis block window'}.",
                 file=sys.stderr,
             )
             self._remote_content_warned = True

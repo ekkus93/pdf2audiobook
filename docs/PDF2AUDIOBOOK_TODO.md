@@ -1,7 +1,7 @@
 # PDF2Audiobook — Implementation TODO
 
-**Status:** In progress (M0–M4 initial implementation; hardening and manual acceptance pending)  
-**Date:** 2026-10-16  
+**Status:** Core implementation in place; speaker segmentation and external acceptance pending
+**Date:** 2026-10-24
 **Specification:** docs/PDF2AUDIOBOOK_SPEC.md  
 **Target:** Python CLI, chapter MP3s, Kitten TTS, optional OpenAI/Ollama/llama-server intelligence.
 
@@ -81,7 +81,7 @@
   - [x] P3.01b Implement Ollama adapter with configurable local base URL/model.
   - [x] P3.01c Implement llama-server adapter with configurable local base URL/model and optional auth.
   - [x] P3.01d Probe or adapt capabilities for JSON/schema response and provider-specific unsupported parameters.
-- [ ] P3.02 Implement bounded prompt/context splitting with stable block references and schema versioning.
+- [x] P3.02 Implement bounded prompt/context splitting with stable block references and schema versioning.
   - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries.
   - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
   - [x] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
@@ -95,7 +95,7 @@
   - [x] P3.05c Ensure logs, crash reports and config show redact credentials and full text.
 - [x] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting.
 - [x] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
-- [ ] P3.08 Add opt-in real backend smoke checks for local Ollama/llama-server and explicitly consented OpenAI.
+- [x] P3.08 Add opt-in real backend smoke checks for local Ollama/llama-server and explicitly consented OpenAI.
 
 **M3 gate:** all three provider adapters pass offline contract tests and model-assisted analysis cannot silently alter or invent source prose.
 
@@ -104,7 +104,7 @@
 - [x] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
   - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
   - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate.
-- [ ] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
+- [x] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
   - [x] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
   - [x] P4.02b Handle oversized sentences and TTS failures without silently dropping text.
 - [x] P4.03 Generate validated PCM/WAV chunks; normalize channels/rate, join at PCM level and encode once per chapter via FFmpeg.
@@ -127,22 +127,31 @@
 - [x] P5.03 Validate no-text-loss/duplication invariants and mid-page chapter boundaries.
 - [x] P5.04 Verify manual chapter manifest overrides and chapter-specific regeneration.
 - [ ] P5.05 Test each LLM backend with mocks; perform environment-dependent real-model acceptance when available.
+  - [x] Mocked contract coverage for OpenAI, Ollama and llama-server.
+  - [x] Live local Ollama synthetic smoke passed on qwen35-128k:latest.
+  - [ ] Live llama-server acceptance (server not installed in this environment).
+  - [ ] Live OpenAI acceptance (requires configured credentials and explicit remote-content consent).
 - [x] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval.
 - [x] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
 - [x] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
 - [x] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes.
 - [ ] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps.
+  - [x] Local Ruff, repository formatting check, mypy (19 modules), full pytest suite (1011 tests), uv lock check, CLI doctor/help, and wheel/sdist build.
+  - [ ] Exact-head Python CI for the implementation commit (will run on push to master).
 
 **M5 gate:** all ten release acceptance criteria in the spec pass, with evidence; no unchecked implementation-critical subtasks.
 
 ## Future backlog (not required for MVP)
 
-- [ ] F.01 Additional pluggable TTS engines (Piper, Kokoro, others).
-- [ ] F.02 Optional vision LLM for figures, diagrams, equations and complicated page order.
-- [ ] F.03 Directory/batch conversion and per-book voice profiles.
-- [ ] F.04 EPUB ingestion and additional audiobook containers/metadata formats.
-- [ ] F.05 Optional GUI and user-assisted chapter editor.
+- [x] F.01 Additional pluggable TTS engines (Piper, Kokoro, others): added an optional Piper CLI adapter selectable through configuration and the CLI; no heavyweight engine or voice is added to default dependencies.
+- [x] F.02 Optional vision LLM for figures, diagrams, equations and complicated page order: opt-in rendered-page review covers image/vector content and likely two-column layouts, validates bounded review-only responses, caches by image digest, and never alters source text.
+- [x] F.03 Directory/batch conversion and per-book voice profiles: added sorted PDF discovery with opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence.
+- [x] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF now accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from completed MP3s.
+- [x] F.05 Optional GUI and user-assisted chapter editor: added a loopback-only browser UI for chapter title/boundary review, with bearer-token API access, origin checks, range/coverage validation and manual approval.
 - [ ] F.06 Multi-speaker narration and pronunciation dictionaries.
+  - [x] Add a validated single-token pronunciation dictionary applied to TTS chunks while preserving original chapter text and source ranges.
+  - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity.
+  - [ ] Add within-chapter dialogue speaker changes (marker/assignment format awaiting user preference; I asked whether you prefer explicit markers or reviewed LLM proposals).
 
 ## Progress ledger
 
@@ -415,3 +424,8 @@
 | 2026-10-23 | 3f075c01e80d288fa97f1e9c9c32b289efffab5b | P3.03: the LLM cleanup verifier now keeps a proposal for review only when an alignment explains every change as a known OCR glyph confusion (0/O, 1/l, h/b, rn/m, li/h, cl/d, ligatures, long s, shape-identical case) or a split/joined word; rewording, tense, case, quote style, punctuation and completing a hyphenated word from the next line are rejected as `not_ocr_correction`. Fingerprint `analysis-v18`. Re-scoring the 38 proposals left pending by the earlier Hearn pass rejected all 38 (none was a pure misread; the one real fix, "hade"→"bade", also rewrote typographic quotes). | Exact-head Python CI #498 (run 40017778488) passed Python 3.11/3.12/3.13. Local, not CI: complete live pass over the Hearn scan with qwen35-128k:latest (131072-token served context, 8192-token output cap): 250 requests, 85 cleanup proposals, 0 left pending (32 `not_ocr_correction`, 19 source mismatch, 10 no-op, 9 excessive change, 6 unknown/duplicate block, 6 invalid schema, 3 deletion); the 21 chapter files are byte-identical to `--no-llm`. | Glyph-confusion table is conservative: a genuine OCR fix that also needs an unlisted substitution or a dropped letter is rejected, not reviewed. |
 | 2026-10-23 | 854678b1cadf4adbefcbe6e47c83b3b10fe89398 | P5.05 robustness: HTTP 500 (Ollama's "prediction aborted, token repeat limit reached") is retried within `max_retries` like 429/502/503/504; persistent 500s still fail with a content-free error. | Exact-head Python CI #499 (run 40018414246) passed Python 3.11/3.12/3.13. Local, not CI: on the qwen35-128k Hearn pass a request that aborted with HTTP 500 succeeded on retry. | Retries are not a guarantee: one earlier attempt saw all four tries abort, so an unattended long-book pass may still need a rerun (completed answers are cached). |
 | 2026-10-23 | 2c6d14e1f397cd1d8dbc2abeb26b992c90177a2f | P3.02 partial: live probe showed Ollama silently truncating a 25,918-byte request to 2,050 prompt tokens (system instructions dropped, HTTP 200) on qwen3.5:9b, which `/api/ps` reports as served with a 4096-token context although `llm.max_context_tokens` defaults to 16384. Before the first uncached request the Ollama adapter now loads the model with an empty prompt, reads its served `context_length`, and refuses requests whose byte bound plus output reserve exceed min(served, configured); an unreadable context fails closed; fully cached reruns never contact Ollama; other providers are unchanged. | Exact-head Python CI #500 (run 40018728236) passed Python 3.11/3.12/3.13. Local, not CI: live qwen35-128k:latest request read a served context of 131072 and completed in 0.9s; the full Hearn pass ran with the check active. | Ollama exposes no tokenizer, so the byte bound stays ~4x conservative (Hearn windows: ~1,500 prompt tokens for ~4-5 KB); with a 4096-context model the default `chunk_tokens` is refused rather than risk truncation. llama-server has no served-context check yet (not installed here); OpenAI not run. |
+| 2026-10-24 | 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | P3.02/P3.08/P4.02 implementation gates reconciled against current code: all LLM tasks use stable source IDs, bounded serialized-byte windows, versioned prompts and configured output reserves; Ollama served-context probing is fail-closed. Narration uses punctuation-preserving sentence-aware chunks with exact source ranges and paragraph boundaries. Opt-in synthetic live-provider smoke passed against local qwen35-128k:latest (39 prompt / 6 completion tokens). | Local exact-worktree validation: Ruff passed; mypy passed on 19 modules; pytest passed (993 tests). CI run 40147022579 was dispatched against exact master SHA and is pending. | llama-server is unavailable; OpenAI needs explicit remote-content consent and credentials; no human listening review was performed. |
+| 2026-10-24 | 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 (worktree changes after that SHA) | F.01: added Piper as a selectable TTS adapter using its optional external CLI and configured ONNX model path; validates model metadata, speaker IDs, speed, mono PCM rate/size and suppresses backend diagnostics. Added mocked CLI contract tests and configuration/CLI integration; updated maintainer, user and normative docs. | Changed-file Ruff and formatting checks passed; mypy passed on 19 configured runtime modules; full pytest passed (996 tests). | Piper CLI and voice models are not installed here, so real voice synthesis/listening acceptance remains pending. |
+| 2026-10-24 | worktree after 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | F.03/F.04: added `batch` PDF directory conversion with opt-in recursion and exact-stem TTS profiles; added EPUB support through inspection, OCR selection, source spans and standard analysis outputs (reflowable page warning); added `pack-m4b` AAC packaging with title/author tags and chapter navigation. | New batch/profile, EPUB and FFmpeg M4B tests passed (8); changed Python passes Ruff and format checks. | EPUB page numbers are renderer-dependent; M4B uses AAC re-encoding and currently requires completed per-chapter MP3s. |
+| 2026-10-24 | worktree after 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | F.02: added opt-in visual page analysis with image/vector/two-column candidate selection, 12-page and 4 MiB PNG bounds, review-only schema, image-digest cache identity, and remote-consent enforcement through the existing provider boundary. Synthetic pipeline test confirms source chapter text is unchanged. Live local Ollama vision analysis on a generated triangle page returned one figure review. | Offline vision tests passed (4); live qwen35-128k run completed against only a synthetic PDF page. | Vision descriptions remain model suggestions requiring human review; scan/image behavior across varied books is not yet human-qualified. |
+| 2026-10-24 | worktree after 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | F.06 partial: added case-insensitive, single-token pronunciation replacements applied only to speakable chunks while preserving original source ranges; review UI now assigns a TTS voice per chapter and voice changes invalidate audio. F.01–F.05 implementation additions and synthetic review coverage are recorded above. | Exact local checks passed: Ruff, formatting, mypy (19 modules), `uv lock --check`, CLI doctor/help, wheel/sdist build, and 1011 pytest tests. | Within-chapter speaker attribution needs user preference on explicit markers vs reviewed LLM assignments; live llama-server/OpenAI and real Piper/Kitten listening acceptance remain unavailable. |

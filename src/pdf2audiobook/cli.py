@@ -116,6 +116,7 @@ def doctor(
                     settings.pdf.ocr_language, languages
                 ),
                 "kitten_installed": kitten_installed,
+                "piper_installed": bool(shutil.which("piper")),
                 "llm_provider": settings.llm.provider if settings.llm.enabled else "disabled",
             },
             json_output,
@@ -126,7 +127,7 @@ def doctor(
 
 @app.command()
 def inspect(
-    source: Path = typer.Argument(..., help="PDF file or previously generated manifest.json"),
+    source: Path = typer.Argument(..., help="PDF/EPUB book or previously generated manifest.json"),
     pdf_password_env: str | None = typer.Option(
         None, "--pdf-password-env", help="Name of environment variable containing PDF password."
     ),
@@ -212,6 +213,7 @@ def analyze(
     llm_model: str | None = typer.Option(None, "--llm-model"),
     llm_url: str | None = typer.Option(None, "--llm-url"),
     allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
+    vision: bool = typer.Option(False, "--vision", help="Enable opt-in page-image review."),
     allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -238,6 +240,8 @@ def analyze(
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
         if pdf_password_env is not None:
             overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
+        if vision:
+            overrides.setdefault("llm", {})["vision"] = True
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import analyze_book
 
@@ -269,6 +273,7 @@ def convert(
     llm_url: str | None = typer.Option(None, "--llm-url"),
     no_llm: bool = typer.Option(False, "--no-llm"),
     allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
+    vision: bool = typer.Option(False, "--vision", help="Enable opt-in page-image review."),
     tts_provider: str | None = typer.Option(None, "--tts-provider"),
     tts_model: str | None = typer.Option(None, "--tts-model"),
     voice: str | None = typer.Option(None, "--voice"),
@@ -310,10 +315,20 @@ def convert(
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
         if tts_provider is not None:
             overrides.setdefault("tts", {})["provider"] = tts_provider
+        if tts_provider == "piper":
+            piper = overrides.setdefault("tts", {}).setdefault("piper", {})
+            if tts_model is not None:
+                piper["model_path"] = tts_model
+            if voice is not None:
+                piper["voice"] = voice
         if pdf_password_env is not None:
             overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
+        if vision:
+            overrides.setdefault("llm", {})["vision"] = True
         if speed is not None:
             overrides.setdefault("tts", {}).setdefault("kitten", {})["speed"] = speed
+            if tts_provider == "piper":
+                overrides.setdefault("tts", {}).setdefault("piper", {})["speed"] = speed
         if sample_rate is not None:
             overrides.setdefault("tts", {})["sample_rate"] = sample_rate
         if chapter is not None and chapter_range is not None:
@@ -347,3 +362,114 @@ def convert(
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
         fail(exc, json_output=json_output)
+
+
+@app.command()
+def batch(
+    source_dir: Path = typer.Argument(..., help="Directory containing PDF books."),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    output: Path | None = typer.Option(None, "--output"),
+    recursive: bool = typer.Option(False, "--recursive", help="Search nested directories."),
+    no_llm: bool = typer.Option(False, "--no-llm"),
+    allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Convert every PDF in a directory, applying a matching named TTS profile."""
+    try:
+        if not source_dir.is_dir():
+            raise ConfigError("batch source must be a directory")
+        files = source_dir.rglob("*") if recursive else source_dir.glob("*")
+        sources = sorted(
+            (path for path in files if path.is_file() and path.suffix.casefold() == ".pdf"),
+            key=lambda path: str(path).casefold(),
+        )
+        if not sources:
+            raise ConfigError("batch source directory contains no PDF files")
+        overrides: dict[str, Any] = {}
+        if output is not None:
+            overrides.setdefault("general", {})["output_dir"] = str(output)
+        if no_llm:
+            overrides.setdefault("llm", {})["enabled"] = False
+        if allow_remote_content:
+            overrides.setdefault("llm", {})["allow_remote_content"] = True
+        settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        from pdf2audiobook.pipeline import convert_book, settings_for_book_tts
+
+        results: list[dict[str, Any]] = []
+        failures = 0
+        for source in sources:
+            book_settings = settings_for_book_tts(settings, source.stem)
+            try:
+                outputs = convert_book(source, book_settings)
+            except (AudiobookError, OSError, ValueError) as exc:
+                failures += 1
+                results.append(
+                    {
+                        "book": source.name,
+                        "ok": False,
+                        "error_code": getattr(exc, "exit_code", 1),
+                    }
+                )
+            else:
+                results.append(
+                    {"book": source.name, "ok": True, "mp3_files": [str(path) for path in outputs]}
+                )
+        emit({"books": results, "failed": failures}, json_output)
+        if failures:
+            raise typer.Exit(code=7)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc, json_output=json_output)
+
+
+@app.command("pack-m4b")
+def pack_m4b(
+    manifest_path: Path = typer.Argument(..., help="Manifest from an analyzed/converted book."),
+    output: Path = typer.Option(..., "--output", help="Destination .m4b file."),
+    bitrate: str = typer.Option("96k", "--bitrate"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Package completed chapter MP3s as a single M4B with chapter navigation."""
+    try:
+        from pdf2audiobook.audio import audio_output_path, encode_m4b
+        from pdf2audiobook.workspace import read_manifest
+
+        manifest = read_manifest(manifest_path)
+        chapter_files = [
+            (audio_output_path(manifest, chapter, manifest_path.parent), chapter.title)
+            for chapter in manifest.chapters
+        ]
+        if any(not path.is_file() for path, _ in chapter_files):
+            raise ConfigError("all chapter MP3 files must exist before M4B packaging")
+        result = encode_m4b(
+            chapter_files,
+            output,
+            title=manifest.title,
+            artist=manifest.author,
+            bitrate=bitrate,
+        )
+        emit({"m4b_file": str(result)}, json_output)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc, json_output=json_output)
+
+
+@app.command()
+def review(
+    manifest_path: Path = typer.Argument(..., help="A generated manifest.json to review."),
+    port: int = typer.Option(8765, "--port", min=0, max=65535),
+) -> None:
+    """Open a loopback-only browser editor for chapter titles and boundaries."""
+    try:
+        from pdf2audiobook.review_ui import create_review_server
+
+        server = create_review_server(manifest_path, port=port)
+        console.print(f"Chapter review UI: http://127.0.0.1:{server.server_address[1]}/")
+        console.print("Press Ctrl+C to stop the local review server.")
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.server_close()
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc)

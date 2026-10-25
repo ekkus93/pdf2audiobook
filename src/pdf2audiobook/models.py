@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class StrictModel(BaseModel):
@@ -55,6 +55,14 @@ class Chapter(StrictModel):
     confidence: float = Field(ge=0, le=1)
     evidence: list[str] = Field(default_factory=list)
     manually_approved: bool = False
+    voice_id: str | None = None
+
+    @field_validator("voice_id")
+    @classmethod
+    def validate_voice_id(cls, value: str | None) -> str | None:
+        if value is not None and (not value.strip() or len(value) > 128):
+            raise ValueError("chapter voice_id must be nonempty and at most 128 characters")
+        return value.strip() if value is not None else None
 
     @model_validator(mode="after")
     def check_range(self) -> "Chapter":

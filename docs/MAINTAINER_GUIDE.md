@@ -250,7 +250,8 @@ The executable `pdf2audiobook` maps to `pdf2audiobook.cli:app`
 Typical call path:
 `cli.analyze -> pipeline.analyze_book -> pdf.extract_pdf ->
 document.structure -> optional llm -> workspace.write_manifest`.
-Conversion additionally calls `pipeline.convert_book -> tts.KittenProvider ->
+Conversion additionally calls `pipeline.convert_book -> tts.KittenProvider` or
+`tts.PiperProvider` ->
 audio.synthesize_chunks -> audio.encode_mp3`. The TTS model is not loaded
 for an up-to-date cached MP3. `analyze_book`/`convert_book` accept
 `extractor=`, `tts_provider=` and `encoder=` replacements; an injected adapter

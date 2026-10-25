@@ -90,8 +90,8 @@ class PyMuPDFExtractor:
 
 
 def _open(source: Path, password_env: str | None = None) -> pymupdf.Document:
-    if not source.is_file() or source.suffix.lower() != ".pdf":
-        raise InputError("not a readable PDF file; verify input path and permissions")
+    if not source.is_file() or source.suffix.lower() not in {".pdf", ".epub"}:
+        raise InputError("not a readable PDF or EPUB book; verify input path and permissions")
     try:
         document = pymupdf.open(source)
         if document.needs_pass:
@@ -113,12 +113,13 @@ def _open(source: Path, password_env: str | None = None) -> pymupdf.Document:
 def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
     with _open(source, password_env) as document:
         try:
+            reflowable = bool(getattr(document, "is_reflowable", False))
             return {
                 "title": document.metadata.get("title") or source.stem,
                 "author": document.metadata.get("author") or None,
                 "pages": len(document),
                 "outline": document.get_toc(),
-                "page_label_rules": document.get_page_labels(),
+                "page_label_rules": [] if reflowable else document.get_page_labels(),
                 # PyMuPDF text bounding boxes use the unrotated page coordinate
                 # space, even when the viewer displays a rotated page.
                 "page_rotations": [page.rotation for page in document],
@@ -829,7 +830,11 @@ def extract_pdf(
     sizes: list[tuple[float, float]] = []
     with _open(source, settings.password_env) as document:
         if len(document) == 0:
-            raise ExtractionError("PDF has no pages")
+            raise ExtractionError("Book has no extractable pages")
+        if bool(getattr(document, "is_reflowable", False)):
+            warnings.append(
+                "EPUB pages use generated reflowable layout; page numbers can vary by renderer"
+            )
         if ocr_cache_dir is not None and source_sha256 is None:
             source_sha256 = digest_file(source)
         try:

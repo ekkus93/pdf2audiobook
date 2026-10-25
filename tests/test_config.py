@@ -13,6 +13,15 @@ def test_defaults():
     assert Settings().pdf.ocr == "auto"
 
 
+def test_pronunciation_dictionary_is_case_insensitive_and_single_token():
+    settings = Settings.model_validate({"tts": {"pronunciations": {"Māori": "Mow-ree"}}})
+    assert settings.tts.pronunciations == {"māori": "Mow-ree"}
+    with pytest.raises(ValueError, match="single words"):
+        Settings.model_validate({"tts": {"pronunciations": {"word": "two words"}}})
+    with pytest.raises(ValueError, match="unique ignoring case"):
+        Settings.model_validate({"tts": {"pronunciations": {"Word": "one", "word": "two"}}})
+
+
 def test_cli_env_file_priority(tmp_path: Path):
     file = tmp_path / "config.toml"
     file.write_text("[llm]\nprovider='openai'\n[general]\nresume=true\n")

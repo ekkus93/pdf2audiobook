@@ -1,5 +1,8 @@
 """Source-aligned speech chunks and paragraph pause behavior."""
 
+import hashlib
+import json
+
 import numpy as np
 
 from pdf2audiobook.audio import chunk_source_ranges, split_sentences, synthesize_chunks
@@ -47,3 +50,30 @@ def test_chunk_mapping_preserves_source_offsets_and_punctuation(tmp_path):
 def test_short_paragraphs_stay_separate_and_soft_wrap_does_not_split():
     assert split_sentences("Short one.\n\nShort two.") == ["Short one.", "Short two."]
     assert split_sentences("This is a\nsoft wrap.") == ["This is a soft wrap."]
+
+
+def test_pronunciation_dictionary_changes_speech_but_preserves_exact_source_ranges(tmp_path):
+    text = "Read Māori, then say MĀORI."
+    dictionary = {"māori": "mow-ree"}
+    chunks = split_sentences(text, pronunciations=dictionary)
+
+    assert chunks == ["Read Mow-ree, then say MOW-REE."]
+    ranges = chunk_source_ranges(text, chunks, pronunciations=dictionary)
+    assert len(ranges) == 1
+    assert text[ranges[0][0] : ranges[0][1]] == text
+
+    synthesize_chunks(
+        text,
+        FakeVoice(),
+        model="mini",
+        voice="Jasper",
+        speed=1,
+        pause_ms=0,
+        cache=tmp_path / "wav",
+        pronunciations=dictionary,
+        progress_file=tmp_path / "wav" / "progress" / "test.json",
+    )
+    progress = json.loads(next((tmp_path / "wav" / "progress").glob("*.json")).read_text())
+    assert progress["chunks"][0]["source_start"] == 0
+    assert progress["chunks"][0]["source_end"] == len(text)
+    assert progress["chunks"][0]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()

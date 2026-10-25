@@ -9,7 +9,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from pdf2audiobook.errors import ConfigError
 
@@ -65,6 +65,7 @@ class LLM(ConfigModel):
     cleanup: bool = True
     classification: bool = True
     narration: bool = True
+    vision: bool = False
     allow_remote_content: bool = False
     fallback_to_deterministic: bool = False
     openai: RemoteLLM = Field(
@@ -86,13 +87,55 @@ class TTSModel(ConfigModel):
     speed: float = Field(default=1.0, gt=0, le=3)
 
 
+class PiperTTSModel(ConfigModel):
+    model_path: str = ""
+    voice: str = ""
+    speed: float = Field(default=1.0, gt=0, le=3)
+
+
+class TTSProfile(ConfigModel):
+    provider: Literal["kitten", "piper"] | None = None
+    kitten_model: str | None = None
+    piper_model_path: str | None = None
+    voice: str | None = None
+    speed: float | None = Field(default=None, gt=0, le=3)
+
+
 class TTS(ConfigModel):
-    provider: Literal["kitten"] = "kitten"
+    provider: Literal["kitten", "piper"] = "kitten"
     output_format: Literal["mp3"] = "mp3"
     bitrate: str = "128k"
     sample_rate: int = Field(default=24000, ge=8000, le=96000)
     pause_ms: int = Field(default=250, ge=0, le=5000)
     kitten: TTSModel = Field(default_factory=TTSModel)
+    piper: PiperTTSModel = Field(default_factory=PiperTTSModel)
+    profiles: dict[str, TTSProfile] = Field(default_factory=dict)
+    pronunciations: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("pronunciations")
+    @classmethod
+    def validate_pronunciations(cls, value: dict[str, str]) -> dict[str, str]:
+        if len(value) > 10_000:
+            raise ValueError("at most 10000 pronunciation entries are supported")
+        normalized: dict[str, str] = {}
+        for source, spoken in value.items():
+            key = source.strip().casefold() if isinstance(source, str) else ""
+            if (
+                not key
+                or len(key) > 80
+                or any(char.isspace() for char in key)
+                or not isinstance(spoken, str)
+                or not spoken.strip()
+                or len(spoken) > 80
+                or any(char.isspace() for char in spoken)
+            ):
+                raise ValueError(
+                    "pronunciation keys and values must be nonempty single words up to 80 characters"
+                )
+            if key in normalized:
+                raise ValueError("pronunciation keys must be unique ignoring case")
+            normalized[key] = spoken.strip()
+        return normalized
 
 
 class Cache(ConfigModel):
@@ -117,6 +160,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_PDF_PASSWORD_ENV": ("pdf", "password_env"),
     "PDF2AUDIOBOOK_OCR_DPI": ("pdf", "ocr_dpi"),
     "PDF2AUDIOBOOK_LLM_ENABLED": ("llm", "enabled"),
+    "PDF2AUDIOBOOK_LLM_VISION": ("llm", "vision"),
     "PDF2AUDIOBOOK_LLM_PROVIDER": ("llm", "provider"),
     "PDF2AUDIOBOOK_LLM_MAX_REQUESTS": ("llm", "max_requests"),
     "PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS": ("llm", "max_output_tokens"),
@@ -127,6 +171,9 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_ALLOW_REMOTE_CONTENT": ("llm", "allow_remote_content"),
     "PDF2AUDIOBOOK_LLM_FALLBACK_TO_DETERMINISTIC": ("llm", "fallback_to_deterministic"),
     "PDF2AUDIOBOOK_TTS_VOICE": ("tts", "kitten", "voice"),
+    "PDF2AUDIOBOOK_TTS_PIPER_MODEL_PATH": ("tts", "piper", "model_path"),
+    "PDF2AUDIOBOOK_TTS_PIPER_VOICE": ("tts", "piper", "voice"),
+    "PDF2AUDIOBOOK_TTS_PIPER_SPEED": ("tts", "piper", "speed"),
     "PDF2AUDIOBOOK_TTS_MODEL": ("tts", "kitten", "model"),
 }
 

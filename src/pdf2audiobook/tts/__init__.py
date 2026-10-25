@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import math
+import shutil
+import subprocess
+import tempfile
+import wave
+from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -130,3 +136,94 @@ class KittenProvider:
         if result.size == 0 or not np.isfinite(result).all():
             raise AudioError("Kitten returned empty or invalid speech audio")
         return np.clip(result, -1.0, 1.0)
+
+
+class PiperProvider:
+    """Optional adapter for an externally installed Piper CLI and voice model.
+
+    Piper remains outside the default dependency set: users install the engine
+    and voice model separately, then configure the model's ONNX path.
+    """
+
+    max_chars_per_chunk = 350
+
+    def __init__(self, model_path: str | Path, executable: str = "piper"):
+        self.model_path = Path(model_path).expanduser()
+        self.executable = executable
+        if not self.model_path.is_file():
+            raise AudioError("Piper model file is unavailable; configure a local ONNX voice model")
+        if shutil.which(executable) is None:
+            raise AudioError("Piper CLI is unavailable; install piper-tts and check PATH")
+        config_path = Path(f"{self.model_path}.json")
+        try:
+            with config_path.open("rb") as stream:
+                raw_config = stream.read(1_048_577)
+            if len(raw_config) > 1_048_576:
+                raise ValueError("oversized model configuration")
+            config = json.loads(raw_config)
+            rate = config["audio"]["sample_rate"]
+        except (OSError, ValueError, KeyError, TypeError):
+            raise AudioError("Piper voice configuration is missing a valid sample rate") from None
+        if isinstance(rate, bool) or not isinstance(rate, int) or not 8000 <= rate <= 192000:
+            raise AudioError("Piper voice sample rate must be an integer from 8000 to 192000")
+        self.sample_rate = rate
+
+    def list_models(self) -> list[str]:
+        return [str(self.model_path)]
+
+    def list_voices(self) -> list[str]:
+        return []
+
+    def health(self) -> bool:
+        return self.model_path.is_file() and shutil.which(self.executable) is not None
+
+    def generate(self, text: str, *, voice: str, speed: float) -> np.ndarray:
+        if not isinstance(text, str) or not text.strip() or len(text) > self.max_chars_per_chunk:
+            raise AudioError("Piper text must be nonempty and within its chunk limit")
+        if (
+            isinstance(speed, bool)
+            or not isinstance(speed, (int, float))
+            or not math.isfinite(speed)
+            or not 0 < speed <= 3
+        ):
+            raise AudioError("Piper speech speed must be finite and in (0, 3]")
+        args = [self.executable, "--model", str(self.model_path)]
+        if voice:
+            if not isinstance(voice, str) or not voice.isdecimal() or len(voice) > 10:
+                raise AudioError("Piper speaker ID must be a nonnegative integer")
+            args.extend(("--speaker", str(int(voice))))
+        args.extend(("--length-scale", str(1.0 / speed)))
+        try:
+            with tempfile.TemporaryDirectory(prefix="pdf2audiobook-piper-") as directory:
+                output = Path(directory) / "chunk.wav"
+                args.extend(("--output_file", str(output)))
+                subprocess.run(
+                    args,
+                    input=text,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    check=True,
+                )
+                if not output.is_file() or output.stat().st_size > 128 * 1024 * 1024:
+                    raise AudioError("Piper returned missing or oversized audio")
+                with wave.open(str(output), "rb") as wav:
+                    if (
+                        wav.getframerate() != self.sample_rate
+                        or wav.getnchannels() != 1
+                        or wav.getsampwidth() != 2
+                    ):
+                        raise AudioError("Piper returned unsupported audio format")
+                    count = wav.getnframes()
+                    if count <= 0 or count > 64 * 1024 * 1024:
+                        raise AudioError("Piper returned empty or oversized audio")
+                    data = wav.readframes(count)
+                    if len(data) != count * 2:
+                        raise AudioError("Piper returned truncated audio")
+            return np.frombuffer(data, dtype="<i2").astype(np.float32) / 32767.0
+        except AudioError:
+            raise
+        except Exception:
+            # Do not reflect backend errors: subprocess diagnostics can contain
+            # the synthesized source text or local filesystem paths.
+            raise AudioError("Piper speech generation failed; verify the model and CLI") from None

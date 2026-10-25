@@ -25,7 +25,7 @@ from pdf2audiobook.llm import (
 from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
-from pdf2audiobook.tts import KittenProvider, TTSProvider
+from pdf2audiobook.tts import KittenProvider, PiperProvider, TTSProvider
 from pdf2audiobook.workspace import (
     digest_file,
     fingerprint,
@@ -47,6 +47,43 @@ def _llm_cache_identity(settings: Settings) -> str:
         settings.llm.max_context_tokens,
         settings.llm.chunk_tokens,
         settings.llm.max_output_tokens,
+    )
+
+
+def settings_for_book_tts(
+    settings: Settings, book_stem: str, *, explicit: frozenset[str] = frozenset()
+) -> Settings:
+    """Apply a named TTS profile unless a command-line option overrides it."""
+    profile = settings.tts.profiles.get(book_stem)
+    if profile is None:
+        return settings
+    selected = settings.model_copy(deep=True)
+    if "tts_provider" not in explicit and profile.provider is not None:
+        selected.tts.provider = profile.provider
+    if "tts_model" not in explicit:
+        if profile.kitten_model is not None:
+            selected.tts.kitten.model = profile.kitten_model
+        if profile.piper_model_path is not None:
+            selected.tts.piper.model_path = profile.piper_model_path
+    if "voice" not in explicit and profile.voice is not None:
+        if selected.tts.provider == "piper":
+            selected.tts.piper.voice = profile.voice
+        else:
+            selected.tts.kitten.voice = profile.voice
+    if "speed" not in explicit and profile.speed is not None:
+        if selected.tts.provider == "piper":
+            selected.tts.piper.speed = profile.speed
+        else:
+            selected.tts.kitten.speed = profile.speed
+    return selected
+
+
+def chapter_voice(settings: Settings, chapter: Chapter) -> str:
+    """Resolve an explicit per-chapter voice before the configured default."""
+    if chapter.voice_id is not None:
+        return chapter.voice_id
+    return (
+        settings.tts.piper.voice if settings.tts.provider == "piper" else settings.tts.kitten.voice
     )
 
 
@@ -150,6 +187,7 @@ def analyze_book(
             or settings.llm.cleanup
             or settings.llm.classification
             or settings.llm.narration
+            or settings.llm.vision
         ):
             # Only anchored proposals are accepted. OCR cleanup requires manual approval.
             source_blocks = [block for block in extracted.blocks if block.id not in omitted]
@@ -171,6 +209,15 @@ def analyze_book(
                     usage_report=folder / "reports" / "llm_usage.json",
                     ledger_path=folder / "reports" / "llm_budget.sqlite3",
                 )
+                if settings.llm.vision:
+                    from pdf2audiobook.llm.vision import review_visual_pages
+
+                    visual_review = review_visual_pages(source, worker)
+                    write_json(folder / "reports" / "vision_review.json", visual_review)
+                    if visual_review["pages"] or visual_review["warnings"]:
+                        warnings.append(
+                            "Vision review suggestions are untrusted; inspect vision_review.json"
+                        )
                 if settings.llm.structure:
                     llm_ids, heading_warnings = detect_llm_headings(
                         source_blocks,
@@ -240,6 +287,17 @@ def analyze_book(
                 "labels": [],
             },
         )
+        if settings.llm.vision:
+            write_json(
+                folder / "reports" / "vision_review.json",
+                {
+                    "schema_version": 1,
+                    "prompt_version": "visual-review-v1",
+                    "requires_manual_review": True,
+                    "pages": [],
+                    "warnings": ["Visual review skipped after explicit deterministic fallback"],
+                },
+            )
         write_json(
             folder / "reports" / "narration_suggestions.json",
             {
@@ -348,13 +406,23 @@ def chapter_audio_fingerprint(
     adapters names injected TTS/encoder replacements so their output never
     shares an identity with the default Kitten/FFmpeg artifacts.
     """
+    model = (
+        settings.tts.piper.model_path
+        if settings.tts.provider == "piper"
+        else settings.tts.kitten.model
+    )
+    voice = chapter_voice(settings, chapter)
+    speed = (
+        settings.tts.piper.speed if settings.tts.provider == "piper" else settings.tts.kitten.speed
+    )
     return fingerprint(
         text,
         settings.tts.provider,
-        settings.tts.kitten.model,
-        settings.tts.kitten.voice,
-        settings.tts.kitten.speed,
+        model,
+        voice,
+        speed,
         settings.tts.pause_ms,
+        settings.tts.pronunciations,
         settings.tts.bitrate,
         settings.tts.sample_rate,
         manifest.title,
@@ -467,17 +535,30 @@ def convert_book(
         if chapter_audio_fingerprint(text, settings, manifest, item, adapters) != identity:
             raise AudioError("Approved chapter text changed during conversion; retry")
         if provider is None:
-            provider = KittenProvider(settings.tts.kitten.model)
+            if settings.tts.provider == "piper":
+                provider = PiperProvider(settings.tts.piper.model_path)
+            else:
+                provider = KittenProvider(settings.tts.kitten.model)
+        selected_model = (
+            settings.tts.piper.model_path
+            if settings.tts.provider == "piper"
+            else settings.tts.kitten.model
+        )
+        selected_voice = chapter_voice(settings, item)
+        selected_speed = (
+            settings.tts.piper.speed
+            if settings.tts.provider == "piper"
+            else settings.tts.kitten.speed
+        )
         samples = synthesize_chunks(
             text,
             provider,
             # Chunk cache keys include the model; qualify it for injected engines.
-            model=":".join(
-                (settings.tts.kitten.model, *(a for a in adapters if a.startswith("tts=")))
-            ),
-            voice=settings.tts.kitten.voice,
-            speed=settings.tts.kitten.speed,
+            model=":".join((selected_model, *(a for a in adapters if a.startswith("tts=")))),
+            voice=selected_voice,
+            speed=selected_speed,
             pause_ms=settings.tts.pause_ms,
+            pronunciations=settings.tts.pronunciations,
             cache=manifest_path.parent / ".cache" / "tts",
             use_cache=settings.cache.enabled and settings.general.resume and not force,
             progress_file=(
