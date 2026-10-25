@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.15 complete; FX10.16 is next.
+**Status:** FX10.00–FX10.16 complete; FX10.17 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -155,13 +155,13 @@
   - [x] FX10.15a Remove `nearer_edge_than_body`, and `chapter_text` if only tests use it. Make `_valid_box` public or move it.
   - [x] FX10.15b Build the Roman-numeral tables once. Move the OCR fallback out of `extract_pdf`. Make `_classify_block_kind` the only kind decision.
   - [x] FX10.15c Compute each page's drawings and image info once, with the shared item cap.
-- [ ] FX10.16 One list classifier that respects footnotes and initials (R96).
-  - [ ] FX10.16a Regression tests:
+- [x] FX10.16 One list classifier that respects footnotes and initials (R96).
+  - [x] FX10.16a Regression tests:
     - numbered small-type footnotes stay `footnote`, and `--footnotes omit` removes them;
     - "A. Smith …" / "B. Jones …" stays one paragraph;
     - the "May / 12." and "page / 42)" wraps join;
     - a list followed by a same-margin body line keeps the paragraph separate.
-  - [ ] FX10.16b Classify footnotes before lists. Use one list classifier for block kinds and the join check. Apply the spec's list-end rule.
+  - [x] FX10.16b Classify footnotes before lists. Use one list classifier for block kinds and the join check. Apply the spec's list-end rule.
 - [ ] FX10.17 Decide page-number ambiguity among candidates only (R97).
   - [ ] FX10.17a Regression tests:
     - two table-cell numerals at the foot give no warning and no review reason;
@@ -291,3 +291,4 @@
 | 2026-10-25 | 46e46af30cc5fa9c91dc26a64f9f9358ffcbfe50 | FX10.13a–b (R93, R94): `analyze` and `batch` accept paired `--resume/--no-resume`, `budget` and `config` group help include examples, and parent spec §8 records the contract. | At parent f0fa9a3, all six cases failed: four `tests/test_resume_cli_overrides.py::test_resume_flags_override_config` cases (both commands × both settings/flags) and `tests/test_cli_help_examples.py::test_every_command_help_contains_an_example[arguments9]` (`config --help`) plus `[arguments10]` (`budget --help`). Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1443 passed and 1 optional Kitten skip. Exact-head CI [40244570730](https://github.com/ekkus93/pdf2audiobook/actions/runs/40244570730) passed Python 3.11–3.13, including unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | 5f8aa274348f612055434fcae1144916ca6bed42 | FX10.14a–b (R95): `budget show` reads v2 ledgers without migration; `budget resolve` refuses v2 and earlier with the fixed re-create-ledger message; missing and settled IDs have distinct fixed messages and exit 2. The R95 decision is recorded in the fourth-review spec. | All four regressions in `tests/test_budget_cli_fx10.py` failed at parent d470d0d: v2 show was rejected, legacy refusal message was generic, and missing/complete row messages were generic. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1447 passed and 1 optional Kitten skip. Exact-head CI [40244899300](https://github.com/ekkus93/pdf2audiobook/actions/runs/40244899300) passed Python 3.11–3.13, including unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | 370b43516d893d17d3a1c4d6d63d33c272c1fd5c | FX10.15a–c (R99): removed unused folio helper and test-only `chapter_text`; exposed `valid_box` while retaining its old internal alias; hoisted Roman marker tables; extracted OCR fallback into `_apply_ocr_fallback`; centralized block kind decisions; gathered capped page image/drawing metadata once for reuse. | Refactor validation: local `/verify` passed (lock check, Ruff, format, mypy on 23 source files, 1447 passed, 1 optional Kitten skip). Exact-head CI [40245247117](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245247117) passed Python 3.11–3.13, including unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. Chapter structure tests now form their text projection locally after removal of the test-only production helper; expected behavior remained the same. | None |
+| 2026-10-25 | 10e5016464cf54c804e6763382a798345709060e | FX10.16a–b (R96): one contextual list classifier now serves extraction and line joining; footnote kinds win before list detection; sequential numbered notes receive audited omit edits; initials stay prose; wrapped May/page numbers join; sentence-final lists end before same-margin prose. R96 and parent spec §4.3 record list-end and colon-label details. | At parent 84074f6, all five cases failed in `tests/test_list_classifier_fx10.py`: sequential numbered footnotes were lists, A/B initials became lists, both May/page number wraps split, and same-margin body text joined the preceding list. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1452 passed, 1 optional Kitten skip. Exact-head CI [40245718067](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245718067) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
