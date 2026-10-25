@@ -14,3 +14,16 @@ def test_ci_pins_uv_and_the_lockfile_revision_is_the_one_that_uv_writes():
     assert re.search(r"^revision = 3$", lock, re.MULTILINE)
     guide = (ROOT / "docs" / "MAINTAINER_GUIDE.md").read_text(encoding="utf-8")
     assert f"uv {pinned.group(1)}" in guide
+
+
+def test_ci_prints_pytest_skip_reasons():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert re.search(r"run: uv run --extra dev pytest -q -ra\s*$", workflow, re.MULTILINE)
+
+
+def test_ci_installs_a_pinned_node_major_for_script_tests():
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert re.search(
+        r"- name: Set up Node\.js for review script tests\s+uses: actions/setup-node@v4\s+with:\s+node-version: ['\"]22['\"]",
+        workflow,
+    )

@@ -10,7 +10,7 @@ Use `uv` to manage the environment and dependencies:
 
 - `uv sync --locked --extra dev` installs the pinned development environment.
 - `uv run pdf2audiobook --help` shows CLI commands; `uv run pdf2audiobook doctor` checks prerequisites.
-- `uv run pytest -q` runs the offline test suite.
+- `uv run pytest -q -ra` runs the offline test suite and reports skip reasons.
 - `uv run ruff check .` checks lint and import ordering; `uv run mypy` runs configured type checks.
 - `uv lock --check` verifies dependency declarations against `uv.lock`. After dependency changes, regenerate with `uv lock` and review the diff.
 

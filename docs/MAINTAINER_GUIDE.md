@@ -376,7 +376,7 @@ uv sync --locked --extra dev
 uv run --extra dev ruff check .
 uv run --extra dev ruff format --check .
 uv run --extra dev mypy
-uv run --extra dev pytest -q
+uv run --extra dev pytest -q -ra
 uv run --extra dev pdf2audiobook --help
 uv run --extra dev pdf2audiobook doctor --json
 ```
@@ -388,7 +388,9 @@ to stderr at their adapter so `--json` output stays parseable and narration
 text never reaches logs.
 
 `.github/workflows/ci.yml` runs these offline checks on `master`, installing
-FFmpeg, Tesseract and English language data. The apt install is time-bounded,
+Node.js 22, FFmpeg, Tesseract and English language data. Pytest uses `-ra` so
+the CI summary shows whether the Node-, FFmpeg- and Tesseract-gated tests ran.
+The apt install is time-bounded,
 retried against archive.ubuntu.com and served from an `actions/cache` of the
 `.deb` files (bump the `apt-…-v1` key when the package list changes), because
 the runners' regional mirror intermittently stalls for hours. It does **not** install Kitten

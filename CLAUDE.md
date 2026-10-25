@@ -12,7 +12,7 @@ Use uv only; never install into the system interpreter. These mirror `.github/wo
 - `uv run --extra dev ruff check .` (import sorting `I` is enforced — a frequent CI failure in new tests)
 - `uv run --extra dev ruff format --check .`: formatting is enforced repository-wide (a PostToolUse hook formats edited `.py` files).
 - `uv run --extra dev mypy`: checks the explicit `[tool.mypy].files` list in `pyproject.toml`. **Add every new module under `src/` to that list.**
-- `uv run --extra dev pytest -q`
+- `uv run --extra dev pytest -q -ra` (includes skip reasons in the result summary)
 - CI runs on Python 3.11, 3.12 and 3.13 and runs mypy once per version (`mypy --python-version X`). Locally only 3.11 is checked.
 - CI also runs a CLI smoke (`--help`, `config show --json`, `doctor --json`) and a clean-venv wheel/sdist install smoke using `--no-config`. `/verify` doesn't cover the packaging smoke, so packaging regressions only show up in CI.
 - `tests/conftest.py` has an autouse fixture that stubs `OpenAICompatibleProvider._ollama_served_context`. Mark a test `@pytest.mark.ollama_context` to exercise the real lookup.
