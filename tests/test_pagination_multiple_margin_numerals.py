@@ -55,3 +55,47 @@ def test_ambiguous_page_does_not_corroborate_adjacent_folio():
         _block(1, 2, "3", 780),
     ]
     assert pagination_cleanup(blocks, [(595, 842)] * 2, Pdf()) == []
+
+
+def test_table_cell_numerals_do_not_create_page_number_ambiguity():
+    blocks = [
+        DocumentBlock(
+            id=f"table-{page}-{number}",
+            page_index=page,
+            text=str(number),
+            bbox=(100 + number * 80, 780, 120 + number * 80, 790),
+            kind="table",
+        )
+        for page in range(2)
+        for number in (1, 2)
+    ]
+    warnings = []
+    reasons = set()
+
+    pagination_cleanup(blocks, [(595, 842)] * 2, Pdf(), warnings=warnings, review_reasons=reasons)
+
+    assert warnings == []
+    assert "ambiguous_page_numbers" not in reasons
+
+
+def test_edge_distances_within_two_points_are_tied():
+    blocks = []
+    for page in range(3):
+        blocks.extend(
+            [
+                _block(page, 0, "Substantive page text remains.", 200, 50),
+                _block(page, 1, str(page + 1), 18),
+                _block(page, 2, str(page + 40), 771.6),
+            ]
+        )
+    warnings = []
+    reasons = set()
+
+    assert (
+        pagination_cleanup(
+            blocks, [(595, 800)] * 3, Pdf(), warnings=warnings, review_reasons=reasons
+        )
+        == []
+    )
+    assert "Multiple page-number sequences retained; verify pagination" in warnings
+    assert "ambiguous_page_numbers" in reasons

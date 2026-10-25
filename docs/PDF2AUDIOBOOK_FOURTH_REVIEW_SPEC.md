@@ -313,12 +313,12 @@ Separately, `batch` maps every `OSError` to 6 (cli.py:675).
 *Problem:*
 - **A false warning blocks the whole book.** `numeric_counts` (structure.py:654-697) counts every numeral in a margin band, including ones in tables, lists, headings and large type. When a band has two numerals but neither is a candidate, the ranked list is empty and the band is marked ambiguous. One page with two table-cell numerals at its foot emits "Equally positioned margin numerals retained". That maps to `ambiguous_page_numbers` (pipeline.py:698-705) and blocks every unapproved chapter.
 - **The label-mismatch warning fires when it shouldn't.** It is raised when a *rejected* sequence disagrees with the PDF page labels, even though the chosen sequence matches them exactly (structure.py:784-794; the sonnet fixture).
-- **Ties need exact float equality.** Edge distances of 18pt and 18.4pt are not a tie, so one sequence is removed without a warning (structure.py:690, 777).
+- **Near ties need a tolerance.** Edge distances of 18pt and 18.4pt should tie; exact float equality selects one sequence and removes it without a warning (structure.py:690, 777).
 
 *Required:*
 - Ambiguity is decided only among page-number candidates (blocks that pass the folio candidate test). Non-candidate numerals never make a band ambiguous.
 - The label-mismatch warning compares only the chosen sequence with the labels.
-- Treat edge distances within a named tolerance (start at 2pt) as tied; document the constant in MAINTAINER_GUIDE.md.
+- Treat edge distances less than the named 2pt tolerance as tied; document the constant in MAINTAINER_GUIDE.md.
 
 *Tests (new):*
 - two table-cell numerals at the foot produce no warning and no review reason;

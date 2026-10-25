@@ -58,6 +58,7 @@ PAGE_REFERENCE_END = re.compile(r"[^\W\d_][\s.…·]*\s\d{1,4}$")
 CHAPTER_TEXT_NAME = re.compile(r"\d{3,}\.txt")
 WRAPPED_LINE_END = re.compile(r"[^\W\d_]-$")
 PAGE_NUMBER = re.compile(r"^(?:\d{1,5}|[ivxlcdm]{1,10})$", re.IGNORECASE)
+PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT = 2.0
 
 CANONICAL_ROMAN = re.compile(
     r"^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})"
@@ -684,23 +685,11 @@ def pagination_cleanup(
             embedded = _number_value(embedded_folio)
             if embedded is not None:
                 numbered[band].append((block.page_index, embedded[0], None, embedded[1]))
-    # More than one standalone numeral in a single margin band on a page
-    # is ambiguous (often a numbered list or page-local references), not
-    # reliable evidence of one running folio. Do not use those numerals to
-    # corroborate a sequence on adjacent pages either.
+    # More than one candidate numeral in a single margin band on a page is
+    # ambiguous. Non-candidates such as table cells are irrelevant here.
     numeric_counts: dict[tuple[str, int], int] = defaultdict(int)
-    for block in blocks:
-        if block.bbox is None or not _valid_bbox(block.bbox) or not valid_page(block.page_index):
-            continue
-        height = sizes[block.page_index][1]
-        band = (
-            "header"
-            if block.bbox[3] < 0.12 * height
-            else "footer"
-            if block.bbox[1] > 0.88 * height
-            else None
-        )
-        if band and _number_value(block.text.strip()) is not None:
+    for block, band in candidates.values():
+        if _number_value(block.text.strip()) is not None:
             numeric_counts[(band, block.page_index)] += 1
     preferred_numeric: dict[tuple[str, int], set[tuple[int, str]]] = defaultdict(set)
     ambiguous_numeric_bands: set[tuple[str, int]] = set()
@@ -724,7 +713,9 @@ def pagination_cleanup(
             for block, parsed in numerals
             if parsed is not None and block.bbox is not None
         )
-        if ranked and (len(ranked) == 1 or ranked[0][0] < ranked[1][0]):
+        if ranked and (
+            len(ranked) == 1 or ranked[1][0] - ranked[0][0] >= PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT
+        ):
             preferred_numeric[band_page].add(ranked[0][1])
         else:
             ambiguous_numeric_bands.add(band_page)
@@ -812,9 +803,10 @@ def pagination_cleanup(
                     )
                 )
         ranked_series.sort(key=lambda item: (item[0], item[1]))
-        if ranked_series and (
-            len(ranked_series) == 1 or ranked_series[0][:2] < ranked_series[1][:2]
-        ):
+        tied = False
+        if len(ranked_series) > 1 and ranked_series[0][0] == ranked_series[1][0]:
+            tied = ranked_series[1][1] - ranked_series[0][1] < PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT
+        if ranked_series and (len(ranked_series) == 1 or not tied):
             selected_sequences[page].add(ranked_series[0][2])
         else:
             ambiguous_sequence_pages.add(page)
@@ -822,13 +814,15 @@ def pagination_cleanup(
         warnings.append("Multiple page-number sequences retained; verify pagination")
     if ambiguous_sequence_pages and review_reasons is not None:
         review_reasons.add("ambiguous_page_numbers")
+    chosen_sequences = {
+        series for series_set in selected_sequences.values() for series in series_set
+    }
     if (
         page_labels is not None
         and any(
-            not page_label_matches(page, number, notation)
-            for (_band, offset, notation), pages in qualifying_sequences.items()
-            for page in pages
-            for number in (page + offset,)
+            not page_label_matches(page, page + offset, notation)
+            for (_band, offset, notation) in chosen_sequences
+            for page in qualifying_sequences[(_band, offset, notation)]
         )
         and warnings is not None
     ):

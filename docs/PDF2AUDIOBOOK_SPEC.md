@@ -123,7 +123,7 @@ In auto mode, OCR only pages with raster coverage above the configured trigger, 
 - Distinguish headers containing chapter titles from a heading appearing once within the content body.
 - Remove pagination artifacts at block/span level, not by blindly deleting all numeric-only lines.
 - Preserve legitimate standalone numbers, ordered lists, captions, poetry, footnotes and quoted content.
-- Remove a single qualifying sequence in the outermost margin band when it is consistent with physical page order. Use edge distance only to break ties between competing sequences; when tied, keep both and warn. Explicit PDF page labels are positive evidence, while disagreement warns once without disabling removal.
+- Remove a single qualifying sequence in the outermost margin band when it is consistent with physical page order. Decide ambiguity only among blocks that pass the folio candidate checks. Use edge distance only to break ties between competing sequences; distances less than 2pt apart are tied, so keep both and warn. Explicit PDF page labels are positive evidence, while disagreement with the selected sequence warns once without disabling removal.
 - A poem or section-number sequence placed in the only margin band is indistinguishable from folios and can be removed; disable page-number removal with `pdf.remove_page_numbers = false` when needed.
 - Maintain reason/confidence for every removal; low-confidence candidates remain in text and are surfaced for review.
 - Default removal of running headers, footers and page numbers; all individually toggleable.

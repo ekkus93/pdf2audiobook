@@ -35,9 +35,13 @@ def _sonnet_pages():
 
 def test_poem_numerals_survive_while_edge_folios_are_removed():
     blocks = _sonnet_pages()
-    edits = pagination_cleanup(blocks, SIZES, Pdf(), page_labels=[str(n) for n in range(40, 44)])
+    warnings = []
+    edits = pagination_cleanup(
+        blocks, SIZES, Pdf(), page_labels=[str(n) for n in range(40, 44)], warnings=warnings
+    )
     removed = {edit.block_id for edit in edits}
     assert removed == {f"folio-{page}" for page in range(4)}
+    assert "Printed page numbers disagree with PDF page labels" not in warnings
 
 
 def test_outermost_competing_edge_sequence_wins():
