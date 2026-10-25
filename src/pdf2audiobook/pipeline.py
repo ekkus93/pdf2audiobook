@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import logging
 import os
 import tempfile
-from collections.abc import Iterator
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -32,7 +30,14 @@ from pdf2audiobook.document.structure import (
     render_chapter_texts,
     validate_chapter_coverage,
 )
-from pdf2audiobook.errors import AudioError, ExtractionError, LLMError, PartialConversionError
+from pdf2audiobook.errors import (
+    AudioError,
+    ExtractionError,
+    InputError,
+    LLMError,
+    PartialConversionError,
+    WorkspaceLockedError,
+)
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.llm import (
     LLMDecision,
@@ -63,6 +68,7 @@ from pdf2audiobook.workspace import (
     digest_file,
     fingerprint,
     read_manifest,
+    workspace_lock,
     write_json,
     write_manifest,
 )
@@ -312,11 +318,33 @@ def _hand_edit_conflict(message: str, numbers: set[int]) -> ExtractionError:
     )
 
 
+def _analysis_workspace_folder(source: Path, settings: Settings) -> Path:
+    try:
+        if not source.is_file():
+            raise InputError("PDF not found; check the input path and permissions")
+        book_hash = digest_file(source)
+    except OSError:
+        raise InputError("Cannot access PDF; check the input path and permissions") from None
+    return Path(settings.general.output_dir).expanduser() / f"{source.stem}-{book_hash[:10]}"
+
+
 def analyze_book(
     source: Path, settings: Settings, *, extractor: DocumentExtractor | None = None
 ) -> Path:
-    from pdf2audiobook.errors import InputError
+    """Analyze one book while holding its workspace lock for every write."""
+    folder = _analysis_workspace_folder(source, settings)
+    try:
+        with workspace_lock(folder):
+            return _analyze_book_locked(source, settings, extractor=extractor)
+    except WorkspaceLockedError as exc:
+        if str(exc) == "Could not lock the book workspace":
+            raise ExtractionError("Could not create or update the output workspace") from None
+        raise ExtractionError("Another conversion is already running for this book") from None
 
+
+def _analyze_book_locked(
+    source: Path, settings: Settings, *, extractor: DocumentExtractor | None = None
+) -> Path:
     log_event("stage_started", level=logging.INFO, stage="analysis")
 
     # These exceptions can include private book names and absolute paths.
@@ -954,29 +982,6 @@ def chapter_audio_fingerprint(
     )
 
 
-@contextlib.contextmanager
-def _workspace_conversion_lock(folder: Path) -> Iterator[None]:
-    """Allow one conversion per workspace so cleanup never races another run's files."""
-    try:
-        import fcntl
-    except ImportError:  # pragma: no cover - platforms without POSIX file locks
-        yield
-        return
-    try:
-        folder.mkdir(parents=True, exist_ok=True)
-        handle = (folder / ".convert.lock").open("a+")
-    except OSError:
-        raise AudioError("Could not lock the book workspace for conversion") from None
-    try:
-        try:
-            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            raise AudioError("Another conversion is already running for this book") from None
-        yield
-    finally:
-        handle.close()
-
-
 def convert_book(
     source: Path,
     settings: Settings,
@@ -990,9 +995,18 @@ def convert_book(
     encoder: AudioEncoder | None = None,
 ) -> list[Path]:
     log_event("stage_started", level=logging.INFO, stage="conversion")
-    cover_image = read_cover_image(settings.audio.cover_image)
-    manifest_path = analyze_book(source, settings, extractor=extractor)
-    with _workspace_conversion_lock(manifest_path.parent):
+    manifest_path = None
+    if source.is_file():
+        folder = _analysis_workspace_folder(source, settings)
+    else:
+        # Invalid inputs cannot write an analysis workspace; retain this path for
+        # injected analysis adapters used by offline callers and tests.
+        manifest_path = analyze_book(source, settings, extractor=extractor)
+        folder = manifest_path.parent
+    with workspace_lock(folder):
+        cover_image = read_cover_image(settings.audio.cover_image)
+        if manifest_path is None:
+            manifest_path = analyze_book(source, settings, extractor=extractor)
         return _convert_analyzed_book(
             manifest_path,
             settings,

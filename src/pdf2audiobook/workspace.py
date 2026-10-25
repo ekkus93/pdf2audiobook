@@ -4,11 +4,51 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from pdf2audiobook.errors import ExtractionError
+from pdf2audiobook.errors import ExtractionError, WorkspaceLockedError
 from pdf2audiobook.models import BookManifest
+
+_workspace_locks = threading.local()
+
+
+@contextmanager
+def workspace_lock(folder: Path, *, blocking: bool = False) -> Iterator[None]:
+    """Hold the per-book lock used by analysis, conversion and review writes."""
+    lock_key = folder.resolve()
+    held: set[Path] = getattr(_workspace_locks, "held", set())
+    if lock_key in held:
+        yield
+        return
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - platforms without POSIX file locks
+        yield
+        return
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        handle = (folder / ".convert.lock").open("a+")
+    except OSError:
+        raise WorkspaceLockedError("Could not lock the book workspace") from None
+    try:
+        operation = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+        try:
+            fcntl.flock(handle, operation)
+        except OSError:
+            raise WorkspaceLockedError(
+                "Another conversion is already running for this book"
+            ) from None
+        _workspace_locks.held = {*held, lock_key}
+        try:
+            yield
+        finally:
+            _workspace_locks.held = held
+    finally:
+        handle.close()
 
 
 def digest_bytes(data: bytes) -> str:

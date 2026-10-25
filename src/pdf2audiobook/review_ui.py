@@ -12,10 +12,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from pdf2audiobook.document.structure import chapter_coverage_report, render_chapter_texts
-from pdf2audiobook.errors import ExtractionError
+from pdf2audiobook.errors import ExtractionError, WorkspaceLockedError
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
-from pdf2audiobook.workspace import read_manifest, write_manifest
+from pdf2audiobook.workspace import read_manifest, workspace_lock, write_manifest
 
 _MAX_REQUEST_BYTES = 1024 * 1024
 _MAX_PREVIEW_CHARS = 1200
@@ -132,6 +132,14 @@ def save_chapter_updates(manifest_path: Path, updates: Any, acknowledge: Any = N
 
     A review reason is acknowledged only when the user names it explicitly.
     """
+    with workspace_lock(manifest_path.parent, blocking=False):
+        _save_chapter_updates_locked(manifest_path, updates, acknowledge)
+
+
+def _save_chapter_updates_locked(
+    manifest_path: Path, updates: Any, acknowledge: Any = None
+) -> None:
+    """Validate and persist a review update while its workspace lock is held."""
     if acknowledge is None:
         acknowledge = []
     if not isinstance(acknowledge, list) or not set(acknowledge) <= set(
@@ -297,6 +305,9 @@ def create_review_server(
                 save_chapter_updates(
                     resolved_manifest, payload.get("chapters"), payload.get("acknowledge")
                 )
+            except WorkspaceLockedError:
+                self._json(409, {"error": "Workspace is locked"})
+                return
             except Exception:
                 self._json(400, {"error": "Review update was invalid; no changes were saved"})
                 return

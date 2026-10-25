@@ -30,5 +30,9 @@ class AudioError(AudiobookError):
     exit_code = 6
 
 
+class WorkspaceLockedError(AudioError):
+    """A workspace is currently owned by another analysis or conversion."""
+
+
 class PartialConversionError(AudiobookError):
     exit_code = 7
