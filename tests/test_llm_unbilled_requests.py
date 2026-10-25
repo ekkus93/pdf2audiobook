@@ -52,7 +52,7 @@ def test_connect_failure_is_unbilled_and_does_not_block_budget(tmp_path):
     )
 
 
-def test_read_timeout_remains_unknown_and_blocks_token_budget(tmp_path):
+def test_read_timeout_remains_unknown_and_is_charged_at_its_bound(tmp_path):
     ledger = run_failed_request(tmp_path, httpx.ReadTimeout)
     assert ledger.rows()[0]["status"] == "unknown"
     assert ledger.totals()["unresolved_requests"] == 1
