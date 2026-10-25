@@ -151,6 +151,39 @@ def test_pack_m4b_ignores_conversion_settings_fingerprint(tmp_path, monkeypatch)
     assert result.exit_code == 0, result.stderr
 
 
+def test_pack_omits_approved_empty_chapter_and_reports_its_number(tmp_path, monkeypatch):
+    manifest, manifest_path = make_book(tmp_path, chapters=2, blocks=2)
+    manifest.blocks[0].text = "* * *"
+    manifest.review_required = ["empty_chapter"]
+    manifest.chapters[0].manually_approved = True
+    write_manifest(manifest_path, manifest)
+    settings = Settings()
+    add_sidecar(manifest, manifest.chapters[1], tmp_path, settings)
+    packed_files = []
+    monkeypatch.setattr(
+        "pdf2audiobook.audio.encode_m4b",
+        lambda files, output, **_kwargs: packed_files.extend(files) or output,
+    )
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "pack-m4b",
+            str(manifest_path),
+            "--output",
+            str(tmp_path / "book.m4b"),
+            "--no-config",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["skipped_chapters"] == [1]
+    assert len(packed_files) == 1
+    assert packed_files[0][1] == "Chapter 2"
+
+
 def test_cli_convert_with_voice_speed_cover_then_pack(tmp_path, monkeypatch):
     manifest, manifest_path = make_book(tmp_path)
     source = tmp_path / "source.pdf"

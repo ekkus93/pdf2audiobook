@@ -77,6 +77,10 @@ def test_commands_reraise_nonzero_typer_exit(monkeypatch, tmp_path, command):
             lambda *_a, **_k: SimpleNamespace(title="Book", author=None, chapters=[]),
         )
         monkeypatch.setattr(
+            "pdf2audiobook.pipeline.prepare_chapter_selection",
+            lambda *_a, **_k: SimpleNamespace(chapters=[], skipped=[]),
+        )
+        monkeypatch.setattr(
             "pdf2audiobook.audio.encode_m4b", lambda *_a, **_k: tmp_path / "book.m4b"
         )
     elif command == "review":

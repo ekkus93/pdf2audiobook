@@ -756,7 +756,7 @@ def pack_m4b(
     try:
         from pdf2audiobook.audio import audio_output_path, encode_m4b, read_cover_image
         from pdf2audiobook.document.structure import render_chapter_narration
-        from pdf2audiobook.pipeline import valid_mp3_sidecar
+        from pdf2audiobook.pipeline import prepare_chapter_selection, valid_mp3_sidecar
         from pdf2audiobook.workspace import read_manifest
 
         settings, origins = load_settings(
@@ -767,9 +767,13 @@ def pack_m4b(
         configure_effective_logging(settings, origins)
         manifest = read_manifest(manifest_path)
         cover_image = read_cover_image(settings.audio.cover_image)
+        selection = prepare_chapter_selection(manifest_path, manifest, settings)
+        skipped_ids = {chapter.id for chapter in selection.skipped}
         chapter_files = []
         stale_chapters = []
-        for chapter in manifest.chapters:
+        for chapter in selection.chapters:
+            if chapter.id in skipped_ids:
+                continue
             path = audio_output_path(manifest, chapter, manifest_path.parent)
             try:
                 # convert reads this text back from disk with universal newlines.
@@ -806,7 +810,13 @@ def pack_m4b(
             )
         except OSError:
             raise AudioError("Could not create the M4B output") from None
-        emit({"m4b_file": str(result)}, json_output)
+        emit(
+            {
+                "m4b_file": str(result),
+                "skipped_chapters": sorted(chapter.number for chapter in selection.skipped),
+            },
+            json_output,
+        )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
     except (typer.Exit, ClickExit):
