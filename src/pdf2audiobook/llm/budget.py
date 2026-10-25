@@ -25,7 +25,7 @@ class BookLLMBudgetLedger:
             connection = sqlite3.connect(self.path, timeout=15)
             connection.execute("PRAGMA busy_timeout=15000")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
-            if version not in (0, 1):
+            if version not in (0, 1, 2):
                 raise LLMError("Unsupported LLM budget ledger schema version")
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS calls ("
@@ -34,8 +34,8 @@ class BookLLMBudgetLedger:
                 "prompt_tokens INTEGER, completion_tokens INTEGER, "
                 "total_tokens INTEGER, estimated_usd TEXT)"
             )
-            if version == 0:
-                connection.execute("PRAGMA user_version=1")
+            if version < 2:
+                connection.execute("PRAGMA user_version=2")
             connection.commit()
             return connection
         except sqlite3.Error:
@@ -46,7 +46,7 @@ class BookLLMBudgetLedger:
     def _stats(connection: sqlite3.Connection) -> dict:
         # Fail closed on malformed/corrupted ledgers rather than undercounting.
         invalid = connection.execute(
-            "SELECT COUNT(*) FROM calls WHERE status NOT IN ('pending','complete','unknown') "
+            "SELECT COUNT(*) FROM calls WHERE status NOT IN ('pending','complete','unknown','unbilled') "
             "OR (status='complete' AND (prompt_tokens IS NULL OR "
             "completion_tokens IS NULL OR total_tokens IS NULL)) "
             "OR (status!='complete' AND (prompt_tokens IS NOT NULL OR "
@@ -62,8 +62,8 @@ class BookLLMBudgetLedger:
         if invalid:
             raise LLMError("Invalid per-book LLM budget ledger entries")
         row = connection.execute(
-            "SELECT COUNT(*), "
-            "COALESCE(SUM(CASE WHEN status != 'complete' THEN 1 ELSE 0 END), 0), "
+            "SELECT COALESCE(SUM(CASE WHEN status != 'unbilled' THEN 1 ELSE 0 END), 0), "
+            "COALESCE(SUM(CASE WHEN status IN ('pending','unknown') THEN 1 ELSE 0 END), 0), "
             "COALESCE(SUM(total_tokens), 0), "
             "COALESCE(SUM(prompt_tokens), 0), "
             "COALESCE(SUM(completion_tokens), 0), "
@@ -134,6 +134,31 @@ class BookLLMBudgetLedger:
                 stats.pop("_exact_cost_usd", None)
                 return stats
         except (sqlite3.Error, InvalidOperation):
+            raise LLMError("Invalid per-book LLM budget ledger") from None
+
+    def rows(self) -> list[dict]:
+        """Return the content-free accounting fields shown by the budget CLI."""
+        try:
+            with self._connect() as connection:
+                self._stats(connection)
+                result = connection.execute(
+                    "SELECT id,status,prompt_tokens,completion_tokens,total_tokens,estimated_usd "
+                    "FROM calls ORDER BY id"
+                )
+                return [
+                    {
+                        "id": row[0],
+                        "status": row[1],
+                        "prompt_tokens": row[2],
+                        "completion_tokens": row[3],
+                        "total_tokens": row[4],
+                        "estimated_cost_usd": float(Decimal(row[5]))
+                        if row[5] is not None
+                        else None,
+                    }
+                    for row in result
+                ]
+        except (sqlite3.Error, InvalidOperation, ValueError, OverflowError):
             raise LLMError("Invalid per-book LLM budget ledger") from None
 
     def reserve(
@@ -244,6 +269,63 @@ class BookLLMBudgetLedger:
                     raise LLMError("LLM ledger request was already settled or missing")
         except sqlite3.Error:
             raise LLMError("Cannot settle per-book LLM budget") from None
+
+    def settle_unbilled(self, call_id: int) -> None:
+        """Mark a request unsent only when transport evidence proves it."""
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                result = connection.execute(
+                    "UPDATE calls SET status='unbilled' WHERE id=? AND status='pending'",
+                    (call_id,),
+                )
+                if result.rowcount != 1:
+                    raise LLMError("LLM ledger request was already settled or missing")
+        except sqlite3.Error:
+            raise LLMError("Cannot settle per-book LLM budget") from None
+
+    def resolve_unknown(
+        self,
+        call_id: int,
+        *,
+        usage: dict | None,
+        input_rate: float | None,
+        output_rate: float | None,
+        unbilled: bool = False,
+    ) -> None:
+        """Resolve an operator-reviewed unknown request without changing other rows."""
+        if unbilled:
+            try:
+                with self._connect() as connection:
+                    connection.execute("BEGIN IMMEDIATE")
+                    result = connection.execute(
+                        "UPDATE calls SET status='unbilled' WHERE id=? AND status='unknown'",
+                        (call_id,),
+                    )
+                    if result.rowcount != 1:
+                        raise LLMError("Only an unknown ledger request can be resolved")
+                return
+            except sqlite3.Error:
+                raise LLMError("Cannot resolve per-book LLM budget") from None
+        # Reuse strict usage and cost validation by temporarily using the normal settlement
+        # routine after changing the row back to pending in one transaction.
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                result = connection.execute(
+                    "UPDATE calls SET status='pending' WHERE id=? AND status='unknown'",
+                    (call_id,),
+                )
+                if result.rowcount != 1:
+                    raise LLMError("Only an unknown ledger request can be resolved")
+        except sqlite3.Error:
+            raise LLMError("Cannot resolve per-book LLM budget") from None
+        self.settle(
+            call_id,
+            usage=usage,
+            input_rate=input_rate,
+            output_rate=output_rate,
+        )
 
     def check_spend(self, *, max_tokens: int | None, max_usd: float | None) -> None:
         try:

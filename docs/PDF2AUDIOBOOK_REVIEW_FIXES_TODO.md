@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0–FX3 in progress
+**Status:** FX0–FX3 complete; FX4 in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -101,20 +101,20 @@
 
 ## Phase FX4 — LLM budget, caching and providers
 
-- [ ] FX4.01 Stop failed connections from permanently blocking budgeted runs (R16).
-  - [ ] FX4.01a Add the `unbilled` ledger status for attempts that never sent the request (connect errors, DNS and connect timeouts, TLS handshake failure). Everything else stays `unknown`.
-  - [ ] FX4.01b Move model discovery before reservation so it never reserves budget.
-  - [ ] FX4.01c Add `pdf2audiobook budget show --output DIR` and `budget resolve … (--tokens P:C | --unbilled) --confirm`.
-  - [ ] FX4.01d Tests: a connect error leaves no blocking row; a read timeout leaves `unknown`; `resolve` unblocks the run; a `budget` CLI privacy test.
+- [x] FX4.01 Stop failed connections from permanently blocking budgeted runs (R16).
+  - [x] FX4.01a Add the `unbilled` ledger status for attempts that never sent the request (connect errors, DNS and connect timeouts, TLS handshake failure). Everything else stays `unknown`.
+  - [x] FX4.01b Move model discovery before reservation so it never reserves budget.
+  - [x] FX4.01c Add `pdf2audiobook budget show --output DIR` and `budget resolve … (--tokens P:C | --unbilled) --confirm`.
+  - [x] FX4.01d Tests: a connect error leaves no blocking row; a read timeout leaves `unknown`; `resolve` unblocks the run; a `budget` CLI privacy test.
 - [ ] FX4.02 Count every retry against the budget (R17).
   - [ ] FX4.02a Make each HTTP attempt reserve and settle its own ledger row and count toward `max_requests`, and stop retrying when the budget runs out.
   - [ ] FX4.02b Test: with `max_requests=1`, a timeout is not retried, and the ledger matches the attempts made.
 - [ ] FX4.03 Warn once per data scope (R18).
   - [ ] FX4.03a Give page images and text windows separate warnings, with an accurate whole-book wording for text, plus the provider and model.
   - [ ] FX4.03b Tests: vision followed by text gives two warnings; text only gives one.
-- [ ] FX4.04 Resolve llama-server's `"auto"` model before keying the caches (R19).
-  - [ ] FX4.04a Resolve the served model before computing cache identity and the analysis key. Raise `LLMError` when it is ambiguous or unavailable and no concrete model is configured.
-  - [ ] FX4.04b Test: changing the stubbed served model invalidates the cache and the analysis.
+- [x] FX4.04 Resolve llama-server's `"auto"` model before keying the caches (R19).
+  - [x] FX4.04a Resolve the served model before computing cache identity and the analysis key. Raise `LLMError` when it is ambiguous or unavailable and no concrete model is configured.
+  - [x] FX4.04b Test: changing the stubbed served model invalidates the cache and the analysis stage fingerprint.
 - [ ] FX4.05 Adapt to unsupported provider parameters (R20).
   - [ ] FX4.05a When a provider rejects `max_tokens` or `temperature`, retry once without it, remember that per provider instance, and count it under R17. Optionally use JSON-schema mode where the provider declares support.
   - [ ] FX4.05b Add provider-matrix contract cases for each rejected parameter.
@@ -207,3 +207,4 @@
 | 2026-10-25 | 96ad884c521c12699b479212e026847b59287b19 | FX3.02 (ignore operational settings in analysis identity; report changed stages safely) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1049 tests; CI run [40175307319](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175307319) passed | FX3 continues |
 | 2026-10-25 | 267f0085063102a2b8de381c27e48909c797256a | FX3.03 (report empty chapters during analysis and gate synthesis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1050 tests; CI run [40175448872](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175448872) passed | FX3 continues |
 | 2026-10-25 | b7caf90a382f4cd7cac62e541ac1313be5851d59 | FX3.04 (validate M4B inputs and remove only verified obsolete chapter audio); FX3.05 (§5 amendment confirmed) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1053 tests; CI run [40175653997](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175653997) passed on Python 3.11–3.13 | FX4–FX7 remain |
+| 2026-10-25 | pending | FX4.01 (unbilled request state, content-free budget commands, pre-reservation model discovery); FX4.04 (served model participates in LLM cache and analysis identity) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1062 tests; exact-head CI pending | FX4 continues |

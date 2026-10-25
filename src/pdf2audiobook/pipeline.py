@@ -52,6 +52,33 @@ def _llm_cache_identity(settings: Settings) -> str:
     )
 
 
+def _resolve_auto_llm_model(settings: Settings) -> Settings:
+    """Resolve a served model before analysis or request cache identities are computed."""
+    selected = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
+    if not settings.llm.enabled or selected.model != "auto":
+        return settings
+    if not any(
+        (
+            settings.llm.structure,
+            settings.llm.cleanup,
+            settings.llm.classification,
+            settings.llm.narration,
+            settings.llm.vision,
+        )
+    ):
+        return settings
+    with create_provider(settings) as provider:
+        resolve = getattr(provider, "resolve_model", None)
+        if not callable(resolve):
+            raise LLMError("LLM provider cannot resolve its automatic model")
+        model = resolve()
+    if not isinstance(model, str) or not model:
+        raise LLMError("LLM provider returned an invalid automatic model")
+    resolved = settings.model_copy(deep=True)
+    getattr(resolved.llm, resolved.llm.provider.replace("-", "_")).model = model
+    return resolved
+
+
 def _analysis_stage_fingerprints(
     book_hash: str, settings: Settings, extractor: DocumentExtractor | None
 ) -> dict[str, str]:
@@ -176,6 +203,7 @@ def analyze_book(
         book_hash = digest_file(source)
     except OSError:
         raise InputError("Cannot access PDF; check the input path and permissions") from None
+    settings = _resolve_auto_llm_model(settings)
     root = Path(settings.general.output_dir).expanduser()
     folder = root / f"{source.stem}-{book_hash[:10]}"
     manifest_path = folder / "manifest.json"

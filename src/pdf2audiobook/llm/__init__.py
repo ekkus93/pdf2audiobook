@@ -189,6 +189,15 @@ class OpenAICompatibleProvider:
             raise LLMError("No models are served at configured endpoint")
         return models[0]
 
+    def resolve_model(self) -> str:
+        """Resolve an automatic served-model alias before cache or budget identity."""
+        if self.model == "auto":
+            models = self.list_models()
+            if len(models) != 1:
+                raise LLMError("Automatic model selection requires exactly one served model")
+            self.model = models[0]
+        return self.model
+
     @staticmethod
     def _unsupported_json_mode(response: httpx.Response) -> bool:
         """Fallback only when the server specifically rejects JSON response_format."""
@@ -439,7 +448,7 @@ class OpenAICompatibleProvider:
                     raise LLMError("Model response must be a JSON object")
                 self.request_count += 1
                 return decoded
-            except httpx.TransportError:
+            except httpx.TransportError as exc:
                 if retry_count < self.max_retries:
                     time.sleep(min(0.2 * (2**retry_count), 2.0))
                     retry_count += 1
@@ -449,7 +458,10 @@ class OpenAICompatibleProvider:
                     if self.provider in ("openai", "ollama", "llama-server")
                     else "provider"
                 )
-                raise LLMError(f"{label} LLM transport failure") from None
+                raise LLMError(
+                    f"{label} LLM transport failure",
+                    unbilled=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)),
+                ) from None
             except LLMError:
                 raise
             except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError):

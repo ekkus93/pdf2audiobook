@@ -19,6 +19,8 @@ from pdf2audiobook.logging import configure_logging, log_event
 app = typer.Typer(no_args_is_help=True, help="Convert PDF books to chapter-based audiobooks.")
 config_app = typer.Typer(help="Inspect effective configuration.")
 app.add_typer(config_app, name="config")
+budget_app = typer.Typer(help="Inspect or resolve per-book LLM request accounting.")
+app.add_typer(budget_app, name="budget")
 console = Console(stderr=True)
 
 
@@ -90,6 +92,67 @@ def show_config(
         if sources:
             payload["_sources"] = origin
         emit(payload, json_output)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc, json_output=json_output)
+
+
+@budget_app.command("show")
+def budget_show(
+    output: Path = typer.Option(..., "--output", help="Book workspace directory."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show content-free request statuses and token/cost totals."""
+    try:
+        from pdf2audiobook.llm.budget import BookLLMBudgetLedger
+
+        ledger = BookLLMBudgetLedger(output / "reports" / "llm_budget.sqlite3")
+        emit({"requests": ledger.rows(), "totals": ledger.totals()}, json_output)
+    except (AudiobookError, OSError, ValueError) as exc:
+        fail(exc, json_output=json_output)
+
+
+@budget_app.command("resolve")
+def budget_resolve(
+    output: Path = typer.Option(..., "--output", help="Book workspace directory."),
+    request_id: int = typer.Argument(..., min=1),
+    tokens: str | None = typer.Option(None, "--tokens", help="Verified PROMPT:COMPLETION counts."),
+    unbilled: bool = typer.Option(False, "--unbilled", help="Confirm the request was never sent."),
+    confirm: bool = typer.Option(False, "--confirm", help="Confirm this ledger change."),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Resolve an unknown request after checking provider billing evidence."""
+    try:
+        from pdf2audiobook.llm.budget import BookLLMBudgetLedger
+
+        if not confirm or (unbilled == (tokens is not None)):
+            raise ConfigError("Choose exactly one resolution and pass --confirm")
+        usage = None
+        if tokens is not None:
+            parts = tokens.split(":")
+            if len(parts) != 2 or any(not part.isdecimal() for part in parts):
+                raise ConfigError("--tokens must use PROMPT:COMPLETION nonnegative integers")
+            prompt, completion = (int(part) for part in parts)
+            if prompt > (1 << 63) - 1 or completion > (1 << 63) - 1:
+                raise ConfigError("Token counts exceed the supported range")
+            usage = {
+                "prompt_tokens": prompt,
+                "completion_tokens": completion,
+                "total_tokens": prompt + completion,
+            }
+        settings, _ = load_settings(config, no_config=no_config)
+        ledger = BookLLMBudgetLedger(output / "reports" / "llm_budget.sqlite3")
+        ledger.resolve_unknown(
+            request_id,
+            usage=usage,
+            input_rate=settings.llm.input_cost_usd_per_million_tokens,
+            output_rate=settings.llm.output_cost_usd_per_million_tokens,
+            unbilled=unbilled,
+        )
+        emit(
+            {"resolved": request_id, "status": "unbilled" if unbilled else "complete"}, json_output
+        )
     except (AudiobookError, OSError, ValueError) as exc:
         fail(exc, json_output=json_output)
 

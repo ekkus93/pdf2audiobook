@@ -20,6 +20,11 @@ class ExtractionError(AudiobookError):
 class LLMError(AudiobookError):
     exit_code = 5
 
+    def __init__(self, message: str, *, unbilled: bool = False):
+        super().__init__(message)
+        # Only transport failures that prove the request was never sent set this.
+        self.unbilled = unbilled
+
 
 class AudioError(AudiobookError):
     exit_code = 6

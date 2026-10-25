@@ -34,6 +34,8 @@ class CachedLLMProvider:
         self.provider = provider
         self.cache_dir = cache_dir
         self.identity = identity
+        self._base_identity = identity
+        self._resolved_model: str | None = None
         self.enabled = enabled
         self.max_requests = max_requests
         self.usage_report = usage_report
@@ -156,6 +158,14 @@ class CachedLLMProvider:
     def _complete_json_call(
         self, *, instructions: str, document_text: str, image_data: bytes | None
     ) -> dict[str, Any]:
+        resolve_model = getattr(self.provider, "resolve_model", None)
+        if callable(resolve_model):
+            resolved_model = resolve_model()
+            if not isinstance(resolved_model, str) or not resolved_model:
+                raise LLMError("LLM provider returned an invalid model identity")
+            if self._resolved_model != resolved_model:
+                self.identity = fingerprint(self._base_identity, "served-model", resolved_model)
+                self._resolved_model = resolved_model
         # Reject known oversized requests before reserving a book-budget call.
         # Such requests cannot incur a charge and must not poison the ledger
         # with a false "unknown" charge. Apply this to cache hits as well.
@@ -230,6 +240,7 @@ class CachedLLMProvider:
             self.provider.last_usage = {}
         self.requests_started += 1
         self._write_usage()
+        request_error: Exception | None = None
         try:
             if image_data is None:
                 reply = self.provider.complete_json(
@@ -242,6 +253,9 @@ class CachedLLMProvider:
                     document_text=document_text,
                     image_data=image_data,
                 )
+        except Exception as exc:
+            request_error = exc
+            raise
         finally:
             last = getattr(self.provider, "last_usage", None)
             # A total-token counter alone cannot prove a request's cost.
@@ -258,12 +272,15 @@ class CachedLLMProvider:
                 and last["total_tokens"] >= last["prompt_tokens"] + last["completion_tokens"]
             )
             if self.ledger is not None and reservation is not None:
-                self.ledger.settle(
-                    reservation,
-                    usage=last,
-                    input_rate=self.input_cost_usd_per_million_tokens,
-                    output_rate=self.output_cost_usd_per_million_tokens,
-                )
+                if isinstance(request_error, LLMError) and request_error.unbilled:
+                    self.ledger.settle_unbilled(reservation)
+                else:
+                    self.ledger.settle(
+                        reservation,
+                        usage=last,
+                        input_rate=self.input_cost_usd_per_million_tokens,
+                        output_rate=self.output_cost_usd_per_million_tokens,
+                    )
             self._write_usage()
         if not isinstance(reply, dict):
             raise ValueError("LLM cache requires a JSON-object response")
