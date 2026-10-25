@@ -1454,21 +1454,28 @@ def place_footnotes(
     return ordered, relocated, kept
 
 
+def render_chapter_narration(
+    manifest: BookManifest, chapter: Chapter, footnotes: str = "warn"
+) -> str:
+    """Narration text of one chapter, rendered in memory from the current manifest."""
+    replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
+    chapter_blocks, _, _ = place_footnotes(
+        manifest.blocks[chapter.start_block : chapter.end_block], footnotes
+    )
+    return reflow_narration_lines(
+        chapter_blocks,
+        replacements,
+        supporting_text=" ".join(block.text for block in manifest.blocks),
+    )
+
+
 def render_chapter_texts(manifest: BookManifest, folder: Path, footnotes: str = "warn") -> None:
     """Regenerate derived text from source-linked, verified edits and manual boundaries."""
     from pdf2audiobook.workspace import atomic_write, digest_bytes, digest_file, write_json
 
     report = chapter_coverage_report(manifest)
-    replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
     for chapter in manifest.chapters:
-        chapter_blocks, _, _ = place_footnotes(
-            manifest.blocks[chapter.start_block : chapter.end_block], footnotes
-        )
-        content = reflow_narration_lines(
-            chapter_blocks,
-            replacements,
-            supporting_text=" ".join(block.text for block in manifest.blocks),
-        ).encode("utf-8")
+        content = render_chapter_narration(manifest, chapter, footnotes).encode("utf-8")
         path = folder / "chapters" / f"{chapter.number:03d}.txt"
         # Compare existing chapter text using bounded reads. read_bytes()
         # would duplicate an entire long chapter in memory on every resume.

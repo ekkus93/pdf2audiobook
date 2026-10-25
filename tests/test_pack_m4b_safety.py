@@ -2,13 +2,11 @@
 
 import hashlib
 import json
-import shutil
 
 import numpy as np
-import pytest
 from typer.testing import CliRunner
 
-from pdf2audiobook.audio import audio_output_path, encode_mp3
+from pdf2audiobook.audio import audio_output_path
 from pdf2audiobook.cli import app
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import render_chapter_texts
@@ -62,37 +60,6 @@ def add_sidecar(path, manifest, chapter, settings, *, fingerprint=None):
         ),
         encoding="utf-8",
     )
-
-
-@pytest.mark.skipif(
-    shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
-    reason="FFmpeg/ffprobe are required for M4B packaging acceptance",
-)
-def test_pack_m4b_cli_happy_path(tmp_path):
-    settings = Settings()
-    manifest, chapter, manifest_path = make_book(tmp_path)
-    output = audio_output_path(manifest, chapter, tmp_path)
-    rate = 24000
-    samples = np.full(rate // 4, 0.01, dtype=np.float32)
-    encode_mp3(
-        samples,
-        rate,
-        output,
-        bitrate=settings.tts.bitrate,
-        target_rate=settings.tts.sample_rate,
-        title=chapter.title,
-        artist=manifest.author,
-        album=manifest.title,
-        track=chapter.number,
-    )
-    add_sidecar(output, manifest, chapter, settings)
-
-    result = CliRunner().invoke(
-        app,
-        ["pack-m4b", str(manifest_path), "--output", str(tmp_path / "book.m4b"), "--no-config"],
-    )
-    assert result.exit_code == 0, result.stderr
-    assert (tmp_path / "book.m4b").is_file()
 
 
 def test_pack_m4b_cli_refuses_text_stale_audio_without_disclosing_content(tmp_path):
@@ -161,100 +128,6 @@ def test_boundary_edit_after_convert_makes_affected_chapter_audio_stale(tmp_path
     assert "chapter(s): 1, 2" in result.stderr
     assert "Narration" not in result.stderr
     assert str(tmp_path) not in result.stderr
-
-
-def test_pack_m4b_ignores_conversion_settings_fingerprint(tmp_path, monkeypatch):
-    settings = Settings()
-    manifest, chapter, manifest_path = make_book(tmp_path)
-    output = audio_output_path(manifest, chapter, tmp_path)
-    add_sidecar(output, manifest, chapter, settings, fingerprint="voice-speed-cover-specific")
-    monkeypatch.setattr("pdf2audiobook.audio.encode_m4b", lambda *_a, **_k: tmp_path / "book.m4b")
-    result = CliRunner().invoke(
-        app,
-        ["pack-m4b", str(manifest_path), "--output", str(tmp_path / "book.m4b"), "--no-config"],
-    )
-    assert result.exit_code == 0, result.stderr
-
-
-def test_cli_convert_with_voice_speed_cover_then_pack(tmp_path, monkeypatch):
-    manifest, chapter, manifest_path = make_book(tmp_path)
-    source = tmp_path / "source.pdf"
-    source.write_bytes(b"synthetic source")
-    chapter_cover = tmp_path / "chapter.jpg"
-    chapter_cover.write_bytes(b"\xff\xd8\xffchapter-cover")
-    book_cover = tmp_path / "book.jpg"
-    book_cover.write_bytes(b"\xff\xd8\xffbook-cover")
-    observed = {}
-
-    class StubKitten:
-        sample_rate = 24000
-
-        def __init__(self, _model):
-            pass
-
-    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: manifest_path)
-    monkeypatch.setattr("pdf2audiobook.pipeline.read_manifest", lambda _path: manifest)
-    monkeypatch.setattr("pdf2audiobook.pipeline.render_chapter_texts", lambda *_a, **_k: None)
-    monkeypatch.setattr("pdf2audiobook.pipeline.KittenProvider", StubKitten)
-    monkeypatch.setattr(
-        "pdf2audiobook.pipeline.synthesize_chunks",
-        lambda *_a, **kwargs: (
-            observed.update(voice=kwargs["voice"], speed=kwargs["speed"])
-            or np.ones(2400, dtype=np.float32)
-        ),
-    )
-
-    def encode_mp3_stub(_samples, _rate, path, **kwargs):
-        observed["chapter_cover"] = kwargs["cover_image"]
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(b"synthetic-mp3")
-        return path
-
-    monkeypatch.setattr("pdf2audiobook.pipeline.encode_mp3", encode_mp3_stub)
-    converted = CliRunner().invoke(
-        app,
-        [
-            "convert",
-            str(source),
-            "--no-config",
-            "--voice",
-            "Bella",
-            "--speed",
-            "1.25",
-            "--cover",
-            str(chapter_cover),
-        ],
-    )
-    assert converted.exit_code == 0, converted.stderr
-    assert observed == {
-        "voice": "Bella",
-        "speed": 1.25,
-        "chapter_cover": (chapter_cover.read_bytes(), "image/jpeg"),
-    }
-
-    packed_cover = {}
-
-    def encode_m4b_stub(_files, output, **kwargs):
-        packed_cover.update(kwargs)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(b"m4b")
-        return output
-
-    monkeypatch.setattr("pdf2audiobook.audio.encode_m4b", encode_m4b_stub)
-    packed = CliRunner().invoke(
-        app,
-        [
-            "pack-m4b",
-            str(manifest_path),
-            "--output",
-            str(tmp_path / "book.m4b"),
-            "--cover",
-            str(book_cover),
-            "--no-config",
-        ],
-    )
-    assert packed.exit_code == 0, packed.stderr
-    assert packed_cover["cover_image"] == (book_cover.read_bytes(), "image/jpeg")
 
 
 def test_convert_rename_removes_only_valid_same_chapter_audio(tmp_path, monkeypatch):

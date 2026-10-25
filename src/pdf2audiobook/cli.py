@@ -681,6 +681,7 @@ def pack_m4b(
     """Package completed chapter MP3s as a single M4B with chapter navigation."""
     try:
         from pdf2audiobook.audio import audio_output_path, encode_m4b, read_cover_image
+        from pdf2audiobook.document.structure import render_chapter_narration
         from pdf2audiobook.pipeline import valid_mp3_sidecar
         from pdf2audiobook.workspace import read_manifest
 
@@ -696,10 +697,14 @@ def pack_m4b(
         stale_chapters = []
         for chapter in manifest.chapters:
             path = audio_output_path(manifest, chapter, manifest_path.parent)
-            text_path = manifest_path.parent / "chapters" / f"{chapter.number:03d}.txt"
             try:
-                text = text_path.read_text(encoding="utf-8")
-            except (OSError, UnicodeError):
+                # convert reads this text back from disk with universal newlines.
+                text = (
+                    render_chapter_narration(manifest, chapter, settings.pdf.footnotes)
+                    .replace("\r\n", "\n")
+                    .replace("\r", "\n")
+                )
+            except ExtractionError:
                 stale_chapters.append(chapter.number)
                 continue
             metadata = valid_mp3_sidecar(path)
