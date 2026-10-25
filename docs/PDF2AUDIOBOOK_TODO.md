@@ -22,13 +22,13 @@
   - [x] P0.01d Commit a generated uv.lock covering default, dev and optional Kitten dependencies; CI now verifies the lockfile and uses locked development installs. Formatting qualification is complete; see P5.10 evidence.
 - [ ] P0.02 Establish src/pdf2audiobook/{cli,config,pdf,document,llm,tts,audio,pipeline} and public adapter protocols.
   - [x] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics; CLI errors are content-free for non-domain exceptions.
-  - [ ] P0.02b Add structured logging with text/key redaction and --verbose/--quiet controls.
+  - [x] P0.02b Add structured logging with text/key redaction and --verbose/--quiet controls (review-fixes FX5.08; exact-head CI evidence in the review-fixes ledger).
 - [ ] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
-  - [ ] P0.03a Implement lookup of per-user config directory; --config and --no-config.
-  - [ ] P0.03b Implement precedence CLI > PDF2AUDIOBOOK_* env > TOML > built-ins, including explicit boolean false.
-  - [ ] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options.
+  - [x] P0.03a Implement lookup of per-user config directory; --config and --no-config (review-fixes FX5.02).
+  - [x] P0.03b Implement precedence CLI > PDF2AUDIOBOOK_* env > TOML > built-ins, including explicit boolean false (review-fixes FX5.03, FX5.05).
+  - [x] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options (review-fixes FX5.06).
   - [x] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples.
-  - [ ] P0.03e Unit-test overlay precedence, parsing, missing/unknown keys and path resolution.
+  - [x] P0.03e Unit-test overlay precedence, parsing, missing/unknown keys and path resolution (review-fixes FX5.01–FX5.03).
 - [ ] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation.
 - [x] P0.05 Implement atomic output workspace/manifest schema, input hash, stable IDs and versioned per-stage caching.
   - [x] P0.05a Define SourceSpan, DocumentBlock, CleanupEdit, Chapter, NarrationChunk and BookManifest models.
@@ -104,7 +104,7 @@
 
 - [x] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
   - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
-  - [ ] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate.
+  - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate (review-fixes FX5.06).
 - [ ] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
   - [x] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
   - [x] P4.02b Handle oversized sentences and TTS failures without silently dropping text.
@@ -132,7 +132,7 @@
   - [x] Live local Ollama synthetic smoke passed on qwen35-128k:latest.
   - [ ] Live llama-server acceptance deferred per user instruction; server is not installed in this environment.
   - [ ] Live OpenAI acceptance deferred per user instruction; credentials are not configured and no remote-content consent was given.
-- [ ] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval.
+- [x] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval (review-fixes FX5.05; exact-head CI evidence in the review-fixes ledger).
 - [ ] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
 - [x] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
 - [ ] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes.
@@ -147,7 +147,7 @@
 
 - [ ] F.01 Additional pluggable TTS engines (Piper, Kokoro, others): added an optional Piper CLI adapter selectable through configuration and the CLI; no heavyweight engine or voice is added to default dependencies.
 - [x] F.02 Optional vision LLM for figures, diagrams, equations and complicated page order: opt-in rendered-page review covers image/vector content and likely two-column layouts, validates bounded review-only responses, caches by image digest, and never alters source text.
-- [ ] F.03 Directory/batch conversion and per-book voice profiles: added sorted PDF discovery with opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence.
+- [x] F.03 Directory/batch conversion and per-book voice profiles: sorted PDF discovery, opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence (review-fixes FX5.07; exact-head CI evidence in the review-fixes ledger).
 - [x] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from current, fingerprint-verified chapter MP3s. See review-fixes ledger FX3.04.
 - [x] F.05 Optional GUI and user-assisted chapter editor: loopback review UI enforces the bound Host authority and Origin checks, validates ranges/coverage, and marks saved chapters manually approved.
 - [ ] F.06 Multi-speaker narration and pronunciation dictionaries.
