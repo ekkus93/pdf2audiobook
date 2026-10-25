@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0–FX1 complete; FX2 implementation in progress
+**Status:** FX0–FX3 in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -205,4 +205,4 @@
 | 2026-10-25 | 471e17c29d41424d6ca2fe619dc00449f3f543b0 | FX2.01 (extraction strategy/block construction refactor) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1045 tests; CI run [40174895909](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174895909) passed | FX3+ remain |
 | 2026-10-25 | f1a447b9bda2ab5cf8b35ee260f891b7b793c94f | FX3.01 (preserve unapproved hand-edited chapter values during reanalysis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1047 tests; CI run [40175123119](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175123119) passed | FX3 continues |
 | 2026-10-25 | 96ad884c521c12699b479212e026847b59287b19 | FX3.02 (ignore operational settings in analysis identity; report changed stages safely) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1049 tests; CI run [40175307319](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175307319) passed | FX3 continues |
-| 2026-10-25 | pending | FX3.03 (report empty chapters during analysis and gate synthesis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1050 tests; exact-head CI pending | FX3 continues |
+| 2026-10-25 | 267f0085063102a2b8de381c27e48909c797256a | FX3.03 (report empty chapters during analysis and gate synthesis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1050 tests; CI run [40175448872](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175448872) passed | FX3 continues |
