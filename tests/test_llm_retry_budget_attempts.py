@@ -132,6 +132,59 @@ def test_rejected_max_tokens_is_zero_cost_and_fallback_stays_capped(tmp_path):
     ]
 
 
+def test_json_mode_rejection_is_rejected_and_capability_persists_between_providers(tmp_path):
+    requests = []
+
+    def respond(request):
+        payload = json.loads(request.content)
+        has_json_mode = "response_format" in payload
+        requests.append(has_json_mode)
+        if has_json_mode:
+            return httpx.Response(
+                400,
+                json={
+                    "error": {"message": "response_format unsupported", "param": "response_format"}
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"headings":[]}'}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12},
+            },
+        )
+
+    transport = httpx.MockTransport(respond)
+    ledger_path = tmp_path / "reports" / "llm_budget.sqlite3"
+    for request_number in range(3):
+        with OpenAICompatibleProvider(
+            provider="stub",
+            model="local",
+            base_url="http://127.0.0.1:11434/v1",
+            allow_remote=False,
+            transport=transport,
+            max_context_tokens=4096,
+        ) as provider:
+            worker = CachedLLMProvider(
+                provider,
+                cache_dir=tmp_path / "cache",
+                identity="stable-provider-model",
+                ledger_path=ledger_path,
+                max_reported_tokens=100_000,
+            )
+            assert worker.complete_json(
+                instructions="task", document_text=f"source {request_number}"
+            ) == {"headings": []}
+
+    assert requests == [True, False, False, False]
+    assert [row["status"] for row in BookLLMBudgetLedger(ledger_path).rows()] == [
+        "rejected",
+        "complete",
+        "complete",
+        "complete",
+    ]
+
+
 @pytest.mark.parametrize(
     ("status_code", "body", "expected_status"),
     [

@@ -156,13 +156,15 @@ class CachedLLMProvider:
             / (fingerprint("unsupported-parameters-v1", self.identity) + ".json")
         )
 
-    def _load_unsupported_parameters(self) -> set[str]:
+    def _load_capabilities(self) -> tuple[set[str], bool]:
         data = load_bounded_json(self._capability_path(), max_bytes=4096, max_depth=4)
         values = data.get("unsupported", []) if isinstance(data, dict) else []
         if not isinstance(values, list):
-            return set()
+            values = []
         allowed = {"max_tokens", "max_completion_tokens", "temperature"}
-        return {value for value in values if isinstance(value, str) and value in allowed}
+        unsupported = {value for value in values if isinstance(value, str) and value in allowed}
+        json_mode_unsupported = isinstance(data, dict) and data.get("json_mode_unsupported") is True
+        return unsupported, json_mode_unsupported
 
     def _save_unsupported_parameters(self) -> None:
         values = getattr(self.provider, "_unsupported_parameters", None)
@@ -173,9 +175,14 @@ class CachedLLMProvider:
             for value in values
             if value in {"max_tokens", "max_completion_tokens", "temperature"}
         )
+        json_mode_unsupported = getattr(self.provider, "_json_mode_unsupported", False) is True
+        if not allowed and not json_mode_unsupported:
+            return
         path = self._capability_path()
         current = load_bounded_json(path, max_bytes=4096, max_depth=4)
         value = {"schema_version": 1, "unsupported": allowed}
+        if json_mode_unsupported:
+            value["json_mode_unsupported"] = True
         if current != value:
             write_json(path, value)
 
@@ -387,8 +394,14 @@ class CachedLLMProvider:
         if hasattr(self.provider, "last_usage"):
             self.provider.last_usage = {}
         unsupported = getattr(self.provider, "_unsupported_parameters", None)
+        json_mode_unsupported = getattr(self.provider, "_json_mode_unsupported", None)
+        saved_unsupported, saved_json_mode_unsupported = self._load_capabilities()
         if isinstance(unsupported, set):
-            unsupported.update(self._load_unsupported_parameters())
+            unsupported.update(saved_unsupported)
+        if isinstance(json_mode_unsupported, bool):
+            self.provider._json_mode_unsupported = (
+                json_mode_unsupported or saved_json_mode_unsupported
+            )
         if not attempt_accounting:
             self.requests_started += 1
         self._write_usage()

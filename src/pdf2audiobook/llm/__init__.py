@@ -165,6 +165,7 @@ class OpenAICompatibleProvider:
         self.max_context_tokens = max_context_tokens
         self.max_output_tokens = max_output_tokens
         self._unsupported_parameters: set[str] = set()
+        self._json_mode_unsupported = False
         self._remote_content_warned_scopes: set[str] = set()
         self._served_context: int | None = None
         self.request_count = 0
@@ -255,7 +256,7 @@ class OpenAICompatibleProvider:
     @staticmethod
     def _unsupported_json_mode(response: httpx.Response) -> bool:
         """Fallback only when the server specifically rejects JSON response_format."""
-        if response.status_code != 400:
+        if not 400 <= response.status_code < 500 or response.status_code in (408, 429):
             return False
         try:
             body = response.json()
@@ -447,8 +448,9 @@ class OpenAICompatibleProvider:
                 {"role": "user", "content": user_content},
             ],
             "temperature": self.temperature,
-            "response_format": {"type": "json_object"},
         }
+        if not self._json_mode_unsupported:
+            payload["response_format"] = {"type": "json_object"}
         # Do not silently drop the response cap for an incompatible provider.
         if self.max_context_tokens is not None:
             parameter = (
@@ -486,7 +488,7 @@ class OpenAICompatibleProvider:
                 file=sys.stderr,
             )
             self._remote_content_warned_scopes.add(scope_key)
-        format_fallback_used = False
+        format_fallback_used = self._json_mode_unsupported
         retry_count = 0
         while True:
             attempt_id = self._attempt_started() if self._attempt_started is not None else None
@@ -512,8 +514,16 @@ class OpenAICompatibleProvider:
             def settle_rejected_parameter() -> AttemptOutcome:
                 return finish_attempt(outcome="rejected")
 
-            def settle_json_mode_fallback() -> AttemptOutcome:
-                return finish_attempt()
+            def settle_json_mode_fallback(response: httpx.Response) -> AttemptOutcome:
+                try:
+                    error_payload = response.json()
+                except (ValueError, json.JSONDecodeError):
+                    error_payload = None
+                usage = error_payload.get("usage") if isinstance(error_payload, dict) else None
+                return finish_attempt(
+                    usage if isinstance(usage, dict) else None,
+                    outcome="settled" if isinstance(usage, dict) else "rejected",
+                )
 
             def settle_non_retryable(response: httpx.Response) -> AttemptOutcome:
                 if 400 <= response.status_code < 500 and response.status_code not in (408, 429):
@@ -538,7 +548,8 @@ class OpenAICompatibleProvider:
                 if self._unsupported_json_mode(response) and not format_fallback_used:
                     # Older OpenAI-compatible local servers sometimes lack JSON mode.
                     # Output is still schema-validated by callers after decoding.
-                    settle_json_mode_fallback()
+                    settle_json_mode_fallback(response)
+                    self._json_mode_unsupported = True
                     payload.pop("response_format")
                     format_fallback_used = True
                     continue
