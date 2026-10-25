@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0–FX3 complete; FX4 in progress
+**Status:** FX0–FX4 complete; FX5 in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -208,7 +208,8 @@
 | 2026-10-25 | 267f0085063102a2b8de381c27e48909c797256a | FX3.03 (report empty chapters during analysis and gate synthesis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1050 tests; CI run [40175448872](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175448872) passed | FX3 continues |
 | 2026-10-25 | b7caf90a382f4cd7cac62e541ac1313be5851d59 | FX3.04 (validate M4B inputs and remove only verified obsolete chapter audio); FX3.05 (§5 amendment confirmed) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1053 tests; CI run [40175653997](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175653997) passed on Python 3.11–3.13 | FX4–FX7 remain |
 | 2026-10-25 | c8987b5295fc4a6cfb679c3370de6becea5a7eaf | FX4.01 (unbilled request state, content-free budget commands, pre-reservation model discovery); FX4.04 (served model participates in LLM cache and analysis identity) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1062 tests; CI run [40176048905](https://github.com/ekkus93/pdf2audiobook/actions/runs/40176048905) passed on Python 3.11–3.13 | FX4 continues |
-| 2026-10-25 | pending | FX4.02 (per-attempt ledger reservations); FX4.03 (separate image and whole-book text consent warnings) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1064 tests; exact-head CI pending | FX4 continues |
-| 2026-10-25 | pending | FX4.05 (provider-specific fallback for unsupported `max_tokens` and `temperature`) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1070 tests; exact-head CI pending | FX4 continues |
-| 2026-10-25 | pending | FX4.06 (privacy-preserving decision records for heading, cleanup, classification and narration) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1074 tests; exact-head CI pending | FX4 continues |
-| 2026-10-25 | pending | FX4.07 (bounded, optional contents-entry and chapter-boundary proposals) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1081 tests; exact-head CI pending | FX4 continues |
+| 2026-10-25 | 608f5388d3f540d1157319b4d25d6a69036b971a | FX4.02 (per-attempt ledger reservations); FX4.03 (separate image and whole-book text consent warnings) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1064 tests; exact-head CI [40176305990](https://github.com/ekkus93/pdf2audiobook/actions/runs/40176305990) passed on Python 3.11–3.13 | None |
+| 2026-10-25 | cb6cae6325496bb991f7cd8c695be82a0e507a0c | FX4.05 (provider-specific fallback for unsupported `max_tokens` and `temperature`) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1070 tests; exact-head CI [40176433550](https://github.com/ekkus93/pdf2audiobook/actions/runs/40176433550) passed on Python 3.11–3.13 | None |
+| 2026-10-25 | d1af74a9a06b2e0e758dcf2aa6a2df3b10e08ae3 | FX4.06 (privacy-preserving decision records for heading, cleanup, classification and narration) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1074 tests; exact-head CI [40176714028](https://github.com/ekkus93/pdf2audiobook/actions/runs/40176714028) passed on Python 3.11–3.13 | None |
+| 2026-10-25 | 9144ecbc0d030de452ab5599e299d40a492417d2 | FX4.07 (bounded, optional contents-entry and chapter-boundary proposals) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1081 tests; exact-head CI [40177029369](https://github.com/ekkus93/pdf2audiobook/actions/runs/40177029369) passed on Python 3.11–3.13 | None |
+| 2026-10-25 | c93d7904a3750bf95b43e136ad79538febbbc1ea | FX4.08 (LLM cache identity v4; parent spec §6.2–§6.4 and §8 amendments confirmed) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1081 tests; exact-head CI [40177115817](https://github.com/ekkus93/pdf2audiobook/actions/runs/40177115817) passed on Python 3.11–3.13 | None |
