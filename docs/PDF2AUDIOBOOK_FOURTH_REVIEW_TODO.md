@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.17 complete; FX10.18 is next.
+**Status:** FX10.00–FX10.18 complete; FX10.19 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -168,13 +168,13 @@
     - the sonnet fixture gives no label-mismatch warning;
     - 18pt vs 18.4pt is a tie and warns.
   - [x] FX10.17b Count only candidates. Compare only the chosen sequence with the labels. Add a named tie tolerance (2pt) documented in MAINTAINER_GUIDE.md.
-- [ ] FX10.18 Keep short valid text out of OCR (R98).
-  - [ ] FX10.18a Regression tests:
+- [x] FX10.18 Keep short valid text out of OCR (R98).
+  - [x] FX10.18a Regression tests:
     - a "Part One" page with a 48-path ornament analyzes with Tesseract unavailable and has `embedded` origin;
     - `--ocr never` on an outlined page doesn't say "attempting OCR";
     - the single-rule page's warning wording.
-  - [ ] FX10.18b Apply the glyph-like-drawings rule only when there is no usable text. Name the actual outcome in each warning.
-  - [ ] FX10.18c Merge the spec §11 §4.1–§4.2 amendments.
+  - [x] FX10.18b Apply the glyph-like-drawings rule only when there is no usable text. Name the actual outcome in each warning.
+  - [x] FX10.18c Merge the spec §11 §4.1–§4.2 amendments.
 
 ### LLM budget and providers
 
@@ -293,3 +293,4 @@
 | 2026-10-25 | 370b43516d893d17d3a1c4d6d63d33c272c1fd5c | FX10.15a–c (R99): removed unused folio helper and test-only `chapter_text`; exposed `valid_box` while retaining its old internal alias; hoisted Roman marker tables; extracted OCR fallback into `_apply_ocr_fallback`; centralized block kind decisions; gathered capped page image/drawing metadata once for reuse. | Refactor validation: local `/verify` passed (lock check, Ruff, format, mypy on 23 source files, 1447 passed, 1 optional Kitten skip). Exact-head CI [40245247117](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245247117) passed Python 3.11–3.13, including unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. Chapter structure tests now form their text projection locally after removal of the test-only production helper; expected behavior remained the same. | None |
 | 2026-10-25 | 10e5016464cf54c804e6763382a798345709060e | FX10.16a–b (R96): one contextual list classifier now serves extraction and line joining; footnote kinds win before list detection; sequential numbered notes receive audited omit edits; initials stay prose; wrapped May/page numbers join; sentence-final lists end before same-margin prose. R96 and parent spec §4.3 record list-end and colon-label details. | At parent 84074f6, all five cases failed in `tests/test_list_classifier_fx10.py`: sequential numbered footnotes were lists, A/B initials became lists, both May/page number wraps split, and same-margin body text joined the preceding list. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1452 passed, 1 optional Kitten skip. Exact-head CI [40245718067](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245718067) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | c578b9a9525c0ad62d61e13eb2ea099ea786558a | FX10.17a–b (R97): pagination ambiguity now counts candidate numerals only; PDF labels are checked against the selected sequence; edge distances under the documented 2pt tolerance tie. Updated parent §4.2. | At parent b65cb3a, `tests/test_pagination_multiple_margin_numerals.py::test_table_cell_numerals_do_not_create_page_number_ambiguity`, `::test_edge_distances_within_two_points_are_tied`, and `tests/test_page_number_sequences.py::test_poem_numerals_survive_while_edge_folios_are_removed` failed. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1454 passed, 1 optional Kitten skip. Exact-head CI [40245977219](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245977219) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
+| 2026-10-25 | c9b82e28d906fd41cc281b0de7f51e110db46c3e | FX10.18a–c (R98): recognized short headings remain usable despite small ornaments; auto OCR's glyph-art trigger applies only without usable text; `--ocr never` no longer claims OCR was attempted; empty-page warnings distinguish disabled OCR, non-text-like drawings and no drawings; parent §§4.1–4.2 updated. | At parent 10ec872, these regressions failed: `tests/test_vector_outlined_text.py::test_short_embedded_heading_with_ornament_does_not_require_tesseract`, `::test_drawing_only_page_without_ocr_never_claims_ocr_is_not_needed`, and `::test_a_single_rule_is_not_sent_to_ocr`. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1455 passed, 1 optional Kitten skip. Exact-head CI [40246285382](https://github.com/ekkus93/pdf2audiobook/actions/runs/40246285382) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
