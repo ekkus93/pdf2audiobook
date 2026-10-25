@@ -154,14 +154,18 @@ class CachedLLMProvider:
         values = data.get("unsupported", []) if isinstance(data, dict) else []
         if not isinstance(values, list):
             return set()
-        allowed = {"max_tokens", "temperature"}
+        allowed = {"max_tokens", "max_completion_tokens", "temperature"}
         return {value for value in values if isinstance(value, str) and value in allowed}
 
     def _save_unsupported_parameters(self) -> None:
         values = getattr(self.provider, "_unsupported_parameters", None)
         if not isinstance(values, set):
             return
-        allowed = sorted(value for value in values if value in {"max_tokens", "temperature"})
+        allowed = sorted(
+            value
+            for value in values
+            if value in {"max_tokens", "max_completion_tokens", "temperature"}
+        )
         path = (
             self.cache_dir
             / "provider-capabilities"
@@ -237,7 +241,13 @@ class CachedLLMProvider:
         self.misses += 1
         prompt_bound = len(instructions.encode("utf-8")) + len(document_text.encode("utf-8")) + 128
         if image_data is not None:
-            prompt_bound += len(image_data)
+            # Compressed PNG bytes say nothing about vision cost: bound by the
+            # decoded pixel tiles, and never below the encoded request size.
+            pixel_reserve = getattr(self.provider, "_image_token_reserve", None)
+            encoded = ((len(image_data) + 2) // 3) * 4 + len("data:image/png;base64,")
+            prompt_bound += max(
+                pixel_reserve(image_data) if callable(pixel_reserve) else 0, encoded
+            )
         output_bound = getattr(self.provider, "max_output_tokens", None)
         if (self.max_reported_tokens is not None or self.max_estimated_cost_usd is not None) and (
             not isinstance(output_bound, int)
@@ -245,6 +255,10 @@ class CachedLLMProvider:
             or getattr(self.provider, "max_context_tokens", None) is None
         ):
             raise LLMError("A bounded output token cap is required under an LLM budget")
+        if (
+            self.max_reported_tokens is not None or self.max_estimated_cost_usd is not None
+        ) and hasattr(self.provider, "require_output_cap"):
+            self.provider.require_output_cap = True
         upper_bound_tokens = prompt_bound + (output_bound or 0)
         upper_bound_usd = None
         if (
@@ -312,9 +326,9 @@ class CachedLLMProvider:
                     self._write_usage()
                     return call_id
 
-                def settle_attempt(call_id: int, usage: dict | None, unbilled: bool) -> None:
+                def settle_attempt(call_id: int, usage: dict | None, outcome: str) -> None:
                     assert self.ledger is not None
-                    if unbilled:
+                    if outcome == "unbilled":
                         self.ledger.settle_unbilled(call_id)
                     else:
                         self.ledger.settle(
@@ -322,6 +336,7 @@ class CachedLLMProvider:
                             usage=usage,
                             input_rate=self.input_cost_usd_per_million_tokens,
                             output_rate=self.output_cost_usd_per_million_tokens,
+                            rejected=outcome == "rejected",
                         )
                     self._write_usage()
 

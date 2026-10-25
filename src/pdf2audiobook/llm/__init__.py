@@ -174,7 +174,8 @@ class OpenAICompatibleProvider:
             "total_tokens": 0,
         }
         self._attempt_started: Callable[[], int] | None = None
-        self._attempt_settled: Callable[[int, dict | None, bool], None] | None = None
+        self.require_output_cap = False
+        self._attempt_settled: Callable[[int, dict | None, str], None] | None = None
         self._client = httpx.Client(
             timeout=timeout,
             transport=transport,
@@ -190,11 +191,22 @@ class OpenAICompatibleProvider:
     def set_attempt_accounting(
         self,
         started: Callable[[], int],
-        settled: Callable[[int, dict | None, bool], None],
+        settled: Callable[[int, dict | None, str], None],
     ) -> None:
         """Attach per-HTTP-attempt accounting supplied by the cache wrapper."""
         self._attempt_started = started
         self._attempt_settled = settled
+
+    def _require_cap(self, payload: dict[str, Any]) -> None:
+        """Under a token or USD budget an uncapped request has no upper bound."""
+        if (
+            self.require_output_cap
+            and "max_tokens" not in payload
+            and "max_completion_tokens" not in payload
+        ):
+            raise LLMError(
+                "Provider does not accept an output token cap, which an LLM budget needs"
+            )
 
     def list_models(self) -> list[str]:
         """Use bounded /models discovery; never include raw server replies in errors."""
@@ -446,6 +458,7 @@ class OpenAICompatibleProvider:
             payload[parameter] = self.max_output_tokens
         for parameter in self._unsupported_parameters:
             payload.pop(parameter, None)
+        self._require_cap(payload)
         if self.provider == "ollama":
             # Reasoning models (e.g. qwen3.5) otherwise spend the whole output
             # cap on hidden thinking and return empty content. Answers are
@@ -477,12 +490,15 @@ class OpenAICompatibleProvider:
         while True:
             attempt_id = self._attempt_started() if self._attempt_started is not None else None
 
-            def finish_attempt(usage: dict | None = None, *, unbilled: bool = False) -> None:
+            def finish_attempt(
+                usage: dict | None = None, *, unbilled: bool = False, rejected: bool = False
+            ) -> None:
                 nonlocal attempt_id
                 if attempt_id is not None and self._attempt_settled is not None:
                     current_id = attempt_id
                     attempt_id = None
-                    self._attempt_settled(current_id, usage, unbilled)
+                    outcome = "unbilled" if unbilled else "rejected" if rejected else "settled"
+                    self._attempt_settled(current_id, usage, outcome)
 
             try:
                 response = self._client.post(f"{self.base_url}/chat/completions", json=payload)
@@ -504,13 +520,15 @@ class OpenAICompatibleProvider:
                     None,
                 )
                 if rejected_parameter is not None:
-                    finish_attempt({"rejected": True})
-                    if rejected_parameter == "max_tokens":
-                        payload.pop("max_tokens", None)
-                        payload["max_completion_tokens"] = self.max_output_tokens
-                    else:
-                        payload.pop(rejected_parameter, None)
+                    finish_attempt(rejected=True)
+                    payload.pop(rejected_parameter, None)
                     self._unsupported_parameters.add(rejected_parameter)
+                    if (
+                        rejected_parameter == "max_tokens"
+                        and "max_completion_tokens" not in self._unsupported_parameters
+                    ):
+                        payload["max_completion_tokens"] = self.max_output_tokens
+                    self._require_cap(payload)
                     continue
                 # Ollama reports an aborted generation ("token repeat limit
                 # reached") as HTTP 500; a resample usually succeeds.
@@ -521,7 +539,7 @@ class OpenAICompatibleProvider:
                         retry_count += 1
                         continue
                 if not response.is_success:
-                    if 400 <= response.status_code < 500 and response.status_code != 408:
+                    if 400 <= response.status_code < 500 and response.status_code not in (408, 429):
                         try:
                             error_payload = response.json()
                         except (ValueError, json.JSONDecodeError):
@@ -530,7 +548,8 @@ class OpenAICompatibleProvider:
                             error_payload.get("usage") if isinstance(error_payload, dict) else None
                         )
                         finish_attempt(
-                            error_usage if isinstance(error_usage, dict) else {"rejected": True}
+                            error_usage if isinstance(error_usage, dict) else None,
+                            rejected=not isinstance(error_usage, dict),
                         )
                     else:
                         finish_attempt()

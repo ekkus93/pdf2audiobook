@@ -2,6 +2,7 @@
 
 import pytest
 
+from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 
 
@@ -28,16 +29,14 @@ def test_out_of_range_provider_usage_becomes_unknown_without_sqlite_overflow(tmp
     assert stats["requests_started"] == 1
     assert stats["unresolved_requests"] == 1
     assert stats["reported_tokens"] == 0
-    # Unknown attempts are charged at their reservation bound and do not
-    # deadlock later attempts when that conservative charge fits the budget.
-    ledger.reserve(
-        request_hash="next",
-        provider_hash="provider",
-        max_requests=None,
-        max_tokens=100,
-        max_usd=None,
-        upper_bound_tokens=50,
-    )
+    with pytest.raises(LLMError, match="unresolved"):
+        ledger.reserve(
+            request_hash="next",
+            provider_hash="provider",
+            max_requests=None,
+            max_tokens=100,
+            max_usd=None,
+        )
 
 
 def test_valid_provider_usage_remains_accounted(tmp_path):

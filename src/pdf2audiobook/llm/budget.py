@@ -90,6 +90,9 @@ class BookLLMBudgetLedger:
             "completion_tokens": 0,
             "unpriced_requests": 0,
         }
+        # Open attempts with no recorded upper bound (legacy rows, direct
+        # reservations) cannot be charged conservatively, so they block.
+        unbounded_open = 0
         for (
             status,
             prompt,
@@ -106,7 +109,10 @@ class BookLLMBudgetLedger:
                 counts["requests_started"] += 1
             if status in {"pending", "unknown"}:
                 counts["unresolved_requests"] += 1
-                counts["reported_tokens"] += upper_tokens or 0
+                if upper_tokens is None:
+                    unbounded_open += 1
+                else:
+                    counts["reported_tokens"] += upper_tokens
                 if upper_usd is None:
                     counts["unpriced_requests"] += 1
             elif status == "complete":
@@ -137,6 +143,7 @@ class BookLLMBudgetLedger:
             raise LLMError("Invalid per-book LLM cost entries")
         return {
             **counts,
+            "_unbounded_open": unbounded_open,
             "estimated_cost_usd": estimated_cost,
             # Keep precise decimal accounting for budget authorization, but
             # do not expose internal arithmetic state in the public report.
@@ -157,6 +164,11 @@ class BookLLMBudgetLedger:
         # A subsequent reservation still rejects equality before the next call.
         if max_requests is not None and stats["requests_started"] >= max_requests:
             raise LLMError("Per-book LLM request budget exhausted")
+        if (max_tokens is not None or max_usd is not None) and stats["_unbounded_open"]:
+            raise LLMError(
+                "Per-book LLM budget has unresolved requests without a recorded bound; "
+                "run 'pdf2audiobook budget resolve' before retrying"
+            )
         if max_tokens is not None and (
             stats["reported_tokens"] > max_tokens
             if postflight
@@ -176,6 +188,7 @@ class BookLLMBudgetLedger:
             with self._connect(readonly=readonly) as connection:
                 stats = self._stats(connection)
                 stats.pop("_exact_cost_usd", None)
+                stats.pop("_unbounded_open", None)
                 return stats
         except (sqlite3.Error, InvalidOperation):
             raise LLMError("Invalid per-book LLM budget ledger") from None
@@ -213,9 +226,11 @@ class BookLLMBudgetLedger:
         max_requests: int | None,
         max_tokens: int | None,
         max_usd: float | None,
-        upper_bound_tokens: int = 0,
+        upper_bound_tokens: int | None = None,
         upper_bound_usd: str | None = None,
     ) -> int:
+        """Reserve one attempt. A missing bound is stored as unbounded and blocks later budgeted
+        requests until the row is resolved."""
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -228,6 +243,7 @@ class BookLLMBudgetLedger:
                 )
                 if (
                     max_tokens is not None
+                    and upper_bound_tokens is not None
                     and stats["reported_tokens"] + upper_bound_tokens > max_tokens
                 ):
                     raise LLMError("Per-book LLM token budget cannot cover the next request")
@@ -257,8 +273,9 @@ class BookLLMBudgetLedger:
         usage: dict | None,
         input_rate: float | None,
         output_rate: float | None,
+        rejected: bool = False,
     ) -> None:
-        if isinstance(usage, dict) and usage.get("rejected") is True:
+        if rejected:
             try:
                 with self._connect() as connection:
                     result = connection.execute(
