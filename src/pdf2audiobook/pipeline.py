@@ -333,12 +333,14 @@ def analyze_book(
         "stage_completed", level=logging.INFO, stage="extraction", count=len(extracted.blocks)
     )
     pagination_warnings: list[str] = []
+    review_reasons = set(getattr(extracted, "review_reasons", []))
     edits = pagination_cleanup(
         extracted.blocks,
         extracted.page_sizes,
         settings.pdf,
         page_labels=getattr(extracted, "page_labels", None),
         warnings=pagination_warnings,
+        review_reasons=review_reasons,
     )
     # Only explicitly selected omit mode can remove a high-confidence note.
     # Source spans/blocks remain intact and every exclusion is audited.
@@ -530,13 +532,15 @@ def analyze_book(
             "decisions": [item.model_dump() for item in llm_decisions],
         },
     )
-    chapters, chapter_warnings = propose_chapters(
+    chapter_proposal = propose_chapters(
         extracted.blocks,
         omitted,
         extracted.toc,
         settings.chapters,
         extra_heading_ids=llm_ids,
     )
+    chapters, chapter_warnings = chapter_proposal
+    review_reasons.update(getattr(chapter_proposal, "review_reasons", set()))
     if hand_edited_chapters and existing_manifest is not None:
         new_positions = {block.id: index for index, block in enumerate(extracted.blocks)}
         preserved_numbers = []
@@ -629,15 +633,11 @@ def analyze_book(
             + ", ".join(str(number) for number in sorted(preserved_numbers))
         )
     for chapter in chapters:
-        chapter.warnings = [
-            warning
-            for warning in chapter.warnings
-            if warning != "No speakable text after accepted cleanup; review manually"
-        ]
         speakable = chapter_has_speakable_text(
             extracted.blocks, chapter.start_block, chapter.end_block, {i: "" for i in omitted}
         )
         if not speakable:
+            review_reasons.add("empty_chapter")
             chapter.warnings.append("No speakable text after accepted cleanup; review manually")
             warnings.append(
                 f"Chapter {chapter.number} has no speakable text after cleanup; review before synthesis"
@@ -675,35 +675,7 @@ def analyze_book(
         chapters=chapters,
         analysis_fingerprint=analysis_key,
         warnings=extracted.warnings + warnings,
-        review_required=(
-            (
-                ["damaged_source"]
-                if any(
-                    warning == "source PDF was damaged and repaired; verify page coverage"
-                    or "could not be loaded; verify coverage" in warning
-                    or "drawings without readable text; verify coverage" in warning
-                    for warning in extracted.warnings
-                )
-                else []
-            )
-            + (
-                ["empty_chapter"]
-                if any(
-                    "No speakable text after accepted cleanup; review manually" in chapter.warnings
-                    for chapter in chapters
-                )
-                else []
-            )
-            + (
-                ["ambiguous_page_numbers"]
-                if any(
-                    "page-number sequences retained" in warning
-                    or "page-number candidates" in warning
-                    for warning in pagination_warnings
-                )
-                else []
-            )
-        ),
+        review_required=[code for code in REVIEW_REASON_CODES if code in review_reasons],
     )
     render_chapter_texts(manifest, folder, settings.pdf.footnotes)
     write_manifest(manifest_path, manifest)
@@ -718,6 +690,7 @@ def analyze_book(
 
 
 REVIEW_REASON_CODES = ("damaged_source", "empty_chapter", "ambiguous_page_numbers")
+BOOK_WIDE_REVIEW_REASON_CODES = ("damaged_source", "ambiguous_page_numbers")
 
 
 def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) -> None:
@@ -726,6 +699,12 @@ def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) ->
     Analysis only knew the chapters it proposed; a hand edit or a review-UI save
     can empty a chapter later, or fix one that was empty.
     """
+    if "empty_chapter" in manifest.review_acknowledged:
+        log_event(
+            "review_warning",
+            level=logging.WARNING,
+            reason="empty_chapter_requires_approval",
+        )
     if not manifest.blocks:
         return  # No source blocks to judge; coverage validation reports this elsewhere.
     replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
@@ -735,7 +714,7 @@ def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) ->
         )
         for chapter in manifest.chapters
     )
-    needed = has_empty and "empty_chapter" not in manifest.review_acknowledged
+    needed = has_empty
     required = [code for code in manifest.review_required if code != "empty_chapter"]
     if needed:
         required = manifest.review_required + (
@@ -928,7 +907,7 @@ def _convert_analyzed_book(
     manifest = read_manifest(manifest_path)
     refresh_empty_chapter_reason(manifest_path, manifest)
     if accept_review:
-        if not set(accept_review) <= set(REVIEW_REASON_CODES):
+        if not set(accept_review) <= set(BOOK_WIDE_REVIEW_REASON_CODES):
             raise AudioError("Unknown review reason code")
         for code in sorted(set(accept_review)):
             log_event("review_acknowledged", level=logging.INFO, status=code)
@@ -942,14 +921,11 @@ def _convert_analyzed_book(
     render_chapter_texts(manifest, manifest_path.parent, settings.pdf.footnotes)
     chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
     skipped_empty = set()
-    empty_chapter_policy = (
-        "empty_chapter" in manifest.review_required
-        or "empty_chapter" in manifest.review_acknowledged
-    )
+    empty_chapter_policy = "empty_chapter" in manifest.review_required
     for item in chosen:
         if (
             empty_chapter_policy
-            and (item.manually_approved or "empty_chapter" in manifest.review_acknowledged)
+            and item.manually_approved
             and not chapter_has_speakable_text(
                 manifest.blocks,
                 item.start_block,

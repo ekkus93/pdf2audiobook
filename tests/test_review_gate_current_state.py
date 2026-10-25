@@ -3,13 +3,17 @@
 import json
 
 import pytest
+from typer.testing import CliRunner
 
+from pdf2audiobook.cli import app
 from pdf2audiobook.config import Settings
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
 from pdf2audiobook.pipeline import convert_book
 from pdf2audiobook.review_ui import _review_payload, save_chapter_updates
 from pdf2audiobook.workspace import read_manifest, write_manifest
+
+runner = CliRunner()
 
 
 def _manifest(**kwargs):
@@ -111,3 +115,109 @@ def test_review_page_offers_the_acknowledgement_only_for_damaged_sources():
     manifest = _manifest(review_required=["damaged_source"])
     assert _review_payload(manifest)["review_required"] == ["damaged_source"]
     assert _review_payload(_manifest())["review_required"] == []
+
+
+def test_changed_damaged_source_warning_wording_keeps_structured_gate(tmp_path, monkeypatch):
+    import pymupdf as fitz
+
+    from pdf2audiobook import pipeline
+    from pdf2audiobook.pdf import ExtractedDocument
+
+    source = tmp_path / "book.pdf"
+    with fitz.open() as document:
+        document.new_page()
+        document.save(source)
+    extracted = ExtractedDocument(
+        title="Book",
+        author=None,
+        toc=[],
+        spans=[],
+        blocks=[DocumentBlock(id="b1", text="Narration.", page_index=0)],
+        warnings=["A revised warning about source integrity"],
+        page_sizes=[(600, 800)],
+        review_reasons=["damaged_source"],
+    )
+    monkeypatch.setattr(pipeline, "extract_pdf", lambda *_a, **_k: extracted)
+    settings = Settings()
+    settings.general.output_dir = str(tmp_path / "output")
+    settings.chapters.allow_single_chapter = True
+    manifest_path = pipeline.analyze_book(source, settings)
+    assert "damaged_source" in read_manifest(manifest_path).review_required
+
+
+def test_accept_empty_chapter_exits_2_without_workspace_changes(tmp_path, monkeypatch):
+    source, path = _source_and_workspace(tmp_path)
+    before = {item.relative_to(path.parent): item.read_bytes() for item in path.parent.rglob("*")}
+    called = []
+    monkeypatch.setattr(
+        "pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: called.append(True) or path
+    )
+    result = runner.invoke(
+        app,
+        [
+            "convert",
+            str(source),
+            "--no-config",
+            "--output",
+            str(path.parent),
+            "--accept-review",
+            "empty_chapter",
+        ],
+    )
+    assert result.exit_code == 2
+    assert " ".join(result.stderr.split()) == (
+        "Error: empty_chapter cannot be accepted globally; approve the chapter in the review UI"
+    )
+    assert called == []
+    after = {item.relative_to(path.parent): item.read_bytes() for item in path.parent.rglob("*")}
+    assert after == before
+
+
+def test_stale_empty_acknowledgement_is_ignored_and_warned(tmp_path, monkeypatch):
+    manifest = _manifest(review_acknowledged=["empty_chapter"])
+    manifest.blocks[1].text = "* * *"
+    path = _workspace(tmp_path, manifest)
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"synthetic")
+    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: path)
+    events = []
+    monkeypatch.setattr(
+        "pdf2audiobook.pipeline.log_event", lambda *args, **kwargs: events.append((args, kwargs))
+    )
+    with pytest.raises(AudioError, match="Chapter 2 has no speakable text"):
+        convert_book(source, Settings(), chapter=2)
+    assert read_manifest(path).review_acknowledged == ["empty_chapter"]
+    assert any(
+        args[0] == "review_warning" and kwargs.get("reason") == "empty_chapter_requires_approval"
+        for args, kwargs in events
+    )
+
+
+def test_approval_skips_only_that_empty_chapter(tmp_path, monkeypatch):
+    manifest = _manifest(review_acknowledged=["empty_chapter"])
+    manifest.chapters[1].manually_approved = True
+    manifest.blocks[1].text = "* * *"
+    path = _workspace(tmp_path, manifest)
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"synthetic")
+    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: path)
+    assert convert_book(source, Settings(), chapter=2) == []
+    status = json.loads((path.parent / "reports" / "conversion_status.json").read_text())
+    assert status["chapters"][0]["number"] == 2
+    assert status["chapters"][0]["status"] == "skipped"
+
+    saved = read_manifest(path)
+    saved.blocks.append(DocumentBlock(id="b3", text="* * *", page_index=0))
+    saved.chapters.append(
+        Chapter(id="c3", number=3, title="Three", start_block=2, end_block=3, confidence=1)
+    )
+    write_manifest(path, saved)
+    with pytest.raises(AudioError, match="Chapter 3 has no speakable text"):
+        convert_book(source, Settings(), chapter=3)
+
+
+def _source_and_workspace(tmp_path):
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"synthetic")
+    path = _workspace(tmp_path, _manifest())
+    return source, path

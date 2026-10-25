@@ -47,6 +47,7 @@ class ExtractedDocument:
     warnings: list[str]
     page_sizes: list[tuple[float, float]]
     page_labels: list[str | None] = field(default_factory=list)
+    review_reasons: list[str] = field(default_factory=list)
 
 
 @runtime_checkable
@@ -1043,6 +1044,7 @@ def extract_pdf(
     spans: list[SourceSpan] = []
     blocks: list[DocumentBlock] = []
     warnings: list[str] = []
+    review_reasons: list[str] = []
     sizes: list[tuple[float, float]] = []
     page_labels: list[str | None] = []
     with _open(source, settings.password_env) as document:
@@ -1054,6 +1056,7 @@ def extract_pdf(
             repaired = True
         if repaired:
             warnings.append("source PDF was damaged and repaired; verify page coverage")
+            review_reasons.append("damaged_source")
         if bool(getattr(document, "is_reflowable", False)):
             warnings.append(
                 "EPUB pages use generated reflowable layout; page numbers can vary by renderer"
@@ -1080,6 +1083,8 @@ def extract_pdf(
                     page = load_page(page_index)
                 except Exception:
                     warnings.append(f"Page {page_index + 1}: could not be loaded; verify coverage")
+                    if "damaged_source" not in review_reasons:
+                        review_reasons.append("damaged_source")
                     sizes.append((0.0, 0.0))
                     continue
             else:
@@ -1187,6 +1192,8 @@ def extract_pdf(
                     reason = "OCR disabled"
                 elif _page_has_drawings(page):
                     reason = "drawings without readable text; verify coverage"
+                    if "damaged_source" not in review_reasons:
+                        review_reasons.append("damaged_source")
                 else:
                     reason = "no text or drawings found"
                 warnings.append(f"Page {page_index + 1}: no readable text ({reason})")
@@ -1264,6 +1271,7 @@ def extract_pdf(
             warnings=warnings,
             page_sizes=sizes,
             page_labels=page_labels,
+            review_reasons=review_reasons,
         )
 
 

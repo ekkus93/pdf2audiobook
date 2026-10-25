@@ -306,11 +306,15 @@ remaining chapters. Voice markers are honored only in approved chapters.
 Failed chapter details stay in `reports/conversion_status.json` and are shown
 by `inspect`; transient provider errors alone are retried. A reviewed manifest
 reason can be acknowledged with `convert --accept-review damaged_source`.
-`--accept-review` validates its reasons before analysis (exit 2), logs a
+`--accept-review` accepts only the book-wide codes `damaged_source` and
+`ambiguous_page_numbers`; it validates them before analysis (exit 2), logs a
 `review_acknowledged` event per reason, and is honored by `--dry-run` without
-rewriting the manifest. The review page acknowledges `damaged_source` only when the
-user ticks its checkbox; a plain save never does. `convert` recomputes the
-`empty_chapter` reason from the manifest as it is now.
+rewriting the manifest. Empty chapters require approval of that chapter in the
+review UI and are skipped with a report entry. Approval is per chapter: if a
+different chapter becomes empty later, it is gated again. A legacy
+`empty_chapter` value in `review_acknowledged` is retained in v3 manifests but
+ignored, with a content-free `review_warning` event. A plain review save never
+acknowledges a book-wide reason.
 Default stderr of a failed command is its own `Error:` line or one JSON object.
 Events print for warnings; `--verbose` or an explicit `general.log_level` adds progress
 and `command_failed`. Unexpected exceptions print "Unexpected internal error"; `OSError` and

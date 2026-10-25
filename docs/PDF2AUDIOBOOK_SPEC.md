@@ -152,6 +152,8 @@ Provide a confidence value and evidence list for each proposed boundary. Schema 
 
 At analysis time, compute speakable text for each chapter after accepted cleanup. A chapter with no narration receives a per-chapter warning and appears in the coverage report; synthesis must wait for explicit chapter approval.
 
+Review reason codes are structured results from extraction and structure; gate decisions never depend on warning wording. Empty chapters are cleared only by approving that chapter. `--accept-review` accepts only the book-wide reasons `damaged_source` and `ambiguous_page_numbers`; chapter approval never acknowledges a book-wide reason. An approved empty chapter is skipped and named in the conversion report. In schema v3 manifests, a legacy `empty_chapter` acknowledgement is ignored and retained, and conversion emits a content-free warning that empty chapters require chapter approval.
+
 ## 6. LLM layer
 
 ### 6.1 Providers

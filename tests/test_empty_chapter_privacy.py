@@ -2,13 +2,17 @@
 
 import fitz
 import pytest
+from typer.testing import CliRunner
 
+from pdf2audiobook.cli import app
 from pdf2audiobook.config import LLM, General, Pdf, Settings
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.pdf import ExtractedDocument
 from pdf2audiobook.pipeline import analyze_book, convert_book
 from pdf2audiobook.workspace import read_manifest
+
+runner = CliRunner()
 
 
 class FootnoteOnlyExtractor:
@@ -91,3 +95,15 @@ def test_approved_empty_chapter_is_skipped_without_partial_failure(tmp_path):
     status = json.loads((manifest_path.parent / "reports" / "conversion_status.json").read_text())
     assert status["chapters"][0]["status"] == "skipped"
     assert status["chapters"][0]["reason_code"] == "empty_chapter"
+
+
+def test_empty_chapter_acceptance_error_does_not_echo_private_path(tmp_path):
+    source = tmp_path / "PRIVATE_BOOK_PATH.pdf"
+    source.write_bytes(b"synthetic")
+    result = runner.invoke(
+        app,
+        ["convert", str(source), "--no-config", "--accept-review", "empty_chapter"],
+    )
+    assert result.exit_code == 2
+    assert "PRIVATE_BOOK_PATH" not in result.stderr
+    assert str(tmp_path) not in result.stderr

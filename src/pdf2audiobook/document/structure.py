@@ -9,7 +9,9 @@ import math
 import re
 import unicodedata
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 from pdf2audiobook.config import Chapters as ChapterSettings
 from pdf2audiobook.config import Pdf as PdfSettings
@@ -21,6 +23,19 @@ from pdf2audiobook.models import (
     DocumentBlock,
     generated_chapter_fingerprint,
 )
+
+
+@dataclass
+class ChapterProposal:
+    chapters: list[Chapter]
+    warnings: list[str]
+    review_reasons: set[str]
+
+    def __iter__(self) -> Iterator[list]:
+        # Preserve the established ``chapters, warnings = propose_chapters(...)`` API.
+        yield self.chapters
+        yield self.warnings
+
 
 # "Chapter" including common scan misreadings (CHAPTEE, CHAPTEK, CIIAPTER).
 CHAPTER_WORD = r"c(?:h|ii|li)apte[rek]"
@@ -403,6 +418,7 @@ def pagination_cleanup(
     *,
     page_labels: list[str | None] | None = None,
     warnings: list[str] | None = None,
+    review_reasons: set[str] | None = None,
 ) -> list[CleanupEdit]:
     """Remove only corroborated pagination patterns confined to margin bands."""
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
@@ -695,6 +711,8 @@ def pagination_cleanup(
         warnings.append(
             "Equally positioned margin numerals retained; verify page-number candidates"
         )
+    if ambiguous_numeric_bands and review_reasons is not None:
+        review_reasons.add("ambiguous_page_numbers")
     sequential_pages: dict[str, set[int]] = defaultdict(set)
     qualifying_sequences: dict[tuple[str, int, str], set[int]] = defaultdict(set)
     for band, entries in numbered.items():
@@ -781,6 +799,8 @@ def pagination_cleanup(
             ambiguous_sequence_pages.add(page)
     if ambiguous_sequence_pages and warnings is not None:
         warnings.append("Multiple page-number sequences retained; verify pagination")
+    if ambiguous_sequence_pages and review_reasons is not None:
+        review_reasons.add("ambiguous_page_numbers")
     if (
         page_labels is not None
         and any(
@@ -888,7 +908,7 @@ def propose_chapters(
     toc: list[list],
     settings: ChapterSettings,
     extra_heading_ids: set[str] | None = None,
-) -> tuple[list[Chapter], list[str]]:
+) -> ChapterProposal:
     """Segment by marked or formatted headings; require review if insufficient evidence."""
     warnings: list[str] = []
     heading_indices = []
@@ -1218,7 +1238,17 @@ def propose_chapters(
         chapter.generated_end_block = chapter.end_block
         chapter.generated_voice_id = chapter.voice_id
         chapters.append(chapter)
-    return chapters, warnings
+    empty_chapter = any(
+        not chapter_has_speakable_text(
+            blocks, chapter.start_block, chapter.end_block, {block_id: "" for block_id in omitted}
+        )
+        for chapter in chapters
+    )
+    return ChapterProposal(
+        chapters=chapters,
+        warnings=warnings,
+        review_reasons={"empty_chapter"} if empty_chapter else set(),
+    )
 
 
 def chapter_text(blocks: list[DocumentBlock], chapter: Chapter, omitted: set[str]) -> str:
