@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.02 complete; FX10.03 is next.
+**Status:** FX10.00–FX10.03 complete; FX10.04 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -59,15 +59,15 @@
     - `batch` with one bad book exits 7, with one JSON value on stderr in `--json` mode;
     - a parametrized test over every command's non-zero `typer.Exit` path.
   - [x] FX10.02b Re-raise `typer.Exit` and `click.exceptions.Exit` before `except Exception` in every command.
-- [ ] FX10.03 Structured review reasons; empty chapters need per-chapter approval (R88). No manifest schema change.
-  - [ ] FX10.03a Regression tests:
+- [x] FX10.03 Structured review reasons; empty chapters need per-chapter approval (R88). No manifest schema change.
+  - [x] FX10.03a Regression tests:
     - the gate still fires when the damaged-source warning wording changes;
     - `--accept-review empty_chapter` exits 2 with no workspace changes;
     - a v3 manifest with `empty_chapter` in `review_acknowledged` gates its unapproved empty chapter and emits the warning event;
     - approve chapter 2 (empty), then empty chapter 3 by hand: convert refuses chapter 3 and skips chapter 2.
-  - [ ] FX10.03b Return review reasons as structured data from extraction and structure (no warning-string matching).
-  - [ ] FX10.03c Remove `empty_chapter` from the codes `--accept-review` accepts. Ignore a stored `empty_chapter` acknowledgement, with a content-free warning event.
-  - [ ] FX10.03d Document per-chapter approval of empty chapters in README.md and MAINTAINER_GUIDE.md, and merge the spec §11 §5 amendment.
+  - [x] FX10.03b Return review reasons as structured data from extraction and structure (no warning-string matching).
+  - [x] FX10.03c Remove `empty_chapter` from the codes `--accept-review` accepts. Ignore a stored `empty_chapter` acknowledgement, with a content-free warning event.
+  - [x] FX10.03d Document per-chapter approval of empty chapters in README.md and MAINTAINER_GUIDE.md, and merge the spec §11 §5 amendment.
 - [ ] FX10.04 Clear book-wide review reasons only by explicit acknowledgement (R80). **High.**
   - [ ] FX10.04a Regression tests:
     - a title-only review-UI save, then `select_chapters` raises for `damaged_source` and for `ambiguous_page_numbers`;
@@ -278,3 +278,4 @@
 | 2026-10-25 | d9adb61f3a0b74ba81a98590f10e8a9535bf1427 | FX10.01a–b: CI prints pytest skip reasons and explicitly installs Node.js 22; `/verify`, AGENTS.md and MAINTAINER_GUIDE.md updated. At parent 6eedfa4, `test_ci_prints_pytest_skip_reasons` and `test_ci_installs_a_pinned_node_major_for_script_tests` failed as expected. | Local gates: uv lock check, Ruff, formatting, mypy (22 files), 1333 passed and 32 skipped with `pytest -q -ra`. FFmpeg and Tesseract are unavailable locally. | FX10.01c needs exact-head CI logs showing the FFmpeg, Tesseract and Node tests ran |
 | 2026-10-25 | d9adb61f3a0b74ba81a98590f10e8a9535bf1427 | FX10.01a–c (R111): CI runs `pytest -q -ra` and sets up Node.js 22. | Exact-head CI [40236749174](https://github.com/ekkus93/pdf2audiobook/actions/runs/40236749174) passed on Python 3.11–3.13. Each job logged Node v22.23.3 and `1364 passed, 1 skipped`; the sole skip was the optional Kitten smoke, so the FFmpeg-, Tesseract- and Node-gated tests ran. Local `pytest -q -ra` with FFmpeg/Tesseract also passed: 1364 passed, 1 skipped. | None |
 | 2026-10-25 | a441f66d273abaa57e1cbceb79a7b69e53175399 | FX10.02a–b (R89): command handlers preserve non-zero Typer/Click exits; partial batch failures use the exit-7 domain error and one JSON stderr diagnostic. | At parent 2f7c094, new regressions failed: `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[config-show]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[budget-show]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[budget-resolve]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[doctor]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[inspect]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[analyze]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[convert]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[batch]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[pack-m4b]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[review]`, `tests/test_cli_exit_propagation.py::test_batch_failure_exits_7_with_one_json_stderr_value`, `tests/test_cli_exit_propagation.py::test_batch_reraises_exit_from_book_converter`, and `tests/test_cli_error_privacy.py::test_batch_partial_failure_diagnostic_is_content_free`. Local gates passed (lock check, Ruff, format, mypy 22 files, 1377 passed and 1 optional Kitten skip). Exact-head CI [40237347156](https://github.com/ekkus93/pdf2audiobook/actions/runs/40237347156) passed on Python 3.11–3.13 with 1377 passed and 1 skipped per job. | None |
+| 2026-10-25 | 1919dfb115c14038f9fd428e9cba762f8a36bac1 | FX10.03a–d (R88): extraction and structure return review reason codes; empty chapters require chapter approval, legacy empty acknowledgements are ignored with a content-free warning, and README/maintainer/spec text is updated. Implementation commit: 86d44e88c31fafd51a1e4be3f931cc437170cae1; test isolation correction: this SHA. | At parent 5b3d416, these regressions failed as expected: `tests/test_review_gate_current_state.py::test_changed_damaged_source_warning_wording_keeps_structured_gate`, `tests/test_review_gate_current_state.py::test_accept_empty_chapter_exits_2_without_workspace_changes`, `tests/test_review_gate_current_state.py::test_stale_empty_acknowledgement_is_ignored_and_warned`, and `tests/test_review_gate_current_state.py::test_approval_skips_only_that_empty_chapter`. Local `/verify`: lock check, Ruff, formatting, mypy (22 files), 1382 passed, 1 optional Kitten skip. Initial exact-head CI [40239694217](https://github.com/ekkus93/pdf2audiobook/actions/runs/40239694217) failed because the new warning-wording test inherited the default Ollama-enabled setting; `1919dfb` disables LLM in that test. Corrected exact-head CI [40239836539](https://github.com/ekkus93/pdf2audiobook/actions/runs/40239836539) passed on Python 3.11–3.13, each with 1382 passed and 1 optional Kitten skip. | None |
