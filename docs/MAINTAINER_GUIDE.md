@@ -306,6 +306,16 @@ remaining chapters. Voice markers are honored only in approved chapters.
 Failed chapter details stay in `reports/conversion_status.json` and are shown
 by `inspect`; transient provider errors alone are retried. A reviewed manifest
 reason can be acknowledged with `convert --accept-review damaged_source`.
+`--accept-review` validates its reasons before analysis (exit 2), logs a
+`review_acknowledged` event per reason, and is honored by `--dry-run` without
+rewriting the manifest. The review page acknowledges `damaged_source` only when the
+user ticks its checkbox; a plain save never does. `convert` recomputes the
+`empty_chapter` reason from the manifest as it is now.
+Default stderr of a failed command is its own `Error:` line or one JSON object.
+Events print for warnings; `--verbose` or an explicit `general.log_level` adds progress
+and `command_failed`. Unexpected exceptions print "Unexpected internal error"; `OSError` and
+`ValueError` keep their fixed messages; a busy `review` port reports a fixed message and
+Ctrl+C ends `review` with exit 0.
 `pack-m4b --cover` applies artwork to the M4B output; freshness checks use the
 chapter text hash, independently of conversion voice, speed or cover settings.
 Unknown and pending LLM requests count against their recorded worst-case token
