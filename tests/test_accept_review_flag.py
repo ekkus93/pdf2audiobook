@@ -90,6 +90,95 @@ def test_dry_run_applies_and_reports_the_acknowledgement(tmp_path, monkeypatch):
     assert read_manifest(path).review_required == ["damaged_source"]
 
 
+def test_dry_run_refuses_a_hand_emptied_chapter(tmp_path, monkeypatch):
+    source, path = _damaged_workspace(tmp_path)
+    manifest = read_manifest(path)
+    manifest.blocks[0].text = "* * *"
+    manifest.review_required = ["empty_chapter"]
+    write_manifest(path, manifest)
+    before = path.read_bytes()
+    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: path)
+
+    result = runner.invoke(
+        app,
+        ["convert", str(source), "--no-config", "--dry-run", "--output", str(path.parent)],
+    )
+
+    assert result.exit_code == 6
+    assert "Chapter 1 has no speakable text" in result.stderr
+    assert path.read_bytes() == before
+
+
+def test_dry_run_reports_an_approved_empty_chapter_as_skipped(tmp_path, monkeypatch):
+    source, path = _damaged_workspace(tmp_path)
+    manifest = read_manifest(path)
+    manifest.blocks[0].text = "* * *"
+    manifest.review_required = ["empty_chapter"]
+    manifest.chapters[0].manually_approved = True
+    write_manifest(path, manifest)
+    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: path)
+
+    result = runner.invoke(
+        app,
+        [
+            "convert",
+            str(source),
+            "--no-config",
+            "--dry-run",
+            "--output",
+            str(path.parent),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["skipped_chapters"] == [1]
+    assert payload["chapters"] == 0
+    assert payload["mp3_files"] == []
+
+
+def test_dry_run_logs_acknowledgement_without_writing(tmp_path, monkeypatch):
+    source, path = _damaged_workspace(tmp_path)
+    before = {
+        item.relative_to(path.parent): item.read_bytes()
+        for item in path.parent.rglob("*")
+        if item.is_file()
+    }
+    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: path)
+
+    result = runner.invoke(
+        app,
+        [
+            "--verbose",
+            "convert",
+            str(source),
+            "--no-config",
+            "--dry-run",
+            "--output",
+            str(path.parent),
+            "--json",
+            "--accept-review",
+            "damaged_source",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stderr
+    events = [json.loads(line) for line in result.stderr.splitlines() if '"event"' in line]
+    assert {
+        "event": "review_acknowledged",
+        "fields": {"status": "damaged_source"},
+        "level": "info",
+    } in events
+    after = {
+        item.relative_to(path.parent): item.read_bytes()
+        for item in path.parent.rglob("*")
+        if item.is_file()
+    }
+    assert after == before
+    assert read_manifest(path).review_required == ["damaged_source"]
+
+
 def test_cli_acknowledges_ambiguous_page_numbers_after_chapter_approval(tmp_path, monkeypatch):
     source, path = _damaged_workspace(tmp_path)
     manifest = read_manifest(path)

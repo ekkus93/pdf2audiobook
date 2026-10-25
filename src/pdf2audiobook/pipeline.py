@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 import tempfile
+from dataclasses import dataclass
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -841,7 +842,9 @@ def _analyze_book_locked(
     return manifest_path
 
 
-def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) -> None:
+def refresh_empty_chapter_reason(
+    manifest_path: Path, manifest: BookManifest, *, persist: bool = True
+) -> None:
     """Recompute the empty-chapter review reason from the manifest as it is now.
 
     Analysis only knew the chapters it proposed; a hand edit or a review-UI save
@@ -868,9 +871,11 @@ def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) ->
         required = manifest.review_required + (
             [] if "empty_chapter" in manifest.review_required else ["empty_chapter"]
         )
-    if required != manifest.review_required:
+    if persist and required != manifest.review_required:
         manifest.review_required = required
         write_manifest(manifest_path, manifest)
+    else:
+        manifest.review_required = required
 
 
 def select_chapters(
@@ -934,6 +939,64 @@ def select_chapters(
                 "review the manifest before synthesis"
             )
     return chosen
+
+
+@dataclass(frozen=True)
+class ChapterSelection:
+    """Chapters approved for conversion and empty chapters intentionally skipped."""
+
+    chapters: list[Chapter]
+    skipped: list[Chapter]
+    acknowledged: list[str]
+    would_acknowledge: list[str]
+
+
+def prepare_chapter_selection(
+    manifest_path: Path,
+    manifest: BookManifest,
+    settings: Settings,
+    *,
+    chapter: int | None = None,
+    chapter_range: tuple[int, int] | None = None,
+    acknowledge: tuple[str, ...] = (),
+    persist: bool = False,
+) -> ChapterSelection:
+    """Refresh review gates and select converted, skipped and refused chapters."""
+    previous_review_required = list(manifest.review_required)
+    previous_acknowledged = list(manifest.review_acknowledged)
+    refresh_empty_chapter_reason(manifest_path, manifest, persist=False)
+    requested_acknowledgements = set(acknowledge)
+    if not requested_acknowledgements <= set(BOOK_WIDE_REVIEW_REASON_CODES):
+        raise AudioError("Unknown review reason code")
+    acknowledged = sorted(requested_acknowledgements)
+    would_acknowledge = sorted(requested_acknowledgements & set(manifest.review_required))
+    for code in acknowledged:
+        log_event("review_acknowledged", level=logging.INFO, status=code)
+    if acknowledged:
+        manifest.review_acknowledged = sorted(set(manifest.review_acknowledged) | set(acknowledged))
+        manifest.review_required = [
+            code for code in manifest.review_required if code not in set(acknowledged)
+        ]
+    if persist and (
+        manifest.review_required != previous_review_required
+        or manifest.review_acknowledged != previous_acknowledged
+    ):
+        write_manifest(manifest_path, manifest)
+
+    chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
+    replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
+    skipped = [
+        item
+        for item in chosen
+        if (
+            "empty_chapter" in manifest.review_required
+            and item.manually_approved
+            and not chapter_has_speakable_text(
+                manifest.blocks, item.start_block, item.end_block, replacements
+            )
+        )
+    ]
+    return ChapterSelection(chosen, skipped, acknowledged, would_acknowledge)
 
 
 # Bump when spoken text changes for unchanged chapter text (alignment, dashes,
@@ -1045,35 +1108,18 @@ def _convert_analyzed_book(
         if adapter is not None
     )
     manifest = read_manifest(manifest_path)
-    refresh_empty_chapter_reason(manifest_path, manifest)
-    if accept_review:
-        if not set(accept_review) <= set(BOOK_WIDE_REVIEW_REASON_CODES):
-            raise AudioError("Unknown review reason code")
-        for code in sorted(set(accept_review)):
-            log_event("review_acknowledged", level=logging.INFO, status=code)
-        manifest.review_acknowledged = sorted(
-            set(manifest.review_acknowledged) | set(accept_review)
-        )
-        manifest.review_required = [
-            code for code in manifest.review_required if code not in set(accept_review)
-        ]
-        write_manifest(manifest_path, manifest)
+    selection = prepare_chapter_selection(
+        manifest_path,
+        manifest,
+        settings,
+        chapter=chapter,
+        chapter_range=chapter_range,
+        acknowledge=accept_review,
+        persist=True,
+    )
     render_chapter_texts(manifest, manifest_path.parent, settings.pdf.footnotes)
-    chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
-    skipped_empty = set()
-    empty_chapter_policy = "empty_chapter" in manifest.review_required
-    for item in chosen:
-        if (
-            empty_chapter_policy
-            and item.manually_approved
-            and not chapter_has_speakable_text(
-                manifest.blocks,
-                item.start_block,
-                item.end_block,
-                {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted},
-            )
-        ):
-            skipped_empty.add(item.id)
+    chosen = selection.chapters
+    skipped_empty = {item.id for item in selection.skipped}
     preflight_failed: dict[int, int] = {}
     preflight_reasons: dict[int, str] = {}
     approved_marker_chapters: dict[int, list[str]] = {}
@@ -1123,7 +1169,7 @@ def _convert_analyzed_book(
     pending = []
     outputs = []
     failed_chapters = set(preflight_failed)
-    conversion_status = {
+    conversion_status: dict[str, dict[str, object]] = {
         item.id: {
             "number": item.number,
             "status": (
@@ -1288,17 +1334,18 @@ def _convert_analyzed_book(
                 progress_file=progress_path,
                 **synth_kwargs,
             )
-            encode_kwargs = {
-                "bitrate": settings.tts.bitrate,
-                "target_rate": settings.tts.sample_rate,
-                "title": item.title,
-                "artist": manifest.author,
-                "album": manifest.title,
-                "track": item.number,
-            }
-            if cover_image is not None:
-                encode_kwargs["cover_image"] = cover_image
-            encode(samples, provider.sample_rate, output, **encode_kwargs)
+            encode(
+                samples,
+                provider.sample_rate,
+                output,
+                bitrate=settings.tts.bitrate,
+                target_rate=settings.tts.sample_rate,
+                title=item.title,
+                artist=manifest.author,
+                album=manifest.title,
+                track=item.number,
+                cover_image=cover_image,
+            )
             progress = load_bounded_json(progress_path, max_bytes=1024 * 1024, max_depth=16)
             mapping = progress.get("mapping", []) if isinstance(progress, dict) else []
             pauses = [
@@ -1308,7 +1355,7 @@ def _convert_analyzed_book(
             conversion_status[item.id]["chunk_mapping"] = mapping
         except AudioError:
             failed_chapters.add(item.number)
-            failure_status = {
+            failure_status: dict[str, object] = {
                 "number": item.number,
                 "status": "failed",
                 "error_code": AudioError.exit_code,
@@ -1356,9 +1403,14 @@ def _convert_analyzed_book(
         {
             "schema_version": 1,
             "pause_count": sum(
-                int(row.get("pause_count", 0)) for row in conversion_status.values()
+                row["pause_count"]
+                for row in conversion_status.values()
+                if isinstance(row.get("pause_count"), int)
             ),
-            "chapters": sorted(conversion_status.values(), key=lambda value: int(value["number"])),
+            "chapters": sorted(
+                conversion_status.values(),
+                key=lambda value: value["number"] if isinstance(value.get("number"), int) else 0,
+            ),
         },
     )
     if failed_chapters:

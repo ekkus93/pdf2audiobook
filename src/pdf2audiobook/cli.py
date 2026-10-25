@@ -551,21 +551,27 @@ def convert(
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
         configure_effective_logging(settings, origins)
         from pdf2audiobook.audio import audio_output_path, read_cover_image
-        from pdf2audiobook.pipeline import analyze_book, convert_book, select_chapters
+        from pdf2audiobook.pipeline import (
+            analyze_book,
+            convert_book,
+            prepare_chapter_selection,
+        )
         from pdf2audiobook.workspace import read_manifest
 
         read_cover_image(settings.audio.cover_image)
         if dry_run:
             manifest_path = analyze_book(source, settings)
             manifest = read_manifest(manifest_path)
-            # Report what the flag would acknowledge; dry-run never rewrites the manifest.
-            would_acknowledge = sorted(set(accept_review) & set(manifest.review_required))
-            manifest.review_required = [
-                code for code in manifest.review_required if code not in set(accept_review)
-            ]
-            chapters = select_chapters(
-                manifest, settings, chapter=chapter, chapter_range=selected_range
+            selection = prepare_chapter_selection(
+                manifest_path,
+                manifest,
+                settings,
+                chapter=chapter,
+                chapter_range=selected_range,
+                acknowledge=tuple(accept_review),
             )
+            skipped_ids = {item.id for item in selection.skipped}
+            chapters = [item for item in selection.chapters if item.id not in skipped_ids]
             output_files = [
                 str(audio_output_path(manifest, item, manifest_path.parent)) for item in chapters
             ]
@@ -574,7 +580,8 @@ def convert(
                     "dry_run": True,
                     "chapters": len(chapters),
                     "mp3_files": output_files,
-                    "would_acknowledge": would_acknowledge,
+                    "skipped_chapters": sorted(item.number for item in selection.skipped),
+                    "would_acknowledge": selection.would_acknowledge,
                 },
                 json_output,
             )
