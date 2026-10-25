@@ -243,6 +243,28 @@ def chapter_voice(settings: Settings, chapter: Chapter) -> str:
     )
 
 
+def _match_edited_chapter(
+    edited: Chapter,
+    chapters: list[Chapter],
+    previous: BookManifest,
+    new_positions: dict[str, int],
+) -> Chapter | None:
+    """Find the regenerated chapter that an edited chapter was generated as.
+
+    Chapter numbers shift whenever analysis finds more or fewer chapters, so the
+    analysis-generated start block (mapped through stable block IDs) identifies
+    the chapter, never its number. The generated title breaks a tie.
+    """
+    start = edited.generated_start_block
+    if start is None or start >= len(previous.blocks):
+        return None
+    new_start = new_positions.get(previous.blocks[start].id)
+    candidates = [chapter for chapter in chapters if chapter.start_block == new_start]
+    if len(candidates) > 1:
+        candidates = [item for item in candidates if item.title == edited.generated_title]
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def analyze_book(
     source: Path, settings: Settings, *, extractor: DocumentExtractor | None = None
 ) -> Path:
@@ -522,7 +544,7 @@ def analyze_book(
                 raise ExtractionError(
                     f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
                 )
-            match = next((chapter for chapter in chapters if chapter.number == edited.number), None)
+            match = _match_edited_chapter(edited, chapters, existing_manifest, new_positions)
             if match is None:
                 raise ExtractionError(
                     f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
@@ -597,7 +619,7 @@ def analyze_book(
                             f"{following.number} cannot be aligned"
                         )
                     following.start_block = match.end_block
-            preserved_numbers.append(edited.number)
+            preserved_numbers.append(match.number)
         validate_chapter_coverage(extracted.blocks, chapters)
         warnings.append(
             "Preserved user-edited chapter numbers: "
