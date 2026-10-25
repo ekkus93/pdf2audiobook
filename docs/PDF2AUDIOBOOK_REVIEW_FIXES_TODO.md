@@ -124,7 +124,7 @@
 - [x] FX4.07 Add the LLM task for contents-page entries and chapter boundaries (R22).
   - [x] FX4.07a Add a bounded, anchored, toggleable task whose results are weak evidence below outline, printed contents and numbered labels, verified the same way as headings.
   - [x] FX4.07b Tests with stubbed responses: valid proposals, unknown IDs and invented text.
-- [ ] FX4.08 Bump the LLM cache identity (spec §3) and merge the spec §6 §6.3 and §6.4 amendments, plus the §8 budget command.
+- [x] FX4.08 Bump the LLM cache identity (spec §3); verify the spec §6.2–§6.4 amendments and §8 budget command are merged into the parent spec.
 
 **FX4 gate:** budgets reflect every attempt and never deadlock on provably unsent requests; consent warnings are accurate; P3.01d, P3.02a, P3.03a and P3.06 are fully met.
 

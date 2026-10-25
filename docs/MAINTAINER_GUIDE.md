@@ -229,6 +229,8 @@ ledgers in place; ambiguous sent requests remain unresolved until reviewed with
 the `budget` command.
 LLM decision auditing writes `reports/llm_decisions.json`; the cleanup audit is
 schema v2 and stores only sanitized IDs, hashes and fixed summaries/reason codes.
+LLM cache identity v4 includes resolved provider/model and current request/task
+semantics; existing LLM cache entries become misses and are regenerated on use.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can

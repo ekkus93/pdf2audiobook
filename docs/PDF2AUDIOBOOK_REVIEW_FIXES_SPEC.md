@@ -36,7 +36,7 @@ Several fixes change persisted formats or fingerprints. Make each of these bumps
 | Manifest `schema_version` 1 → 2 | R11, R12 (and R9's per-chapter warning) | v1 manifests are rejected with a content-free "re-run analyze" message |
 | Extraction/analysis fingerprint version | R3, R4, R5, R6, R7, R13 (fingerprint composition) | Cached analysis is recomputed; approved v2 workspaces are protected as usual |
 | Audio (WAV chunk + MP3 sidecar) fingerprint version | R35, R37, R38, R39, R40 | Chapter audio is regenerated on the next convert |
-| LLM cache identity | R19, R20 | Old LLM cache entries become misses |
+| LLM cache identity v4 | R19–R22 | Old LLM cache entries become misses |
 
 Record each bump in docs/MAINTAINER_GUIDE.md as an upgrade note, so users know to re-run `analyze`/`convert`.
 
