@@ -227,6 +227,8 @@ fresh output directory when intentionally replacing approved analysis.
 The per-book LLM budget ledger schema v2 adds an `unbilled` state and reads v1
 ledgers in place; ambiguous sent requests remain unresolved until reviewed with
 the `budget` command.
+LLM decision auditing writes `reports/llm_decisions.json`; the cleanup audit is
+schema v2 and stores only sanitized IDs, hashes and fixed summaries/reason codes.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can

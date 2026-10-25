@@ -17,7 +17,7 @@ from pdf2audiobook.document.structure import (
 from pdf2audiobook.errors import AudioError, LLMError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.llm import (
-    CleanupDecision,
+    LLMDecision,
     create_provider,
     detect_llm_headings,
     propose_llm_classification,
@@ -285,7 +285,7 @@ def analyze_book(
     omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
 
     llm_ids: set[str] = set()
-    llm_decisions: list[CleanupDecision] = []
+    llm_decisions: list[LLMDecision] = []
     warnings: list[str] = pagination_warnings
     if footnotes and settings.pdf.footnotes == "omit":
         warnings.append(
@@ -335,6 +335,7 @@ def analyze_book(
                         source_blocks,
                         worker,
                         chunk_tokens=settings.llm.chunk_tokens,
+                        decisions=llm_decisions,
                     )
                     # Keep deterministic footnote-policy warnings in the audit.
                     # Replacing the list also corrupts the fallback warning prefix.
@@ -353,6 +354,7 @@ def analyze_book(
                         source_blocks,
                         worker,
                         chunk_tokens=settings.llm.chunk_tokens,
+                        decisions=llm_decisions,
                     )
                     warnings.extend(class_warnings)
                     write_json(
@@ -368,6 +370,7 @@ def analyze_book(
                         source_blocks,
                         worker,
                         chunk_tokens=settings.llm.chunk_tokens,
+                        decisions=llm_decisions,
                     )
                     warnings.extend(spoken_warnings)
                     # Deliberately separate from approved CleanupEdits and chapter
@@ -418,8 +421,18 @@ def analyze_book(
                 "suggestions": [],
             },
         )
+    for decision in llm_decisions:
+        decision.provider = settings.llm.provider
     write_json(
         folder / "reports" / "llm_cleanup_audit.json",
+        {
+            "schema_version": 2,
+            "requires_manual_review": True,
+            "decisions": [item.model_dump() for item in llm_decisions if item.task == "cleanup"],
+        },
+    )
+    write_json(
+        folder / "reports" / "llm_decisions.json",
         {
             "schema_version": 1,
             "requires_manual_review": True,

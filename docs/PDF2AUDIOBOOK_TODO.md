@@ -86,7 +86,7 @@
   - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
   - [x] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
 - [x] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
-  - [ ] P3.03a Track accepted/rejected edits, evidence, confidence, review flags and provenance.
+  - [x] P3.03a Track accepted/rejected decisions, evidence, confidence, review flags and provenance for each LLM task; see review-fixes ledger FX4.06.
   - [x] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
 - [x] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
 - [x] P3.05 Enforce remote-data opt-in (--allow-remote-content/config) and warning before sending book content. See review-fixes ledger FX4.03 for separate scope warnings.

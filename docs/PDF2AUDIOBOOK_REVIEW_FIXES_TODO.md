@@ -118,9 +118,9 @@
 - [x] FX4.05 Adapt to unsupported provider parameters (R20).
   - [x] FX4.05a When a provider rejects `max_tokens` or `temperature`, retry once without it, remember that per provider instance, and count it under R17. Optionally use JSON-schema mode where the provider declares support.
   - [x] FX4.05b Add provider-matrix contract cases for each rejected parameter.
-- [ ] FX4.06 Record LLM decisions for every task (R21).
-  - [ ] FX4.06a Generalize to an `LLMDecision` record, emitted for the heading, cleanup, classification and narration tasks, and persist it in `reports/`.
-  - [ ] FX4.06b Tests: accepted and rejected records for each task.
+- [x] FX4.06 Record LLM decisions for every task (R21).
+  - [x] FX4.06a Generalize to an `LLMDecision` record, emitted for the heading, cleanup, classification and narration tasks, and persist it in `reports/`.
+  - [x] FX4.06b Tests: accepted and rejected records for each task.
 - [ ] FX4.07 Add the LLM task for contents-page entries and chapter boundaries (R22).
   - [ ] FX4.07a Add a bounded, anchored, toggleable task whose results are weak evidence below outline, printed contents and numbered labels, verified the same way as headings.
   - [ ] FX4.07b Tests with stubbed responses: valid proposals, unknown IDs and invented text.
@@ -210,3 +210,4 @@
 | 2026-10-25 | c8987b5295fc4a6cfb679c3370de6becea5a7eaf | FX4.01 (unbilled request state, content-free budget commands, pre-reservation model discovery); FX4.04 (served model participates in LLM cache and analysis identity) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1062 tests; CI run [40176048905](https://github.com/ekkus93/pdf2audiobook/actions/runs/40176048905) passed on Python 3.11–3.13 | FX4 continues |
 | 2026-10-25 | pending | FX4.02 (per-attempt ledger reservations); FX4.03 (separate image and whole-book text consent warnings) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1064 tests; exact-head CI pending | FX4 continues |
 | 2026-10-25 | pending | FX4.05 (provider-specific fallback for unsupported `max_tokens` and `temperature`) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1070 tests; exact-head CI pending | FX4 continues |
+| 2026-10-25 | pending | FX4.06 (privacy-preserving decision records for heading, cleanup, classification and narration) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1074 tests; exact-head CI pending | FX4 continues |

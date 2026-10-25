@@ -94,8 +94,12 @@ def test_classification_only_writes_advisory_report(tmp_path, monkeypatch):
     report = json.loads(
         (manifest_path.parent / "reports" / "classification_suggestions.json").read_text()
     )
+    decisions = json.loads((manifest_path.parent / "reports" / "llm_decisions.json").read_text())
     assert Stub.calls == 1
     assert report["requires_manual_review"] is True
     assert report["labels"][0]["category"] == "running_header"
+    assert decisions["decisions"][0]["task"] == "classification"
+    assert decisions["decisions"][0]["status"] == "accepted"
+    assert decisions["decisions"][0]["provider"] == "ollama"
     assert manifest.edits == []
     assert manifest.blocks[0].text.startswith("This is the first paragraph")

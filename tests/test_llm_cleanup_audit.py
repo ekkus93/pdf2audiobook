@@ -24,7 +24,7 @@ def item(block_id, original, replacement, confidence=0.99):
     }
 
 
-def test_audit_retains_pending_review_and_omits_source_text():
+def test_audit_marks_verified_proposal_accepted_for_manual_review():
     source = DocumentBlock(id="p1", page_index=0, text="A rnisspelled word.")
     decisions = []
     edits, warnings = propose_llm_cleanup(
@@ -36,7 +36,9 @@ def test_audit_retains_pending_review_and_omits_source_text():
     assert len(edits) == 1 and not edits[0].accepted
     assert len(decisions) == 1
     record = decisions[0]
-    assert record.status == "pending_review"
+    assert record.status == "accepted"
+    assert record.task == "cleanup"
+    assert record.proposal_summary == "cleanup proposal"
     assert record.reason_code == "verified_proposal"
     assert record.source_sha256 == hashlib.sha256(source.text.encode()).hexdigest()
     assert source.text not in record.model_dump_json()
