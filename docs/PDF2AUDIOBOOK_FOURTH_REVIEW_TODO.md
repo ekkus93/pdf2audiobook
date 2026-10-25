@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.08 complete; FX10.09 is next.
+**Status:** FX10.00–FX10.09 complete; FX10.10 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -107,17 +107,17 @@
   - [x] FX10.08a Regression test: a book with an approved empty chapter packages with that chapter left out, and the output names it. Test the selection without FFmpeg; the happy path is FFmpeg-gated.
   - [x] FX10.08b Use the FX10.07 selection function in `pack-m4b`, and report skipped chapters by number.
   - [x] FX10.08c Merge the spec §11 §8 amendment (`pack-m4b` omits skipped chapters).
-- [ ] FX10.09 Small pipeline fixes (R82, R86, R87).
-  - [ ] FX10.09a Regression tests:
+- [x] FX10.09 Small pipeline fixes (R82, R86, R87).
+  - [x] FX10.09a Regression tests:
     - after approval, a `min_boundary_confidence` change is accepted;
     - an LLM-model change with the LLM disabled is accepted;
     - `convert --no-resume` on an approved workspace with unchanged settings succeeds in dry-run;
     - a dangling `audio/x.mp3` symlink survives a successful convert;
     - a rejected page-number removal survives reanalysis.
-  - [ ] FX10.09b Remove gate-only and disabled-LLM settings from the analysis fingerprint. Keep approved analysis on `--no-resume` with unchanged stages.
-  - [ ] FX10.09c Skip and warn on MP3 cleanup candidates that can't be inspected.
-  - [ ] FX10.09d Preserve deterministic edits whose `accepted` differs from the generated default.
-  - [ ] FX10.09e Merge the spec §11 §5 resume amendment.
+  - [x] FX10.09b Remove gate-only and disabled-LLM settings from the analysis fingerprint. Keep approved analysis on `--no-resume` with unchanged stages.
+  - [x] FX10.09c Skip and warn on MP3 cleanup candidates that can't be inspected.
+  - [x] FX10.09d Preserve deterministic edits whose `accepted` differs from the generated default.
+  - [x] FX10.09e Merge the spec §11 §5 resume amendment.
 
 ### CLI, configuration and logging
 
@@ -284,3 +284,4 @@
 | 2026-10-25 | 9e7b6412bda858307347a46fcba5996606e102b1 | FX10.06a–b (R85): analysis, conversion and review saves share a nonblocking per-workspace lock; the review API returns a fixed 409 while locked; §8 CLI contract updated. | At parent 793d7e2, all required regressions failed: `tests/test_workspace_locking_fx10.py::test_convert_no_resume_refuses_locked_workspace_without_rewriting`, `::test_analyze_refuses_locked_workspace`, and `::test_review_save_returns_409_without_writing_when_workspace_is_locked`. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1398 passed, 1 optional Kitten skip. Exact-head CI [40241446543](https://github.com/ekkus93/pdf2audiobook/actions/runs/40241446543) passed Python 3.11–3.13, each with 1398 passed and 1 optional Kitten skip; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | 03fb1249c4c2a8ff2e7eb4c9215b3ef4340552b3 | FX10.07a–b (R83): convert and dry-run share chapter-gate selection, recompute empty-chapter reasons, report approved empty chapters as skipped, and log acknowledgements without dry-run writes; §8 CLI contract updated. | At parent 4439352, `tests/test_accept_review_flag.py::test_dry_run_reports_an_approved_empty_chapter_as_skipped` and `::test_dry_run_logs_acknowledgement_without_writing` failed; `::test_dry_run_refuses_a_hand_emptied_chapter` already passed. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1401 passed, 1 optional Kitten skip. Exact-head CI [40241803578](https://github.com/ekkus93/pdf2audiobook/actions/runs/40241803578) passed Python 3.11–3.13 with 1401 passed and 1 optional Kitten skip per job; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | 1a4bab99fd9a7c563ffb8d8636055e383ab1fa42 | FX10.08a–c (R84, first step): `pack-m4b` uses shared chapter selection, omits approved empty chapters and reports skipped chapter numbers; no sidecar format change. | At parent b4219aa, `tests/test_pack_m4b_manifest_text.py::test_pack_omits_approved_empty_chapter_and_reports_its_number` failed because the approved empty chapter was treated as missing audio. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1402 passed, 1 optional Kitten skip. Exact-head CI [40242048096](https://github.com/ekkus93/pdf2audiobook/actions/runs/40242048096) passed Python 3.11–3.13 with 1402 passed and 1 optional Kitten skip per job; FFmpeg and Tesseract were installed. | None |
+| 2026-10-25 | deeef53bc585b46dc8afdc3d8d5606b2f2e5daba | FX10.09a–e (R82, R86, R87): gate-only and disabled-LLM settings no longer invalidate analysis; unchanged approved analysis is retained under `--no-resume`; MP3 cleanup skips uninspectable candidates with a content-free warning; rejected deterministic cleanup decisions are preserved or fail with a chapter-only conflict. Parent spec §5 resume amendment updated. | At parent 782f89a, these regressions failed: `tests/test_analysis_resume_fx10.py::test_approved_analysis_accepts_min_boundary_confidence_change`, `::test_disabled_llm_model_change_does_not_invalidate_approved_analysis`, `::test_no_resume_dry_run_keeps_approved_analysis_when_stages_match`, `::test_rejected_page_number_removal_survives_reanalysis`, `tests/test_convert_robustness_fx9.py::test_dangling_mp3_symlink_survives_successful_conversion`, and `tests/test_analysis_resume_privacy.py::test_unmatched_rejected_page_number_names_chapter_without_source_text`. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1408 passed, 1 optional Kitten skip. Exact-head CI [40242577944](https://github.com/ekkus93/pdf2audiobook/actions/runs/40242577944) passed Python 3.11–3.13 with 1408 passed and 1 optional Kitten skip per job; FFmpeg and Tesseract were installed. The obsolete assertion that unchanged approved analysis must fail under `--no-resume` was replaced with the R82 requirement, as stated in the commit body. | None |
