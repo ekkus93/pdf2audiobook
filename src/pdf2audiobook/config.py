@@ -389,7 +389,23 @@ def load_settings(
     return result, sources
 
 
-_SECRET_CONFIG_PATHS = frozenset({"pdf.password"})
+def _secret_field_paths(model: type[BaseModel], prefix: str = "") -> frozenset[str]:
+    """Dotted paths of fields declared ``json_schema_extra={"secret": True}``."""
+    paths: set[str] = set()
+    for name, field in model.model_fields.items():
+        path = f"{prefix}.{name}" if prefix else name
+        extra = field.json_schema_extra
+        if isinstance(extra, dict) and extra.get("secret") is True:
+            paths.add(path)
+        annotation = field.annotation
+        if isinstance(annotation, type) and issubclass(annotation, BaseModel):
+            paths |= _secret_field_paths(annotation, path)
+    return frozenset(paths)
+
+
+# Credentials are read from environment variables named in the settings, so no
+# setting currently holds a secret value; a field that does must be marked.
+_SECRET_CONFIG_PATHS = _secret_field_paths(Settings)
 
 
 def settings_public(settings: Settings) -> dict[str, Any]:

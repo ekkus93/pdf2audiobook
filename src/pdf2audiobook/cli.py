@@ -41,6 +41,10 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
     code = exc.exit_code if isinstance(exc, AudiobookError) else 1
     if isinstance(exc, AudiobookError):
         message = str(exc)
+    elif isinstance(exc, OSError):
+        message = "A filesystem operation failed"
+    elif isinstance(exc, ValueError):
+        message = "Invalid input value"
     else:
         message = "Unexpected internal error"
     # Never log exception text, file paths, credentials, or PDF contents.
@@ -773,13 +777,17 @@ def review(
     try:
         from pdf2audiobook.review_ui import create_review_server
 
-        server = create_review_server(manifest_path, port=port)
+        try:
+            server = create_review_server(manifest_path, port=port)
+        except OSError:
+            raise ConfigError("Review server port is unavailable; choose another --port") from None
         console.print(f"Chapter review UI: http://127.0.0.1:{server.server_address[1]}/")
         console.print("Press Ctrl+C to stop the local review server.")
         try:
             server.serve_forever()
         except KeyboardInterrupt:
-            raise
+            # Stopping the server is how the review session normally ends.
+            console.print("Review server stopped.")
         finally:
             server.server_close()
     except KeyboardInterrupt:

@@ -8,7 +8,6 @@ from typer.testing import CliRunner
 
 from pdf2audiobook.cli import app, fail
 from pdf2audiobook.errors import (
-    AudiobookError,
     AudioError,
     ConfigError,
     ExtractionError,
@@ -42,8 +41,8 @@ def test_json_error_contract(exception, exit_code, capsys):
             "type": type(exception).__name__,
             "code": exit_code,
             "message": (
-                "Unexpected internal error"
-                if not isinstance(exception, AudiobookError)
+                "A filesystem operation failed"
+                if isinstance(exception, OSError)
                 else str(exception)
             ),
         },
@@ -73,8 +72,8 @@ def test_human_error_output_remains_human_readable(tmp_path):
 @pytest.mark.parametrize(
     ("exception", "expected"),
     [
-        (OSError("/private/book.pdf: permission denied"), "Unexpected internal error"),
-        (ValueError("PRIVATE_INPUT_VALUE"), "Unexpected internal error"),
+        (OSError("/private/book.pdf: permission denied"), "A filesystem operation failed"),
+        (ValueError("PRIVATE_INPUT_VALUE"), "Invalid input value"),
         (RuntimeError("PRIVATE_EXCEPTION_TEXT"), "Unexpected internal error"),
     ],
 )

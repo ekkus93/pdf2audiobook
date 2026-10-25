@@ -133,7 +133,7 @@ def _removed(path):
 def test_tight_centered_folios_are_removed_even_when_listed_in_contents(tmp_path):
     source = tmp_path / "scan.pdf"
     _scan_pdf(source, 5)
-    # Folios 1..5 sit ~4pt under full-width body text and also appear on page
+    # Folios 1..5 sit ~4pt under full-width body text and also appear as page
     # references on the contents page, which itself must stay intact.
     assert _removed(source) == [(page, str(page)) for page in range(1, 6)]
 
