@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.01 complete; FX10.02 is next.
+**Status:** FX10.00–FX10.02 complete; FX10.03 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -54,11 +54,11 @@
 
 ### High-severity fixes
 
-- [ ] FX10.02 Stop the catch-all swallowing `typer.Exit` (R89). **High.**
-  - [ ] FX10.02a Regression tests:
+- [x] FX10.02 Stop the catch-all swallowing `typer.Exit` (R89). **High.**
+  - [x] FX10.02a Regression tests:
     - `batch` with one bad book exits 7, with one JSON value on stderr in `--json` mode;
     - a parametrized test over every command's non-zero `typer.Exit` path.
-  - [ ] FX10.02b Re-raise `typer.Exit` and `click.exceptions.Exit` before `except Exception` in every command.
+  - [x] FX10.02b Re-raise `typer.Exit` and `click.exceptions.Exit` before `except Exception` in every command.
 - [ ] FX10.03 Structured review reasons; empty chapters need per-chapter approval (R88). No manifest schema change.
   - [ ] FX10.03a Regression tests:
     - the gate still fires when the damaged-source warning wording changes;
@@ -277,3 +277,4 @@
 | 2026-10-25 | f3cb375c769d38f2a281bb592b539ed059aa104b | FX10.00: corrected previous-review and original TODO statuses; added fourth-review spec and task plan; corrected the historical CI and mypy ledger notes. | Docs-only commit; `git diff --cached --check` passed; no code tests required. | FX10.01 CI skip-summary verification remains |
 | 2026-10-25 | d9adb61f3a0b74ba81a98590f10e8a9535bf1427 | FX10.01a–b: CI prints pytest skip reasons and explicitly installs Node.js 22; `/verify`, AGENTS.md and MAINTAINER_GUIDE.md updated. At parent 6eedfa4, `test_ci_prints_pytest_skip_reasons` and `test_ci_installs_a_pinned_node_major_for_script_tests` failed as expected. | Local gates: uv lock check, Ruff, formatting, mypy (22 files), 1333 passed and 32 skipped with `pytest -q -ra`. FFmpeg and Tesseract are unavailable locally. | FX10.01c needs exact-head CI logs showing the FFmpeg, Tesseract and Node tests ran |
 | 2026-10-25 | d9adb61f3a0b74ba81a98590f10e8a9535bf1427 | FX10.01a–c (R111): CI runs `pytest -q -ra` and sets up Node.js 22. | Exact-head CI [40236749174](https://github.com/ekkus93/pdf2audiobook/actions/runs/40236749174) passed on Python 3.11–3.13. Each job logged Node v22.23.3 and `1364 passed, 1 skipped`; the sole skip was the optional Kitten smoke, so the FFmpeg-, Tesseract- and Node-gated tests ran. Local `pytest -q -ra` with FFmpeg/Tesseract also passed: 1364 passed, 1 skipped. | None |
+| 2026-10-25 | a441f66d273abaa57e1cbceb79a7b69e53175399 | FX10.02a–b (R89): command handlers preserve non-zero Typer/Click exits; partial batch failures use the exit-7 domain error and one JSON stderr diagnostic. | At parent 2f7c094, new regressions failed: `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[config-show]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[budget-show]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[budget-resolve]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[doctor]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[inspect]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[analyze]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[convert]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[batch]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[pack-m4b]`, `tests/test_cli_exit_propagation.py::test_commands_reraise_nonzero_typer_exit[review]`, `tests/test_cli_exit_propagation.py::test_batch_failure_exits_7_with_one_json_stderr_value`, `tests/test_cli_exit_propagation.py::test_batch_reraises_exit_from_book_converter`, and `tests/test_cli_error_privacy.py::test_batch_partial_failure_diagnostic_is_content_free`. Local gates passed (lock check, Ruff, format, mypy 22 files, 1377 passed and 1 optional Kitten skip). Exact-head CI [40237347156](https://github.com/ekkus93/pdf2audiobook/actions/runs/40237347156) passed on Python 3.11–3.13 with 1377 passed and 1 skipped per job. | None |
