@@ -292,6 +292,8 @@ Kitten is the default TTS provider and loads lazily. The provider protocol also 
 
 Prepare speakable text in sentence-aware bounded chunks that honor TTS model input limits; do not split words or markup commands, and do not lose punctuation. Track exact chunk sequence and text hash. Generate chunks atomically, validate duration and nonempty audio, normalize sample rate/channels, concatenate in PCM domain with configurable inter-chunk pauses, and **encode once per chapter** through FFmpeg rather than concatenating compressed MP3 streams. Add ID3 book, author, chapter title, chapter sequence and optional cover art when available. Deterministic names (zero-padded index, sanitized title) and collision avoidance are required. The optional `pack-m4b` command may package completed chapter MP3s as AAC in an M4B container with book metadata and chapter navigation.
 
+Each published chapter MP3 has a bounded sidecar containing its chapter ID, audio fingerprint, byte length and SHA-256. `pack-m4b` verifies every current chapter against its sidecar and refuses stale or missing chapters with their chapter numbers. After publishing a renamed chapter, conversion removes older MP3/sidecar pairs only when a valid sidecar identifies the same chapter; files without a valid owned sidecar are left untouched.
+
 Proposed tree:
 
 ```text

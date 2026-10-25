@@ -91,11 +91,11 @@
 - [x] FX3.03 Catch chapters with nothing to speak at analysis (R9).
   - [x] FX3.03a Compute each chapter's speakable text at analysis time. For an empty chapter, add a per-chapter warning and a coverage-report entry, and have `convert` refuse it before synthesis unless it is approved.
   - [x] FX3.03b Test: a chapter made entirely of omitted material is reported by `analyze`.
-- [ ] FX3.04 Make `pack-m4b` safe and clean up old MP3s (R14).
-  - [ ] FX3.04a Have `pack-m4b` check every sidecar fingerprint against the current manifest, and refuse with exit 6 and the stale chapter numbers.
-  - [ ] FX3.04b After publishing a chapter, delete any older MP3 and sidecar that carry the same chapter ID in a valid sidecar. Never touch files without our sidecar.
-  - [ ] FX3.04c Tests: a `pack-m4b` CLI happy path (FFmpeg-gated); stale refusal; rename cleanup; an unrelated file in `audio/` survives.
-- [ ] FX3.05 Merge the spec §6 §5 amendment into the parent spec.
+- [x] FX3.04 Make `pack-m4b` safe and clean up old MP3s (R14).
+  - [x] FX3.04a Have `pack-m4b` check every sidecar fingerprint against the current manifest, and refuse with exit 6 and the stale chapter numbers.
+  - [x] FX3.04b After publishing a chapter, delete any older MP3 and sidecar that carry the same chapter ID in a valid sidecar. Never touch files without our sidecar.
+  - [x] FX3.04c Tests: a `pack-m4b` CLI happy path (FFmpeg-gated); stale refusal; rename cleanup; an unrelated file in `audio/` survives.
+- [x] FX3.05 Merge the spec §6 §5 amendment into the parent spec; §5 warnings, empty-chapter approval, and manual-edit preservation are present.
 
 **FX3 gate:** acceptance #8 in the parent spec holds for unapproved edits; approved workspaces tolerate operational setting changes; `pack-m4b` can't package stale audio.
 
@@ -206,3 +206,4 @@
 | 2026-10-25 | f1a447b9bda2ab5cf8b35ee260f891b7b793c94f | FX3.01 (preserve unapproved hand-edited chapter values during reanalysis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1047 tests; CI run [40175123119](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175123119) passed | FX3 continues |
 | 2026-10-25 | 96ad884c521c12699b479212e026847b59287b19 | FX3.02 (ignore operational settings in analysis identity; report changed stages safely) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1049 tests; CI run [40175307319](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175307319) passed | FX3 continues |
 | 2026-10-25 | 267f0085063102a2b8de381c27e48909c797256a | FX3.03 (report empty chapters during analysis and gate synthesis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1050 tests; CI run [40175448872](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175448872) passed | FX3 continues |
+| 2026-10-25 | pending | FX3.04 (validate M4B inputs and remove only verified obsolete chapter audio); FX3.05 (§5 amendment confirmed) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1053 tests; exact-head CI pending | FX3 continues |

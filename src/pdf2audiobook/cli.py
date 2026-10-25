@@ -445,20 +445,43 @@ def pack_m4b(
     manifest_path: Path = typer.Argument(..., help="Manifest from an analyzed/converted book."),
     output: Path = typer.Option(..., "--output", help="Destination .m4b file."),
     bitrate: str = typer.Option("96k", "--bitrate"),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Package completed chapter MP3s as a single M4B with chapter navigation."""
     try:
         from pdf2audiobook.audio import audio_output_path, encode_m4b
+        from pdf2audiobook.pipeline import chapter_audio_fingerprint, valid_mp3_sidecar
         from pdf2audiobook.workspace import read_manifest
 
+        settings, _ = load_settings(config, no_config=no_config)
         manifest = read_manifest(manifest_path)
-        chapter_files = [
-            (audio_output_path(manifest, chapter, manifest_path.parent), chapter.title)
-            for chapter in manifest.chapters
-        ]
-        if any(not path.is_file() for path, _ in chapter_files):
-            raise ConfigError("all chapter MP3 files must exist before M4B packaging")
+        chapter_files = []
+        stale_chapters = []
+        for chapter in manifest.chapters:
+            path = audio_output_path(manifest, chapter, manifest_path.parent)
+            text_path = manifest_path.parent / "chapters" / f"{chapter.number:03d}.txt"
+            try:
+                text = text_path.read_text(encoding="utf-8")
+            except (OSError, UnicodeError):
+                stale_chapters.append(chapter.number)
+                continue
+            metadata = valid_mp3_sidecar(path)
+            expected = chapter_audio_fingerprint(text, settings, manifest, chapter)
+            if (
+                metadata is None
+                or metadata.get("chapter_id") != chapter.id
+                or metadata.get("fingerprint") != expected
+            ):
+                stale_chapters.append(chapter.number)
+                continue
+            chapter_files.append((path, chapter.title))
+        if stale_chapters:
+            numbers = ", ".join(str(number) for number in stale_chapters)
+            raise AudioError(
+                f"Chapter audio is stale or missing for chapter(s): {numbers}; run convert"
+            )
         try:
             result = encode_m4b(
                 chapter_files,

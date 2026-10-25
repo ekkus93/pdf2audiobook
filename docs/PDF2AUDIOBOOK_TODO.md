@@ -147,7 +147,7 @@
 - [ ] F.01 Additional pluggable TTS engines (Piper, Kokoro, others): added an optional Piper CLI adapter selectable through configuration and the CLI; no heavyweight engine or voice is added to default dependencies.
 - [x] F.02 Optional vision LLM for figures, diagrams, equations and complicated page order: opt-in rendered-page review covers image/vector content and likely two-column layouts, validates bounded review-only responses, caches by image digest, and never alters source text.
 - [ ] F.03 Directory/batch conversion and per-book voice profiles: added sorted PDF discovery with opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence.
-- [ ] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF now accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from completed MP3s.
+- [x] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from current, fingerprint-verified chapter MP3s. See review-fixes ledger FX3.04.
 - [x] F.05 Optional GUI and user-assisted chapter editor: loopback review UI enforces the bound Host authority and Origin checks, validates ranges/coverage, and marks saved chapters manually approved.
 - [ ] F.06 Multi-speaker narration and pronunciation dictionaries.
   - [ ] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges.

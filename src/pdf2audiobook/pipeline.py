@@ -105,6 +105,27 @@ def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]
     return changed or ["analysis"]
 
 
+def valid_mp3_sidecar(audio_path: Path) -> dict[str, object] | None:
+    """Return a verified owned sidecar; foreign or stale files are never trusted."""
+    record = audio_path.with_suffix(".cache.json")
+    data = load_bounded_json(record, max_bytes=4096, max_depth=8)
+    if not isinstance(data, dict):
+        return None
+    try:
+        valid = (
+            isinstance(data.get("chapter_id"), str)
+            and isinstance(data.get("fingerprint"), str)
+            and isinstance(data.get("bytes"), int)
+            and not isinstance(data.get("bytes"), bool)
+            and data["bytes"] == audio_path.stat().st_size
+            and isinstance(data.get("sha256"), str)
+            and data["sha256"] == digest_file(audio_path)
+        )
+    except OSError:
+        return None
+    return data if valid else None
+
+
 def settings_for_book_tts(
     settings: Settings, book_stem: str, *, explicit: frozenset[str] = frozenset()
 ) -> Settings:
@@ -633,6 +654,7 @@ def convert_book(
                 cached = (
                     isinstance(metadata, dict)
                     and metadata.get("fingerprint") == identity
+                    and metadata.get("chapter_id", item.id) == item.id
                     and metadata.get("bytes") == output.stat().st_size
                     and metadata.get("sha256") == digest_file(output)
                 )
@@ -720,9 +742,23 @@ def convert_book(
         write_json(
             record,
             {
+                "chapter_id": item.id,
                 "fingerprint": identity,
                 "sha256": digest_file(output),
                 "bytes": output.stat().st_size,
             },
         )
+        for previous in output.parent.glob("*.mp3"):
+            if previous == output:
+                continue
+            metadata = valid_mp3_sidecar(previous)
+            if metadata is None or metadata.get("chapter_id") != item.id:
+                continue
+            try:
+                previous.unlink()
+                previous.with_suffix(".cache.json").unlink(missing_ok=True)
+            except OSError:
+                raise AudioError(
+                    f"Chapter {item.number} was published but old chapter audio could not be removed"
+                ) from None
     return outputs
