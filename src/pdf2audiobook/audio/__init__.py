@@ -165,7 +165,7 @@ def _spoken_sequence(words: list[str], pronunciations: Mapping[str, str] | None)
                     spoken[index] += ","
                 return
 
-    for word in words:
+    for index, word in enumerate(words):
         core = word.strip(_DASHES)
         if not core:
             attach_comma()
@@ -173,7 +173,7 @@ def _spoken_sequence(words: list[str], pronunciations: Mapping[str, str] | None)
             continue
         if word[0] in _DASHES:
             attach_comma()
-        text = _spoken_token(core, pronunciations)
+        text = _spoken_token(core, pronunciations, ends_paragraph=index == len(words) - 1)
         if word[-1] in _DASHES and text and not text.endswith((",", ";", ":", ".", "!", "?")):
             text += ","
         spoken.append(text)
@@ -235,7 +235,12 @@ def read_cover_image(path: str | Path | None) -> tuple[bytes, str] | None:
     raise ConfigError("Cover image must be a JPEG or PNG file")
 
 
-def _spoken_token(token: str, pronunciations: Mapping[str, str] | None = None) -> str:
+def _spoken_token(
+    token: str,
+    pronunciations: Mapping[str, str] | None = None,
+    *,
+    ends_paragraph: bool = True,
+) -> str:
     normalized = normalize_narration_text(token)
     if not pronunciations:
         return normalized
@@ -253,9 +258,17 @@ def _spoken_token(token: str, pronunciations: Mapping[str, str] | None = None) -
     ):
         end -= 1
     core = normalized[start:end]
-    has_terminal_period = core.endswith(".") and not normalized[end:].startswith(",")
-    pronunciation_core = (core[:-1] if has_terminal_period else core).rstrip(".")
+    # "..." and "…" are stripped before lookup and restored unchanged.
+    ellipsis_match = re.search(r"\.{3,}$", core)
+    ellipsis = ellipsis_match.group() if ellipsis_match else ""
+    if ellipsis:
+        core = core[: -len(ellipsis)]
+    terminal_period = not ellipsis and core.endswith(".") and not normalized[end:].startswith(",")
+    pronunciation_core = (core[:-1] if terminal_period else core).rstrip(".")
     spoken = pronunciations.get(core.casefold())
+    # A key that includes the period owns it (an abbreviation's dot); otherwise
+    # the period is the token's own sentence punctuation and is always kept.
+    period_owned_by_key = spoken is not None and terminal_period
     if spoken is None:
         spoken = pronunciations.get(pronunciation_core.casefold())
     if spoken is None:
@@ -264,8 +277,13 @@ def _spoken_token(token: str, pronunciations: Mapping[str, str] | None = None) -
         spoken = spoken.upper()
     elif pronunciation_core.isalpha() and pronunciation_core.istitle():
         spoken = spoken.capitalize()
-    period = "." if has_terminal_period else ""
-    return f"{normalized[:start]}{spoken}{period}{normalized[end:]}"
+    if ellipsis:
+        suffix = ellipsis
+    elif terminal_period and (ends_paragraph or not period_owned_by_key):
+        suffix = "."
+    else:
+        suffix = ""
+    return f"{normalized[:start]}{spoken}{suffix}{normalized[end:]}"
 
 
 def _voice_markers(text: str, default_voice: str) -> tuple[str, list[tuple[int, str]]]:

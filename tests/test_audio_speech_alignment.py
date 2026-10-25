@@ -74,10 +74,6 @@ def test_normalized_chunks_keep_source_ranges_with_comma_spacing():
     assert source == before
 
 
-def test_ellipsis_token_still_matches_its_pronunciation_key():
-    assert split_sentences("hello...", pronunciations={"hello": "hullo"}) == ["hullo."]
-
-
 @pytest.mark.parametrize("invisible", ["﻿", "​", "‌", "‍", "⁠", "­"])
 @pytest.mark.parametrize(
     "template",

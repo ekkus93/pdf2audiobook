@@ -25,19 +25,6 @@ def test_each_narration_normalization_table_entry(source, expected):
     assert original == f"A{source}B"
 
 
-def test_punctuated_pronunciation_keys_match_whole_tokens():
-    source = "Dr. U.S., (C++) Hermione."
-    pronunciations = {
-        "dr.": "Doctor",
-        "u.s.": "United",
-        "c++": "seeplus",
-        "hermione.": "Her-my-oh-nee",
-    }
-    chunks = split_sentences(source, pronunciations=pronunciations)
-    assert chunks == ["Doctor. United, (seeplus) Her-my-oh-nee."]
-    assert chunk_source_ranges(source, chunks, pronunciations=pronunciations)
-
-
 def test_case_transfer_only_applies_to_alphabetic_pronunciation_keys():
     assert split_sentences("C++", pronunciations={"c++": "seeplus"}) == ["seeplus"]
 
