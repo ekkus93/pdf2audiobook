@@ -154,7 +154,6 @@ def _analysis_stage_fingerprints(
     book_hash: str, settings: Settings, extractor: DocumentExtractor | None
 ) -> dict[str, str]:
     """Hash stage inputs separately while excluding operational policy limits."""
-    selected = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
     llm_settings = settings.llm.model_dump(
         exclude={
             "openai",
@@ -169,7 +168,18 @@ def _analysis_stage_fingerprints(
             "allow_remote_content",
         }
     )
-    chapter_settings = settings.chapters.model_dump(exclude={"allow_single_chapter"})
+    chapter_settings = settings.chapters.model_dump(
+        exclude={"allow_single_chapter", "min_boundary_confidence"}
+    )
+    llm_fingerprint = fingerprint("disabled")
+    if settings.llm.enabled:
+        selected = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
+        llm_fingerprint = fingerprint(
+            llm_settings,
+            settings.llm.provider,
+            selected.model,
+            selected.base_url,
+        )
     return {
         "extraction": fingerprint(
             "analysis-v21",
@@ -178,13 +188,45 @@ def _analysis_stage_fingerprints(
             *(() if extractor is None else ("extractor", extractor.name)),
         ),
         "chapter-boundaries": fingerprint(chapter_settings),
-        "llm-analysis": fingerprint(
-            llm_settings,
-            settings.llm.provider,
-            selected.model,
-            selected.base_url,
-        ),
+        "llm-analysis": llm_fingerprint,
     }
+
+
+def _preserve_rejected_deterministic_edits(
+    previous: BookManifest | None, edits: list[CleanupEdit]
+) -> None:
+    """Carry a rejected deterministic edit forward by block identity and reason."""
+    if previous is None:
+        return
+    rejected = [
+        edit for edit in previous.edits if edit.provider == "deterministic" and not edit.accepted
+    ]
+    regenerated = {
+        (edit.block_id, edit.reason, edit.original, edit.replacement): edit for edit in edits
+    }
+    for edit in rejected:
+        key = (edit.block_id, edit.reason, edit.original, edit.replacement)
+        replacement = regenerated.get(key)
+        if replacement is None:
+            old_position = next(
+                (index for index, block in enumerate(previous.blocks) if block.id == edit.block_id),
+                None,
+            )
+            chapter_number = 1
+            if old_position is not None:
+                chapter_number = next(
+                    (
+                        chapter.number
+                        for chapter in previous.chapters
+                        if chapter.start_block <= old_position < chapter.end_block
+                    ),
+                    1,
+                )
+            raise ExtractionError(
+                f"Rejected cleanup edit for chapter {chapter_number} cannot be aligned; "
+                "review the chapter before reanalysis"
+            )
+        replacement.accepted = edit.accepted
 
 
 def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]:
@@ -373,25 +415,38 @@ def _analyze_book_locked(
             if chapter.generated_fingerprint is not None
             and chapter.generated_fingerprint != generated_chapter_fingerprint(chapter)
         ]
+        rejected_deterministic_edits = [
+            edit
+            for edit in existing.edits
+            if edit.provider == "deterministic" and not edit.accepted
+        ]
         same_input = existing.input_sha256 == book_hash
         same_analysis = existing.analysis_fingerprint == analysis_key
-        approved_content = (
+        other_approved_content = (
             existing.approved
             or any(ch.manually_approved for ch in existing.chapters)
             or any(edit.accepted and edit.provider != "deterministic" for edit in existing.edits)
         )
-        if same_input and same_analysis and settings.general.resume:
+        approved_content = other_approved_content or bool(rejected_deterministic_edits)
+        if same_input and same_analysis and (settings.general.resume or approved_content):
+            if approved_content and not settings.general.resume:
+                log_event(
+                    "analysis_preserved",
+                    level=logging.WARNING,
+                    reason="unchanged_approved_analysis",
+                )
             # Regenerate missing or stale derived texts without replacing user edits.
             render_chapter_texts(existing, folder, settings.pdf.footnotes)
             return manifest_path
         if approved_content:
             changed_stages = _changed_analysis_stages(folder, stage_fingerprints)
-            raise ExtractionError(
-                "This workspace contains manually approved or protected chapter/cleanup edits. "
-                "Changed analysis stage(s): "
-                + ", ".join(changed_stages)
-                + ". Use a new --output directory for changed analysis."
-            )
+            if other_approved_content or not rejected_deterministic_edits:
+                raise ExtractionError(
+                    "This workspace contains manually approved or protected chapter/cleanup edits. "
+                    "Changed analysis stage(s): "
+                    + ", ".join(changed_stages)
+                    + ". Use a new --output directory for changed analysis."
+                )
 
     ocr_cache_dir = (folder / ".cache" / "ocr") if settings.cache.enabled else None
     if extractor is None:
@@ -438,6 +493,7 @@ def _analyze_book_locked(
                 extracted.blocks, {edit.block_id for edit in edits if edit.accepted}
             )
         )
+    _preserve_rejected_deterministic_edits(existing_manifest, edits)
     omitted = {edit.block_id for edit in edits if edit.accepted and not edit.replacement}
 
     llm_ids: set[str] = set()
@@ -1381,23 +1437,30 @@ def _convert_analyzed_book(
         conversion_status[item.id]["status"] = "complete"
         log_event("stage_completed", level=logging.INFO, stage="chapter_audio", count=item.number)
         for previous in output.parent.glob("*.mp3"):
+            if previous == output:
+                continue
             try:
                 if os.path.samefile(previous, output):
                     continue
             except OSError:
-                if previous == output:
-                    continue
-                raise AudioError("Could not verify chapter audio file identity") from None
-            metadata = valid_mp3_sidecar(previous)
-            if metadata is None or metadata.get("chapter_id") != item.id:
+                log_event(
+                    "audio_cleanup_candidate_skipped",
+                    level=logging.WARNING,
+                    reason="candidate_uninspectable",
+                )
                 continue
             try:
+                metadata = valid_mp3_sidecar(previous)
+                if metadata is None or metadata.get("chapter_id") != item.id:
+                    continue
                 previous.unlink()
                 previous.with_suffix(".cache.json").unlink(missing_ok=True)
             except OSError:
-                raise AudioError(
-                    f"Chapter {item.number} was published but old chapter audio could not be removed"
-                ) from None
+                log_event(
+                    "audio_cleanup_candidate_skipped",
+                    level=logging.WARNING,
+                    reason="candidate_uninspectable",
+                )
     write_json(
         manifest_path.parent / "reports" / "conversion_status.json",
         {

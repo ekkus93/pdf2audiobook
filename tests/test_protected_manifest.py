@@ -11,7 +11,7 @@ from pdf2audiobook.pipeline import analyze_book
 from pdf2audiobook.workspace import read_manifest, write_manifest
 
 
-def test_approved_chapter_manifest_not_silently_overwritten(tmp_path: Path):
+def test_approved_chapter_manifest_is_kept_when_analysis_stages_match(tmp_path: Path, caplog):
     source = tmp_path / "example.pdf"
     document = fitz.open()
     page = document.new_page()
@@ -37,9 +37,9 @@ def test_approved_chapter_manifest_not_silently_overwritten(tmp_path: Path):
     assert read_manifest(manifest_path).chapters[0].manually_approved
 
     settings.general.resume = False
-    with pytest.raises(ExtractionError, match="manually approved"):
-        analyze_book(source, settings)
+    assert analyze_book(source, settings) == manifest_path
     assert read_manifest(manifest_path).chapters[0].manually_approved
+    assert "unchanged_approved_analysis" in caplog.text
 
     settings.general.resume = True
     settings.pdf.ocr_dpi = 320

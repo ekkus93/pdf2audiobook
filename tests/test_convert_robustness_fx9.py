@@ -191,3 +191,21 @@ def test_resumed_conversion_reports_the_same_pause_count(tmp_path, monkeypatch):
     second = json.loads(status.read_text())
     assert second["chapters"][0]["status"] == "complete"
     assert second["pause_count"] == first["pause_count"] == 1
+
+
+def test_dangling_mp3_symlink_survives_successful_conversion(tmp_path, monkeypatch, caplog):
+    _book(tmp_path, monkeypatch, ["A complete chapter for conversion."])
+    audio_dir = tmp_path / "audio"
+    audio_dir.mkdir()
+    dangling = audio_dir / "x.mp3"
+    dangling.symlink_to(tmp_path / "missing-target.mp3")
+
+    outputs = pipeline.convert_book(
+        tmp_path / "book.pdf", Settings(), tts_provider=StubProvider(), encoder=_encode
+    )
+
+    assert len(outputs) == 1
+    assert dangling.is_symlink()
+    assert not dangling.exists()
+    assert (tmp_path / "reports" / "conversion_status.json").is_file()
+    assert "candidate_uninspectable" in caplog.text
