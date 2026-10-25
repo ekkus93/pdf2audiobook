@@ -180,6 +180,7 @@ Use bounded requests with nearby-context overlap, stable IDs and prompt versioni
 - --no-llm always works and uses deterministic heuristics; unavailable providers fail informatively or fall back **only when explicitly configured**.
 - Cache by source/stage hash, prompt schema/version, provider/model, context and generation parameters; do not mix incompatible cache entries.
 - Report approximate token/cost metrics when known; enforce optional per-book request/token/USD budgets. Cost estimates are advisory unless authoritative pricing is configured.
+- Analysis fingerprints include content-affecting settings, not operational limits or consent toggles. When approved workspaces cannot be reused, diagnostics name changed stages without exposing setting values.
 
 ### 6.4 Data privacy
 

@@ -52,6 +52,59 @@ def _llm_cache_identity(settings: Settings) -> str:
     )
 
 
+def _analysis_stage_fingerprints(
+    book_hash: str, settings: Settings, extractor: DocumentExtractor | None
+) -> dict[str, str]:
+    """Hash stage inputs separately while excluding operational policy limits."""
+    selected = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
+    llm_settings = settings.llm.model_dump(
+        exclude={
+            "openai",
+            "ollama",
+            "llama_server",
+            "max_retries",
+            "max_requests",
+            "max_reported_tokens",
+            "max_estimated_cost_usd",
+            "input_cost_usd_per_million_tokens",
+            "output_cost_usd_per_million_tokens",
+            "allow_remote_content",
+        }
+    )
+    chapter_settings = settings.chapters.model_dump(exclude={"allow_single_chapter"})
+    return {
+        "extraction": fingerprint(
+            "analysis-v19",
+            book_hash,
+            settings.pdf.model_dump(),
+            *(() if extractor is None else ("extractor", extractor.name)),
+        ),
+        "chapter-boundaries": fingerprint(chapter_settings),
+        "llm-analysis": fingerprint(
+            llm_settings,
+            settings.llm.provider,
+            selected.model,
+            selected.base_url,
+        ),
+    }
+
+
+def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]:
+    """Return changed stage names without loading or displaying their inputs."""
+    previous = load_bounded_json(
+        folder / "reports" / "analysis_fingerprints.json", max_bytes=4096, max_depth=8
+    )
+    prior_stages = previous.get("stages") if isinstance(previous, dict) else None
+    if not isinstance(prior_stages, dict):
+        return ["analysis"]
+    changed = sorted(
+        name
+        for name, value in current.items()
+        if not isinstance(prior_stages.get(name), str) or prior_stages[name] != value
+    )
+    return changed or ["analysis"]
+
+
 def settings_for_book_tts(
     settings: Settings, book_stem: str, *, explicit: frozenset[str] = frozenset()
 ) -> Settings:
@@ -105,18 +158,8 @@ def analyze_book(
     root = Path(settings.general.output_dir).expanduser()
     folder = root / f"{source.stem}-{book_hash[:10]}"
     manifest_path = folder / "manifest.json"
-    chosen_provider = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
-    analysis_key = fingerprint(
-        book_hash,
-        settings.pdf.model_dump(),
-        settings.chapters.model_dump(),
-        settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
-        chosen_provider.model,
-        chosen_provider.base_url,
-        "analysis-v19",
-        # A replacement backend must never reuse the default extractor's analysis.
-        *(() if extractor is None else ("extractor", extractor.name)),
-    )
+    stage_fingerprints = _analysis_stage_fingerprints(book_hash, settings, extractor)
+    analysis_key = fingerprint(stage_fingerprints)
     hand_edited_chapters: list[Chapter] = []
     existing_manifest: BookManifest | None = None
     if manifest_path.is_file():
@@ -142,10 +185,12 @@ def analyze_book(
         if approved_content:
             from pdf2audiobook.errors import ExtractionError
 
+            changed_stages = _changed_analysis_stages(folder, stage_fingerprints)
             raise ExtractionError(
-                "This workspace contains manually approved chapter or cleanup edits. "
-                "A reanalysis would overwrite those decisions. Back up the manifest "
-                "and use a new --output directory for a fresh analysis."
+                "This workspace contains manually approved or protected chapter/cleanup edits. "
+                "Changed analysis stage(s): "
+                + ", ".join(changed_stages)
+                + ". Use a new --output directory for changed analysis."
             )
 
     ocr_cache_dir = (folder / ".cache" / "ocr") if settings.cache.enabled else None
@@ -415,6 +460,10 @@ def analyze_book(
     )
     render_chapter_texts(manifest, folder, settings.pdf.footnotes)
     write_manifest(manifest_path, manifest)
+    write_json(
+        folder / "reports" / "analysis_fingerprints.json",
+        {"schema_version": 1, "stages": stage_fingerprints},
+    )
     return manifest_path
 
 
