@@ -15,24 +15,24 @@
 
 ## Phase 0 — Repository and tooling (M0)
 
-- [ ] P0.01 Set Python >=3.11 project packaging (pyproject.toml, src layout), CLI entry point pdf2audiobook, reproducible dependency groups, README quick start.
-  - [ ] P0.01a Add Typer, Pydantic, PyMuPDF, HTTP/OpenAI-compatible client, Rich, Mutagen, FFmpeg interaction, Kitten TTS integration and OCR dependency declarations (separate optional heavyweight/model dependencies).
+- [x] P0.01 Set Python >=3.11 project packaging (pyproject.toml, src layout), CLI entry point pdf2audiobook, reproducible dependency groups, README quick start.
+  - [x] P0.01a Add Typer, Pydantic, PyMuPDF, HTTP/OpenAI-compatible client, Rich, Mutagen, FFmpeg interaction, Kitten TTS integration and OCR dependency declarations (separate optional heavyweight/model dependencies; kittenml is bounded in review-fixes FX6.01).
   - [x] P0.01b Add formatting, lint, type checking and pytest configuration; ensure clean install from repository checkout.
   - [x] P0.01c Add GitHub Actions lint/unit CI with no remote keys/model downloads.
   - [x] P0.01d Commit a generated uv.lock covering default, dev and optional Kitten dependencies; CI now verifies the lockfile and uses locked development installs. Formatting qualification is complete; see P5.10 evidence.
-- [ ] P0.02 Establish src/pdf2audiobook/{cli,config,pdf,document,llm,tts,audio,pipeline} and public adapter protocols.
+- [x] P0.02 Establish src/pdf2audiobook/{cli,config,pdf,document,llm,tts,audio,pipeline} and public adapter protocols.
   - [x] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics; CLI errors are content-free for non-domain exceptions.
   - [x] P0.02b Add structured logging with text/key redaction and --verbose/--quiet controls (review-fixes FX5.08; exact-head CI evidence in the review-fixes ledger).
-- [ ] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
+- [x] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
   - [x] P0.03a Implement lookup of per-user config directory; --config and --no-config (review-fixes FX5.02).
   - [x] P0.03b Implement precedence CLI > PDF2AUDIOBOOK_* env > TOML > built-ins, including explicit boolean false (review-fixes FX5.03, FX5.05).
   - [x] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options (review-fixes FX5.06).
   - [x] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples.
   - [x] P0.03e Unit-test overlay precedence, parsing, missing/unknown keys and path resolution (review-fixes FX5.01–FX5.03).
-- [ ] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation.
+- [x] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation (review-fixes FX7.01).
 - [x] P0.05 Implement atomic output workspace/manifest schema, input hash, stable IDs and versioned per-stage caching.
   - [x] P0.05a Define SourceSpan, DocumentBlock, CleanupEdit, Chapter, NarrationChunk and BookManifest models.
-  - [ ] P0.05b Unit-test manifest schema migration/rejection, atomic file writes and stage fingerprints.
+  - [x] P0.05b Unit-test manifest schema migration/rejection, atomic file writes and stage fingerprints (review-fixes FX0.03).
 
 **M0 gate:** installable CLI; --help/doctor/config work without a model; offline CI green.
 
@@ -40,19 +40,19 @@
 
 - [x] P1.01 Inspect PDF, metadata, pages, page labels, outlines, TOC and embedded text using PyMuPDF.
   - [x] P1.01a Preserve page geometry, font/style and stable span/block provenance.
-  - [ ] P1.01b Handle rotation, empty pages, malformed files and password-protected files gracefully.
-- [ ] P1.02 Implement usable-text scoring per page/region; choose embedded extraction vs OCR in auto mode.
+  - [x] P1.01b Handle rotation, empty pages, malformed files and password-protected files gracefully (review-fixes FX2.06).
+- [x] P1.02 Implement usable-text scoring per page/region; choose embedded extraction vs OCR in auto mode (review-fixes FX2.04–FX2.05).
   - [x] P1.02a Support --ocr auto|always|never, OCR language and DPI settings.
   - [x] P1.02b Integrate Tesseract and verify system language packages/model availability.
-  - [ ] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings.
+  - [x] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings (review-fixes FX2.04–FX2.05).
   - [x] P1.02d Detect suspicious OCR/extraction text and possible side-by-side reading-order cases; emit explicit review warnings (heuristics, not engine confidence).
 - [x] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
-  - [ ] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation.
-  - [ ] P1.03b Preserve dialogue, section breaks, legitimate line breaks and special content markers.
+  - [x] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation (review-fixes FX2.07).
+  - [x] P1.03b Preserve dialogue, section breaks, legitimate line breaks and special content markers (review-fixes FX2.07).
 - [x] P1.04 Detect repeated headers, footers, Arabic/Roman page numbers and alternate-page layouts.
   - [x] P1.04a Remove only confidently identified pagination noise, with source-linked CleanupEdit records.
   - [x] P1.04b Add toggles to retain/remove headers/footers/page numbers independently.
-  - [ ] P1.04c Never remove numbered lists, quoted standalone numbers or substantive body text.
+  - [x] P1.04c Never remove numbered lists, quoted standalone numbers or substantive body text (review-fixes FX2.03; ambiguous candidates remain conservative and reviewable).
 - [x] P1.05 Implement footnote/table/image/math handling policies, conservative warnings and audit.
 - [x] P1.06 Add synthetic PDF fixtures for text, scans, mixed pages, two-column, Roman numbering, repeated headers, numbered lists and difficult OCR.
   - [x] P1.06a Unit and integration tests verify correct extraction/coverage without network dependency.
@@ -63,7 +63,7 @@
 
 - [x] P2.01 Detect candidates from bookmarks, TOC/page offsets, typography, heading patterns and whitespace.
   - [x] P2.01a Handle prologues, epilogues, front matter, multiple parts and mid-page starts.
-  - [ ] P2.01b Rank evidence and attach confidence/warnings to each boundary.
+  - [x] P2.01b Rank evidence and attach confidence/warnings to each boundary (review-fixes FX3.03).
 - [x] P2.02 Build nonoverlapping stable chapter spans and enforce full prose coverage exactly once.
   - [x] P2.02a Reject overlapping/missing chapter spans and source holes; emit a coverage report with chapters left empty by accepted cleanup.
   - [x] P2.02b Require review for low-confidence/no-chapter books; allow explicit --allow-single-chapter.
@@ -80,7 +80,7 @@
   - [x] P3.01a Implement OpenAI API adapter; load key only from OPENAI_API_KEY or designated env.
   - [x] P3.01b Implement Ollama adapter with configurable local base URL/model.
   - [x] P3.01c Implement llama-server adapter with configurable local base URL/model and optional auth.
-  - [ ] P3.01d Probe or adapt capabilities for JSON/schema response and provider-specific unsupported parameters.
+  - [x] P3.01d Probe or adapt capabilities for JSON/schema response and provider-specific unsupported parameters (review-fixes FX4.05).
 - [x] P3.02 Implement bounded prompt/context splitting with stable block references and schema versioning.
   - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries; TOC task is independently toggleable and verifier-anchored (review-fixes FX4.07).
   - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
@@ -94,7 +94,7 @@
   - [x] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
   - [x] P3.05c Ensure logs, crash reports and config show redact credentials and full text.
   - [x] P3.05d Warn separately for page images and whole-book text windows, naming the provider, model and image page cap.
-- [ ] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting.
+- [x] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting (review-fixes FX4.01–FX4.04, FX4.08).
 - [x] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
 - [x] P3.08 Add opt-in real backend smoke checks for local Ollama/llama-server and explicitly consented OpenAI.
 
@@ -105,18 +105,18 @@
 - [x] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
   - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
   - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate (review-fixes FX5.06).
-- [ ] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking.
+- [x] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking (review-fixes FX6.03–FX6.05).
   - [x] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
   - [x] P4.02b Handle oversized sentences and TTS failures without silently dropping text.
 - [x] P4.03 Generate validated PCM/WAV chunks; normalize channels/rate, join at PCM level and encode once per chapter via FFmpeg.
   - [x] P4.03a Produce playable, deterministic, zero-padded chapter MP3 filenames.
-  - [ ] P4.03b Apply configurable inter-chunk pauses, suitable default bitrate and correct chapter order.
-  - [ ] P4.03c Add ID3 book/author/chapter title/track tags, optional cover artwork.
+  - [x] P4.03b Apply configurable inter-chunk pauses, suitable default bitrate and correct chapter order (review-fixes FX6.03, FX6.09).
+  - [x] P4.03c Add ID3 book/author/chapter title/track tags, optional cover artwork (review-fixes FX6.08).
 - [x] P4.04 Track per-chunk progress, checksums, cache keys and completion; persist atomically.
-  - [ ] P4.04a Implement --resume/--no-resume and --force with precise cache invalidation.
+  - [x] P4.04a Implement --resume/--no-resume and --force with precise cache invalidation (review-fixes FX6.02, FX6.11).
   - [x] P4.04b Restart interrupted conversion without regenerating validated completed audio chunks.
-  - [ ] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts.
-- [ ] P4.05 Add mocked TTS tests using synthetic sine/audio fixtures; optional actual Kitten model integration test.
+  - [x] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts (review-fixes FX6.09).
+- [x] P4.05 Add mocked TTS tests using synthetic sine/audio fixtures; optional actual Kitten model integration test (review-fixes FX6.10; real smoke remains opt-in).
 - [x] P4.06 Decode all generated MP3 fixtures with FFmpeg and inspect expected tags/durations.
 
 **M4 gate:** one playable, tagged MP3 per approved chapter; resumes cleanly after interruption.
@@ -133,9 +133,9 @@
   - [ ] Live llama-server acceptance deferred per user instruction; server is not installed in this environment.
   - [ ] Live OpenAI acceptance deferred per user instruction; credentials are not configured and no remote-content consent was given.
 - [x] P5.06 Verify default config + CLI overrides, explicit false, no-LLM and remote-consent denial/approval (review-fixes FX5.05; exact-head CI evidence in the review-fixes ledger).
-- [ ] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
+- [x] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart (review-fixes FX6.07, FX6.09).
 - [x] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
-- [ ] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes.
+- [x] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes (review-fixes FX7.01–FX7.02).
 - [ ] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps.
   - [x] Previous release checks: local Ruff, repository formatting check, mypy (21 modules), full pytest suite (1013 tests), uv lock check, CLI doctor/help, and wheel/sdist build.
   - [x] Exact-head Python CI for implementation commit d9a0c4c72ab908bca91f6815c7fe0a8c6b0df74f passed on Python 3.11, 3.12 and 3.13 (run 40160505083).
@@ -150,10 +150,10 @@
 - [x] F.03 Directory/batch conversion and per-book voice profiles: sorted PDF discovery, opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence (review-fixes FX5.07; exact-head CI evidence in the review-fixes ledger).
 - [x] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from current, fingerprint-verified chapter MP3s. See review-fixes ledger FX3.04.
 - [x] F.05 Optional GUI and user-assisted chapter editor: loopback review UI enforces the bound Host authority and Origin checks, validates ranges/coverage, and marks saved chapters manually approved.
-- [ ] F.06 Multi-speaker narration and pronunciation dictionaries.
-  - [ ] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges.
+- [x] F.06 Multi-speaker narration and pronunciation dictionaries (review-fixes FX6.05–FX6.06).
+  - [x] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges (review-fixes FX6.05).
   - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity and survives review saves, including omitted fields in partial clients.
-  - [ ] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval.
+  - [x] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval (review-fixes FX6.06).
 
 ## Progress ledger
 

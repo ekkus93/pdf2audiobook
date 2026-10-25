@@ -1,8 +1,8 @@
 # pdf2audiobook
 
-Python CLI project for converting PDF books into chapter-separated MP3 audiobooks. Planned features include OCR, chapter detection, optional LLM support for OpenAI/Ollama/llama-server, and Kitten TTS.
+Python CLI for analyzing PDF and EPUB books and converting approved chapters into tagged MP3 audiobooks. It supports selectable OCR, chapter review, optional LLM-assisted analysis, resumable TTS, batch conversion and M4B packaging.
 
-**Status:** Working initial CLI implementation with offline end-to-end fixture coverage; real-model acceptance and release hardening remain incomplete. See the [specification](docs/PDF2AUDIOBOOK_SPEC.md), [implementation TODO](docs/PDF2AUDIOBOOK_TODO.md), and [installation/maintainer guide](docs/MAINTAINER_GUIDE.md).
+**Status:** Working CLI with offline end-to-end fixture coverage. Real Kitten synthesis is an opt-in smoke test; live OpenAI and llama-server acceptance remains deferred. See the [specification](docs/PDF2AUDIOBOOK_SPEC.md), [implementation TODO](docs/PDF2AUDIOBOOK_TODO.md), and [installation/maintainer guide](docs/MAINTAINER_GUIDE.md).
 
 ## Development with uv
 
@@ -95,10 +95,12 @@ uv run pdf2audiobook analyze path/to/book.pdf --no-llm
 uv run pdf2audiobook convert path/to/book.pdf --no-llm --allow-single-chapter
 uv run pdf2audiobook batch ./books --no-llm --recursive
 uv run pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b
+uv run pdf2audiobook convert path/to/book.pdf --cover ./cover.jpg
+uv run pdf2audiobook budget show --output ./audiobooks/BOOK
 uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
 ~~~
 
-`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with the selected TTS provider. `batch` processes a directory of PDFs; `pack-m4b` packages completed chapters with chapter navigation. Models are loaded on demand.
+`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with the selected TTS provider; `--cover PATH` embeds JPEG/PNG artwork (up to 5 MiB). The same option works with `batch`, and `audio.cover_image` configures a default. `budget show` reports content-free LLM request accounting; `budget resolve` settles an ambiguous request only after explicit confirmation. TTS retries default to two, and conversion continues through other chapters before reporting partial failures. Models are loaded on demand.
 
 Install Tesseract separately for scanned pages. For synthesis, run `uv sync --extra kitten --extra dev` and install FFmpeg. The Kitten model alias `mini` resolves to the lightweight 0.8 mini model.
 

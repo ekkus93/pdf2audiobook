@@ -17,7 +17,11 @@ from pdf2audiobook.config import load_settings, settings_public
 from pdf2audiobook.errors import AudiobookError, AudioError, ConfigError, ExtractionError
 from pdf2audiobook.logging import configure_logging, log_event
 
-app = typer.Typer(no_args_is_help=True, help="Convert PDF books to chapter-based audiobooks.")
+app = typer.Typer(
+    no_args_is_help=True,
+    help="Convert PDF books to chapter-based audiobooks.",
+    epilog="Example: pdf2audiobook convert ./book.pdf --no-llm --cover ./cover.jpg",
+)
 config_app = typer.Typer(help="Inspect effective configuration.")
 app.add_typer(config_app, name="config")
 budget_app = typer.Typer(help="Inspect or resolve per-book LLM request accounting.")
@@ -82,7 +86,7 @@ def entry(
         raise typer.Exit()
 
 
-@config_app.command("show")
+@config_app.command("show", epilog="Example: pdf2audiobook config show --sources")
 def show_config(
     config: Path | None = typer.Option(None, "--config"),
     no_config: bool = typer.Option(False, "--no-config"),
@@ -101,7 +105,7 @@ def show_config(
         fail(exc, json_output=json_output)
 
 
-@budget_app.command("show")
+@budget_app.command("show", epilog="Example: pdf2audiobook budget show --output ./audiobooks/BOOK")
 def budget_show(
     output: Path = typer.Option(..., "--output", help="Book workspace directory."),
     json_output: bool = typer.Option(False, "--json"),
@@ -116,7 +120,10 @@ def budget_show(
         fail(exc, json_output=json_output)
 
 
-@budget_app.command("resolve")
+@budget_app.command(
+    "resolve",
+    epilog="Example: pdf2audiobook budget resolve --output ./audiobooks/BOOK --confirm --unbilled 12",
+)
 def budget_resolve(
     output: Path = typer.Option(..., "--output", help="Book workspace directory."),
     request_id: int = typer.Argument(..., min=1),
@@ -162,7 +169,7 @@ def budget_resolve(
         fail(exc, json_output=json_output)
 
 
-@app.command()
+@app.command(epilog="Example: pdf2audiobook doctor --json")
 def doctor(
     json_output: bool = typer.Option(False, "--json"),
     config: Path | None = typer.Option(None, "--config"),
@@ -201,7 +208,7 @@ def doctor(
         fail(exc, json_output=json_output)
 
 
-@app.command()
+@app.command(epilog="Example: pdf2audiobook inspect ./book.pdf --json")
 def inspect(
     source: Path = typer.Argument(..., help="PDF/EPUB book or previously generated manifest.json"),
     pdf_password_env: str | None = typer.Option(
@@ -272,7 +279,7 @@ def _overrides(
     return value
 
 
-@app.command()
+@app.command(epilog="Example: pdf2audiobook analyze ./book.pdf --no-llm --output ./audiobooks")
 def analyze(
     source: Path = typer.Argument(...),
     config: Path | None = typer.Option(None, "--config"),
@@ -346,7 +353,9 @@ def parse_chapter_range(value: str) -> tuple[int, int]:
     return first, last
 
 
-@app.command()
+@app.command(
+    epilog="Example: pdf2audiobook convert ./book.pdf --no-llm --cover ./cover.jpg --allow-single-chapter"
+)
 def convert(
     source: Path = typer.Argument(...),
     config: Path | None = typer.Option(None, "--config"),
@@ -467,7 +476,7 @@ def convert(
         fail(exc, json_output=json_output)
 
 
-@app.command()
+@app.command(epilog="Example: pdf2audiobook batch ./books --no-llm --recursive --cover ./cover.png")
 def batch(
     source_dir: Path = typer.Argument(..., help="Directory containing PDF books."),
     config: Path | None = typer.Option(None, "--config"),
@@ -580,7 +589,10 @@ def batch(
         fail(exc, json_output=json_output)
 
 
-@app.command("pack-m4b")
+@app.command(
+    "pack-m4b",
+    epilog="Example: pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b --cover ./cover.jpg",
+)
 def pack_m4b(
     manifest_path: Path = typer.Argument(..., help="Manifest from an analyzed/converted book."),
     output: Path = typer.Option(..., "--output", help="Destination .m4b file."),
@@ -644,7 +656,7 @@ def pack_m4b(
         fail(exc, json_output=json_output)
 
 
-@app.command()
+@app.command(epilog="Example: pdf2audiobook review ./audiobooks/BOOK/manifest.json")
 def review(
     manifest_path: Path = typer.Argument(..., help="A generated manifest.json to review."),
     port: int = typer.Option(8765, "--port", min=0, max=65535),

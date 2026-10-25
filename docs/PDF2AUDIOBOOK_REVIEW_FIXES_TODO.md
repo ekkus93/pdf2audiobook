@@ -183,12 +183,12 @@
 
 ## Phase FX7 — Documentation and closure
 
-- [ ] FX7.01 Add a `--help` usage example to every command, including `budget` and `--cover` (R33). Test: each command's `--help` contains "Example".
-- [ ] FX7.02 Update the docs (R45).
-  - [ ] FX7.02a README.md:3: remove the stale "Planned features…" sentence and document the new flags and commands.
-  - [ ] FX7.02b MAINTAINER_GUIDE.md: paired flags, the `budget` command, cover art, TTS retries, the `ollama_context` test marker, and all spec §3 upgrade notes.
-  - [ ] FX7.02c Confirm that every spec §6 amendment has been merged into docs/PDF2AUDIOBOOK_SPEC.md.
-- [ ] FX7.03 Re-check the original TODO items that spec §5 maps to each fixed requirement, citing this TODO's ledger evidence.
+- [x] FX7.01 Add a `--help` usage example to every command, including `budget` and `--cover` (R33). Test: each command's `--help` contains "Example".
+- [x] FX7.02 Update the docs (R45).
+  - [x] FX7.02a README.md:3: remove the stale "Planned features…" sentence and document the new flags and commands.
+  - [x] FX7.02b MAINTAINER_GUIDE.md: paired flags, the `budget` command, cover art, TTS retries, the `ollama_context` test marker, and all spec §3 upgrade notes.
+  - [x] FX7.02c Confirm that every spec §6 amendment has been merged into docs/PDF2AUDIOBOOK_SPEC.md.
+- [x] FX7.03 Re-check the original TODO items that spec §5 maps to each fixed requirement, citing this TODO's ledger evidence.
 - [ ] FX7.04 Final gate: `/verify` is green on Python 3.11–3.13 for mypy; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; record the SHA and run ID below.
 
 **FX7 gate:** every R1–R45 is implemented with passing tests; the original TODO has no item checked without evidence; exact-head CI is green.

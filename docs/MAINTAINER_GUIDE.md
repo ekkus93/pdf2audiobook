@@ -53,6 +53,8 @@ OCR needs) without TTS:
 uv run pdf2audiobook inspect book.pdf --json
 uv run pdf2audiobook config show --sources --json
 uv run pdf2audiobook doctor --json
+uv run pdf2audiobook budget show --output ./audiobooks/BOOK
+uv run pdf2audiobook budget resolve --output ./audiobooks/BOOK --confirm --unbilled 12
 ```
 
 Analyze with no LLM and review the resulting manifest/chapter text before
@@ -72,6 +74,7 @@ uv run pdf2audiobook convert book.pdf --no-llm --chapter 2 --voice Jasper --spee
 uv run pdf2audiobook convert book.pdf --no-llm --chapter-range 2:5 --bitrate 128k
 uv run pdf2audiobook convert book.pdf --no-llm --chapter 2 --force
 uv run pdf2audiobook convert book.pdf --no-llm --no-resume
+uv run pdf2audiobook convert book.pdf --no-llm --cover ./cover.jpg
 ```
 
 `--dry-run` can still write analysis files and invoke OCR, but does not
@@ -79,6 +82,20 @@ synthesize audio. `--force` regenerates selected MP3s. `--no-resume` bypasses
 the existing analysis/audio reuse path; **neither option authorizes overwriting
 manually approved analysis**. Preserve a backup and use a different `--output`
 directory if a new analysis would invalidate approved edits.
+
+Boolean CLI pairs accept both explicit directions: `--llm/--no-llm`,
+`--vision/--no-vision`,
+`--allow-remote-content/--no-allow-remote-content`,
+`--allow-single-chapter/--no-allow-single-chapter`,
+`--resume/--no-resume`, and `--recursive/--no-recursive` for batch. Their
+default is unset, so environment and TOML values remain effective unless a
+flag is supplied. `--cover PATH` overrides `[audio].cover_image` for convert
+or batch; `pack-m4b --cover PATH` embeds the same validated image at book level.
+
+`budget show --output DIR` prints request statuses and accounting without
+prompt or response text. `budget resolve --output DIR ID --confirm` requires
+exactly one of `--tokens PROMPT:COMPLETION` or `--unbilled`, and should be used
+only after checking provider billing evidence.
 
 To use OCR explicitly, set `--ocr always` or `--ocr never`; `auto` uses
 embedded text when usable and OCR otherwise. A PDF password is read from a
@@ -324,6 +341,11 @@ models, call external LLMs, or validate all real scanned-book layouts. Record
 the exact commit SHA and Actions run when claiming CI acceptance. Before
 marking a TODO complete, add a deterministic regression test or explicitly
 document environment-dependent/manual acceptance evidence.
+
+The `ollama_context` pytest marker bypasses the autouse stub for Ollama served
+context discovery. Apply it only to tests intended to exercise the live local
+Ollama `/api/ps` lookup; the ordinary suite must remain offline. Use
+`uv run --extra dev pytest -m ollama_context -q` only when Ollama is available.
 
 If OCR is missing or produces almost no text, check `doctor --json`, OCR
 language packs and `--ocr` mode; inspect extracted source spans. If chapters
