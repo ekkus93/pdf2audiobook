@@ -140,6 +140,7 @@ def test_changed_damaged_source_warning_wording_keeps_structured_gate(tmp_path, 
     monkeypatch.setattr(pipeline, "extract_pdf", lambda *_a, **_k: extracted)
     settings = Settings()
     settings.general.output_dir = str(tmp_path / "output")
+    settings.llm.enabled = False
     settings.chapters.allow_single_chapter = True
     manifest_path = pipeline.analyze_book(source, settings)
     assert "damaged_source" in read_manifest(manifest_path).review_required
