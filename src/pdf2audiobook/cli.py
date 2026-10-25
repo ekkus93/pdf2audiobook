@@ -254,7 +254,15 @@ def budget_resolve(
                 output_rate=settings.llm.output_cost_usd_per_million_tokens,
                 unbilled=unbilled,
             )
-        except LLMError:
+        except LLMError as exc:
+            # These two fixed row-state messages are safe and actionable. Other
+            # ledger failures remain deliberately content-free.
+            if str(exc) in {
+                "Budget request ID does not exist",
+                "Budget request is already settled",
+                "Legacy budget ledger cannot be resolved; re-create the ledger",
+            }:
+                raise ConfigError(str(exc)) from None
             raise ConfigError("Resolved values are invalid or exceed ledger limits") from None
         emit({"resolved": request_id, "status": stored_status}, json_output)
     except KeyboardInterrupt:

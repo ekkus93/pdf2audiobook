@@ -279,7 +279,7 @@ Separately, `batch` maps every `OSError` to 6 (cli.py:675).
 
 *Required:*
 - `budget show` reads every ledger version this release can write or has written, read-only.
-- `budget resolve` on a legacy ledger upgrades it in one transaction, or refuses with a fixed "re-create the ledger" message (choose one and record the decision).
+- `budget resolve` refuses v2 and earlier ledgers with the fixed message "Legacy budget ledger cannot be resolved; re-create the ledger". This avoids modifying an old ledger before the user confirms a current-version workspace.
 - A missing ID and an already-settled row each get their own fixed message and exit 2.
 
 *Tests (new):* `show` on a v2 ledger; `resolve` of a missing ID; `resolve` of a complete row.

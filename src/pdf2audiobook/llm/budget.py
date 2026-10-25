@@ -16,6 +16,15 @@ from typing import cast
 from pdf2audiobook.errors import LLMError
 
 
+def read_ledger_schema_version(path: Path) -> int:
+    """Read ledger metadata through SQLite's read-only URI without migration."""
+    try:
+        with sqlite3.connect(f"file:{path.resolve().as_posix()}?mode=ro", uri=True) as connection:
+            return int(connection.execute("PRAGMA user_version").fetchone()[0])
+    except (sqlite3.Error, TypeError, ValueError):
+        raise LLMError("Cannot access per-book LLM budget ledger") from None
+
+
 class BookLLMBudgetLedger:
     def __init__(self, path: Path):
         self.path = path
@@ -34,7 +43,7 @@ class BookLLMBudgetLedger:
             if version not in (0, 1, 2, 3):
                 raise LLMError("Unsupported LLM budget ledger schema version")
             if readonly:
-                if version != 3:
+                if version not in (0, 1, 2, 3):
                     raise LLMError("Unsupported LLM budget ledger schema version")
                 return connection
             connection.execute(
@@ -61,6 +70,20 @@ class BookLLMBudgetLedger:
     @staticmethod
     def _stats(connection: sqlite3.Connection) -> dict:
         # Fail closed on malformed/corrupted ledgers rather than undercounting.
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(calls)")}
+        token_bound_expr = "upper_bound_tokens" if "upper_bound_tokens" in columns else "NULL"
+        cost_bound_expr = "upper_bound_usd" if "upper_bound_usd" in columns else "NULL"
+        bound_validation = ""
+        if "upper_bound_tokens" in columns:
+            bound_validation += (
+                " OR (upper_bound_tokens IS NOT NULL AND (typeof(upper_bound_tokens) != 'integer' "
+                "OR upper_bound_tokens < 0 OR status NOT IN ('pending','unknown')))"
+            )
+        if "upper_bound_usd" in columns:
+            bound_validation += (
+                " OR (upper_bound_usd IS NOT NULL AND (typeof(upper_bound_usd) != 'text' "
+                "OR status NOT IN ('pending','unknown')))"
+            )
         invalid = connection.execute(
             "SELECT COUNT(*) FROM calls WHERE status NOT IN ('pending','complete','unknown','unbilled','rejected') "
             "OR (status='complete' AND (prompt_tokens IS NULL OR "
@@ -74,10 +97,7 @@ class BookLLMBudgetLedger:
             "OR (estimated_usd IS NOT NULL AND typeof(estimated_usd) != 'text') "
             "OR prompt_tokens < 0 OR completion_tokens < 0 OR total_tokens < 0 "
             "OR (status='complete' AND total_tokens < prompt_tokens + completion_tokens)"
-            " OR (upper_bound_tokens IS NOT NULL AND (typeof(upper_bound_tokens) != 'integer' "
-            "OR upper_bound_tokens < 0 OR status NOT IN ('pending','unknown')))"
-            " OR (upper_bound_usd IS NOT NULL AND (typeof(upper_bound_usd) != 'text' "
-            "OR status NOT IN ('pending','unknown')))"
+            + bound_validation
         ).fetchone()[0]
         if invalid:
             raise LLMError("Invalid per-book LLM budget ledger entries")
@@ -103,7 +123,7 @@ class BookLLMBudgetLedger:
             upper_usd,
         ) in connection.execute(
             "SELECT status,prompt_tokens,completion_tokens,total_tokens,estimated_usd,"
-            "upper_bound_tokens,upper_bound_usd FROM calls"
+            f"{token_bound_expr},{cost_bound_expr} FROM calls"
         ):
             if status != "unbilled":
                 counts["requests_started"] += 1
@@ -126,12 +146,17 @@ class BookLLMBudgetLedger:
                 for key in ("reported_tokens", "prompt_tokens", "completion_tokens")
             ):
                 raise LLMError("Cumulative token totals exceed supported range")
-        costs = connection.execute(
-            "SELECT CASE WHEN status='complete' THEN estimated_usd "
-            "WHEN status IN ('pending','unknown') THEN upper_bound_usd ELSE NULL END "
-            "FROM calls WHERE (status='complete' AND estimated_usd IS NOT NULL) "
-            "OR (status IN ('pending','unknown') AND upper_bound_usd IS NOT NULL)"
-        ).fetchall()
+        if "upper_bound_usd" in columns:
+            costs = connection.execute(
+                "SELECT CASE WHEN status='complete' THEN estimated_usd "
+                "WHEN status IN ('pending','unknown') THEN upper_bound_usd ELSE NULL END "
+                "FROM calls WHERE (status='complete' AND estimated_usd IS NOT NULL) "
+                "OR (status IN ('pending','unknown') AND upper_bound_usd IS NOT NULL)"
+            ).fetchall()
+        else:
+            costs = connection.execute(
+                "SELECT estimated_usd FROM calls WHERE status='complete' AND estimated_usd IS NOT NULL"
+            ).fetchall()
         values = [Decimal(item[0]) for item in costs]
         if any(not amount.is_finite() or amount < 0 for amount in values):
             raise LLMError("Invalid per-book LLM cost entries")
@@ -192,6 +217,10 @@ class BookLLMBudgetLedger:
                 return stats
         except (sqlite3.Error, InvalidOperation):
             raise LLMError("Invalid per-book LLM budget ledger") from None
+
+    def schema_version(self) -> int:
+        """Read the schema version without opening a migration-capable connection."""
+        return read_ledger_schema_version(self.path)
 
     def rows(self, *, readonly: bool = False) -> list[dict]:
         """Return the content-free accounting fields shown by the budget CLI."""
@@ -389,14 +418,18 @@ class BookLLMBudgetLedger:
         unbilled: bool = False,
     ) -> str:
         """Resolve one pending/unknown request with validated accounting in one transaction."""
+        if read_ledger_schema_version(self.path) < 3:
+            raise LLMError("Legacy budget ledger cannot be resolved; re-create the ledger")
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
                 row = connection.execute(
                     "SELECT status FROM calls WHERE id=?", (call_id,)
                 ).fetchone()
-                if row is None or row[0] not in {"pending", "unknown"}:
-                    raise LLMError("Only a pending or unknown ledger request can be resolved")
+                if row is None:
+                    raise LLMError("Budget request ID does not exist")
+                if row[0] not in {"pending", "unknown"}:
+                    raise LLMError("Budget request is already settled")
                 if unbilled:
                     connection.execute(
                         "UPDATE calls SET status='unbilled', upper_bound_tokens=NULL, "
