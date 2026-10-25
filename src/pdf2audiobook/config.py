@@ -245,7 +245,10 @@ def user_config_path() -> Path:
 
 def _apply(obj: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
     for part in path[:-1]:
-        obj = obj.setdefault(part, {})
+        child = obj.setdefault(part, {})
+        if not isinstance(child, dict):
+            raise ConfigError("invalid configuration values; check field names and types")
+        obj = child
     obj[path[-1]] = value
 
 
@@ -425,12 +428,16 @@ def _redact_public_value(value: Any, field_name: str = "", _path: str = "") -> A
     if isinstance(value, list):
         return [_redact_public_value(item, field_name, _path) for item in value]
     if isinstance(value, str) and "://" in value:
+        authority_start = value.find("://") + 3
+        userinfo_end = value.rfind("@")
+        if userinfo_end >= authority_start:
+            value = value[:authority_start] + "***@" + value[userinfo_end + 1 :]
         try:
             parsed = urlsplit(value)
         except ValueError:
             return "***"
         if not parsed.scheme or not parsed.netloc:
-            return value
+            return "***"
         netloc = parsed.netloc
         if "@" in netloc:
             netloc = "***@" + netloc.rsplit("@", 1)[1]

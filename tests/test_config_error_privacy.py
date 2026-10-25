@@ -100,6 +100,23 @@ def test_toml_scalar_llm_section_is_rejected_before_provider_selection(tmp_path:
     assert raised.value.__cause__ is None
 
 
+@pytest.mark.parametrize("env_override", [False, True], ids=["without-env", "with-env"])
+def test_nested_non_table_config_section_is_content_free_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, env_override: bool
+) -> None:
+    config = tmp_path / "settings.toml"
+    config.write_text("[tts]\nkitten = 5\n", encoding="utf-8")
+    if env_override:
+        monkeypatch.setenv("PDF2AUDIOBOOK_TTS_VOICE", "Jasper")
+
+    result = CliRunner().invoke(app, ["config", "show", "--json", "--config", str(config)])
+
+    assert result.exit_code == 2
+    assert "PRIVATE" not in result.stderr
+    assert "TypeError" not in result.stderr
+    assert "invalid configuration values" in result.stderr
+
+
 @pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache", "audio"])
 def test_toml_scalar_sections_keep_diagnostics_content_free(tmp_path: Path, section: str) -> None:
     config = tmp_path / f"{SENTINEL}.toml"

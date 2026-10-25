@@ -63,6 +63,63 @@ def test_config_redaction_does_not_infer_secrets_from_user_dictionary_keys():
     }
 
 
+def test_config_redaction_hides_unparseable_url_values():
+    assert _redact_public_value("http:///PRIVATE_URL_VALUE") == "***"
+
+
+@pytest.mark.parametrize(
+    ("password", "secret"),
+    [
+        ("private#HASH_SECRET", "HASH_SECRET"),
+        ("private?QUERY_SECRET", "QUERY_SECRET"),
+        ("private/PATH_SECRET", "PATH_SECRET"),
+        ("private@AT_SECRET", "AT_SECRET"),
+    ],
+)
+@pytest.mark.parametrize("sources", [False, True], ids=["config-only", "with-sources"])
+def test_config_show_redacts_reserved_characters_in_url_password(
+    tmp_path, password, secret, sources
+):
+    config = tmp_path / "settings.toml"
+    config.write_text(
+        '[llm]\nprovider = "ollama"\n[llm.ollama]\n'
+        f'base_url = "http://PRIVATE_USER:{password}@localhost:11434/v1"\n',
+        encoding="utf-8",
+    )
+    arguments = ["config", "show", "--json", "--config", str(config)]
+    if sources:
+        arguments.append("--sources")
+
+    result = CliRunner().invoke(app, arguments)
+
+    assert result.exit_code == 0, result.stderr
+    assert secret not in result.stdout
+    assert "PRIVATE_USER" not in result.stdout
+    assert json.loads(result.stdout)["llm"]["ollama"]["base_url"].startswith("http://***@localhost")
+
+
+@pytest.mark.parametrize("sources", [False, True], ids=["config-only", "with-sources"])
+def test_declared_secret_config_field_is_redacted(tmp_path, monkeypatch, sources):
+    import pdf2audiobook.config as app_config
+
+    monkeypatch.setattr(app_config, "_SECRET_CONFIG_PATHS", frozenset({"llm.ollama.model"}))
+    config = tmp_path / "settings.toml"
+    config.write_text(
+        '[llm]\nprovider = "ollama"\n[llm.ollama]\nmodel = "PRIVATE_MODEL_SECRET_123"\n',
+        encoding="utf-8",
+    )
+    arguments = ["config", "show", "--json", "--config", str(config)]
+    if sources:
+        arguments.append("--sources")
+
+    result = CliRunner().invoke(app, arguments)
+
+    assert result.exit_code == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["llm"]["ollama"]["model"] == "***"
+    assert "PRIVATE_MODEL_SECRET_123" not in result.stdout
+
+
 def test_config_show_keeps_numeric_limits_rates_and_pronunciation_keys_visible(tmp_path):
     config = tmp_path / "settings.toml"
     config.write_text(
