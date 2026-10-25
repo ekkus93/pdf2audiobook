@@ -508,6 +508,12 @@ def convert(
         if chapter is not None and chapter_range is not None:
             raise ConfigError("--chapter and --chapter-range cannot be combined")
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
+        from pdf2audiobook.pipeline import REVIEW_REASON_CODES
+
+        if not set(accept_review) <= set(REVIEW_REASON_CODES):
+            raise ConfigError(
+                "Unknown --accept-review reason; choose from " + ", ".join(REVIEW_REASON_CODES)
+            )
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
         configure_effective_logging(settings, origins)
         from pdf2audiobook.audio import audio_output_path, read_cover_image
@@ -518,6 +524,11 @@ def convert(
         if dry_run:
             manifest_path = analyze_book(source, settings)
             manifest = read_manifest(manifest_path)
+            # Report what the flag would acknowledge; dry-run never rewrites the manifest.
+            would_acknowledge = sorted(set(accept_review) & set(manifest.review_required))
+            manifest.review_required = [
+                code for code in manifest.review_required if code not in set(accept_review)
+            ]
             chapters = select_chapters(
                 manifest, settings, chapter=chapter, chapter_range=selected_range
             )
@@ -525,7 +536,13 @@ def convert(
                 str(audio_output_path(manifest, item, manifest_path.parent)) for item in chapters
             ]
             emit(
-                {"dry_run": True, "chapters": len(chapters), "mp3_files": output_files}, json_output
+                {
+                    "dry_run": True,
+                    "chapters": len(chapters),
+                    "mp3_files": output_files,
+                    "would_acknowledge": would_acknowledge,
+                },
+                json_output,
             )
         else:
             try:

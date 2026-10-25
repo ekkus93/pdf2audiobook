@@ -692,6 +692,9 @@ def analyze_book(
     return manifest_path
 
 
+REVIEW_REASON_CODES = ("damaged_source", "empty_chapter", "ambiguous_page_numbers")
+
+
 def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) -> None:
     """Recompute the empty-chapter review reason from the manifest as it is now.
 
@@ -845,9 +848,10 @@ def convert_book(
     manifest = read_manifest(manifest_path)
     refresh_empty_chapter_reason(manifest_path, manifest)
     if accept_review:
-        allowed = {"damaged_source", "empty_chapter", "ambiguous_page_numbers"}
-        if not set(accept_review) <= allowed:
+        if not set(accept_review) <= set(REVIEW_REASON_CODES):
             raise AudioError("Unknown review reason code")
+        for code in sorted(set(accept_review)):
+            log_event("review_acknowledged", level=logging.INFO, status=code)
         manifest.review_acknowledged = sorted(
             set(manifest.review_acknowledged) | set(accept_review)
         )
