@@ -280,6 +280,10 @@ lockfile currently resolves 0.9.6. Re-encoding is automatic when a chapter is
 next converted; no manifest migration is needed. Chapter synthesis now streams
 PCM to a temporary WAV, so interrupted temporary audio is disposable.
 
+`ci.yml` pins uv 0.12.9 (`astral-sh/setup-uv` `version:`), the release that wrote
+`uv.lock` (`revision = 3`; `uv lock` with 0.12.9 leaves the file unchanged). To move to a
+newer uv, change the pin and the lockfile in the same commit and say so in the ledger.
+
 Upgrade note (FX9): the analysis fingerprint is now `analysis-v21` (one-letter Roman
 headings, wrapped initials and years, glyph-like vector pages sent to OCR), so existing
 workspaces re-run analysis; unapproved workspaces recompute, approved ones are protected
