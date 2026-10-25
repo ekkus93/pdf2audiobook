@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import os
 import tempfile
+from collections.abc import Iterator
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
@@ -16,6 +18,7 @@ from pdf2audiobook.audio import (
     audio_output_path,
     encode_mp3,
     read_cover_image,
+    scene_break_pause_ranges,
     synthesize_chunks,
     voice_marker_ids,
 )
@@ -840,6 +843,29 @@ def chapter_audio_fingerprint(
     )
 
 
+@contextlib.contextmanager
+def _workspace_conversion_lock(folder: Path) -> Iterator[None]:
+    """Allow one conversion per workspace so cleanup never races another run's files."""
+    try:
+        import fcntl
+    except ImportError:  # pragma: no cover - platforms without POSIX file locks
+        yield
+        return
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        handle = (folder / ".convert.lock").open("a+")
+    except OSError:
+        raise AudioError("Could not lock the book workspace for conversion") from None
+    try:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            raise AudioError("Another conversion is already running for this book") from None
+        yield
+    finally:
+        handle.close()
+
+
 def convert_book(
     source: Path,
     settings: Settings,
@@ -855,6 +881,32 @@ def convert_book(
     log_event("stage_started", level=logging.INFO, stage="conversion")
     cover_image = read_cover_image(settings.audio.cover_image)
     manifest_path = analyze_book(source, settings, extractor=extractor)
+    with _workspace_conversion_lock(manifest_path.parent):
+        return _convert_analyzed_book(
+            manifest_path,
+            settings,
+            cover_image,
+            chapter=chapter,
+            chapter_range=chapter_range,
+            force=force,
+            accept_review=accept_review,
+            tts_provider=tts_provider,
+            encoder=encoder,
+        )
+
+
+def _convert_analyzed_book(
+    manifest_path: Path,
+    settings: Settings,
+    cover_image: tuple[bytes, str] | None,
+    *,
+    chapter: int | None,
+    chapter_range: tuple[int, int] | None,
+    force: bool,
+    accept_review: tuple[str, ...],
+    tts_provider: TTSProvider | None,
+    encoder: AudioEncoder | None,
+) -> list[Path]:
     temporary_wav_dir = manifest_path.parent / ".cache" / "tts" / "chapters"
     try:
         if temporary_wav_dir.is_dir():
@@ -908,9 +960,16 @@ def convert_book(
             continue
         text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
         try:
-            marker_ids = voice_marker_ids(text_file.read_text(encoding="utf-8"))
-        except (AudioError, OSError, UnicodeError):
+            chapter_source = text_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
             raise AudioError("Cannot read approved chapter text; check workspace files") from None
+        try:
+            marker_ids = voice_marker_ids(chapter_source)
+        except AudioError:
+            # A misplaced marker fails its own chapter, not the whole book.
+            preflight_failed[item.number] = AudioError.exit_code
+            preflight_reasons[item.number] = "invalid_voice_marker"
+            continue
         if marker_ids and not item.manually_approved:
             preflight_failed[item.number] = AudioError.exit_code
         elif marker_ids:
@@ -1029,6 +1088,11 @@ def convert_book(
             pending.append((item, output, text_file, record, identity))
         else:
             conversion_status[item.id]["status"] = "complete"
+            # A resumed chapter keeps the pause count its synthesized run reported.
+            try:
+                conversion_status[item.id]["pause_count"] = len(scene_break_pause_ranges(text))
+            except AudioError:
+                conversion_status[item.id]["pause_count"] = 0
         del text
 
     encode = encode_mp3 if encoder is None else encoder

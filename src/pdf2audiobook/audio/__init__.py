@@ -192,6 +192,16 @@ def _unspeakable_ranges(text: str) -> list[tuple[int, int]]:
     return ranges
 
 
+def scene_break_pause_ranges(chapter_text: str) -> list[tuple[int, int]]:
+    """Source ranges of decorative scene breaks, which are spoken as pauses."""
+    masked = _voice_markers(chapter_text, "")[0]
+    return [
+        (start, end)
+        for start, end in _unspeakable_ranges(masked)
+        if _SCENE_BREAK.fullmatch(masked[start:end].strip())
+    ]
+
+
 def has_speakable_narration(text: str) -> bool:
     """Return false for whitespace and decorative scene-break-only text."""
     return any(
@@ -509,11 +519,7 @@ def synthesize_chunks(
     pause = np.zeros(int(rate * pause_ms / 1000), dtype=np.float32)
     paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
     ranges = chunk_source_ranges(spoken_source, chunks, pronunciations=pronunciations)
-    pause_ranges = [
-        (start, end)
-        for start, end in _unspeakable_ranges(spoken_source)
-        if _SCENE_BREAK.fullmatch(spoken_source[start:end].strip())
-    ]
+    pause_ranges = scene_break_pause_ranges(chapter_text)
     chunk_voices: list[str] = []
     change_index = 0
     active_voice = voice

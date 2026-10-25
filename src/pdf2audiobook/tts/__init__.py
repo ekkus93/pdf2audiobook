@@ -223,6 +223,11 @@ class PiperProvider:
             return np.frombuffer(data, dtype="<i2").astype(np.float32) / 32767.0
         except AudioError:
             raise
+        except subprocess.TimeoutExpired:
+            # The documented transient failure of the CLI adapter: a busy host.
+            error = AudioError("Piper speech generation timed out; retry may succeed")
+            error.transient = True  # type: ignore[attr-defined]
+            raise error from None
         except Exception:
             # Do not reflect backend errors: subprocess diagnostics can contain
             # the synthesized source text or local filesystem paths.

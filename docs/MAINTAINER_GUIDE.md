@@ -119,6 +119,14 @@ reported as "drawings without readable text" and sets the `damaged_source`
 review reason; a lone rule or border is treated as blank. The Tesseract test in
 `tests/test_vector_outlined_text.py` runs in CI, whose job installs Tesseract.
 
+`convert` holds an exclusive lock on `<workspace>/.convert.lock` (POSIX
+`flock`) for the whole run, so a second `convert` of the same book exits with
+"Another conversion is already running" and the stale temporary WAV sweep can
+never delete a running conversion's file. `tts.max_retries` retries only errors a
+provider marks transient (`exc.transient = True` or `provider.is_transient_error`).
+The Piper adapter marks its subprocess timeout; the Kitten adapter runs
+in-process and has no documented transient failure, so it never retries.
+
 ### Optional local and remote LLMs
 
 The built-in default provider is Ollama at `http://127.0.0.1:11434/v1`
