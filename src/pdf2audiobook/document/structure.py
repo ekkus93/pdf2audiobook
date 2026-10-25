@@ -203,13 +203,43 @@ def _number_value(raw: str) -> tuple[int, str] | None:
     return total, "roman"
 
 
+_ROMAN_TITLE = re.compile(r"([IVXLCDM]{1,8})[.)]\s+[A-Z][A-Z\s'’:-]{2,80}")
+# One-letter numerals double as initials ("C. DICKENS", "M. LEBLANC"), so they
+# only count as headings beside neighbouring numerals or by typography.
+_AMBIGUOUS_NUMERALS = frozenset("CDLMVX")
+
+
 def labelled_heading(text: str) -> bool:
     """A chapter/part/prologue label line, not prose that cites one."""
     stripped = text.strip()
-    roman_title = re.fullmatch(r"[IVXLCDM]{1,8}[.)]\s+[A-Z][A-Z\s'’:-]{2,80}", stripped)
+    roman_title = _ROMAN_TITLE.fullmatch(stripped)
+    if roman_title is not None and roman_title.group(1) in _AMBIGUOUS_NUMERALS:
+        roman_title = None
     return roman_title is not None or (
         HEADING.match(text) is not None and len(text.split()) <= 12 and not LABEL_PROSE.match(text)
     )
+
+
+def roman_sequence_heading_indices(blocks: list[DocumentBlock], skip: set[int]) -> set[int]:
+    """One-letter numeral titles that sit beside a neighbouring Roman heading.
+
+    "V. THE FOREST" is a chapter heading when "IV." or "VI." headings exist;
+    "C. DICKENS" has no such neighbour and stays body text.
+    """
+    values: set[int] = set()
+    ambiguous: dict[int, int] = {}
+    for index, block in enumerate(blocks):
+        if index in skip:
+            continue
+        match = _ROMAN_TITLE.fullmatch(block.text.strip())
+        parsed = _number_value(match.group(1)) if match is not None else None
+        if match is None or parsed is None:
+            continue
+        if match.group(1) in _AMBIGUOUS_NUMERALS:
+            ambiguous[index] = parsed[0]
+        else:
+            values.add(parsed[0])
+    return {index for index, value in ambiguous.items() if {value - 1, value + 1} & values}
 
 
 def is_heading_line(text: str) -> bool:
@@ -874,6 +904,9 @@ def propose_chapters(
     typical_size = body_sizes[(len(body_sizes) - 1) // 2] if len(body_sizes) >= 3 else None
     contents_lines, contents_titles = _printed_contents(blocks, omitted, typical_size)
     typography_ids: set[int] = set()
+    roman_sequence = roman_sequence_heading_indices(
+        blocks, {j for j, item in enumerate(blocks) if item.id in omitted} | set(contents_lines)
+    )
     for i, block in enumerate(blocks):
         if block.id in omitted or i in contents_lines:
             # Entries on a printed contents page are references, not headings.
@@ -904,6 +937,7 @@ def propose_chapters(
             typography_ids.add(i)
         if (
             is_heading_line(text)
+            or i in roman_sequence
             or block.id in (extra_heading_ids or set())
             or is_typographic_heading
             or i in contents_titles
