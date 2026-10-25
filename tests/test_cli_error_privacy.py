@@ -41,3 +41,21 @@ def test_analyze_output_path_failure_is_content_free(tmp_path, json_output):
         diagnostic = json.loads(result.stderr)
         assert diagnostic["error"]["type"] == "ExtractionError"
         assert diagnostic["error"]["message"] == "Could not create or update the output workspace"
+
+
+def test_batch_partial_failure_diagnostic_is_content_free(tmp_path):
+    books = tmp_path / "PRIVATE_OUTPUT_PATH" / "books"
+    books.mkdir(parents=True)
+    (books / "PRIVATE_BOOK_NAME.pdf").write_bytes(b"PRIVATE_BOOK_CONTENT")
+
+    result = CliRunner().invoke(
+        app,
+        ["batch", str(books), "--no-config", "--no-llm", "--json"],
+    )
+
+    assert result.exit_code == 7
+    diagnostic = json.loads(result.stderr)
+    assert diagnostic["error"]["type"] == "PartialConversionError"
+    assert diagnostic["error"]["message"] == "One or more books failed"
+    for private in ("PRIVATE_OUTPUT_PATH", "PRIVATE_BOOK_NAME", "PRIVATE_BOOK_CONTENT"):
+        assert private not in result.stderr

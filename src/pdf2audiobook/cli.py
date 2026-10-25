@@ -7,15 +7,28 @@ import json
 import logging
 import re
 import shutil
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import typer
 from rich.console import Console
 
+try:
+    ClickExit: type[BaseException] = getattr(import_module("click.exceptions"), "Exit")
+except ImportError:
+    ClickExit = typer.Exit
+
 from pdf2audiobook import __version__
 from pdf2audiobook.config import Settings, load_settings, settings_public
-from pdf2audiobook.errors import AudiobookError, AudioError, ConfigError, ExtractionError, LLMError
+from pdf2audiobook.errors import (
+    AudiobookError,
+    AudioError,
+    ConfigError,
+    ExtractionError,
+    LLMError,
+    PartialConversionError,
+)
 from pdf2audiobook.logging import (
     configure_from_settings,
     configure_logging,
@@ -136,6 +149,8 @@ def show_config(
         emit(payload, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -159,6 +174,8 @@ def budget_show(
         )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -215,6 +232,8 @@ def budget_resolve(
         emit({"resolved": request_id, "status": stored_status}, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -257,6 +276,8 @@ def doctor(
         )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -298,6 +319,8 @@ def inspect(
         emit(payload, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -406,6 +429,8 @@ def analyze(
         emit({"manifest": str(manifest_path)}, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -563,6 +588,8 @@ def convert(
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -660,6 +687,8 @@ def batch(
                 validated["tts"][selected_provider]["speed"] = speed
             try:
                 book_settings = Settings.model_validate(validated)
+            except (typer.Exit, ClickExit):
+                raise
             except Exception:
                 raise ConfigError("Invalid per-book TTS settings for batch conversion") from None
             batch_jobs.append((source, book_settings))
@@ -668,6 +697,8 @@ def batch(
             try:
                 outputs = convert_book(source, book_settings)
             except KeyboardInterrupt:
+                raise
+            except (typer.Exit, ClickExit):
                 raise
             except Exception as exc:
                 failures += 1
@@ -687,9 +718,11 @@ def batch(
                 )
         emit({"books": results, "failed": failures}, json_output)
         if failures:
-            raise typer.Exit(code=7)
+            raise PartialConversionError("One or more books failed")
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -764,6 +797,8 @@ def pack_m4b(
         emit({"m4b_file": str(result)}, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -792,5 +827,7 @@ def review(
             server.server_close()
     except KeyboardInterrupt:
         fail_interrupted()
+    except (typer.Exit, ClickExit):
+        raise
     except Exception as exc:
         fail(exc)
