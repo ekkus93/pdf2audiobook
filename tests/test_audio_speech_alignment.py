@@ -76,3 +76,34 @@ def test_normalized_chunks_keep_source_ranges_with_comma_spacing():
 
 def test_ellipsis_token_still_matches_its_pronunciation_key():
     assert split_sentences("hello...", pronunciations={"hello": "hullo"}) == ["hullo."]
+
+
+@pytest.mark.parametrize("invisible", ["﻿", "​", "‌", "‍", "⁠", "­"])
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{x} Hello there world.",
+        "Hello {x} world.",
+        "Hello there world. {x}",
+        "{x}\n\nHello there world.",
+        "Hello there\n\n{x}\n\nworld.",
+    ],
+)
+def test_isolated_invisible_token_never_fails_alignment(invisible, template):
+    source = template.format(x=invisible)
+    chunks, ranges = _align(source)
+    assert " ".join(chunks).split() == [
+        word for word in source.replace(invisible, " ").split() if word
+    ]
+    assert ranges
+
+
+def test_chapter_of_one_invisible_token_and_one_word_aligns():
+    source = "﻿ ​ word"
+    chunks, ranges = _align(source)
+    assert chunks == ["word"]
+    assert source[ranges[0][0] : ranges[0][1]] == "word"
+
+
+def test_invisible_only_chapter_has_nothing_to_speak():
+    assert split_sentences("﻿ ​") == []

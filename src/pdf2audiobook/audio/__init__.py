@@ -121,6 +121,7 @@ _NARRATION_TRANSLATION = str.maketrans(
         "\u200b": "",
         "\u200c": "",
         "\u200d": "",
+        "\u2060": "",
         "\ufeff": "",
     }
 )
@@ -140,9 +141,12 @@ def normalize_narration_text(text: str) -> str:
     return text.translate(_NARRATION_TRANSLATION)
 
 
+_INVISIBLE = re.compile("[\u00ad\u200b\u200c\u200d\u2060\ufeff]")
+
+
 def _droppable_word(word: str) -> bool:
     """Source words that legitimately produce no spoken token of their own."""
-    return not word.strip(_DASHES)
+    return not _INVISIBLE.sub("", word).strip(_DASHES)
 
 
 def _spoken_sequence(words: list[str], pronunciations: Mapping[str, str] | None) -> list[str]:
