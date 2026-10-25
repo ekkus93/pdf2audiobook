@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0–FX1 implementation complete; FX2 in progress
+**Status:** FX0–FX1 complete; FX2 implementation in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -59,20 +59,20 @@
 ## Phase FX2 — Text integrity (extraction)
 
 - [ ] FX2.01 Refactor first, with no behaviour change (R44).
-  - [ ] FX2.01a Move to one heading classifier in the structure layer, used by pdf.py, and remove pdf.py's import of structure internals.
+  - [x] FX2.01a Move to one heading classifier in the structure layer, used by pdf.py, and remove pdf.py's import of structure internals.
   - [ ] FX2.01b Split `extract_pdf` into page-strategy, block-builder and block-kind steps.
-  - [ ] FX2.01c Emit `kind="list"` for numbered lists or delete the dead list guards (structure.py:423, 1233).
+  - [x] FX2.01c Emit `kind="list"` for numbered lists or delete the dead list guards (structure.py:423, 1233).
   - [ ] FX2.01d The full test suite passes unchanged.
-- [ ] FX2.02 Stop classifying prose as headings (R6). Test: "introduction of the new tax was delayed until" stays body text and forces no paragraph breaks.
+- [x] FX2.02 Stop classifying prose as headings (R6). Test: "introduction of the new tax was delayed until" stays body text and forces no paragraph breaks.
 - [ ] FX2.03 Never remove real numerals as page numbers (R3).
   - [ ] FX2.03a Require all three: the numeral is in the top or bottom band, it is nearer the page edge than the nearest body line, and its sequence is consistent with the page index and page labels. If more than one sequence qualifies, remove none and emit a review warning.
   - [ ] FX2.03b Add a sonnet fixture (`12`–`15` above poems, `40`–`43` folios): the poem numbers are kept and the folios removed. Add an ambiguous-sequence fixture: nothing removed and a warning emitted. The existing pagination tests still pass.
-- [ ] FX2.04 Send pages to auto OCR only when they need it (R4).
-  - [ ] FX2.04a Trigger OCR only for raster coverage or unusable embedded text. Keep short valid text, and never OCR image-free blank pages.
-  - [ ] FX2.04b Test with Tesseract made unavailable: a born-digital PDF with a blank page and a "Part One" page analyzes, and every block has origin `embedded`.
-- [ ] FX2.05 Fix hyphen joining (R5).
-  - [ ] FX2.05a Join only a hyphen preceded by a letter and followed by a lowercase continuation. Drop the hyphen only when the unhyphenated word appears elsewhere in the document. Never join after a spaced dash or an en/em dash.
-  - [ ] FX2.05b Tests: "and so -" + "then"; "exam-" + "ple" with and without a supporting occurrence; "well-" + "known".
+- [x] FX2.04 Send pages to auto OCR only when they need it (R4).
+  - [x] FX2.04a Trigger OCR only for raster coverage or unusable embedded text. Keep short valid text, and never OCR image-free blank pages.
+  - [x] FX2.04b Test with Tesseract made unavailable: a born-digital PDF with a blank page and a "Part One" page analyzes, and every block has origin `embedded`.
+- [x] FX2.05 Fix hyphen joining (R5).
+  - [x] FX2.05a Join only a hyphen preceded by a letter and followed by a lowercase continuation. Drop the hyphen only when the unhyphenated word appears elsewhere in the document. Never join after a spaced dash or an en/em dash.
+  - [x] FX2.05b Tests: "and so -" + "then"; "exam-" + "ple" with and without a supporting occurrence; "well-" + "known".
 - [ ] FX2.06 Flag damaged and repaired PDFs (R7).
   - [ ] FX2.06a When the document reports repair or a page fails to load, add a content-free manifest warning, mark the manifest review-required, and include only page numbers in per-page warnings.
   - [ ] FX2.06b Tests: a truncated fixture triggers the warning and the review gate; add `tests/test_damaged_pdf_privacy.py`.

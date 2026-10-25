@@ -68,6 +68,26 @@ def test_unicode_soft_hyphen_is_repaired_only_across_soft_wrap():
     assert reflow_narration_lines(lines) == "international cooperation.\n"
 
 
+def test_line_end_hyphens_preserve_dashes_and_require_document_evidence():
+    spaced_dash = [block(0, "and so -"), block(1, "then")]
+    assert reflow_narration_lines(spaced_dash) == "and so - then\n"
+    assert reflow_narration_lines([block(0, "well–"), block(1, "known")]) == "well– known\n"
+    assert reflow_narration_lines([block(0, "well—"), block(1, "known")]) == "well— known\n"
+
+    unsupported = [block(0, "exam-"), block(1, "ple")]
+    assert reflow_narration_lines(unsupported) == "exam-ple\n"
+
+    supported = [
+        block(0, "exam-"),
+        block(1, "ple"),
+        block(2, "This is an example.", kind="heading"),
+    ]
+    assert reflow_narration_lines(supported) == "example\n\nThis is an example.\n"
+
+    compound = [block(0, "well-"), block(1, "known")]
+    assert reflow_narration_lines(compound) == "well-known\n"
+
+
 def test_indented_paragraph_stays_separate():
     first = block(0, "The previous paragraph ends.")
     second = block(1, "A new paragraph begins.")

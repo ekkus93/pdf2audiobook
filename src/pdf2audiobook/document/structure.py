@@ -210,6 +210,19 @@ def labelled_heading(text: str) -> bool:
     )
 
 
+def is_heading_line(text: str) -> bool:
+    """Shared conservative classifier for extraction kind and chapter analysis."""
+    return labelled_heading(text.strip())
+
+
+LIST_LINE = re.compile(r"^\s*(?:\d+[.)]|[A-Za-z][.)]|[•*])\s+")
+
+
+def is_list_line(text: str) -> bool:
+    """Recognize explicit list markers without treating dialogue dashes as lists."""
+    return LIST_LINE.match(text) is not None
+
+
 def _wordlike(text: str) -> bool:
     """Scan noise (rules, stray quotes, digit runs, mixed-script mojibake) is not a heading."""
     letters = [char for char in text if char.isalpha()]
@@ -722,7 +735,7 @@ def propose_chapters(
         if is_typographic_heading:
             typography_ids.add(i)
         if (
-            labelled_heading(text)
+            is_heading_line(text)
             or block.id in (extra_heading_ids or set())
             or is_typographic_heading
             or i in contents_titles
@@ -739,7 +752,7 @@ def propose_chapters(
         heading_indices = [
             i
             for i in heading_indices
-            if i not in lone or labelled_heading(blocks[i].text.strip()) or i in contents_titles
+            if i not in lone or is_heading_line(blocks[i].text) or i in contents_titles
         ]
     # Combine confirmed bookmark anchors with textual headings. Some books mix
     # numbered headings and ornamental titles; do not discard the TOC merely
@@ -839,7 +852,7 @@ def propose_chapters(
         heading_indices = [
             i
             for i in heading_indices
-            if i not in crowded or labelled_heading(blocks[i].text.strip()) or i in contents_titles
+            if i not in crowded or is_heading_line(blocks[i].text) or i in contents_titles
         ]
     # A chapter label on a contents-style page (most lines end in a page
     # reference) is a listing when the same label opens a chapter later.
@@ -885,7 +898,7 @@ def propose_chapters(
         if (i in typography_ids or blocks[i].id in llm_ids)
         and i not in bookmark_titles
         and i not in contents_titles
-        and not labelled_heading(blocks[i].text.strip())
+        and not is_heading_line(blocks[i].text)
     }
     llm_only = {i for i in weak if i not in typography_ids}
     if len(bookmark_titles) >= 2 or contents_titles or numbered_labels >= 3:
@@ -1221,7 +1234,11 @@ def render_chapter_texts(manifest: BookManifest, folder: Path, footnotes: str = 
         chapter_blocks, _, _ = place_footnotes(
             manifest.blocks[chapter.start_block : chapter.end_block], footnotes
         )
-        content = reflow_narration_lines(chapter_blocks, replacements).encode("utf-8")
+        content = reflow_narration_lines(
+            chapter_blocks,
+            replacements,
+            supporting_text=" ".join(block.text for block in manifest.blocks),
+        ).encode("utf-8")
         path = folder / "chapters" / f"{chapter.number:03d}.txt"
         # Compare existing chapter text using bounded reads. read_bytes()
         # would duplicate an entire long chapter in memory on every resume.
@@ -1272,14 +1289,19 @@ def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
 
 
 def reflow_narration_lines(
-    blocks: list[DocumentBlock], replacements: dict[str, str] | None = None
+    blocks: list[DocumentBlock],
+    replacements: dict[str, str] | None = None,
+    *,
+    supporting_text: str | None = None,
 ) -> str:
     """Preserve headings and breaks while joining clear PDF soft-wrapped body lines.
 
-    No source blocks are mutated. Explicit ASCII hyphens are retained (they may
-    belong to a compound word); only Unicode soft hyphens are discarded at wraps.
+    No source blocks are mutated. A line-end hyphen is removed only when the
+    joined word appears elsewhere without a hyphen in the source document.
     """
     replacements = replacements or {}
+    corpus = supporting_text if supporting_text is not None else " ".join(b.text for b in blocks)
+    corpus_words = {word.casefold() for word in re.findall(r"[^\W\d_]+", corpus)}
     paragraphs: list[str] = []
     current = ""
     previous: DocumentBlock | None = None
@@ -1292,7 +1314,15 @@ def reflow_narration_lines(
             if current.endswith("\u00ad"):
                 current = current[:-1] + text
             elif current.endswith("-") and text[:1].islower():
-                current += text
+                match = re.search(r"([^\W\d_]+)-$", current)
+                continuation = re.match(r"([^\W\d_]+)", text)
+                if match and continuation:
+                    if (match.group(1) + continuation.group(1)).casefold() in corpus_words:
+                        current = current[:-1] + text
+                    else:
+                        current += text
+                else:
+                    current += " " + text
             else:
                 current += " " + text
         else:

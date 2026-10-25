@@ -13,7 +13,9 @@ from pdf2audiobook.pdf import extract_pdf
 
 def make_pdf(path: Path, *, text_page: bool = False) -> None:
     document = fitz.open()
-    document.new_page()
+    page = document.new_page()
+    blank = page.get_pixmap()
+    page.insert_image(page.rect, stream=blank.tobytes("png"))
     if text_page:
         page = document.new_page()
         page.insert_text((60, 90), "Chapter 2 - Embedded text from the next page of the book.")

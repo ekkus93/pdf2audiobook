@@ -14,6 +14,8 @@ from pdf2audiobook.pdf import extract_pdf
 def _short_text_pdf(path: Path) -> None:
     with fitz.open() as doc:
         page = doc.new_page(width=400, height=300)
+        blank = page.get_pixmap()
+        page.insert_image(page.rect, stream=blank.tobytes("png"))
         page.insert_text((45, 70), "Chapter 7", fontsize=16)
         doc.save(path)
 
@@ -57,7 +59,9 @@ def test_auto_ocr_empty_on_scanned_page_still_reports_no_text(
 ) -> None:
     source = tmp_path / "blank.pdf"
     with fitz.open() as doc:
-        doc.new_page(width=400, height=300)
+        page = doc.new_page(width=400, height=300)
+        blank = page.get_pixmap()
+        page.insert_image(page.rect, stream=blank.tobytes("png"))
         doc.save(source)
     monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", lambda *a, **k: [])
     result = extract_pdf(source, Pdf(ocr="auto"))

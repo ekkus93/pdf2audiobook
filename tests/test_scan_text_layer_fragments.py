@@ -7,9 +7,14 @@ reproduced here with synthetic text only.
 import pymupdf
 
 from pdf2audiobook.config import Pdf
-from pdf2audiobook.document.structure import chapter_coverage_report, pagination_cleanup
+from pdf2audiobook.document.structure import (
+    chapter_coverage_report,
+    is_heading_line,
+    is_list_line,
+    pagination_cleanup,
+)
 from pdf2audiobook.models import BookManifest, Chapter
-from pdf2audiobook.pdf import _heading_line, extract_pdf
+from pdf2audiobook.pdf import extract_pdf
 from pdf2audiobook.reading_order import merge_line_fragments
 
 
@@ -137,10 +142,23 @@ def test_folios_on_sideways_drifting_scans_and_under_citations(tmp_path):
 
 
 def test_prose_starting_with_a_chapter_reference_is_not_a_heading():
-    assert _heading_line("CHAPTER IV RHYME")
-    assert _heading_line("Chapter 3: The Return")
-    assert _heading_line("PREFACE")
-    assert not _heading_line("Chapter IV regarding the change in Shakespeare's blank")
-    assert not _heading_line(
+    assert is_heading_line("CHAPTER IV RHYME")
+    assert is_heading_line("Chapter 3: The Return")
+    assert is_heading_line("PREFACE")
+    assert not is_heading_line("Chapter IV regarding the change in Shakespeare's blank")
+    assert not is_heading_line(
         "Introduction of the new rules took many years and was opposed by nearly everyone"
     )
+
+
+def test_extraction_classifies_numbered_items_as_lists(tmp_path):
+    source = tmp_path / "list.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 80), "1. First item")
+        page.insert_text((72, 100), "2) Second item")
+        document.save(source)
+
+    extracted = extract_pdf(source, Pdf(ocr="never"))
+    assert [block.kind for block in extracted.blocks] == ["list", "list"]
+    assert is_list_line("a) first")

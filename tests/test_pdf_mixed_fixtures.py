@@ -18,7 +18,8 @@ def _mixed_pdf(path: Path) -> None:
         "This is a digitally typeset passage with sufficient selectable text.",
     )
     scan = pdf.new_page(width=612, height=792)
-    scan.draw_rect(fitz.Rect(70, 90, 520, 150), fill=(0.7, 0.7, 0.7))
+    blank = scan.get_pixmap()
+    scan.insert_image(scan.rect, stream=blank.tobytes("png"))
     pdf.save(path)
     pdf.close()
 

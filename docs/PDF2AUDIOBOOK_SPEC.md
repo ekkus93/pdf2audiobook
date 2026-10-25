@@ -114,6 +114,8 @@ Canonical raw text and intermediate files must remain independently inspectable.
 
 OCR modes: **auto** (default), **always**, **never**. OCR languages default to eng; user can override. Orientation correction, deskew and preprocessing may be added as needed; keep all rasterizations ephemeral or cached locally.
 
+In auto mode, OCR only pages with raster coverage above the configured trigger or unusable embedded text. Keep short valid selectable text, and do not invoke OCR for image-free blank pages.
+
 ### 4.2 Page-number and header/footer detection
 
 - Use positional signals (top/bottom bands), repeated text patterns across pages, changing numeric sequences, mirrored even/odd page styles, Roman numerals and page-label context.
@@ -126,7 +128,7 @@ OCR modes: **auto** (default), **always**, **never**. OCR languages default to e
 ### 4.3 Text restoration and special material
 
 - Reflow paragraphs and line breaks using geometry, indentation and punctuation. Do not merge section headings into body text.
-- Join discretionary hyphenation when supported by neighboring text; retain legitimate hyphenated terms.
+- Join a line-end hyphen only when it follows a letter and the next line begins with a lowercase letter. Remove the hyphen only when the unhyphenated word appears elsewhere in the document; otherwise preserve the compound spelling. Never join a spaced hyphen or an en/em dash.
 - Preserve quotations, scene breaks, emphasis cues, lists and paragraph boundaries. Treat footnotes/endnotes via configurable policy: omit, inline at anchor, or end of chapter; default to warn/omit ancillary material only when explicitly classified.
 - For tables, figures, formulas, sidebars and diagrams, default to a warning and conservative narration, not invented descriptions. A future vision-capable provider may describe these under explicit opt-in.
 - Avoid introducing new prose. Flag anomalous OCR tokens, huge edits, repeated/missing spans or nonmonotonic reading order.

@@ -8,8 +8,42 @@ import pytest
 from mutagen.mp3 import MP3
 
 from pdf2audiobook.config import LLM, General, Pdf, Settings
-from pdf2audiobook.pipeline import convert_book
+from pdf2audiobook.pipeline import analyze_book, convert_book
 from pdf2audiobook.workspace import read_manifest
+
+
+def test_auto_ocr_skips_image_free_blank_and_short_valid_text_without_tesseract(
+    tmp_path, monkeypatch
+):
+    import pdf2audiobook.pdf as pdf
+
+    source = tmp_path / "born-digital.pdf"
+    document = fitz.open()
+    document.new_page(width=600, height=800)  # Deliberately blank.
+    page = document.new_page(width=600, height=800)
+    page.insert_text((70, 100), "Part One", fontsize=18)
+    document.save(source)
+    document.close()
+
+    monkeypatch.setattr(pdf.shutil, "which", lambda name: None if name == "tesseract" else "/bin")
+
+    def fail_if_called(_page, _settings):
+        raise AssertionError("auto OCR should not run on image-free pages")
+
+    monkeypatch.setattr(pdf, "_ocr_page_lines", fail_if_called)
+    manifest_path = analyze_book(
+        source,
+        Settings(
+            general=General(output_dir=str(tmp_path / "out")),
+            pdf=Pdf(ocr="auto"),
+            llm=LLM(enabled=False),
+        ),
+    )
+    manifest = read_manifest(manifest_path)
+    assert manifest.blocks
+    assert all(block.page_index == 1 for block in manifest.blocks)
+    assert all(span.origin == "embedded" for span in manifest.spans)
+    assert any("Page 1: no readable text" in warning for warning in manifest.warnings)
 
 
 class FakeVoice:

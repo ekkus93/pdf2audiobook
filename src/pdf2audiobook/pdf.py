@@ -18,7 +18,7 @@ from typing import Literal, Protocol, runtime_checkable
 import pymupdf
 
 from pdf2audiobook.config import Pdf as PdfSettings
-from pdf2audiobook.document.structure import CHAPTER_WORD
+from pdf2audiobook.document.structure import is_heading_line, is_list_line
 from pdf2audiobook.errors import ExtractionError, InputError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import DocumentBlock, SourceSpan
@@ -180,26 +180,6 @@ def _inspection_page_size(page: pymupdf.Page) -> tuple[float, float]:
     if width is None or height is None:
         raise ValueError("invalid PDF page geometry")
     return width, height
-
-
-_HEADING_PREFIX = re.compile(
-    rf"^(?:(?P<numbered>(?:{CHAPTER_WORD}|part)\s+[\divxlcdm]+)|prologue|epilogue|"
-    r"introduction|preface)\b[.:]?\s*(?P<rest>.*)$",
-    re.IGNORECASE,
-)
-
-
-def _heading_line(text: str) -> bool:
-    """A chapter/part label line, not prose that merely starts with one.
-
-    "Chapter IV regarding the change ..." continues as a sentence: after a
-    numbered label, a title starts with a capital, digit or punctuation.
-    """
-    match = _HEADING_PREFIX.match(text.strip())
-    if match is None or len(text.split()) > 12:
-        return False
-    rest = match.group("rest")
-    return not (match.group("numbered") and rest[:1].islower())
 
 
 def _finite_bbox(bounds: object) -> tuple[float, float, float, float] | None:
@@ -874,7 +854,11 @@ def extract_pdf(
                         f"Page {page_index + 1}: sparse selectable text overlays "
                         "a large raster; attempting OCR and requiring coverage review"
                     )
-            use_ocr = settings.ocr == "always" or (settings.ocr == "auto" and not usable)
+            auto_ocr_needed = not usable and (
+                quality_issue == "damaged selectable-text mapping"
+                or _page_has_dominant_raster(page)
+            )
+            use_ocr = settings.ocr == "always" or (settings.ocr == "auto" and auto_ocr_needed)
             if settings.ocr == "auto" and quality_issue == "damaged selectable-text mapping":
                 warnings.append(
                     f"Page {page_index + 1}: damaged embedded text layer; "
@@ -953,7 +937,8 @@ def extract_pdf(
                             "verify scanned body coverage manually"
                         )
             if not page_lines and not use_ocr:
-                warnings.append(f"Page {page_index + 1}: no readable text (OCR disabled)")
+                reason = "OCR disabled" if settings.ocr == "never" else "OCR not needed"
+                warnings.append(f"Page {page_index + 1}: no readable text ({reason})")
             page_lines = merge_line_fragments(page_lines)
             # Preserve table cell text and annotate only contained blocks.
             table_regions, table_warnings = _table_regions(page, page_number=page_index + 1)
@@ -1041,8 +1026,10 @@ def extract_pdf(
                             if line_index in caption_indices
                             else "equation"
                             if line_index in equation_indices
+                            else "list"
+                            if is_list_line(line["text"])
                             else "heading"
-                            if _heading_line(line["text"])
+                            if is_heading_line(line["text"])
                             else "unknown"
                         ),
                     )
