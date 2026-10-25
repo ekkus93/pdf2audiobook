@@ -108,8 +108,28 @@ class BookManifest(StrictModel):
 
 def generated_chapter_fingerprint(chapter: Chapter) -> str:
     """Hash analysis-generated chapter identity fields for edit detection."""
+    return _chapter_fingerprint(
+        chapter.title, chapter.start_block, chapter.end_block, chapter.voice_id
+    )
+
+
+def generated_baseline_fingerprint(chapter: Chapter) -> str:
+    """Hash the stored generated_* baseline after a controlled neighbour move."""
+    return _chapter_fingerprint(
+        chapter.generated_title if chapter.generated_title is not None else chapter.title,
+        chapter.generated_start_block
+        if chapter.generated_start_block is not None
+        else chapter.start_block,
+        chapter.generated_end_block
+        if chapter.generated_end_block is not None
+        else chapter.end_block,
+        chapter.generated_voice_id,
+    )
+
+
+def _chapter_fingerprint(title: str, start: int, end: int, voice_id: str | None) -> str:
     payload = json.dumps(
-        [chapter.title, chapter.start_block, chapter.end_block, chapter.voice_id],
+        [title, start, end, voice_id],
         ensure_ascii=False,
         separators=(",", ":"),
     ).encode("utf-8")

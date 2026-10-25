@@ -45,7 +45,13 @@ from pdf2audiobook.llm import (
 )
 from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.logging import log_event
-from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, generated_chapter_fingerprint
+from pdf2audiobook.models import (
+    BookManifest,
+    Chapter,
+    CleanupEdit,
+    generated_baseline_fingerprint,
+    generated_chapter_fingerprint,
+)
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
 from pdf2audiobook.review_reasons import (
     BOOK_WIDE_REVIEW_REASON_CODES,
@@ -262,14 +268,48 @@ def _match_edited_chapter(
     analysis-generated start block (mapped through stable block IDs) identifies
     the chapter, never its number. The generated title breaks a tie.
     """
-    start = edited.generated_start_block
-    if start is None or start >= len(previous.blocks):
+    generated_start = edited.generated_start_block
+    if generated_start is None or generated_start >= len(previous.blocks):
         return None
-    new_start = new_positions.get(previous.blocks[start].id)
-    candidates = [chapter for chapter in chapters if chapter.start_block == new_start]
-    if len(candidates) > 1:
-        candidates = [item for item in candidates if item.title == edited.generated_title]
-    return candidates[0] if len(candidates) == 1 else None
+    old_start = new_positions.get(previous.blocks[generated_start].id)
+    if old_start is None:
+        return None
+    exact = [
+        chapter
+        for chapter in chapters
+        if (
+            chapter.generated_start_block
+            if chapter.generated_start_block is not None
+            else chapter.start_block
+        )
+        == old_start
+    ]
+    if len(exact) == 1:
+        return exact[0]
+    containing = [
+        chapter
+        for chapter in chapters
+        if (
+            chapter.generated_start_block
+            if chapter.generated_start_block is not None
+            else chapter.start_block
+        )
+        <= old_start
+        and (
+            chapter.generated_end_block
+            if chapter.generated_end_block is not None
+            else chapter.end_block
+        )
+        > old_start
+    ]
+    return containing[0] if len(containing) == 1 else None
+
+
+def _hand_edit_conflict(message: str, numbers: set[int]) -> ExtractionError:
+    chapter_numbers = ", ".join(str(number) for number in sorted(numbers))
+    return ExtractionError(
+        f"{message} for chapter(s) {chapter_numbers}; approve or revert the named chapter(s)."
+    )
 
 
 def analyze_book(
@@ -547,20 +587,81 @@ def analyze_book(
     review_reasons.update(getattr(chapter_proposal, "review_reasons", set()))
     if hand_edited_chapters and existing_manifest is not None:
         new_positions = {block.id: index for index, block in enumerate(extracted.blocks)}
-        preserved_numbers = []
-        for edited in hand_edited_chapters:
-            if edited.start_block >= len(existing_manifest.blocks) or edited.end_block > len(
-                existing_manifest.blocks
-            ):
-                raise ExtractionError(
-                    f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
-                )
-            match = _match_edited_chapter(edited, chapters, existing_manifest, new_positions)
+        old_chapters = sorted(existing_manifest.chapters, key=lambda item: item.start_block)
+        edited_by_id = {chapter.id: chapter for chapter in hand_edited_chapters}
+        matches: dict[str, Chapter] = {}
+        claimed_matches: dict[str, Chapter] = {}
+        for old in old_chapters:
+            match = _match_edited_chapter(old, chapters, existing_manifest, new_positions)
             if match is None:
-                raise ExtractionError(
-                    f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
+                if old.id in edited_by_id:
+                    raise _hand_edit_conflict(
+                        f"Chapter {old.number} was edited but cannot be aligned",
+                        {old.number},
+                    )
+                continue
+            owner = claimed_matches.get(match.id)
+            if owner is not None:
+                if old.id in edited_by_id or owner.id in edited_by_id:
+                    if old.id in edited_by_id and owner.id not in edited_by_id:
+                        message = f"Chapter {old.number} was edited but cannot be aligned"
+                        numbers = {old.number}
+                    elif owner.id in edited_by_id and old.id not in edited_by_id:
+                        message = f"Chapter {owner.number} was edited but cannot be aligned"
+                        numbers = {owner.number}
+                    else:
+                        message = "Edited chapters cannot be uniquely matched"
+                        numbers = {old.number, owner.number}
+                    raise _hand_edit_conflict(
+                        message,
+                        numbers,
+                    )
+                continue
+            matches[old.id] = match
+            claimed_matches[match.id] = old
+
+        field_changes: dict[str, dict[str, int | str | None]] = {}
+        explicit_boundary_fields: dict[str, set[str]] = {}
+        moved_neighbor_fields: dict[str, set[str]] = {}
+        changed_chapter_numbers = {chapter.number for chapter in hand_edited_chapters}
+
+        def queue_change(
+            item: Chapter, field_name: str, value: int | str | None, chapter_number: int
+        ) -> None:
+            current = field_changes.setdefault(item.id, {}).get(field_name)
+            if field_name in field_changes[item.id] and current != value:
+                raise _hand_edit_conflict(
+                    "Edited boundaries conflict",
+                    changed_chapter_numbers | {chapter_number},
                 )
-            generated = match.model_copy(deep=True)
+            field_changes[item.id][field_name] = value
+
+        def map_boundary(position: int) -> int | None:
+            if position == len(existing_manifest.blocks):
+                return len(extracted.blocks)
+            if position < 0 or position >= len(existing_manifest.blocks):
+                return None
+            return new_positions.get(existing_manifest.blocks[position].id)
+
+        for old_index, edited in enumerate(old_chapters):
+            if edited.id not in edited_by_id:
+                continue
+            if (
+                edited.start_block >= len(existing_manifest.blocks)
+                or edited.end_block > len(existing_manifest.blocks)
+                or edited.start_block < 0
+                or edited.end_block < 0
+            ):
+                raise _hand_edit_conflict(
+                    f"Chapter {edited.number} was edited but cannot be aligned",
+                    {edited.number},
+                )
+            match = matches.get(edited.id)
+            if match is None:
+                raise _hand_edit_conflict(
+                    f"Chapter {edited.number} was edited but cannot be aligned",
+                    {edited.number},
+                )
             title_edited = (
                 edited.generated_title is not None and edited.title != edited.generated_title
             )
@@ -574,67 +675,86 @@ def analyze_book(
             )
             voice_edited = edited.generated_voice_id != edited.voice_id
             if start_edited:
-                start_id = existing_manifest.blocks[edited.start_block].id
-                mapped_start = new_positions.get(start_id)
+                mapped_start = map_boundary(edited.start_block)
                 if mapped_start is None:
-                    raise ExtractionError(
-                        f"Chapter {edited.number} boundary cannot be aligned; approve or revert the edit"
+                    raise _hand_edit_conflict(
+                        f"Chapter {edited.number} boundary cannot be aligned",
+                        {edited.number},
                     )
-                match.start_block = mapped_start
+                queue_change(match, "start_block", mapped_start, edited.number)
+                explicit_boundary_fields.setdefault(match.id, set()).add("start_block")
+                if old_index > 0:
+                    old_neighbor = old_chapters[old_index - 1]
+                    neighbor = matches.get(old_neighbor.id)
+                    if neighbor is None:
+                        raise _hand_edit_conflict(
+                            "Edited boundary neighbor cannot be aligned",
+                            {old_neighbor.number, edited.number},
+                        )
+                    queue_change(neighbor, "end_block", mapped_start, edited.number)
+                    moved_neighbor_fields.setdefault(neighbor.id, set()).add("end_block")
+                    changed_chapter_numbers.add(old_neighbor.number)
             if end_edited:
-                end_id = (
-                    existing_manifest.blocks[edited.end_block].id
-                    if edited.end_block < len(existing_manifest.blocks)
-                    else None
-                )
-                mapped_end = (
-                    new_positions.get(end_id) if end_id is not None else len(extracted.blocks)
-                )
+                mapped_end = map_boundary(edited.end_block)
                 if mapped_end is None:
-                    raise ExtractionError(
-                        f"Chapter {edited.number} boundary cannot be aligned; approve or revert the edit"
+                    raise _hand_edit_conflict(
+                        f"Chapter {edited.number} boundary cannot be aligned",
+                        {edited.number},
                     )
-                match.end_block = mapped_end
+                queue_change(match, "end_block", mapped_end, edited.number)
+                explicit_boundary_fields.setdefault(match.id, set()).add("end_block")
+                if old_index + 1 < len(old_chapters):
+                    old_neighbor = old_chapters[old_index + 1]
+                    neighbor = matches.get(old_neighbor.id)
+                    if neighbor is None:
+                        raise _hand_edit_conflict(
+                            "Edited boundary neighbor cannot be aligned",
+                            {edited.number, old_neighbor.number},
+                        )
+                    queue_change(neighbor, "start_block", mapped_end, edited.number)
+                    moved_neighbor_fields.setdefault(neighbor.id, set()).add("start_block")
+                    changed_chapter_numbers.add(old_neighbor.number)
             if title_edited:
-                match.title = edited.title
+                queue_change(match, "title", edited.title, edited.number)
             if voice_edited:
-                match.voice_id = edited.voice_id
-            match.generated_fingerprint = edited.generated_fingerprint
-            match.generated_title = generated.title
-            match.generated_start_block = generated.start_block
-            match.generated_end_block = generated.end_block
-            match.generated_voice_id = generated.voice_id
-            if match.end_block <= match.start_block:
-                raise ExtractionError(
-                    f"Edited chapter {edited.number} would be empty; approve or revert the edit"
-                )
-            if start_edited and match.number > 1:
-                previous = next(
-                    (chapter for chapter in chapters if chapter.number == match.number - 1), None
-                )
-                if previous is not None:
-                    if match.start_block <= previous.start_block:
-                        raise ExtractionError(
-                            f"Edited boundary between chapters {previous.number} and "
-                            f"{match.number} cannot be aligned"
-                        )
-                    previous.end_block = match.start_block
-            if end_edited and match.number < len(chapters):
-                following = next(
-                    (chapter for chapter in chapters if chapter.number == match.number + 1), None
-                )
-                if following is not None:
-                    if match.end_block >= following.end_block:
-                        raise ExtractionError(
-                            f"Edited boundary between chapters {match.number} and "
-                            f"{following.number} cannot be aligned"
-                        )
-                    following.start_block = match.end_block
-            preserved_numbers.append(match.number)
-        validate_chapter_coverage(extracted.blocks, chapters)
+                queue_change(match, "voice_id", edited.voice_id, edited.number)
+
+        for item in chapters:
+            for field_name, value in field_changes.get(item.id, {}).items():
+                setattr(item, field_name, value)
+            if item.end_block <= item.start_block:
+                affected = sorted(changed_chapter_numbers)
+                if len(affected) == 2:
+                    message = (
+                        f"Edited boundary between chapters {affected[0]} and {affected[1]} "
+                        "cannot be aligned; approve or revert the named chapter(s)."
+                    )
+                    raise ExtractionError(message)
+                raise _hand_edit_conflict("Edited chapter would be empty", set(affected))
+
+        try:
+            validate_chapter_coverage(extracted.blocks, chapters)
+        except ExtractionError:
+            raise _hand_edit_conflict(
+                "Edited boundaries conflict",
+                changed_chapter_numbers,
+            ) from None
+
+        for item in chapters:
+            fields = moved_neighbor_fields.get(item.id, set()) - explicit_boundary_fields.get(
+                item.id, set()
+            )
+            if "start_block" in fields:
+                item.generated_start_block = item.start_block
+            if "end_block" in fields:
+                item.generated_end_block = item.end_block
+            if fields:
+                item.generated_fingerprint = generated_baseline_fingerprint(item)
+
+        preserved_numbers = sorted(matches[chapter.id].number for chapter in hand_edited_chapters)
         warnings.append(
             "Preserved user-edited chapter numbers: "
-            + ", ".join(str(number) for number in sorted(preserved_numbers))
+            + ", ".join(str(number) for number in preserved_numbers)
         )
     for chapter in chapters:
         speakable = chapter_has_speakable_text(
