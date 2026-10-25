@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes Specification
 
-**Status:** R1–R45 implemented in FX0–FX7 (through 2904f19); second review added R46–R63 (§8), implementation pending
+**Status:** R1–R45 implemented in FX0–FX7 (through 2904f19); R46–R63 (§8) implemented in FX8 (5c8eff7); third review added R64–R79 (§9), implementation pending
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Parent specification:** docs/PDF2AUDIOBOOK_SPEC.md
@@ -547,7 +547,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 
 ### 8.3 Text integrity regressions
 
-**R46 — List and heading classification (H, amends R44) (confirmed).**
+**R46 — List and heading classification (H, amends R44) (confirmed).** *Amended by R66, R67 (§9).*
 *Problem:*
 - `_classify_block_kind` checks lists before headings (pdf.py:328), and that turns on the formerly dead guard at structure.py:790.
 - Large numbered headings ("1. The Storm", "2. The Calm", "3. The Return") are now kind `list`. The baseline found 3 chapters; 2904f19 finds none.
@@ -580,7 +580,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 - The sonnet fixture still keeps 12–15 and removes 40–43.
 - Labels 1–4 with printed 40–43 removes 40–43 and warns once.
 
-**R48 — Finish damaged-source handling (M, amends R7 and R4) (confirmed).**
+**R48 — Finish damaged-source handling (M, amends R7 and R4) (confirmed).** *Amended by R69, R73, R74 (§9).*
 *Problem:*
 - A page that fails to load skips `sizes.append`, which shifts every later page's size (pdf.py:943-966).
 - The review gate matches warning strings (pipeline.py:631-646), and there is no review-required field and no acknowledgement path. Approval through the review UI is the only way through, and that isn't tested.
@@ -597,7 +597,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 
 ### 8.4 LLM budget and providers
 
-**R49 — Worst-case accounting so retries work under budgets (H, amends R16, R17 and R20) (confirmed).**
+**R49 — Worst-case accounting so retries work under budgets (H, amends R16, R17 and R20) (confirmed).** *Amended by R70 (§9).*
 *Problem:*
 - Every failed attempt settles as `unknown`, and `reserve` refuses whenever any `unknown` row exists under a token or USD budget (budget.py:111-114).
 - Under such a budget, R17's retries and R20's fallbacks therefore always fail after one attempt: 400 "unsupported parameter", 5xx, `ReadTimeout`, `PoolTimeout`.
@@ -616,7 +616,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 - `max_completion_tokens` is substituted.
 - An uncapped request under a budget is refused.
 
-**R50 — Correct the `budget` CLI (M, amends R16) (confirmed).**
+**R50 — Correct the `budget` CLI (M, amends R16) (confirmed).** *Amended by R71 (§9).*
 *Problem:*
 - `budget resolve` reports success after `settle` has rejected the value (cli.py:148-165, budget.py:229).
 - Resolved values can overflow SQLite `SUM` (budget.py:67-69), which makes the ledger unreadable and blocks every LLM run permanently.
@@ -643,7 +643,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 
 ### 8.5 Manifest, review and packaging
 
-**R52 — `pack-m4b` freshness (H, amends R14 and R40) (confirmed).**
+**R52 — `pack-m4b` freshness (H, amends R14 and R40) (confirmed).** *Amended by R76 (§9).*
 *Problem:*
 - `pack-m4b` recomputes convert's audio fingerprint from config-only settings (cli.py:596-637). Audio made with CLI TTS options, batch profiles or a different `--cover` is reported as stale (exit 6).
 - `pack-m4b --cover` itself always fails. No test runs convert followed by pack.
@@ -657,7 +657,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 - convert with `--cover`, then pack with a different `--cover`, succeeds, and the M4B carries the pack cover.
 - Editing a chapter boundary after convert gives exit 6 naming that chapter.
 
-**R53 — Make hand-edit protection robust (M, amends R11 and R9) (confirmed).**
+**R53 — Make hand-edit protection robust (M, amends R11 and R9) (confirmed).** *Amended by R73, R75 (§9).*
 *Problem:*
 - When a chapter has been hand-edited, the merge pins its old boundaries even if only the title was edited (pipeline.py:518-557).
 - Any boundary shift next to an edited chapter makes reanalysis fail with a generic coverage error, so a title-only edit can block reanalysis for good.
@@ -684,14 +684,14 @@ Severity labels are the same as in §1. The findings that the second review conf
 
 ### 8.6 Privacy and CLI
 
-**R54 — Catch-all CLI exception handling (M, amends R2) (confirmed by reading).**
+**R54 — Catch-all CLI exception handling (M, amends R2) (confirmed by reading).** *Amended by R78 (§9).*
 *Problem:* Commands catch only `AudiobookError`, `OSError` and `ValueError`. Typer's pretty-exception handler is left on (cli.py:20), so a `RuntimeError`, `KeyError` or `TypeError` from PyMuPDF, mutagen or kittenml prints its message, and `--json` gets no diagnostic.
 *Required:*
 - Create the Typer app with `pretty_exceptions_enable=False`.
 - Every command routes *any* `Exception` to `fail()`, which prints "Unexpected internal error" and exits 1. `KeyboardInterrupt` exits 130 with a fixed message.
 *Tests:* for `analyze`, `convert` and `config show`, a monkeypatched `RuntimeError("SECRET BOOK SENTENCE")` never appears on stdout or stderr, and `--json` gets a JSON diagnostic.
 
-**R55 — Precise `config show` redaction (M, amends R26) (confirmed).**
+**R55 — Precise `config show` redaction (M, amends R26) (confirmed).** *Amended by R78 (§9).*
 *Problem:* Substring matching on `key` and `token` masks `max_context_tokens`, `max_output_tokens`, `chunk_tokens`, cost rates and user-chosen dict keys such as pronunciations (config.py:396-419). URL fragments are never masked.
 *Required:*
 - Mask by an explicit allowlist of secret field paths. Today that is only the URL-valued fields' userinfo, query and fragment, and any future field marked secret in the config model (e.g. through field metadata).
@@ -708,12 +708,12 @@ Severity labels are the same as in §1. The findings that the second review conf
 
 ### 8.7 Audio and speech
 
-**R57 — Chunk alignment survives normalization (M, amends R38) (confirmed).**
+**R57 — Chunk alignment survives normalization (M, amends R38) (confirmed).** *Amended by R64, R65 (§9).*
 *Problem:* A whitespace-separated token made only of U+200B, U+00AD or U+FEFF normalizes to an empty string (audio:255). The word alignment then fails with "Narration chunk source alignment failed" for the whole chapter. A leading BOM is enough.
 *Required:* Remove zero-width and soft-hyphen characters before tokenizing, consistently on both the source side and the spoken side of the alignment. No token can become empty after tokenizing.
 *Tests:* a leading BOM, an isolated U+200B and an isolated soft hyphen all chunk and align.
 
-**R58 — Spoken-text quality (L, amends R38 and R39).**
+**R58 — Spoken-text quality (L, amends R38 and R39).** *Amended by R64, R68 (§9).*
 *Required:*
 - A pronunciation key ending in `.` doesn't re-append the period when the replacement is mid-sentence. The token's own trailing sentence punctuation is kept exactly once.
 - Case transfer applies only when the key is alphabetic, so `C++` doesn't become `CPLUSPLUS`.
@@ -724,7 +724,7 @@ Severity labels are the same as in §1. The findings that the second review conf
   - an em dash and any other en dash become ", ".
 *Tests:* one per rule, including "10–20" read as "10 to 20".
 
-**R59 — Temporary WAV cleanup and the size limit (M, amends R41) (confirmed).**
+**R59 — Temporary WAV cleanup and the size limit (M, amends R41) (confirmed).** *Amended by R77 (§9).*
 *Problem:* Temporary chapter WAVs are removed only on `AudioError` (pipeline:912). An interrupt or an `OSError` leaves them, and nothing cleans them up. A WAV over 4 GiB raises `struct.error`.
 *Required:*
 - Remove the temporary chapter WAV in a `finally` block.
@@ -735,7 +735,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 - A stale file is swept on the next run.
 - A monkeypatched small size limit triggers the chapter error.
 
-**R60 — Voice marker validation (L, amends R8).**
+**R60 — Voice marker validation (L, amends R8).** *Amended by R77 (§9).*
 *Problem:*
 - Piper marker voices are never pre-checked, because `list_voices()` returns `[]` (tts:174).
 - An exception from `list_voices` silently skips validation (pipeline:741-743).
@@ -746,7 +746,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 - A bad marker fails only its own chapter, with a message naming the chapter number and the reason code `invalid_voice_marker`, and the run exits 7.
 *Tests:* a bad Piper ID in chapter 2 of 3 gives exit 7 with chapters 1 and 3 produced; a `list_voices` exception is reported.
 
-**R61 — TTS retries and failure reporting (L, amends R36).**
+**R61 — TTS retries and failure reporting (L, amends R36).** *Amended by R77 (§9).*
 *Required:*
 - Retry only errors the provider marks transient. Unknown voices, invalid speaker IDs and validation errors fail immediately.
 - Failed chapters stay in `reports/conversion_status.json`. That is a deliberate decision: the manifest is user-owned and may be approved, so the run must not write to it. `inspect` and `inspect --json` must show the failed chapters from that file.
@@ -755,7 +755,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 
 ### 8.8 Small fixes, fingerprints and process
 
-**R62 — Small fixes (L).**
+**R62 — Small fixes (L).** *Amended by R72, R77 (§9).*
 *Required:*
 - **Review UI (R15):**
   - a non-ASCII or malformed `Authorization` header on POST returns 401;
@@ -766,7 +766,7 @@ Severity labels are the same as in §1. The findings that the second review conf
 - **Analysis fingerprint:** bump it for the c5096aa change to emptiness detection. It can share the bump in §8.8's table below.
 *Tests:* one per item.
 
-**R63 — Test and process integrity (D).**
+**R63 — Test and process integrity (D).** *Amended by R78, R79 (§9).*
 *Required:*
 - **Audit test edits.** Go through every change to existing assertions or fixture inputs under `tests/` between 7eb4d25 and 2904f19, including `test_scan_text_layer_fragments.py`, `test_auto_ocr_*` and `test_ocr_cache.py`. For each one, either revert it or record a one-line reason in the FX8 ledger row.
 - **Depth tests reach the depth check.** The MP3-sidecar and WAV-metadata depth tests must use a payload that fits inside each cache's size cap.
@@ -810,3 +810,212 @@ Severity labels are the same as in §1. The findings that the second review conf
 | CLI negative-flag tests cover `analyze` only | R63 (add tests for `convert` and `batch`) | FX5.05b |
 | Fingerprint stage names and operational fields | R53, R62 | FX3.02a |
 | Overclaimed original TODO items; lockfile revision | R63 | FX7.03, FX6.01 |
+
+## 9. Third review (FX9)
+
+### 9.1 Context
+
+FX8 landed in 5c8eff7160f3f02506b7092ac75196860df6bc13 and its CI evidence in 0c198457396821434614b712faf9d8129eb497ef. At 0c19845 every local gate passes (1240 passed, 1 opt-in Kitten skip) and CI runs 40186391382 and 40186508562 succeeded. A third review of `2904f19..0c19845` then found:
+
+- new regressions introduced by FX8 (digit ranges, Roman-letter headings, JSON on default stderr);
+- requirements only partly met (R48, R49, R52, R57);
+- existing tests rewritten to expect the new behaviour, against §8.2;
+- new regression tests that pass against the code they were meant to catch;
+- status and ledger entries that don't match git: FX8.01's re-opening never happened in any commit, two ledger rows added in 5c8eff7 carry earlier SHAs, and FX8.18 is checked on a false lockfile claim.
+
+The review also found three places where this spec itself was at fault:
+
+- R58's "an en dash between digits becomes ' to '" changes the token count and so contradicts R57's alignment rule. R64 resolves this.
+- R62's "`command_failed` is logged at ERROR no matter which level is enabled", combined with INFO stage events and the default `general.log_level = "INFO"`, puts JSON log lines on default stderr. R72 resolves this.
+- R63 asked for `uv.lock` to be regenerated "with the uv version CI uses", but `ci.yml` doesn't pin uv (`astral-sh/setup-uv@v6` installs the latest). R78 resolves this.
+
+This section amends those requirements and adds R64–R79. File and line references point to 0c19845 and are approximate. Findings marked **(confirmed)** were reproduced by running code or checked by reading it.
+
+### 9.2 Ground rules added for FX9
+
+These add to §2 and §8.2; they don't replace them.
+
+- **One fix per commit.** Each FX9 task that changes `src/` lands in its own commit, together with its regression tests. Docs-only status changes land in separate `docs:` commits.
+- **Prove the regression test fails.** Before committing a fix, run its new tests against the parent commit (for example `git stash` the `src/` change, or check out the parent in a worktree) and record the failing test IDs in the ledger row. A test that passes at the parent doesn't count as a regression test.
+- **Restore, don't rewrite.** The tests listed in R79 are restored to their 2904f19 text in the same commit as the fix that makes them pass. If a restored assertion is truly obsolete, delete it with a reason in the commit message and add a new, truthfully named test.
+- **Test names must describe what the test asserts.** A test named `…_blocks_…` must assert that something is blocked.
+- **The ledger is append-only.** A row's SHA is the commit whose state it documents, and the row is written after that commit exists. Never add a row labelled with an older SHA, and never edit an existing row; append a correction row instead.
+- **Status changes happen in git.** Unchecking or re-checking an item is a commit of its own, so `git log -p` on the TODO shows every transition.
+
+### 9.3 Text integrity and speech
+
+**R64 — Speech rewrites keep alignment (H, amends R57 and R58) (confirmed).**
+*Problem:*
+- R58's rewrite of "10–20" to "10 to 20" turns one source token into three spoken tokens. The chunk alignment requires matching token counts, so "Read 10–20 pages today." and "In 1990–91 it rained." raise "Narration chunk source alignment failed" and the whole chapter fails (audio/__init__.py:137).
+- An em dash becomes ",", giving "pause,then" with no space.
+*Required:*
+- Alignment works on source token spans, not on equal token counts. Every spoken-side rewrite records which source token (or span) it came from, so a rewrite may change the number of tokens without breaking alignment. Alternatively, apply token-count-changing rewrites after the source ranges have been computed. Either way the rule is: no R58 rewrite can fail alignment.
+- An em dash, and an en dash not between digits, become ", " with exactly one following space, and no space before the comma.
+- An alignment failure stays a content-free chapter error (never silently dropped text), but no valid R58 input may trigger it.
+*Tests (new):* "Read 10–20 pages today.", "In 1990–91 it rained.", "pp. 3–4.", "wait—then" spoken as "wait, then", "wait — then", and a property-style test that runs every R58 rule through `chunk_source_ranges` on generated sentences.
+
+**R65 — Isolated invisible characters (M, amends R57) (confirmed).**
+*Problem:* FX8 only strips invisible characters inside a word. A whitespace-separated token made only of U+FEFF, U+200B, U+200C, U+200D, U+2060 or U+00AD still normalizes to empty, and "﻿ Hello there world." and "Hello ​ world." fail alignment. The R57 test covers only the in-word case and passes at 2904f19.
+*Required:* Remove those characters before tokenizing, on both the source and spoken sides, so no token can be empty. A token that becomes empty is dropped from both sides together.
+*Tests (new):* a leading BOM followed by a space, an isolated U+200B, U+2060 and U+00AD, and a chapter made only of such a token plus one word. Each test must fail at 0c19845.
+
+**R66 — Roman-letter headings (H, amends R46) (confirmed).**
+*Problem:* The Roman-title pattern `[IVXLCDM]{1,8}[.)]\s+[A-Z][A-Z\s'’:-]{2,80}` (structure.py:209) accepts any one Roman-numeral letter. Epigraph attributions such as "C. DICKENS", "M. LEBLANC", "D. H. LAWRENCE" and "L. FRANK BAUM" become chapter headings and split the book.
+*Required:* A single-letter numeral ("C.", "D.", "L.", "M.", "V.", "X.") counts as a Roman heading only when the book also has a sequence of at least two consecutive Roman headings that includes it, or when its block passes the font-size or whitespace heading test. Numerals of two or more letters keep the current rule.
+*Tests (new):* each attribution above stays body text; "I. THE STORM / II. … / III. …" still gives 3 chapters; "IV. … / V. … / VI. …" keeps "V." as a heading.
+
+**R67 — Wrapped lines and list ends (L, completes R46).**
+*Problem:* A wrapped line that starts with "J. Smith" or "1990)" still splits a paragraph (structure.py:1476), because the join check uses the old list pattern. The last item of a list swallows the paragraph that follows it.
+*Required:* The join check uses the same sequential-marker rule as classification (R46). A list ends at a blank line, a font change or a line that isn't indented like its items.
+*Tests (new):* "…reported by\nJ. Smith of the Times." joins; "…from 1985 to\n1990) was…" joins; a two-item list followed by a body paragraph keeps the paragraph separate.
+
+**R68 — Remaining speech rules (L, completes R58).**
+*Problem:* `Dr.` is still spoken as "Doctor." mid-sentence and `U.S.` as "USA." (the period rule isn't implemented). "Hermione..." gains an extra period.
+*Required:* As R58: a key ending in `.` doesn't re-append its period mid-sentence, and the token's own sentence-ending punctuation is kept exactly once. `...` and `…` are stripped and restored identically.
+*Tests (new):* "Dr. Watson arrived.", "the U.S. army", "the U.S.", "Hermione...", "Hermione…".
+
+### 9.4 Extraction
+
+**R69 — OCR for vector-outlined text (H, amends R48) (confirmed).**
+*Problem:* A full page of text drawn as outlines covers 0.143 of the page area, which is under the hard-coded 0.15 threshold (pdf.py:714). It isn't OCRed and still gets the "no readable text (OCR not needed)" warning. The FX8 fixture is a grid of rectangles at about 17% coverage, so it never tested a real outlined page.
+*Required:*
+- In `--ocr auto`, an image-free page with no usable text is OCRed when its drawings look like glyphs: at least a configured number of small filled paths (defaulting to a value that a single outlined text line exceeds), or drawing coverage above a lower threshold. Name the constants and document them in MAINTAINER_GUIDE.md.
+- Never say "OCR not needed" for a page with no readable text. A page that isn't OCRed gets a warning that says why (OCR disabled, or no drawings) and sets the `damaged_source` review reason only when the page has drawings.
+*Tests (new):* a fixture of real outlined glyphs (made with Ghostscript `-dNoOutputFonts`, or by drawing glyph paths, and committed as a small binary) whose coverage is below 0.15 is OCRed (Tesseract-gated); a page with one horizontal rule isn't. Check the skip summary in CI shows the Tesseract test ran.
+
+### 9.5 LLM budget
+
+**R70 — Budget accounting fails closed (H, amends R49) (confirmed).**
+*Problem:*
+- If a provider rejects `max_tokens` and then `max_completion_tokens`, the second is popped and the request is sent with no output cap, even under a token or USD budget (llm/__init__.py:506-512).
+- Legacy `unknown` or `pending` rows with no recorded bound count as `upper_tokens or 0` (llm/budget.py:109), and `reserve` defaults `upper_bound_tokens` to 0 (llm/budget.py:216). Old unresolved attempts therefore count as free. `test_llm_budget_integer_bounds.py:30` was rewritten to assert exactly that.
+- After retries run out, a 429 falls into the "4xx other than 408" branch and is settled `rejected` with zero tokens. R49 says 429 stays `unknown`.
+- `rejected` is signalled by putting `{"rejected": True}` into the provider's `usage` dict, mixing control flow with reported data.
+- The image part of the upper bound is based on compressed PNG bytes, which isn't conservative.
+*Required:*
+- Under a token or USD budget, never send a request without an output cap. When both cap parameters are rejected, settle the attempt `rejected` and fail with a content-free error saying the provider doesn't accept an output cap.
+- `reserve` requires an explicit upper bound; remove the default. An `unknown` or `pending` row without a bound blocks new requests under a token or USD budget, as before R49, with a message pointing to `budget resolve`.
+- `rejected` applies only to 4xx responses other than 408 and 429. A 429 after the last retry stays `unknown`.
+- Settlement takes a typed outcome (`completed`, `unknown`, `rejected`) separate from usage.
+- The image bound comes from decoded pixel dimensions using the most expensive tile rule among supported providers, and is never less than the encoded request's UTF-8 byte length.
+*Tests:* restore the tests listed in R79 for the budget; add a "both cap parameters rejected under a budget" test, a legacy-NULL-bound test, a 429-exhaustion test, and an image-bound test with a small PNG of a large image.
+
+**R71 — `budget resolve` can't break the ledger (M, amends R50) (confirmed).**
+*Problem:* The cumulative check in `resolve_unknown` ignores the upper bounds of other open rows. Resolving huge values succeeds, after which the stored sums overflow, `budget show` fails and every LLM run fails.
+*Required:* Before writing, check that every stored total (including all other rows' actual usage and open rows' upper bounds) stays within SQLite's 64-bit integer range and the `Decimal` limits used for costs. On failure exit 2 and change nothing. Anything `resolve` accepts, `show` can display.
+*Tests (new):* resolving a value that would overflow with another open row present exits 2, leaves the row unchanged, and `budget show` still works.
+
+### 9.6 Manifest, review and packaging
+
+**R72 — Clean stderr (M, amends R62 and R31) (confirmed).**
+*Problem:* With the default `general.log_level = "INFO"`, R62's INFO stage events and ERROR `command_failed` event print JSON lines to stderr before "Error: …". In `--json` mode stderr holds several JSON objects. The 2904f19 assertions `json.loads(captured.err)` and `not result.stderr.lstrip().startswith("{")` (tests/test_cli_json_errors.py) were changed to `splitlines()[-1]` and removed. R62's wording caused this.
+*Required:*
+- In human mode, log events are rendered as human-readable lines, never JSON. Default human-mode stderr for a failed command starts with "Error:".
+- In `--json` mode, stderr contains exactly one JSON value for a failed command unless `--verbose` is given. Structured events are emitted only with `--verbose` or an explicitly configured `general.log_level`.
+- `command_failed` uses the ERROR level, but is printed only when logging output is enabled as above.
+*Tests:* restore the 2904f19 assertions in `tests/test_cli_json_errors.py` unchanged; add a test that `--verbose` emits the structured events.
+
+**R73 — Review gate uses current state (M, amends R48 and R53) (confirmed).**
+*Problem:*
+- The empty-chapter gate reads `review_required` as computed at analysis time. A chapter emptied later by a hand edit is neither gated nor skipped.
+- Any review-UI save, even title-only, adds `damaged_source` to `review_acknowledged` and removes it from `review_required` (review_ui.py:146-149).
+*Required:*
+- `convert` recomputes the review reasons from the current manifest with the same emptiness function used by analysis and `coverage.json`, before gating.
+- The review UI clears `damaged_source` only when the user ticks an explicit "I have checked the damaged pages" control. A plain save never acknowledges a reason.
+*Tests (new):* hand-empty a chapter after analysis, then convert is gated; a title-only save keeps `damaged_source`; the acknowledgement control clears it.
+
+**R74 — `--accept-review` behaviour (M, amends R48) (confirmed).**
+*Problem:* It writes no log event, an unknown reason exits 6 only after a full analysis, and `--dry-run` ignores it.
+*Required:* Validate reasons at option parsing (exit 2 before any work). Emit a content-free `review_acknowledged` event with the reason codes. `--dry-run` applies it and reports which reasons would be acknowledged.
+*Tests (new):* unknown reason exits 2 with no workspace changes; the event is logged; dry-run with and without the flag.
+
+**R75 — Match hand edits by chapter identity (M, amends R53).**
+*Problem:* Hand-edited chapters are matched to reanalysed ones by chapter number. When reanalysis changes the chapter count, an edit lands on the wrong chapter.
+*Required:* Match by chapter `id` and `generated_fingerprint`. An edit with no match is a content-free conflict error naming the old chapter number; it is never applied to another chapter.
+*Tests (new):* reanalysis that inserts a chapter before an edited one keeps the edit on the right chapter; a removed chapter with an edit raises the conflict.
+
+**R76 — `pack-m4b` hashes manifest-rendered text (H, amends R52) (confirmed).**
+*Problem:* `pack-m4b` hashes `chapters/NNN.txt` as it is on disk (cli.py:699-708), not text rendered from the current manifest. After a hand edit of the manifest's boundaries without re-rendering, `pack-m4b` exits 0 and packages stale audio. The FX8 test re-renders the chapter files itself, so it can't catch this.
+*Required:* `pack-m4b` renders each chapter's narration text in memory from the current manifest, with the same function `convert` uses, and compares its SHA-256 with the sidecar. It doesn't read `chapters/*.txt`.
+*Tests (new):* edit a boundary in `manifest.json` only, then `pack-m4b` exits 6 naming the chapter; the test must not call `render_chapter_texts`.
+
+### 9.7 Audio, TTS and CLI
+
+**R77 — Run-scoped WAV cleanup, retries and resume counts (M/L, amends R59, R60, R61 and R62).**
+*Problem:*
+- The start-of-convert sweep deletes every `chapter-*.wav` older than the run, including one a concurrent `convert` on the same workspace is writing.
+- No real TTS provider marks any error transient, so `tts.max_retries` never retries.
+- A misplaced voice marker still aborts the whole run instead of failing its own chapter.
+- `pause_count` is 0 on resumed runs.
+*Required:*
+- `convert` takes an exclusive workspace lock; a second `convert` exits with a content-free error. The sweep runs only while holding the lock.
+- Each provider adapter maps its documented transient failures (timeouts, connection resets, HTTP 429 and 5xx for remote providers) to transient errors. MAINTAINER_GUIDE.md lists providers that have none.
+- A bad voice marker fails only its chapter (exit 7, reason `invalid_voice_marker`). Piper's speaker-count check stays deferred with FX8.14c.
+- The conversion report counts pauses from the chunk mapping, including resumed chapters.
+*Tests (new):* concurrent convert is refused and the other run's WAV survives; a fake provider's transient error is retried; a misplaced marker fails one chapter; a resumed run reports the same `pause_count`.
+
+**R78 — CLI error mapping and small fixes (L, amends R54, R55 and R63).**
+*Problem:*
+- The catch-all maps `OSError` and `ValueError` to "Unexpected internal error", losing useful content-free messages such as "port in use" for `review`. The original mapping test was rewritten.
+- Stopping `review` with Ctrl+C exits 130.
+- `_SECRET_CONFIG_PATHS = {"pdf.password"}` (config.py:391) names a field that doesn't exist.
+- `ci.yml` doesn't pin uv, so R63's lockfile requirement can't be met as written. `uv.lock` revision went from 5 to 3 in c5096aa, and FX8.18 claims it was 3 before.
+- The restored folio-test comment says "appear on page"; the original says "appear as page".
+*Required:*
+- Known `OSError` cases keep their content-free messages ("A filesystem operation failed", "Review server port is unavailable"); only unknown exceptions say "Unexpected internal error".
+- Ctrl+C on `review` is a normal shutdown: exit 0 with a fixed message.
+- Secret fields are marked on the config model (for example `json_schema_extra={"secret": True}`); `_SECRET_CONFIG_PATHS` is derived from the model, and a test checks every listed path exists.
+- Pin uv in `ci.yml` (`with: version:`), regenerate `uv.lock` with that version, and record the resulting revision and the decision in the ledger. Don't claim it matches an earlier revision unless `git show` proves it.
+- Restore the comment text exactly.
+*Tests:* restore the 2904f19 error-mapping parametrization; add a `review` port-in-use test and a Ctrl+C test.
+
+### 9.8 Test and process integrity
+
+**R79 — Restore tests and correct the record (D) (confirmed).**
+*Required:*
+- **Restore rewritten tests** to their 2904f19 text, each in the commit of the fix that makes it pass:
+  - `tests/test_llm_budget_integer_bounds.py` (the assertion that an `unknown` row costs 0 tokens is removed);
+  - `test_overspent_token_budget_still_fails_closed` and the exact-exhaustion test in `tests/test_llm_exact_budget_boundary.py`;
+  - `tests/test_llm_budget_settlement_types.py`: tests named `…_blocks_…` assert that a request is blocked, or are renamed with a reason;
+  - `tests/test_cli_json_errors.py` (R72, R78);
+  - the page-number tests from before FX2 whose expectations FX8 inverted;
+  - every other file the FX8.02b re-audit (below) lists.
+- **Re-audit with one line per change.** For every changed assertion or fixture input under `tests/` between 2904f19 and 0c19845, append one ledger row line (file, test, old → new, reason). Category reasons aren't enough.
+- **Regression tests must catch their bug.** Replace FX8's R46 chapter test, R47 folio test and R57 test with versions that fail at 2904f19. The MP3-sidecar and WAV-metadata depth tests must use nested dicts that reach the depth check and fail with the check disabled. The R10 test runs the page's own JavaScript (with Node when available, skipped otherwise) and also statically checks that the request builder in `_HTML` sends `voice_id`.
+- **Correct the status record**, in a docs commit before any FX9 fix:
+  - Uncheck the FX8 items found wrong or partial (TODO FX9.00a) and their parents.
+  - Uncheck FX8.19a, and original-TODO F.06 while its deferred dependencies are open.
+  - Append a correction row to the ledger saying the rows labelled `2904f19` (FX8.01) and "a176375 (review baseline source)" were written in 5c8eff7, the FX8.01 re-opening never happened in git, and FX8.18's lockfile claim is false. Don't edit or delete those rows.
+
+### 9.9 Fingerprint bumps for FX9
+
+Make each bump once, as in §3:
+
+| Bump | Covers | Effect |
+| --- | --- | --- |
+| Extraction/analysis fingerprint | R66, R67, R69 | Analysis is recomputed |
+| Audio fingerprint | R64, R65, R68 | Chapter audio is regenerated |
+| Budget ledger | R70 (`reserve` requires a bound; typed outcome) | No schema change; legacy NULL-bound rows block until resolved |
+
+No manifest schema change is needed: `review_required` and `review_acknowledged` already exist in v3.
+
+### 9.10 Third-review traceability
+
+| Third-review finding | Requirement | FX8 items to re-open |
+| --- | --- | --- |
+| Digit ranges and em-dash spacing fail alignment | R64 | FX8.13b, FX8.13c |
+| Isolated invisible characters | R65 | FX8.13a, FX8.02c |
+| "C. DICKENS" headings | R66 | FX8.04a, FX8.04b |
+| "J. Smith"/"1990)" joins; list end | R67 | FX8.04a |
+| `Dr.`/`U.S.`/`...` speech rules | R68 | FX8.13b |
+| Vector-outlined text not OCRed | R69 | FX8.06c, FX8.06d |
+| Uncapped request; legacy rows free; 429 `rejected`; image bound | R70 | FX8.08a, FX8.08b, FX8.08c |
+| `budget resolve` overflow | R71 | FX8.09a, FX8.09c |
+| JSON on default stderr; test rewritten | R72 | FX8.15b, FX8.15d, FX8.03a |
+| Stale review gate; UI auto-acknowledge | R73 | FX8.06b, FX8.12b |
+| `--accept-review` log, parse-time check, dry-run | R74 | FX8.06b, FX8.06d |
+| Edits matched by number | R75 | FX8.12a, FX8.12c |
+| `pack-m4b` hashes on-disk text | R76 | FX8.11a, FX8.11b |
+| WAV sweep race; no transient errors; marker abort; `pause_count` | R77 | FX8.14b, FX8.14d, FX8.15c |
+| `OSError` mapping; Ctrl+C; secret paths; uv pin; comment | R78 | FX8.03b, FX8.18, FX8.02a |
+| Rewritten tests; weak regression tests; status and ledger | R79 | FX8.01, FX8.02b, FX8.16a, FX8.16b, FX8.19a |

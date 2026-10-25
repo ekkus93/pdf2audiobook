@@ -1,9 +1,9 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX8 implementation and exact-head CI complete except Piper-specific marker validation, deferred by user
+**Status:** FX8 reviewed; third review added FX9 (R64–R79), implementation pending. FX8 status entries are to be corrected in FX9.00
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
-**Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R63; R46–R63 and amendments in §8)
+**Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R79; R46–R63 in §8, R64–R79 and amendments in §9)
 **Parent TODO:** docs/PDF2AUDIOBOOK_TODO.md
 
 ## Working rules
@@ -278,6 +278,95 @@ The second review of `7eb4d25..2904f19` found regressions, an existing test whos
 - every R46–R63 requirement has passing tests;
 - no parent item is checked while any of its subitems is open.
 
+## Phase FX9 — Third-review corrections
+
+The third review of `2904f19..0c19845` found new regressions from FX8, requirements only partly met, existing tests rewritten to expect broken behaviour, regression tests that don't catch their bugs, and status entries that don't match git. Requirements R64–R79 and the amendments to §8 are in spec §9. FX9 follows the ground rules in spec §8.2 and §9.2:
+- one fix per commit, with its regression tests, and docs-only status changes in their own commits;
+- run each new regression test against the parent commit and record the failing test IDs in the ledger row;
+- restore rewritten tests to their 2904f19 text in the commit of the fix that makes them pass;
+- the ledger is append-only, and each row's SHA is the commit it documents;
+- check a parent item only when all of its subitems are checked.
+
+Every fix task below has the same three parts unless it says otherwise: (a) add the new regression tests and confirm they fail at the parent commit, (b) make the fix, (c) restore the listed tests and run `/verify`.
+
+- [ ] FX9.00 Correct the recorded status first, in one `docs:` commit with no code changes (R79).
+  - [ ] FX9.00a Uncheck the FX8 items the third review found wrong: FX8.01, FX8.01a, FX8.01b, FX8.01c, FX8.06c, FX8.08a, FX8.08b, FX8.11a, FX8.13a, FX8.13b, FX8.18 and FX8.19a.
+  - [ ] FX9.00b Uncheck the FX8 items it found partial: FX8.02, FX8.02a, FX8.02b, FX8.02c, FX8.03b, FX8.04a, FX8.04b, FX8.05b, FX8.06b, FX8.06d, FX8.08c, FX8.09a, FX8.09c, FX8.11b, FX8.12a, FX8.12b, FX8.12c, FX8.13c, FX8.14b, FX8.14d, FX8.15b, FX8.15c, FX8.15d, FX8.16a and FX8.16b. Also uncheck every parent of an unchecked item.
+  - [ ] FX9.00c Actually perform FX8.01: uncheck the 41 FX0–FX7 items and the 10 original-TODO items it lists, wherever their FX8 evidence depends on an item unchecked in FX9.00a or FX9.00b. Leave the rest checked and say why in the ledger row. Uncheck original-TODO F.06 while FX5.06a and FX6.06a are open.
+  - [ ] FX9.00d Append a correction row to the ledger: the rows labelled `2904f19` (FX8.01) and "a176375 (review baseline source)" were written in 5c8eff7; the FX8.01 re-opening never happened in git; FX8.18's lockfile claim is false (`uv.lock` was revision 5 up to c5096aa's parent and is 3 since). Don't edit or delete the existing rows. Update both TODOs' status lines.
+- [ ] FX9.01 Make speech rewrites keep alignment (R64). **High.**
+  - [ ] FX9.01a Regression tests: "Read 10–20 pages today.", "In 1990–91 it rained.", "pp. 3–4.", "wait—then" spoken as "wait, then", "wait — then", plus a property-style test running every R58 rule through `chunk_source_ranges`.
+  - [ ] FX9.01b Align on source token spans (or apply token-count-changing rewrites after source ranges are computed). Em dashes and non-digit en dashes become ", " with one following space.
+- [ ] FX9.02 Make budget accounting fail closed (R70). **High.**
+  - [ ] FX9.02a Regression tests: both cap parameters rejected under a budget is refused and settled `rejected`; a legacy `unknown` row with a NULL bound blocks under a token budget; a 429 after the last retry stays `unknown`; a small PNG of a large image gets a pixel-based bound.
+  - [ ] FX9.02b Never send an uncapped request under a token or USD budget. Remove the `upper_bound_tokens=0` default from `reserve`. Treat NULL-bound open rows as blocking. Restrict `rejected` to 4xx other than 408 and 429. Settle with a typed outcome instead of `usage["rejected"]`. Compute the image bound from pixel dimensions.
+  - [ ] FX9.02c Restore `tests/test_llm_budget_integer_bounds.py`, `test_overspent_token_budget_still_fails_closed` and the exact-exhaustion test in `tests/test_llm_exact_budget_boundary.py`, and make every `…_blocks_…` test in `tests/test_llm_budget_settlement_types.py` assert a block (or rename it with a reason).
+- [ ] FX9.03 Stop Roman-letter attributions becoming headings (R66). **High.**
+  - [ ] FX9.03a Regression tests: "C. DICKENS", "M. LEBLANC", "D. H. LAWRENCE" and "L. FRANK BAUM" stay body text; "I./II./III." gives 3 chapters; "IV./V./VI." keeps "V." as a heading.
+  - [ ] FX9.03b Accept a single-letter numeral only within a sequence of at least two consecutive Roman headings, or when the block passes the font-size or whitespace heading test.
+- [ ] FX9.04 Hash manifest-rendered text in `pack-m4b` (R76). **High.**
+  - [ ] FX9.04a Regression test: edit a boundary in `manifest.json` only, without calling `render_chapter_texts`; `pack-m4b` exits 6 naming the chapter.
+  - [ ] FX9.04b Render narration text in memory from the current manifest, with the function `convert` uses, and stop reading `chapters/*.txt` in `pack-m4b`.
+- [ ] FX9.05 OCR vector-outlined text (R69). **High.**
+  - [ ] FX9.05a Add a real outlined-glyph fixture with drawing coverage below 0.15 (Ghostscript `-dNoOutputFonts`, or drawn glyph paths, committed as a small binary). Regression test: it is OCRed in `--ocr auto` (Tesseract-gated; confirm in CI's `-ra` summary that it ran). A page with one horizontal rule isn't OCRed.
+  - [ ] FX9.05b Detect glyph-like drawings (a named minimum count of small filled paths, or a lower coverage threshold). Remove the "OCR not needed" wording, and warn with the real reason when a page isn't OCRed. Document the constants in MAINTAINER_GUIDE.md.
+- [ ] FX9.06 Strip isolated invisible characters (R65).
+  - [ ] FX9.06a Regression tests: a leading BOM then a space; isolated U+200B, U+2060 and U+00AD; a chapter of one such token plus one word.
+  - [ ] FX9.06b Remove the characters before tokenizing on both sides; drop a token that becomes empty from both sides together.
+- [ ] FX9.07 Keep stderr clean (R72).
+  - [ ] FX9.07a Restore the 2904f19 assertions in `tests/test_cli_json_errors.py` (`json.loads(captured.err)`, `json.loads(result.stderr)`, `not result.stderr.lstrip().startswith("{")`).
+  - [ ] FX9.07b Render log events as human-readable lines in human mode. In `--json` mode emit only the error object unless `--verbose`. Emit structured events only with `--verbose` or an explicitly configured `general.log_level`.
+  - [ ] FX9.07c New test: `--verbose` emits `stage_started` and `command_failed`.
+- [ ] FX9.08 Stop `budget resolve` overflowing the ledger (R71).
+  - [ ] FX9.08a Regression test: with another open row present, resolving a value that would overflow exits 2, leaves the row unchanged, and `budget show` still works.
+  - [ ] FX9.08b Include every other row's usage and open bound in the cumulative check, and check the 64-bit and `Decimal` limits before writing.
+- [ ] FX9.09 Make the review gate use current state (R73).
+  - [ ] FX9.09a Regression tests: a chapter emptied by hand after analysis is gated at convert; a title-only review-UI save keeps `damaged_source`.
+  - [ ] FX9.09b Recompute review reasons in `convert` from the current manifest with the shared emptiness function. Add an explicit acknowledgement control to the review UI and clear `damaged_source` only through it.
+- [ ] FX9.10 Fix `--accept-review` (R74).
+  - [ ] FX9.10a Regression tests: an unknown reason exits 2 with no workspace changes; a `review_acknowledged` event is logged; `--dry-run` reports the acknowledgement.
+  - [ ] FX9.10b Validate reasons at option parsing, log the event, and apply the flag in dry-run.
+- [ ] FX9.11 Match hand edits by chapter identity (R75).
+  - [ ] FX9.11a Regression tests: reanalysis inserting a chapter before an edited one keeps the edit on the right chapter; a removed edited chapter raises a content-free conflict.
+  - [ ] FX9.11b Match by `id` and `generated_fingerprint`, never by number.
+- [ ] FX9.12 Scope WAV cleanup and fix TTS robustness (R77).
+  - [ ] FX9.12a Regression tests: a second concurrent `convert` is refused and the first run's WAV survives; a fake provider's transient error is retried; a misplaced voice marker fails only its chapter (exit 7, `invalid_voice_marker`); a resumed run reports the same `pause_count`.
+  - [ ] FX9.12b Take an exclusive workspace lock in `convert` and sweep only while holding it. Map each provider's transient failures, and list providers with none in MAINTAINER_GUIDE.md. Fail only the marker's chapter. Count pauses from the chunk mapping.
+  - [ ] FX9.12c Piper speaker-count validation stays deferred with FX8.14c.
+- [ ] FX9.13 Finish the speech rules (R68).
+  - [ ] FX9.13a Regression tests: "Dr. Watson arrived.", "the U.S. army", "the U.S.", "Hermione...", "Hermione…".
+  - [ ] FX9.13b Implement R58's period rule, and strip and restore `...` and `…` identically.
+- [ ] FX9.14 Fix wrapped lines and list ends (R67).
+  - [ ] FX9.14a Regression tests: "J. Smith of the Times." and "1990) was…" wrapped lines join; a list followed by a body paragraph keeps the paragraph separate.
+  - [ ] FX9.14b Use the sequential-marker rule in the join check, and end a list at a blank line, font change or unindented line.
+- [ ] FX9.15 CLI error mapping and small fixes (R78).
+  - [ ] FX9.15a Restore the 2904f19 error-mapping parametrization in `tests/test_cli_json_errors.py`; add tests for `review` with the port in use and for Ctrl+C on `review` (exit 0).
+  - [ ] FX9.15b Keep content-free messages for known `OSError` cases. Make Ctrl+C on `review` a normal shutdown.
+  - [ ] FX9.15c Mark secret fields on the config model and derive `_SECRET_CONFIG_PATHS` from it; add a test that every listed path exists.
+  - [ ] FX9.15d Restore the folio-test comment to "appear as page" exactly.
+- [ ] FX9.16 Make the regression tests discriminate (R79).
+  - [ ] FX9.16a Replace FX8's R46 chapter test, R47 folio test and R57 test with versions that fail at 2904f19, and record the failing IDs.
+  - [ ] FX9.16b Make the MP3-sidecar and WAV-metadata depth tests use nested dicts, and show each fails with its depth check disabled.
+  - [ ] FX9.16c Make the R10 test run the page's own JavaScript (Node-gated) and add a static check that the request builder in `_HTML` sends `voice_id`.
+  - [ ] FX9.16d Re-audit every changed assertion or fixture input under `tests/` between 2904f19 and 0c19845, one ledger line per change (file, test, old → new, reason). Restore any not covered by another FX9 task.
+- [ ] FX9.17 Bump fingerprints once (spec §9.9): the extraction/analysis fingerprint for R66, R67 and R69, and the audio fingerprint for R64, R65 and R68. Add the MAINTAINER_GUIDE upgrade notes.
+- [ ] FX9.18 Pin uv in `ci.yml`, regenerate `uv.lock` with that version, and record the version, the resulting `revision` and the reason in the ledger (R78). `uv lock --check` passes locally and in CI.
+- [ ] FX9.19 Closure.
+  - [ ] FX9.19a Re-check each FX8 item unchecked in FX9.00 only when the FX9 task that covers it is checked, citing its commit SHA. Re-check FX0–FX7 and original-TODO items the same way.
+  - [ ] FX9.19b Merge the §9 parent-spec amendments and update README.md and MAINTAINER_GUIDE.md (`--accept-review` validation, review-UI acknowledgement, stderr behaviour, workspace lock, OCR constants, uv pin).
+  - [ ] FX9.19c Final gate: `/verify` is green, with mypy on Python 3.11, 3.12 and 3.13; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; the `-ra` skip summary shows the Tesseract and FFmpeg tests ran in CI. Record the SHA and run ID below.
+
+**FX9 gate:**
+- digit ranges, dashes and invisible characters never fail a chapter;
+- no request is sent uncapped under a budget, and no unresolved attempt counts as free;
+- "C. DICKENS" stays body text and numbered and Roman chapters are kept;
+- `pack-m4b` rejects audio that doesn't match the current manifest;
+- a vector-outlined text page is OCRed;
+- default stderr starts with "Error:" and `--json` stderr is one JSON value;
+- every test rewritten in FX8 is restored or deleted with a reason;
+- every new regression test is recorded as failing at its parent commit;
+- the ledger is append-only and every status change is a git commit.
+
 ## Progress ledger
 
 | Date | Master SHA | Completed tasks | Tests/CI | Blockers |
@@ -306,3 +395,4 @@ The second review of `7eb4d25..2904f19` found regressions, an existing test whos
 | 2026-10-25 | 2904f1975ef131f11ed340264b0b8151e85101a9 | FX8.01 reopened the second-review findings R46–R63 and reclassified affected FX0–FX7 evidence; FX8.02a restored the baseline tight-folio fixture at y=474 | The restored regression now fails on 2904f19: it removes no tight footer folios | FX8 implementation in progress |
 | 2026-10-25 | a176375 (review baseline source) | FX8.02b audit of changed existing test assertions and fixture inputs: schema v1→v2 edits follow FX0.03; blank-page raster edits preserve raster OCR/cache coverage while new image-free coverage was added; CLI error wording follows R2; config wording/import edits accompany typed config behavior; read-count +1 reflects voice-marker preflight; LLM wording/decision/context assertions follow R18/R20/R21; review UI voice assertion was an incomplete R10 check and FX8.02c will test the actual JS request; WAV cache identity follows FX6; PDF vector→raster fixture preserves raster OCR while vector behavior gets dedicated coverage. The scan fixture's y=500 edit had no justification and was restored to y=474. | Diff audit covered every changed file existing at 7eb4d25; new tests are additive. | FX8.02c regressions remain |
 | 2026-10-25 | 5c8eff7160f3f02506b7092ac75196860df6bc13 | FX8.02–FX8.18 and FX8.19a–b: second-review regressions, privacy, extraction/page numbering, damaged-source gates, budget accounting, packaging freshness, manifest edit protection, TTS robustness (Piper speaker-count validation remains user-deferred), logging, and docs | Local: Ruff, formatting, mypy (22 files), `uv lock --check`, wheel/sdist build, 1240 passed and 1 optional Kitten smoke skipped. Exact-head CI [40186391382](https://github.com/ekkus93/pdf2audiobook/actions/runs/40186391382) passed on Python 3.11–3.13, including wheel/sdist clean-environment smoke | Piper-specific speaker-count validation remains deferred under FX8.14c |
+| 2026-10-25 | 0c198457396821434614b712faf9d8129eb497ef | Third review of 2904f19..0c19845: FX9 phase and spec §9 (R64–R79) drafted; no fixes implemented | Local gates green at 0c19845 (1240 passed, 1 skipped); CI runs 40186391382 and 40186508562 succeeded; regressions reproduced by probes (digit ranges, isolated BOM/U+200B, "C. DICKENS" headings, JSON on default stderr) | FX8 status corrections pending in FX9.00; FX9 not started |
