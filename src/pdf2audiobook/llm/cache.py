@@ -222,23 +222,57 @@ class CachedLLMProvider:
         elif callable(served):
             served(instructions=instructions, document_text=document_text)
         reservation = None
+        attempt_accounting = False
         if self.ledger is None:
             self._check_usage_budget()
             if self.max_requests is not None and self.requests_started >= self.max_requests:
                 self._write_usage()
                 raise LLMError("LLM request budget exhausted; increase llm.max_requests")
         else:
-            reservation = self.ledger.reserve(
-                request_hash=key,
-                provider_hash=self.identity,
-                max_requests=self.max_requests,
-                max_tokens=self.max_reported_tokens,
-                max_usd=self.max_estimated_cost_usd,
-            )
+            set_accounting = getattr(self.provider, "set_attempt_accounting", None)
+            if callable(set_accounting):
+                attempt_accounting = True
+
+                def start_attempt() -> int:
+                    assert self.ledger is not None
+                    call_id = self.ledger.reserve(
+                        request_hash=key,
+                        provider_hash=self.identity,
+                        max_requests=self.max_requests,
+                        max_tokens=self.max_reported_tokens,
+                        max_usd=self.max_estimated_cost_usd,
+                    )
+                    self.requests_started += 1
+                    self._write_usage()
+                    return call_id
+
+                def settle_attempt(call_id: int, usage: dict | None, unbilled: bool) -> None:
+                    assert self.ledger is not None
+                    if unbilled:
+                        self.ledger.settle_unbilled(call_id)
+                    else:
+                        self.ledger.settle(
+                            call_id,
+                            usage=usage,
+                            input_rate=self.input_cost_usd_per_million_tokens,
+                            output_rate=self.output_cost_usd_per_million_tokens,
+                        )
+                    self._write_usage()
+
+                set_accounting(start_attempt, settle_attempt)
+            else:
+                reservation = self.ledger.reserve(
+                    request_hash=key,
+                    provider_hash=self.identity,
+                    max_requests=self.max_requests,
+                    max_tokens=self.max_reported_tokens,
+                    max_usd=self.max_estimated_cost_usd,
+                )
         # A failed response can still incur charges. Never reuse stale usage.
         if hasattr(self.provider, "last_usage"):
             self.provider.last_usage = {}
-        self.requests_started += 1
+        if not attempt_accounting:
+            self.requests_started += 1
         self._write_usage()
         request_error: Exception | None = None
         try:

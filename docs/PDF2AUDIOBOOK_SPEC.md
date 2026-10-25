@@ -183,6 +183,7 @@ Use bounded requests with nearby-context overlap, stable IDs and prompt versioni
 - Cache by source/stage hash, prompt schema/version, provider/model, context and generation parameters; do not mix incompatible cache entries.
 - Report approximate token/cost metrics when known; enforce optional per-book request/token/USD budgets. Cost estimates are advisory unless authoritative pricing is configured.
 - Persist pending, complete, unknown and unbilled request rows. Only provably unsent connection failures are unbilled; unresolved sent/ambiguous calls block token and cost budgets until reviewed. Model discovery occurs before reservation. `budget show --output DIR` exposes row IDs, statuses and accounting only; `budget resolve` requires explicit confirmation and verified token counts or a confirmed unbilled result.
+- Every HTTP attempt, including compatibility fallbacks and retries, gets its own reservation and settlement. Attempts count toward `max_requests`; a retry stops when the next reservation would exceed a configured budget.
 - Analysis fingerprints include content-affecting settings, not operational limits or consent toggles. When approved workspaces cannot be reused, diagnostics name changed stages without exposing setting values.
 
 ### 6.4 Data privacy

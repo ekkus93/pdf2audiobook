@@ -106,9 +106,9 @@
   - [x] FX4.01b Move model discovery before reservation so it never reserves budget.
   - [x] FX4.01c Add `pdf2audiobook budget show --output DIR` and `budget resolve … (--tokens P:C | --unbilled) --confirm`.
   - [x] FX4.01d Tests: a connect error leaves no blocking row; a read timeout leaves `unknown`; `resolve` unblocks the run; a `budget` CLI privacy test.
-- [ ] FX4.02 Count every retry against the budget (R17).
-  - [ ] FX4.02a Make each HTTP attempt reserve and settle its own ledger row and count toward `max_requests`, and stop retrying when the budget runs out.
-  - [ ] FX4.02b Test: with `max_requests=1`, a timeout is not retried, and the ledger matches the attempts made.
+- [x] FX4.02 Count every retry against the budget (R17).
+  - [x] FX4.02a Make each HTTP attempt reserve and settle its own ledger row and count toward `max_requests`, and stop retrying when the budget runs out.
+  - [x] FX4.02b Test: with `max_requests=1`, a timeout is not retried, and the ledger matches the attempts made.
 - [ ] FX4.03 Warn once per data scope (R18).
   - [ ] FX4.03a Give page images and text windows separate warnings, with an accurate whole-book wording for text, plus the provider and model.
   - [ ] FX4.03b Tests: vision followed by text gives two warnings; text only gives one.
