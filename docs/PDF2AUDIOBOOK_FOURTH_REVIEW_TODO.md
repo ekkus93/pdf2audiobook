@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.16 complete; FX10.17 is next.
+**Status:** FX10.00–FX10.17 complete; FX10.18 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -162,12 +162,12 @@
     - the "May / 12." and "page / 42)" wraps join;
     - a list followed by a same-margin body line keeps the paragraph separate.
   - [x] FX10.16b Classify footnotes before lists. Use one list classifier for block kinds and the join check. Apply the spec's list-end rule.
-- [ ] FX10.17 Decide page-number ambiguity among candidates only (R97).
-  - [ ] FX10.17a Regression tests:
+- [x] FX10.17 Decide page-number ambiguity among candidates only (R97).
+  - [x] FX10.17a Regression tests:
     - two table-cell numerals at the foot give no warning and no review reason;
     - the sonnet fixture gives no label-mismatch warning;
     - 18pt vs 18.4pt is a tie and warns.
-  - [ ] FX10.17b Count only candidates. Compare only the chosen sequence with the labels. Add a named tie tolerance (2pt) documented in MAINTAINER_GUIDE.md.
+  - [x] FX10.17b Count only candidates. Compare only the chosen sequence with the labels. Add a named tie tolerance (2pt) documented in MAINTAINER_GUIDE.md.
 - [ ] FX10.18 Keep short valid text out of OCR (R98).
   - [ ] FX10.18a Regression tests:
     - a "Part One" page with a 48-path ornament analyzes with Tesseract unavailable and has `embedded` origin;
@@ -292,3 +292,4 @@
 | 2026-10-25 | 5f8aa274348f612055434fcae1144916ca6bed42 | FX10.14a–b (R95): `budget show` reads v2 ledgers without migration; `budget resolve` refuses v2 and earlier with the fixed re-create-ledger message; missing and settled IDs have distinct fixed messages and exit 2. The R95 decision is recorded in the fourth-review spec. | All four regressions in `tests/test_budget_cli_fx10.py` failed at parent d470d0d: v2 show was rejected, legacy refusal message was generic, and missing/complete row messages were generic. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1447 passed and 1 optional Kitten skip. Exact-head CI [40244899300](https://github.com/ekkus93/pdf2audiobook/actions/runs/40244899300) passed Python 3.11–3.13, including unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | 370b43516d893d17d3a1c4d6d63d33c272c1fd5c | FX10.15a–c (R99): removed unused folio helper and test-only `chapter_text`; exposed `valid_box` while retaining its old internal alias; hoisted Roman marker tables; extracted OCR fallback into `_apply_ocr_fallback`; centralized block kind decisions; gathered capped page image/drawing metadata once for reuse. | Refactor validation: local `/verify` passed (lock check, Ruff, format, mypy on 23 source files, 1447 passed, 1 optional Kitten skip). Exact-head CI [40245247117](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245247117) passed Python 3.11–3.13, including unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. Chapter structure tests now form their text projection locally after removal of the test-only production helper; expected behavior remained the same. | None |
 | 2026-10-25 | 10e5016464cf54c804e6763382a798345709060e | FX10.16a–b (R96): one contextual list classifier now serves extraction and line joining; footnote kinds win before list detection; sequential numbered notes receive audited omit edits; initials stay prose; wrapped May/page numbers join; sentence-final lists end before same-margin prose. R96 and parent spec §4.3 record list-end and colon-label details. | At parent 84074f6, all five cases failed in `tests/test_list_classifier_fx10.py`: sequential numbered footnotes were lists, A/B initials became lists, both May/page number wraps split, and same-margin body text joined the preceding list. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1452 passed, 1 optional Kitten skip. Exact-head CI [40245718067](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245718067) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
+| 2026-10-25 | c578b9a9525c0ad62d61e13eb2ea099ea786558a | FX10.17a–b (R97): pagination ambiguity now counts candidate numerals only; PDF labels are checked against the selected sequence; edge distances under the documented 2pt tolerance tie. Updated parent §4.2. | At parent b65cb3a, `tests/test_pagination_multiple_margin_numerals.py::test_table_cell_numerals_do_not_create_page_number_ambiguity`, `::test_edge_distances_within_two_points_are_tied`, and `tests/test_page_number_sequences.py::test_poem_numerals_survive_while_edge_folios_are_removed` failed. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1454 passed, 1 optional Kitten skip. Exact-head CI [40245977219](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245977219) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
