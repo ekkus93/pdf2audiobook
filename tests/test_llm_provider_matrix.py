@@ -14,7 +14,7 @@ from pdf2audiobook.models import DocumentBlock
 PROVIDERS = ("openai", "ollama", "llama-server")
 
 
-def _provider(name, handler, *, retries=0):
+def _provider(name, handler, *, retries=0, context=None):
     url = "https://api.openai.com/v1" if name == "openai" else ("http://127.0.0.1:11434/v1")
     return OpenAICompatibleProvider(
         provider=name,
@@ -22,6 +22,7 @@ def _provider(name, handler, *, retries=0):
         model="mock",
         allow_remote=name == "openai",
         max_retries=retries,
+        max_context_tokens=context,
         transport=httpx.MockTransport(handler),
     )
 
@@ -92,6 +93,27 @@ def test_json_mode_rejection_falls_back_once(name):
     with _provider(name, handler) as provider:
         assert provider.complete_json(instructions="x", document_text="y") == {"headings": []}
     assert formats == [{"type": "json_object"}, None]
+
+
+@pytest.mark.parametrize("parameter", ["max_tokens", "temperature"])
+@pytest.mark.parametrize("name", PROVIDERS)
+def test_rejected_generation_parameter_is_removed_and_remembered(parameter, name):
+    seen = []
+
+    def handler(request):
+        payload = json.loads(request.content)
+        seen.append(parameter in payload)
+        if parameter in payload:
+            return httpx.Response(
+                400,
+                json={"error": {"message": f"{parameter} unsupported", "param": parameter}},
+            )
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    with _provider(name, handler, context=4096) as provider:
+        assert provider.complete_json(instructions="x", document_text="y") == {}
+        assert provider.complete_json(instructions="x", document_text="z") == {}
+    assert seen == [True, False, False]
 
 
 @pytest.mark.parametrize("name", PROVIDERS)

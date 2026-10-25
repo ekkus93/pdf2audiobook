@@ -90,7 +90,7 @@ def test_json_mode_fallback_keeps_output_cap():
     assert "response_format" not in seen[1]
 
 
-def test_unsupported_output_cap_fails_closed_without_uncapped_retry():
+def test_unsupported_output_cap_is_removed_for_one_bounded_compatibility_retry():
     sent = []
 
     def handler(request):
@@ -103,8 +103,9 @@ def test_unsupported_output_cap_fails_closed_without_uncapped_retry():
     with create_provider(settings, transport=httpx.MockTransport(handler)) as provider:
         with pytest.raises(LLMError, match="request or JSON decoding failed"):
             provider.complete_json(instructions="classify", document_text="book")
-    assert len(sent) == 1
+    assert len(sent) == 2
     assert sent[0]["max_tokens"] == settings.llm.max_output_tokens
+    assert "max_tokens" not in sent[1]
 
 
 def test_oversized_request_does_not_reserve_unknown_ledger_charge(tmp_path):

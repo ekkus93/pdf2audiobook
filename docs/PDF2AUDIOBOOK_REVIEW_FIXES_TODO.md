@@ -115,9 +115,9 @@
 - [x] FX4.04 Resolve llama-server's `"auto"` model before keying the caches (R19).
   - [x] FX4.04a Resolve the served model before computing cache identity and the analysis key. Raise `LLMError` when it is ambiguous or unavailable and no concrete model is configured.
   - [x] FX4.04b Test: changing the stubbed served model invalidates the cache and the analysis stage fingerprint.
-- [ ] FX4.05 Adapt to unsupported provider parameters (R20).
-  - [ ] FX4.05a When a provider rejects `max_tokens` or `temperature`, retry once without it, remember that per provider instance, and count it under R17. Optionally use JSON-schema mode where the provider declares support.
-  - [ ] FX4.05b Add provider-matrix contract cases for each rejected parameter.
+- [x] FX4.05 Adapt to unsupported provider parameters (R20).
+  - [x] FX4.05a When a provider rejects `max_tokens` or `temperature`, retry once without it, remember that per provider instance, and count it under R17. Optionally use JSON-schema mode where the provider declares support.
+  - [x] FX4.05b Add provider-matrix contract cases for each rejected parameter.
 - [ ] FX4.06 Record LLM decisions for every task (R21).
   - [ ] FX4.06a Generalize to an `LLMDecision` record, emitted for the heading, cleanup, classification and narration tasks, and persist it in `reports/`.
   - [ ] FX4.06b Tests: accepted and rejected records for each task.
@@ -209,3 +209,4 @@
 | 2026-10-25 | b7caf90a382f4cd7cac62e541ac1313be5851d59 | FX3.04 (validate M4B inputs and remove only verified obsolete chapter audio); FX3.05 (§5 amendment confirmed) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1053 tests; CI run [40175653997](https://github.com/ekkus93/pdf2audiobook/actions/runs/40175653997) passed on Python 3.11–3.13 | FX4–FX7 remain |
 | 2026-10-25 | c8987b5295fc4a6cfb679c3370de6becea5a7eaf | FX4.01 (unbilled request state, content-free budget commands, pre-reservation model discovery); FX4.04 (served model participates in LLM cache and analysis identity) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1062 tests; CI run [40176048905](https://github.com/ekkus93/pdf2audiobook/actions/runs/40176048905) passed on Python 3.11–3.13 | FX4 continues |
 | 2026-10-25 | pending | FX4.02 (per-attempt ledger reservations); FX4.03 (separate image and whole-book text consent warnings) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1064 tests; exact-head CI pending | FX4 continues |
+| 2026-10-25 | pending | FX4.05 (provider-specific fallback for unsupported `max_tokens` and `temperature`) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1070 tests; exact-head CI pending | FX4 continues |

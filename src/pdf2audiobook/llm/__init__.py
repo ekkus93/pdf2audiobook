@@ -135,6 +135,7 @@ class OpenAICompatibleProvider:
         self.max_retries = max_retries
         self.max_context_tokens = max_context_tokens
         self.max_output_tokens = max_output_tokens
+        self._unsupported_parameters: set[str] = set()
         self._remote_content_warned_scopes: set[str] = set()
         self._served_context: int | None = None
         self.request_count = 0
@@ -229,6 +230,30 @@ class OpenAICompatibleProvider:
             term in explanation
             for term in ("not support", "unsupported", "unrecognized", "unknown", "invalid")
         )
+
+    @staticmethod
+    def _unsupported_parameter(response: httpx.Response, parameter: str) -> bool:
+        """Detect a specific provider rejection without exposing its error body."""
+        if response.status_code != 400:
+            return False
+        try:
+            body = response.json()
+            detail = body.get("error", body) if isinstance(body, dict) else ""
+            if isinstance(detail, dict):
+                message = detail.get("message", "")
+                param = detail.get("param", "")
+            else:
+                message, param = detail, ""
+            if not isinstance(message, str) or not isinstance(param, str):
+                return False
+        except (ValueError, TypeError):
+            return False
+        explanation = message.casefold()
+        rejected = any(
+            term in explanation
+            for term in ("not support", "unsupported", "unrecognized", "unknown", "invalid")
+        )
+        return rejected and (param == parameter or parameter in explanation)
 
     def validate_request_capacity(self, *, instructions: str, document_text: str) -> None:
         """Check capacity before cache/ledger reservations or any book-text upload."""
@@ -386,6 +411,8 @@ class OpenAICompatibleProvider:
         # Do not silently drop the response cap for an incompatible provider.
         if self.max_context_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
+        for parameter in self._unsupported_parameters:
+            payload.pop(parameter, None)
         if self.provider == "ollama":
             # Reasoning models (e.g. qwen3.5) otherwise spend the whole output
             # cap on hidden thinking and return empty content. Answers are
@@ -432,6 +459,21 @@ class OpenAICompatibleProvider:
                     finish_attempt()
                     payload.pop("response_format")
                     format_fallback_used = True
+                    continue
+                rejected_parameter = next(
+                    (
+                        parameter
+                        for parameter in ("max_tokens", "temperature")
+                        if parameter in payload
+                        and parameter not in self._unsupported_parameters
+                        and self._unsupported_parameter(response, parameter)
+                    ),
+                    None,
+                )
+                if rejected_parameter is not None:
+                    finish_attempt()
+                    payload.pop(rejected_parameter)
+                    self._unsupported_parameters.add(rejected_parameter)
                     continue
                 # Ollama reports an aborted generation ("token repeat limit
                 # reached") as HTTP 500; a resample usually succeeds.

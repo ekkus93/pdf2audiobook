@@ -164,6 +164,8 @@ A stable LLMProvider protocol exposes health/model discovery (when available), t
 
 Use the OpenAI Python SDK or an equivalent HTTP client with OpenAI-compatible chat/completions when supported. Do not assume every Ollama/llama-server build supports every OpenAI parameter, JSON-schema mode, endpoint or model-list response: use provider capability adaptation and local Pydantic/JSON validation, with bounded repairs and explicit error messages. Provider adapters must have contract tests using stubbed responses.
 
+If a provider explicitly rejects `max_tokens` or `temperature`, retry once without that parameter and remember the unsupported capability for that provider instance. Treat the fallback as a new HTTP attempt for budget accounting; keep local response validation enabled.
+
 ### 6.2 LLM tasks
 
 - **Structure detection:** classify headings and TOC candidates; return anchored block IDs and confidence, never free-form chapter text.
