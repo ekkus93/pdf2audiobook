@@ -41,6 +41,19 @@ def test_synthesis_can_stream_chunks_directly_to_wav(tmp_path):
 
 
 def test_streaming_peak_memory_does_not_grow_with_chapter_length(tmp_path):
+    # Exclude one-time interpreter/NumPy initialization from the size comparison.
+    warmup_text = "\n\n".join(f"Sentence number {index} ends here." for index in range(40))
+    synthesize_chunks(
+        warmup_text,
+        _StreamingProvider(),
+        model="synthetic",
+        voice="default",
+        speed=1.0,
+        pause_ms=0,
+        cache=tmp_path / "cache-warmup",
+        use_cache=False,
+        output_wav=tmp_path / "streamed-warmup.wav",
+    )
     peaks = []
     for chunk_count in (10, 40):
         chapter = "\n\n".join(f"Sentence number {index} ends here." for index in range(chunk_count))
