@@ -359,15 +359,13 @@ def _classify_block_kind(
     caption_indices: set[int],
     equation_indices: set[int],
     *,
-    marker: str | None,
-    sequential_marker: bool,
+    previous_text: str | None,
+    next_text: str | None,
     display_heading: bool,
 ) -> Literal["heading", "paragraph", "list", "table", "footnote", "caption", "equation", "unknown"]:
     """Assign one explicit structural kind after page-level detectors run."""
     if display_heading:
         return "heading"
-    if marker is not None and sequential_marker and not is_heading_line(text):
-        return "list"
     if _inside_table(bbox, table_regions):
         return "table"
     if line_index in footnote_indices:
@@ -378,9 +376,7 @@ def _classify_block_kind(
         return "equation"
     if is_heading_line(text):
         return "heading"
-    if is_list_line(text):
-        if marker is not None and not sequential_marker:
-            return "unknown"
+    if is_list_line(text, previous_text=previous_text, next_text=next_text):
         return "list"
     return "unknown"
 
@@ -776,11 +772,6 @@ _VECTOR_ARTWORK_MIN_PATHS = 100
 # instead of being treated as blank (a lone rule or border is not).
 _VECTOR_REVIEW_MIN_PATHS = 10
 _VECTOR_ARTWORK_MIN_COVERAGE = 0.15
-_ROMAN_LIST_MARKERS = frozenset({"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"})
-_ROMAN_LIST_VALUES = {
-    marker: value
-    for value, marker in enumerate(("i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"), 1)
-}
 
 
 def _page_has_dense_vector_art(page: pymupdf.Page, visuals: _PageVisuals | None = None) -> bool:
@@ -995,24 +986,6 @@ def _build_page_blocks(
         float(line["size"]) for line in lines if isinstance(line.get("size"), (int, float))
     )
     typical_size = sizes[(len(sizes) - 1) // 2] if sizes else 0.0
-    sequential: set[int] = set()
-    for index in range(len(marked) - 1):
-        first, second = marked[index][0], marked[index + 1][0]
-        if first is None or second is None:
-            continue
-        a, b = first.group(1), second.group(1)
-        if a.isdigit() and b.isdigit() and int(b) == int(a) + 1:
-            sequential.update((index, index + 1))
-        elif (
-            len(a) == len(b) == 1
-            and a.isalpha()
-            and b.isalpha()
-            and ord(b.lower()) == ord(a.lower()) + 1
-        ):
-            sequential.update((index, index + 1))
-        elif a.lower() in _ROMAN_LIST_MARKERS and b.lower() in _ROMAN_LIST_MARKERS:
-            if _ROMAN_LIST_VALUES[b.lower()] == _ROMAN_LIST_VALUES[a.lower()] + 1:
-                sequential.update((index, index + 1))
     for line_index, line in enumerate(lines):
         ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
         bbox = _finite_bbox(line["bbox"])
@@ -1046,8 +1019,10 @@ def _build_page_blocks(
             footnote_indices,
             caption_indices,
             equation_indices,
-            marker=marker.group(1) if marker is not None else None,
-            sequential_marker=line_index in sequential,
+            previous_text=(str(lines[line_index - 1].get("text", "")) if line_index else None),
+            next_text=(
+                str(lines[line_index + 1].get("text", "")) if line_index + 1 < len(lines) else None
+            ),
             display_heading=display_heading,
         )
         blocks.append(

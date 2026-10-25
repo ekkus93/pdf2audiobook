@@ -299,7 +299,8 @@ Separately, `batch` maps every `OSError` to 6 (cli.py:675).
 - **Footnotes first.** Footnote classification (small type in the page's foot band) runs before list detection. A footnote is never reclassified as a list.
 - **A list item needs** a run of at least two sequential markers, each followed by text that isn't a capitalized name (for example "Smith" or "Jones"). Single capitals followed by a name are never markers.
 - **A wrapped line joins** the previous line when the previous line doesn't end a sentence and the next line's marker isn't part of a sequential run.
-- **A list ends** at a blank line, a font change, or a line whose left edge is at or left of the markers' left edge and doesn't start with the next marker.
+- **A list ends** at a blank line, a font change, or an outdented line. A sentence-final item followed by an unmarked line at the marker margin starts a new body paragraph; an unpunctuated flush-left line can remain its wrapped continuation.
+- Keep a colon-terminated label separate from a following list-marker candidate, preserving existing “Instructions:” behavior.
 
 *Tests (new):*
 - numbered small-type footnotes stay `footnote`, and `--footnotes omit` removes them;

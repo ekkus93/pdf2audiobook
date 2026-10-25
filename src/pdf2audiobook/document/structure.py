@@ -262,21 +262,66 @@ def is_heading_line(text: str) -> bool:
     return labelled_heading(text.strip())
 
 
-LIST_LINE = re.compile(r"^\s*(?:\d+[.)]|[A-Za-z][.)]|[•*])\s+")
+_LIST_MARKER = re.compile(
+    r"^\s*(?P<marker>\d{1,3}[.)]|[ivxlcdm]{2,}[.)]|[A-Za-z][.)]|[•*])\s+(?P<rest>\S.*)$",
+    re.IGNORECASE,
+)
+_ROMAN_LIST_VALUES = {
+    marker: value
+    for value, marker in enumerate(("i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"), 1)
+}
 
 
-def is_list_line(text: str) -> bool:
-    """Recognize explicit list markers without treating dialogue dashes as lists."""
-    match = LIST_LINE.match(text)
+def _list_marker(text: str) -> tuple[str, str] | None:
+    match = _LIST_MARKER.match(text)
     if match is None:
+        return None
+    marker = match.group("marker")[:-1]
+    rest = match.group("rest")
+    # A. Smith and B. Jones are prose initials, not alphabetic list items.
+    if len(marker) == 1 and marker.isalpha() and re.match(r"[A-Z][a-z]+\b", rest):
+        return None
+    if marker.isdigit() and len(marker) >= 3 and text.lstrip().startswith(marker + ")"):
+        return None
+    return marker, rest
+
+
+def _sequential_markers(first: str, second: str) -> bool:
+    if first.isdigit() and second.isdigit():
+        return int(second) == int(first) + 1
+    if len(first) == len(second) == 1 and first.isalpha() and second.isalpha():
+        return ord(second.lower()) == ord(first.lower()) + 1
+    if first in {"•", "*"} or second in {"•", "*"}:
+        return first == second
+    left, right = first.casefold(), second.casefold()
+    return (
+        left in _ROMAN_LIST_VALUES
+        and right in _ROMAN_LIST_VALUES
+        and _ROMAN_LIST_VALUES[right] == _ROMAN_LIST_VALUES[left] + 1
+    )
+
+
+def is_list_line(
+    text: str, *, previous_text: str | None = None, next_text: str | None = None
+) -> bool:
+    """Classify a line as part of a sequential list run, using adjacent lines."""
+    current = _list_marker(text)
+    if current is None:
         return False
-    marker = match.group().strip()
-    rest = text[match.end() :]
-    if re.fullmatch(r"[A-Z]", marker[:-1]) and re.match(r"[A-Z][a-z]+\b", rest):
+    marker, _ = current
+    previous = _list_marker(previous_text) if previous_text is not None else None
+    following = _list_marker(next_text) if next_text is not None else None
+    if previous is not None and _sequential_markers(previous[0], marker):
+        return True
+    if following is not None and _sequential_markers(marker, following[0]):
+        return True
+    # Day-of-month and page-number wraps are prose unless the marker continues
+    # a sequential run on the adjacent line.
+    if previous_text is not None and re.search(r"\b(?:may|page)\s*$", previous_text, re.I):
         return False
-    if re.match(r"\d{3,}\)\s", text):
-        return False
-    return True
+    # Preserve the public helper's historical candidate behavior when callers
+    # have no neighboring lines. Extraction and reflow always provide context.
+    return previous_text is None and next_text is None
 
 
 def _wordlike(text: str) -> bool:
@@ -1389,6 +1434,22 @@ def footnote_anchor_edits(blocks: list[DocumentBlock], edited: set[str]) -> list
     return edits
 
 
+def footnote_omit_edits(blocks: list[DocumentBlock]) -> list[CleanupEdit]:
+    """Create audited exclusions for blocks classified as footnotes."""
+    return [
+        CleanupEdit(
+            block_id=block.id,
+            original=block.text,
+            replacement="",
+            reason="explicit footnotes=omit policy (conservative classification)",
+            confidence=0.9,
+            accepted=True,
+        )
+        for block in blocks
+        if block.kind == "footnote"
+    ]
+
+
 def place_footnotes(
     blocks: list[DocumentBlock], policy: str
 ) -> tuple[list[DocumentBlock], int, int]:
@@ -1427,7 +1488,9 @@ def place_footnotes(
         anchor_index = _unique_anchor(head, body, position)
         if anchor_index is not None:
             while anchor_index + 1 < len(body) and _is_wrapped_line(
-                body[anchor_index], body[anchor_index + 1]
+                body[anchor_index],
+                body[anchor_index + 1],
+                body[anchor_index + 2] if anchor_index + 2 < len(body) else None,
             ):
                 anchor_index += 1
             relocated += 1
@@ -1484,7 +1547,9 @@ def render_chapter_texts(manifest: BookManifest, folder: Path, footnotes: str = 
     write_json(folder / "coverage.json", report)
 
 
-def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
+def _is_wrapped_line(
+    before: DocumentBlock, after: DocumentBlock, after_next: DocumentBlock | None = None
+) -> bool:
     """Join nearby consecutive body lines only when geometry supports a soft wrap."""
     if before.kind in {"heading", "table", "footnote", "caption", "equation"}:
         return False
@@ -1508,9 +1573,17 @@ def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
     markers = ("“", '"', "‘", "'", "—", "–", "•", "*", "§", "#")
     if next_text.startswith(markers) or before.text.strip().startswith(("*", "§", "#")):
         return False
+    if before.text.rstrip().endswith(":") and (
+        is_list_line(next_text) or re.match(r"^[-–—]\s+", next_text)
+    ):
+        return False
     # An initial before a name ("J. Smith") and a year before ")" ("1990) was")
     # are prose, which is_list_line already knows; real markers start a new line.
-    if is_list_line(next_text) or re.match(r"^-\s+", next_text):
+    if is_list_line(
+        next_text,
+        previous_text=before.text,
+        next_text=after_next.text if after_next is not None else None,
+    ) or re.match(r"^-\s+", next_text):
         return False
     if next_text.isupper() and len(next_text.split()) <= 8:
         return False
@@ -1527,6 +1600,11 @@ def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
         ):
             return False
         if left_shift < -2:
+            return False
+        # A sentence-final list item followed at the marker margin is followed
+        # by a new body paragraph. A hanging continuation can remain flush-left
+        # when the list item itself has no sentence-ending punctuation.
+        if left_shift <= 2 and before.text.rstrip().endswith((".", "?", "!", ":", ";")):
             return False
     # Preserve indented paragraphs, section breaks and column transitions.
     return -2 <= vertical_gap <= 0.8 * line_height and abs(left_shift) <= max(12.0, line_height)
@@ -1549,12 +1627,18 @@ def reflow_narration_lines(
     paragraphs: list[str] = []
     current = ""
     previous: DocumentBlock | None = None
-    for block in blocks:
+    for block_index, block in enumerate(blocks):
         text = replacements.get(block.id, block.text).strip()
         if not text:
             # An excluded running header/footer should not force a new paragraph.
+            if not block.text.strip():
+                if current:
+                    paragraphs.append(current)
+                    current = ""
+                previous = None
             continue
-        if current and previous is not None and _is_wrapped_line(previous, block):
+        after_next = blocks[block_index + 1] if block_index + 1 < len(blocks) else None
+        if current and previous is not None and _is_wrapped_line(previous, block, after_next):
             if current.endswith("\u00ad"):
                 current = current[:-1] + text
             elif current.endswith("-") and text[:1].islower():

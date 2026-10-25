@@ -25,6 +25,7 @@ from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import (
     chapter_has_speakable_text,
     footnote_anchor_edits,
+    footnote_omit_edits,
     pagination_cleanup,
     place_footnotes,
     propose_chapters,
@@ -474,17 +475,7 @@ def _analyze_book_locked(
     # Source spans/blocks remain intact and every exclusion is audited.
     footnotes = [block for block in extracted.blocks if block.kind == "footnote"]
     if settings.pdf.footnotes == "omit":
-        edits.extend(
-            CleanupEdit(
-                block_id=block.id,
-                original=block.text,
-                replacement="",
-                reason="explicit footnotes=omit policy (conservative classification)",
-                confidence=0.9,
-                accepted=True,
-            )
-            for block in footnotes
-        )
+        edits.extend(footnote_omit_edits(extracted.blocks))
     if footnotes and settings.pdf.footnotes in {"inline", "end", "omit"}:
         # Once notes are handled, their anchor digits ("world.5") would only
         # be read aloud as numbers. Removal is per anchor, audited, reversible.
