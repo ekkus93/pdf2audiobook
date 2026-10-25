@@ -370,6 +370,23 @@ class BookLLMBudgetLedger:
                 )
                 if result.rowcount != 1:
                     raise LLMError("LLM ledger request was already settled or missing")
+                if verified is not None:
+                    connection.execute("SAVEPOINT validate_settlement")
+                    try:
+                        # Check the full ledger while the candidate complete row
+                        # is visible, still inside the serialized transaction.
+                        self._stats(connection)
+                    except (LLMError, InvalidOperation, ValueError, TypeError, OverflowError):
+                        connection.execute("ROLLBACK TO validate_settlement")
+                        connection.execute("RELEASE validate_settlement")
+                        connection.execute(
+                            "UPDATE calls SET status='unknown', prompt_tokens=NULL, "
+                            "completion_tokens=NULL, total_tokens=NULL, estimated_usd=NULL "
+                            "WHERE id=? AND status='complete'",
+                            (call_id,),
+                        )
+                    else:
+                        connection.execute("RELEASE validate_settlement")
         except sqlite3.Error:
             raise LLMError("Cannot settle per-book LLM budget") from None
 

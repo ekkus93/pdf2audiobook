@@ -514,16 +514,36 @@ class OpenAICompatibleProvider:
             def settle_rejected_parameter() -> AttemptOutcome:
                 return finish_attempt(outcome="rejected")
 
+            def prepare_usage(raw_usage: object) -> dict[str, int]:
+                self.last_usage = {}
+                if isinstance(raw_usage, dict):
+                    for field in self.total_usage:
+                        count = raw_usage.get(field)
+                        if (
+                            valid_usage_count(count)
+                            and count <= (2**63 - 1) - self.total_usage[field]
+                        ):
+                            self.last_usage[field] = count
+                return self.last_usage
+
+            def aggregate_usage() -> None:
+                for field, count in self.last_usage.items():
+                    self.total_usage[field] += count
+
             def settle_json_mode_fallback(response: httpx.Response) -> AttemptOutcome:
                 try:
                     error_payload = response.json()
                 except (ValueError, json.JSONDecodeError):
                     error_payload = None
                 usage = error_payload.get("usage") if isinstance(error_payload, dict) else None
-                return finish_attempt(
-                    usage if isinstance(usage, dict) else None,
+                settlement_usage = prepare_usage(usage) if isinstance(usage, dict) else None
+                result = finish_attempt(
+                    settlement_usage,
                     outcome="settled" if isinstance(usage, dict) else "rejected",
                 )
+                if isinstance(usage, dict):
+                    aggregate_usage()
+                return result
 
             def settle_non_retryable(response: httpx.Response) -> AttemptOutcome:
                 if 400 <= response.status_code < 500 and response.status_code not in (408, 429):
@@ -534,10 +554,16 @@ class OpenAICompatibleProvider:
                     error_usage = (
                         error_payload.get("usage") if isinstance(error_payload, dict) else None
                     )
-                    return finish_attempt(
-                        error_usage if isinstance(error_usage, dict) else None,
-                        outcome=("settled" if isinstance(error_usage, dict) else "rejected"),
+                    settlement_usage = (
+                        prepare_usage(error_usage) if isinstance(error_usage, dict) else None
                     )
+                    result = finish_attempt(
+                        settlement_usage,
+                        outcome="settled" if isinstance(error_usage, dict) else "rejected",
+                    )
+                    if isinstance(error_usage, dict):
+                        aggregate_usage()
+                    return result
                 return finish_attempt()
 
             def settle_unexpected_error() -> AttemptOutcome:
@@ -589,20 +615,9 @@ class OpenAICompatibleProvider:
                 # Provider usage is billable even when generated JSON is malformed.
                 # Account for it before attempting to parse or validate the content.
                 usage = reply.get("usage", {}) if isinstance(reply, dict) else {}
-                settle_success(usage if isinstance(usage, dict) else None)
-                self.last_usage = {}
-                if isinstance(usage, dict):
-                    for field in self.total_usage:
-                        count = usage.get(field)
-                        if (
-                            valid_usage_count(count)
-                            and count <= (2**63 - 1) - self.total_usage[field]
-                        ):
-                            # Persisted token ledgers use signed SQLite integers.
-                            # Malformed or overflowing usage must stay unknown,
-                            # not crash accounting or authorize a false zero cost.
-                            self.last_usage[field] = count
-                            self.total_usage[field] += count
+                settlement_usage = prepare_usage(usage)
+                settle_success(settlement_usage)
+                aggregate_usage()
                 choice = reply["choices"][0]
                 message = choice["message"]["content"]
                 truncated = choice.get("finish_reason") == "length"
