@@ -58,11 +58,11 @@
 
 ## Phase FX2 — Text integrity (extraction)
 
-- [ ] FX2.01 Refactor first, with no behaviour change (R44).
+- [x] FX2.01 Refactor first, with no behaviour change (R44).
   - [x] FX2.01a Move to one heading classifier in the structure layer, used by pdf.py, and remove pdf.py's import of structure internals.
-  - [ ] FX2.01b Split `extract_pdf` into page-strategy, block-builder and block-kind steps.
+  - [x] FX2.01b Split `extract_pdf` into page-strategy, block-builder and block-kind steps.
   - [x] FX2.01c Emit `kind="list"` for numbered lists or delete the dead list guards (structure.py:423, 1233).
-  - [ ] FX2.01d The full test suite passes unchanged.
+  - [x] FX2.01d The full test suite passes unchanged.
 - [x] FX2.02 Stop classifying prose as headings (R6). Test: "introduction of the new tax was delayed until" stays body text and forces no paragraph breaks.
 - [x] FX2.03 Never remove real numerals as page numbers (R3).
   - [x] FX2.03a Require all three: the numeral is in the top or bottom band, it is nearer the page edge than the nearest body line, and its sequence is consistent with the page index and page labels. If more than one sequence qualifies, remove none and emit a review warning.
@@ -202,3 +202,4 @@
 | 2026-10-25 | 9ab2c88034a1f85f1f4ac32d02a2029b7f3464a0 | FX1.01–FX1.06 (review UI security, voice saves, CLI privacy, config redaction) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1038 tests; CI run [40174161319](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174161319) passed | None |
 | 2026-10-25 | 5ee08690ab2f0577175551b088b6cd31ceaa4f82 | FX2.01a, FX2.01c, FX2.02, FX2.04–FX2.05 (shared heading/list classification, OCR selection, hyphen joining) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1041 tests; CI run [40174435021](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174435021) passed | FX2 continues |
 | 2026-10-25 | b3e6bbadcd83e4388474b113d3bf6feaa47d739a | FX2.03, FX2.06–FX2.07 (safe folio detection; damaged-source review gate; extraction fingerprint v19) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1045 tests; CI run [40174780336](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174780336) passed | FX2 extraction refactor FX2.01b and final phase gate remain |
+| 2026-10-25 | pending | FX2.01 (extraction strategy/block construction refactor) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1045 tests; exact-head CI pending | FX2.02–FX2.07 integration work remains |

@@ -306,6 +306,31 @@ def _inside_table(
     )
 
 
+def _classify_block_kind(
+    text: str,
+    line_index: int,
+    bbox: tuple[float, float, float, float] | None,
+    table_regions: list[tuple[float, float, float, float]],
+    footnote_indices: set[int],
+    caption_indices: set[int],
+    equation_indices: set[int],
+) -> Literal["table", "footnote", "caption", "equation", "list", "heading", "unknown"]:
+    """Assign one explicit structural kind after page-level detectors run."""
+    if _inside_table(bbox, table_regions):
+        return "table"
+    if line_index in footnote_indices:
+        return "footnote"
+    if line_index in caption_indices:
+        return "caption"
+    if line_index in equation_indices:
+        return "equation"
+    if is_list_line(text):
+        return "list"
+    if is_heading_line(text):
+        return "heading"
+    return "unknown"
+
+
 def _special_material_warnings(
     page: pymupdf.Page, lines: list[dict], *, page_number: int
 ) -> list[str]:
@@ -575,6 +600,33 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
     return True, None
 
 
+def _page_ocr_strategy(
+    page: pymupdf.Page, lines: list[dict], settings: PdfSettings, page_number: int
+) -> tuple[bool, str | None, bool, list[str]]:
+    """Select embedded text or OCR for one page and describe the evidence."""
+    usable, quality_issue = _embedded_text_quality(lines)
+    warnings = []
+    if settings.ocr == "auto" and usable:
+        printable = sum(not char.isspace() for line in lines for char in line["text"])
+        if printable < 120 and _page_has_dominant_raster(page):
+            usable = False
+            quality_issue = "sparse selectable text over dominant raster"
+            warnings.append(
+                f"Page {page_number}: sparse selectable text overlays "
+                "a large raster; attempting OCR and requiring coverage review"
+            )
+    auto_ocr_needed = not usable and (
+        quality_issue == "damaged selectable-text mapping" or _page_has_dominant_raster(page)
+    )
+    use_ocr = settings.ocr == "always" or (settings.ocr == "auto" and auto_ocr_needed)
+    if settings.ocr == "auto" and quality_issue == "damaged selectable-text mapping":
+        warnings.append(
+            f"Page {page_number}: damaged embedded text layer; "
+            "using OCR instead of unreliable selectable text"
+        )
+    return usable, quality_issue, use_ocr, warnings
+
+
 def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
     """Find scan-sized raster coverage, including pages assembled from tiles.
 
@@ -791,6 +843,62 @@ def _cached_ocr_lines(
     return verified
 
 
+def _build_page_blocks(
+    lines: list[dict],
+    *,
+    page_index: int,
+    page_label: str,
+    origin: Literal["embedded", "ocr"],
+    order_offset: int,
+    table_regions: list[tuple[float, float, float, float]],
+    footnote_indices: set[int],
+    caption_indices: set[int],
+    equation_indices: set[int],
+) -> tuple[list[SourceSpan], list[DocumentBlock]]:
+    """Build source-aligned spans and classified blocks for one extracted page."""
+    spans: list[SourceSpan] = []
+    blocks: list[DocumentBlock] = []
+    for line_index, line in enumerate(lines):
+        ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
+        bbox = _finite_bbox(line["bbox"])
+        parts = line.get("parts") or [line]
+        span_ids = [ident] + [f"{ident}-f{n:03d}" for n in range(2, len(parts) + 1)]
+        for span_id, part in zip(span_ids, parts):
+            spans.append(
+                SourceSpan(
+                    id=span_id,
+                    page_index=page_index,
+                    page_label=page_label,
+                    text=part["text"],
+                    bbox=bbox if part is line else _finite_bbox(part.get("bbox")),
+                    origin=origin,
+                    font=part.get("font"),
+                    font_size=part.get("size"),
+                )
+            )
+        blocks.append(
+            DocumentBlock(
+                id=ident,
+                span_ids=span_ids,
+                text=line["text"],
+                page_index=page_index,
+                bbox=bbox,
+                font_size=line["size"],
+                order=order_offset + len(blocks),
+                kind=_classify_block_kind(
+                    line["text"],
+                    line_index,
+                    bbox,
+                    table_regions,
+                    footnote_indices,
+                    caption_indices,
+                    equation_indices,
+                ),
+            )
+        )
+    return spans, blocks
+
+
 def extract_pdf(
     source: Path,
     settings: PdfSettings,
@@ -864,28 +972,10 @@ def extract_pdf(
                     f"Failed to extract embedded text from PDF page {page_index + 1}; "
                     "check PDF integrity"
                 ) from None
-            usable, quality_issue = _embedded_text_quality(page_lines)
-            # A scanned body can coexist with a short, perfectly valid
-            # selectable heading. Character quality alone misses that body.
-            if settings.ocr == "auto" and usable:
-                printable = sum(not char.isspace() for line in page_lines for char in line["text"])
-                if printable < 120 and _page_has_dominant_raster(page):
-                    usable = False
-                    quality_issue = "sparse selectable text over dominant raster"
-                    warnings.append(
-                        f"Page {page_index + 1}: sparse selectable text overlays "
-                        "a large raster; attempting OCR and requiring coverage review"
-                    )
-            auto_ocr_needed = not usable and (
-                quality_issue == "damaged selectable-text mapping"
-                or _page_has_dominant_raster(page)
+            usable, quality_issue, use_ocr, strategy_warnings = _page_ocr_strategy(
+                page, page_lines, settings, page_index + 1
             )
-            use_ocr = settings.ocr == "always" or (settings.ocr == "auto" and auto_ocr_needed)
-            if settings.ocr == "auto" and quality_issue == "damaged selectable-text mapping":
-                warnings.append(
-                    f"Page {page_index + 1}: damaged embedded text layer; "
-                    "using OCR instead of unreliable selectable text"
-                )
+            warnings.extend(strategy_warnings)
             origin: Literal["embedded", "ocr"] = "embedded"
             if use_ocr:
                 # Retain the original text layer until OCR actually produces
@@ -1013,51 +1103,19 @@ def extract_pdf(
                     f"Page {page_index + 1}: could not read PDF page label; "
                     "using physical page number"
                 )
-            for line_index, line in enumerate(page_lines):
-                ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
-                bbox = _finite_bbox(line["bbox"])
-                # A merged printed line keeps one source span per fragment.
-                parts = line.get("parts") or [line]
-                span_ids = [ident] + [f"{ident}-f{n:03d}" for n in range(2, len(parts) + 1)]
-                for span_id, part in zip(span_ids, parts):
-                    spans.append(
-                        SourceSpan(
-                            id=span_id,
-                            page_index=page_index,
-                            page_label=page_label,
-                            text=part["text"],
-                            bbox=bbox if part is line else _finite_bbox(part.get("bbox")),
-                            origin=origin,
-                            font=part.get("font"),
-                            font_size=part.get("size"),
-                        )
-                    )
-                blocks.append(
-                    DocumentBlock(
-                        id=ident,
-                        span_ids=span_ids,
-                        text=line["text"],
-                        page_index=page_index,
-                        bbox=bbox,
-                        font_size=line["size"],
-                        order=len(blocks),
-                        kind=(
-                            "table"
-                            if _inside_table(bbox, table_regions)
-                            else "footnote"
-                            if line_index in footnote_indices
-                            else "caption"
-                            if line_index in caption_indices
-                            else "equation"
-                            if line_index in equation_indices
-                            else "list"
-                            if is_list_line(line["text"])
-                            else "heading"
-                            if is_heading_line(line["text"])
-                            else "unknown"
-                        ),
-                    )
-                )
+            page_spans, page_blocks = _build_page_blocks(
+                page_lines,
+                page_index=page_index,
+                page_label=page_label,
+                origin=origin,
+                order_offset=len(blocks),
+                table_regions=table_regions,
+                footnote_indices=footnote_indices,
+                caption_indices=caption_indices,
+                equation_indices=equation_indices,
+            )
+            spans.extend(page_spans)
+            blocks.extend(page_blocks)
         return ExtractedDocument(
             title=title,
             author=author,
