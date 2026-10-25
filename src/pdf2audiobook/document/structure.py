@@ -1514,13 +1514,26 @@ def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
     markers = ("“", '"', "‘", "'", "—", "–", "•", "*", "§", "#")
     if next_text.startswith(markers) or before.text.strip().startswith(("*", "§", "#")):
         return False
-    if re.match(r"^(?:-\s+|\d+[.)]\s+|[A-Za-z][.)]\s+)", next_text):
+    # An initial before a name ("J. Smith") and a year before ")" ("1990) was")
+    # are prose, which is_list_line already knows; real markers start a new line.
+    if is_list_line(next_text) or re.match(r"^-\s+", next_text):
         return False
     if next_text.isupper() and len(next_text.split()) <= 8:
         return False
     line_height = max(1.0, before.bbox[3] - before.bbox[1])
     vertical_gap = after.bbox[1] - before.bbox[3]
     left_shift = after.bbox[0] - before.bbox[0]
+    if before.kind == "list":
+        # A list ends at a font change or at a line outdented from its items;
+        # wrapped continuation lines stay at or inside the item's left edge.
+        if (
+            before.font_size is not None
+            and after.font_size is not None
+            and abs(float(before.font_size) - float(after.font_size)) > 0.5
+        ):
+            return False
+        if left_shift < -2:
+            return False
     # Preserve indented paragraphs, section breaks and column transitions.
     return -2 <= vertical_gap <= 0.8 * line_height and abs(left_shift) <= max(12.0, line_height)
 
