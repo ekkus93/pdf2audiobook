@@ -274,3 +274,4 @@
 | Date | Master SHA | Completed tasks | Tests/CI | Blockers |
 | --- | --- | --- | --- | --- |
 | 2026-10-25 | 6eedfa4c283e5eb54c4e17100e1d16c7be894949 | Fourth review of `0c19845..6eedfa4`: spec R80–R112 and FX10 drafted; no fixes implemented | Local at 6eedfa4: ruff, format, mypy (22 files) clean; 1331 passed, 32 skipped (FFmpeg, Tesseract and the Kitten extra absent locally). CI run 40214615871 succeeded | FX10.00 status correction pending |
+| 2026-10-25 | f3cb375c769d38f2a281bb592b539ed059aa104b | FX10.00: corrected previous-review and original TODO statuses; added fourth-review spec and task plan; corrected the historical CI and mypy ledger notes. | Docs-only commit; `git diff --cached --check` passed; no code tests required. | FX10.01 CI skip-summary verification remains |
