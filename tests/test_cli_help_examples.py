@@ -18,6 +18,8 @@ from pdf2audiobook.cli import app
         ["pack-m4b", "--help"],
         ["review", "--help"],
         ["config", "show", "--help"],
+        ["config", "--help"],
+        ["budget", "--help"],
         ["budget", "show", "--help"],
         ["budget", "resolve", "--help"],
     ],

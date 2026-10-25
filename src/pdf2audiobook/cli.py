@@ -46,9 +46,14 @@ app = typer.Typer(
     epilog="Example: pdf2audiobook convert ./book.pdf --no-llm --cover ./cover.jpg",
     pretty_exceptions_enable=False,
 )
-config_app = typer.Typer(help="Inspect effective configuration.")
+config_app = typer.Typer(
+    help="Inspect effective configuration.", epilog="Example: pdf2audiobook config show --sources"
+)
 app.add_typer(config_app, name="config")
-budget_app = typer.Typer(help="Inspect or resolve per-book LLM request accounting.")
+budget_app = typer.Typer(
+    help="Inspect or resolve per-book LLM request accounting.",
+    epilog="Example: pdf2audiobook budget show --output ./audiobooks/BOOK",
+)
 app.add_typer(budget_app, name="budget")
 console = Console(stderr=True)
 
@@ -413,6 +418,7 @@ def analyze(
     allow_single_chapter: bool | None = typer.Option(
         None, "--allow-single-chapter/--no-allow-single-chapter"
     ),
+    resume: bool | None = typer.Option(None, "--resume/--no-resume"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     set_output_mode(json_output)
@@ -430,7 +436,7 @@ def analyze(
             None,
             None,
             None,
-            None,
+            resume,
             allow_single_chapter,
         )
         if llm_model is not None or llm_url is not None:
@@ -641,6 +647,7 @@ def batch(
     recursive: bool = typer.Option(
         False, "--recursive/--no-recursive", help="Search nested directories."
     ),
+    resume: bool | None = typer.Option(None, "--resume/--no-resume"),
     llm: bool | None = typer.Option(
         None, "--llm/--no-llm", help="Enable or disable LLM assistance."
     ),
@@ -676,6 +683,8 @@ def batch(
         overrides: dict[str, Any] = {}
         if output is not None:
             overrides.setdefault("general", {})["output_dir"] = str(output)
+        if resume is not None:
+            overrides.setdefault("general", {})["resume"] = resume
         if llm is not None:
             overrides.setdefault("llm", {})["enabled"] = llm
         if allow_remote_content is not None:
