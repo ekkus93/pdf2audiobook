@@ -32,7 +32,7 @@ target-version = "py311"
 select = ["E4", "E7", "E9", "F", "I"]
 
 # Explicitly type-check every runtime Python module, including package entry
-# points and the main LLM adapter. Lockfile and formatting gates remain open.
+# points and the main LLM adapter.
 [tool.mypy]
 python_version = "3.11"
 files = [
@@ -55,6 +55,8 @@ files = [
     "src/pdf2audiobook/pdf.py",
     "src/pdf2audiobook/pipeline.py",
     "src/pdf2audiobook/cli.py",
+    "src/pdf2audiobook/llm/vision.py",
+    "src/pdf2audiobook/review_ui.py",
 ]
 check_untyped_defs = true
 warn_unused_ignores = true

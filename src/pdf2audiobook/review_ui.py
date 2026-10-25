@@ -192,7 +192,9 @@ def create_review_server(
 
         def do_POST(self) -> None:
             authority = f"[{host}]" if ":" in host else host
-            origin = f"http://{authority}:{self.server.server_address[1]}"
+            address = self.server.server_address
+            port = address[1] if isinstance(address, tuple) else None
+            origin = f"http://{authority}:{port}"
             if not self._authorized() or self.headers.get("Origin") != origin:
                 self._json(403, {"error": "Forbidden"})
                 return

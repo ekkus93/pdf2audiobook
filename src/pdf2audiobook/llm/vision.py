@@ -112,11 +112,11 @@ def review_visual_pages(
         document = pymupdf.open(source)
     except Exception:
         raise LLMError("Could not open book for visual review") from None
-    pages = []
+    pages: list[dict[str, Any]] = []
     skipped = 0
     warnings: list[str] = []
     try:
-        for index, page in enumerate(document):
+        for index, page in enumerate(document.pages()):
             if not _has_visual_content(page):
                 continue
             if len(pages) >= _MAX_REVIEW_PAGES:
