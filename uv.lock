@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.15'",
@@ -747,7 +747,7 @@ wheels = [
 
 [[package]]
 name = "kittenml"
-version = "0.9.4"
+version = "0.9.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "brotli" },
@@ -775,9 +775,9 @@ dependencies = [
     { name = "torchaudio" },
     { name = "transformers" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3e/61/7d8a7bdd4769a073857a6e68c36d74238805b5eacea22e8a14f1f60ff752/kittenml-0.9.4.tar.gz", hash = "sha256:ea425dc58a94fc053148d897018ed2c0b17d2b3c960c1c8dfa7b8b4b8c60aa5f", size = 130425, upload-time = "2026-10-06T17:11:56.706Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a2/c0/6609daf1aff52e6895f910a43e16626a19f49af6eace1e1d53e2eeb0b9ca/kittenml-0.9.6.tar.gz", hash = "sha256:86f069419f5c086e621ac270b7c81838e431ff08599d722b1563b7b05daf9450", size = 173876, upload-time = "2026-10-21T18:44:23.287Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a9/e4/1c64b1e4c0ec70b79be3e4d065fdf969bd821fda34642fe6f296a4f5a692/kittenml-0.9.4-py3-none-any.whl", hash = "sha256:74b723552b707f3bc9f96fa204019a13b67b97265c41146033630c6b5a43388c", size = 129810, upload-time = "2026-10-06T17:11:54.144Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/7d/6fcc1eb0ff07bf03414814b1af741d847ef02b3291b2d618539d80269085/kittenml-0.9.6-py3-none-any.whl", hash = "sha256:5362a22c0caf4def3ff2a3ac3c5a24e18bbcea94866d62c1762ee4a24b8084df", size = 161676, upload-time = "2026-10-21T18:44:22.134Z" },
 ]
 
 [[package]]
@@ -1891,7 +1891,7 @@ kitten = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27,<1" },
-    { name = "kittenml", marker = "extra == 'kitten'" },
+    { name = "kittenml", marker = "extra == 'kitten'", specifier = ">=0.9.4,<0.10" },
     { name = "mutagen", specifier = ">=1.47,<2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10,<2" },
     { name = "numpy", specifier = ">=1.26,<3" },

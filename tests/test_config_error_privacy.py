@@ -100,7 +100,7 @@ def test_toml_scalar_llm_section_is_rejected_before_provider_selection(tmp_path:
     assert raised.value.__cause__ is None
 
 
-@pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache"])
+@pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache", "audio"])
 def test_toml_scalar_sections_keep_diagnostics_content_free(tmp_path: Path, section: str) -> None:
     config = tmp_path / f"{SENTINEL}.toml"
     config.write_text(f'{section} = "{SENTINEL}"\n', encoding="utf-8")

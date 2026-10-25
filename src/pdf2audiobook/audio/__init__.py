@@ -8,6 +8,8 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
+import unicodedata
 import wave
 from contextlib import contextmanager
 from pathlib import Path
@@ -18,7 +20,7 @@ from mutagen.easyid3 import EasyID3
 from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 
-from pdf2audiobook.errors import AudioError
+from pdf2audiobook.errors import AudioError, ConfigError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.tts import TTSProvider
@@ -46,32 +48,165 @@ class _SynthesisProgress(TypedDict):
     chunks: list[_ChunkProgress]
 
 
+def _open_streaming_wav(path: Path, sample_rate: int) -> wave.Wave_write:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        writer = wave.open(str(path), "wb")
+        writer.setnchannels(1)
+        writer.setsampwidth(2)
+        writer.setframerate(sample_rate)
+        return writer
+    except (OSError, wave.Error):
+        raise AudioError("Could not create temporary chapter WAV") from None
+
+
+def _write_pcm_chunk(writer: wave.Wave_write, samples: np.ndarray) -> None:
+    try:
+        audio = np.asarray(samples, dtype=np.float32)
+    except Exception:
+        raise AudioError("TTS returned invalid audio sample data") from None
+    if audio.ndim != 1 or audio.size == 0 or not np.isfinite(audio).all():
+        raise AudioError("TTS returned invalid mono audio samples")
+    for offset in range(0, audio.size, 65536):
+        part = audio[offset : offset + 65536]
+        pcm = (np.clip(part, -1, 1) * 32767).astype("<i2")
+        writer.writeframesraw(pcm.tobytes())
+
+
+def _write_silence(writer: wave.Wave_write, sample_count: int) -> None:
+    block = b"\0" * (65536 * 2)
+    remaining = sample_count
+    while remaining:
+        count = min(remaining, 65536)
+        writer.writeframesraw(block[: count * 2])
+        remaining -= count
+
+
 # Match pairs of logical line endings (CRLF, LF, or CR) with optional
 # indentation between them. The same rule controls chunking and source spans.
 _PARAGRAPH_BREAK = re.compile(r"(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)+")
-_PRONUNCIATION_TOKEN = re.compile(r"(?P<prefix>\W*)(?P<word>\w+(?:['’\-]\w+)*)(?P<suffix>\W*)")
 _VOICE_MARKER = re.compile(
     r"(?m)^\[\[voice:([A-Za-z0-9][A-Za-z0-9_.-]{0,127})\]\][ \t]*(?:\r?\n|$)"
 )
+NARRATION_NORMALIZATION_VERSION = "narration-normalization-v1"
+_NARRATION_TRANSLATION = str.maketrans(
+    {
+        "‘": "'",
+        "’": "'",
+        "‚": "'",
+        "‛": "'",
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "‟": '"',
+        "‐": "-",
+        "‑": "-",
+        "‒": ",",
+        "–": ",",
+        "—": ",",
+        "―": ",",
+        "…": "...",
+        "ﬁ": "fi",
+        "ﬂ": "fl",
+        "ﬀ": "ff",
+        "ﬃ": "ffi",
+        "ﬄ": "ffl",
+        "ﬅ": "st",
+        "ﬆ": "st",
+        "\u00a0": " ",
+        "\u00ad": "",
+        "\u200b": "",
+        "\u200c": "",
+        "\u200d": "",
+        "\ufeff": "",
+    }
+)
+_SCENE_BREAK = re.compile(r"^\s*(?:\*\s*){3,}$")
+_PRONUNCIATION_EDGE = {'"', "'", "(", ")", "[", "]", "{", "}", "<", ">"}
+_PRONUNCIATION_TRAILING = {",", ";", ":", "!", "?", "…"}
+
+
+def normalize_narration_text(text: str) -> str:
+    """Apply the documented TTS-only character table without changing source data."""
+    return text.translate(_NARRATION_TRANSLATION)
+
+
+def _unspeakable_ranges(text: str) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    cursor = 0
+    for match in _PARAGRAPH_BREAK.finditer(text):
+        if not has_speakable_narration(text[cursor : match.start()]):
+            ranges.append((cursor, match.start()))
+        cursor = match.end()
+    if not has_speakable_narration(text[cursor:]):
+        ranges.append((cursor, len(text)))
+    return ranges
+
+
+def has_speakable_narration(text: str) -> bool:
+    """Return false for whitespace and decorative scene-break-only text."""
+    return any(
+        paragraph.strip()
+        and not _SCENE_BREAK.fullmatch(paragraph)
+        and any(char.isalnum() for char in paragraph)
+        for paragraph in _PARAGRAPH_BREAK.split(text)
+    )
 
 
 # Short TTS chunks must never require a 128 MiB WAV cache entry.
 _MAX_CACHED_WAV_BYTES = 128 * 1024 * 1024
+_MAX_COVER_BYTES = 5 * 1024 * 1024
+
+
+def read_cover_image(path: str | Path | None) -> tuple[bytes, str] | None:
+    """Read a bounded JPEG/PNG cover using signatures, with content-free errors."""
+    if path is None:
+        return None
+    try:
+        with Path(path).expanduser().open("rb") as source:
+            data = source.read(_MAX_COVER_BYTES + 1)
+    except OSError:
+        raise ConfigError("Cover image is unavailable; check the configured image file") from None
+    if len(data) > _MAX_COVER_BYTES:
+        raise ConfigError("Cover image exceeds the 5 MiB limit")
+    if data.startswith(b"\xff\xd8\xff"):
+        return data, "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return data, "image/png"
+    raise ConfigError("Cover image must be a JPEG or PNG file")
 
 
 def _spoken_token(token: str, pronunciations: Mapping[str, str] | None = None) -> str:
-    match = _PRONUNCIATION_TOKEN.fullmatch(token)
-    if match is None or not pronunciations:
-        return token
-    word = match.group("word")
-    spoken = pronunciations.get(word.casefold())
+    normalized = normalize_narration_text(token)
+    if not pronunciations:
+        return normalized
+    start = 0
+    end = len(normalized)
+    while start < end and (
+        normalized[start] in _PRONUNCIATION_EDGE
+        or unicodedata.category(normalized[start]).startswith("Ps")
+    ):
+        start += 1
+    while end > start and (
+        normalized[end - 1] in _PRONUNCIATION_EDGE
+        or normalized[end - 1] in _PRONUNCIATION_TRAILING
+        or unicodedata.category(normalized[end - 1]).startswith("Pe")
+    ):
+        end -= 1
+    core = normalized[start:end]
+    has_terminal_period = core.endswith(".") and not normalized[end:].startswith(",")
+    pronunciation_core = core[:-1] if has_terminal_period else core
+    spoken = pronunciations.get(core.casefold())
     if spoken is None:
-        return token
-    if word.isupper():
+        spoken = pronunciations.get(pronunciation_core.casefold())
+    if spoken is None:
+        return normalized
+    if pronunciation_core.isupper():
         spoken = spoken.upper()
-    elif word.istitle():
+    elif pronunciation_core.istitle():
         spoken = spoken.capitalize()
-    return f"{match.group('prefix')}{spoken}{match.group('suffix')}"
+    period = "." if has_terminal_period else ""
+    return f"{normalized[:start]}{spoken}{period}{normalized[end:]}"
 
 
 def _voice_markers(text: str, default_voice: str) -> tuple[str, list[tuple[int, str]]]:
@@ -95,6 +230,11 @@ def _voice_markers(text: str, default_voice: str) -> tuple[str, list[tuple[int, 
     return "".join(masked), voices
 
 
+def voice_marker_ids(text: str) -> list[str]:
+    """Validate marker placement and return explicit voice IDs in source order."""
+    return [voice for _, voice in _voice_markers(text, "")[1][1:]]
+
+
 def split_sentences(
     text: str,
     max_chars: int = 350,
@@ -107,6 +247,8 @@ def split_sentences(
     # Blank lines are semantic paragraph boundaries, including PDF-derived
     # CR-only line endings; a single soft wrap is not a paragraph break.
     for paragraph in _PARAGRAPH_BREAK.split(text.strip()):
+        if not has_speakable_narration(paragraph):
+            continue
         current = ""
         for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
             for source_word in sentence.split():
@@ -131,7 +273,12 @@ def chunk_source_ranges(
     pronunciations: Mapping[str, str] | None = None,
 ) -> list[tuple[int, int, bool]]:
     """Map normalized spoken chunks to exact source character ranges, in order."""
-    words = list(re.finditer(r"\S+", chapter_text))
+    scene_ranges = _unspeakable_ranges(chapter_text)
+    words = [
+        match
+        for match in re.finditer(r"\S+", chapter_text)
+        if not any(start <= match.start() and match.end() <= end for start, end in scene_ranges)
+    ]
     positions: list[tuple[int, int, bool]] = []
     cursor = 0
     previous_end = 0
@@ -224,7 +371,9 @@ def synthesize_chunks(
     use_cache: bool = True,
     progress_file: Path | None = None,
     pronunciations: Mapping[str, str] | None = None,
-) -> np.ndarray:
+    max_retries: int = 2,
+    output_wav: Path | None = None,
+) -> np.ndarray | Path:
     """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
     samples: list[np.ndarray] = []
     # Public synthesis is callable without Pydantic or the Kitten adapter.
@@ -247,6 +396,12 @@ def synthesize_chunks(
         raise AudioError("TTS provider sample_rate must be an integer from 8000 to 192000")
     if isinstance(pause_ms, bool) or not isinstance(pause_ms, int) or not 0 <= pause_ms <= 5000:
         raise AudioError("TTS pause_ms must be an integer from 0 to 5000")
+    if (
+        isinstance(max_retries, bool)
+        or not isinstance(max_retries, int)
+        or not 0 <= max_retries <= 10
+    ):
+        raise AudioError("TTS max_retries must be an integer from 0 to 10")
     # Legacy mocked providers need no explicit chunk-limit attribute, but
     # concrete providers advertise a hard limit that must be enforced before
     # any synthesis or cache replay. Defaulting to 350 otherwise can send
@@ -278,7 +433,16 @@ def synthesize_chunks(
     # The version marker invalidates older engine-agnostic cache keys.
     engine = f"{type(provider).__module__}.{type(provider).__qualname__}"
     identities = [
-        fingerprint("tts-wav-v2", engine, text, model, chunk_voice, speed, rate)
+        fingerprint(
+            "tts-wav-v3",
+            NARRATION_NORMALIZATION_VERSION,
+            engine,
+            text,
+            model,
+            chunk_voice,
+            speed,
+            rate,
+        )
         for text, chunk_voice in zip(chunks, chunk_voices, strict=True)
     ]
     # The ledger is diagnostic; it never authorizes reuse without WAV and SHA-256 validation.
@@ -286,7 +450,7 @@ def synthesize_chunks(
     progress: _SynthesisProgress = {
         "schema_version": 1,
         "fingerprint": fingerprint(
-            "tts-progress-v3",
+            "tts-progress-v4",
             digest_bytes(chapter_text.encode("utf-8")),
             identities,
             model,
@@ -314,105 +478,131 @@ def synthesize_chunks(
     }
     if progress_file is not None:
         write_json(progress_file, progress)
-    for idx, (text, identity, chunk_voice) in enumerate(
-        zip(chunks, identities, chunk_voices, strict=True)
-    ):
-        chunk_path = cache / f"{identity}.wav"
-        checksum_path = chunk_path.with_suffix(".sha256")
-        metadata_path = chunk_path.with_suffix(".meta.json")
-        audio = None
-        checksum = None
-        encoded_size = None
-        if (
-            use_cache
-            and chunk_path.is_file()
-            and checksum_path.is_file()
-            and metadata_path.is_file()
+    writer = _open_streaming_wav(output_wav, rate) if output_wav is not None else None
+    try:
+        for idx, (text, identity, chunk_voice) in enumerate(
+            zip(chunks, identities, chunk_voices, strict=True)
         ):
-            try:
-                # Check file size before loading untrusted cache bytes into RAM.
-                if chunk_path.stat().st_size > _MAX_CACHED_WAV_BYTES:
-                    raise AudioError("Cached WAV exceeds safe size limit")
-                # Bound both reads even if an untrusted cache file changes
-                # between stat() and open(). A checksum sidecar needs at most
-                # 64 ASCII hex characters plus its trailing newline.
-                with chunk_path.open("rb") as cached_stream:
-                    cached_bytes = cached_stream.read(_MAX_CACHED_WAV_BYTES + 1)
-                if len(cached_bytes) > _MAX_CACHED_WAV_BYTES:
-                    raise AudioError("Cached WAV exceeds safe size limit")
-                with checksum_path.open("rb") as checksum_stream:
-                    saved_digest = checksum_stream.read(66)
-                if len(saved_digest) > 65:
-                    raise AudioError("Cached WAV checksum sidecar is oversized")
-                metadata = load_bounded_json(metadata_path, max_bytes=1024, max_depth=4)
-                candidate = digest_bytes(cached_bytes)
-                if (
-                    isinstance(metadata, dict)
-                    and metadata.get("schema_version") == 1
-                    and metadata.get("sha256") == candidate
-                    and metadata.get("bytes") == len(cached_bytes)
-                    and metadata.get("sample_rate") == rate
-                    and candidate.encode("ascii") == saved_digest.strip()
-                ):
-                    audio = read_wav(cached_bytes, rate)
-                    checksum = candidate
-                    encoded_size = len(cached_bytes)
-            except (AudioError, OSError, UnicodeError):
-                pass
-        if audio is None:
-            try:
+            chunk_path = cache / f"{identity}.wav"
+            checksum_path = chunk_path.with_suffix(".sha256")
+            metadata_path = chunk_path.with_suffix(".meta.json")
+            audio = None
+            checksum = None
+            encoded_size = None
+            if (
+                use_cache
+                and chunk_path.is_file()
+                and checksum_path.is_file()
+                and metadata_path.is_file()
+            ):
                 try:
-                    audio = provider.generate(text, voice=chunk_voice, speed=speed)
+                    # Check file size before loading untrusted cache bytes into RAM.
+                    if chunk_path.stat().st_size > _MAX_CACHED_WAV_BYTES:
+                        raise AudioError("Cached WAV exceeds safe size limit")
+                    # Bound both reads even if an untrusted cache file changes
+                    # between stat() and open(). A checksum sidecar needs at most
+                    # 64 ASCII hex characters plus its trailing newline.
+                    with chunk_path.open("rb") as cached_stream:
+                        cached_bytes = cached_stream.read(_MAX_CACHED_WAV_BYTES + 1)
+                    if len(cached_bytes) > _MAX_CACHED_WAV_BYTES:
+                        raise AudioError("Cached WAV exceeds safe size limit")
+                    with checksum_path.open("rb") as checksum_stream:
+                        saved_digest = checksum_stream.read(66)
+                    if len(saved_digest) > 65:
+                        raise AudioError("Cached WAV checksum sidecar is oversized")
+                    metadata = load_bounded_json(metadata_path, max_bytes=1024, max_depth=4)
+                    candidate = digest_bytes(cached_bytes)
+                    if (
+                        isinstance(metadata, dict)
+                        and metadata.get("schema_version") == 1
+                        and metadata.get("sha256") == candidate
+                        and metadata.get("bytes") == len(cached_bytes)
+                        and metadata.get("sample_rate") == rate
+                        and candidate.encode("ascii") == saved_digest.strip()
+                    ):
+                        audio = read_wav(cached_bytes, rate)
+                        checksum = candidate
+                        encoded_size = len(cached_bytes)
+                except (AudioError, OSError, UnicodeError):
+                    pass
+            if audio is None:
+                try:
+                    for attempt in range(max_retries + 1):
+                        try:
+                            audio = provider.generate(text, voice=chunk_voice, speed=speed)
+                            break
+                        except Exception:
+                            if attempt >= max_retries:
+                                # Arbitrary TTS engines can echo book text in their errors.
+                                raise AudioError(
+                                    "TTS synthesis failed; verify model and voice"
+                                ) from None
+                            time.sleep(min(0.1 * (2**attempt), 1.0))
+                    if audio is None:
+                        raise AudioError("TTS synthesis returned no audio")
+                    # Short model chunks must not generate enormous cache entries.
+                    # Reject oversized ndarray outputs before PCM conversion and
+                    # also check serialized size for other provider buffer types.
+                    if (
+                        isinstance(audio, np.ndarray)
+                        and audio.size > (_MAX_CACHED_WAV_BYTES - 44) // 2
+                    ):
+                        raise AudioError("TTS chunk exceeds safe WAV cache limit")
+                    encoded = wav_bytes(audio, rate)
+                    if len(encoded) > _MAX_CACHED_WAV_BYTES:
+                        raise AudioError("TTS chunk exceeds safe WAV cache limit")
+                    # First-pass PCM must match verified cached PCM exactly:
+                    # canonicalize clipping and 16-bit quantization before
+                    # concatenation, not only when replaying the WAV cache.
+                    audio = read_wav(encoded, rate)
+                    checksum = digest_bytes(encoded)
+                    atomic_write(chunk_path, encoded)
+                    atomic_write(checksum_path, (checksum + "\n").encode())
+                    write_json(
+                        metadata_path,
+                        {
+                            "schema_version": 1,
+                            "sha256": checksum,
+                            "bytes": len(encoded),
+                            "sample_rate": rate,
+                        },
+                    )
+                    encoded_size = len(encoded)
                 except Exception:
-                    # Arbitrary TTS engines can echo book text in their errors.
-                    raise AudioError("TTS synthesis failed; verify model and voice") from None
-                # Short model chunks must not generate enormous cache entries.
-                # Reject oversized ndarray outputs before PCM conversion and
-                # also check serialized size for other provider buffer types.
-                if isinstance(audio, np.ndarray) and audio.size > (_MAX_CACHED_WAV_BYTES - 44) // 2:
-                    raise AudioError("TTS chunk exceeds safe WAV cache limit")
-                encoded = wav_bytes(audio, rate)
-                if len(encoded) > _MAX_CACHED_WAV_BYTES:
-                    raise AudioError("TTS chunk exceeds safe WAV cache limit")
-                # First-pass PCM must match verified cached PCM exactly:
-                # canonicalize clipping and 16-bit quantization before
-                # concatenation, not only when replaying the WAV cache.
-                audio = read_wav(encoded, rate)
-                checksum = digest_bytes(encoded)
-                atomic_write(chunk_path, encoded)
-                atomic_write(checksum_path, (checksum + "\n").encode())
-                write_json(
-                    metadata_path,
-                    {
-                        "schema_version": 1,
-                        "sha256": checksum,
-                        "bytes": len(encoded),
-                        "sample_rate": rate,
-                    },
-                )
-                encoded_size = len(encoded)
-            except Exception:
-                progress["chunks"][idx]["status"] = "failed"
-                progress["status"] = "failed"
-                if progress_file is not None:
-                    write_json(progress_file, progress)
-                raise
-        progress["chunks"][idx].update(
-            {
-                "sha256": checksum,
-                "bytes": encoded_size,
-                "status": "completed",
-            }
-        )
-        progress["completed_chunks"] += 1
-        if progress_file is not None:
-            write_json(progress_file, progress)
-        if idx:
-            samples.append(paragraph_pause if ranges[idx][2] else pause)
-        samples.append(audio)
+                    progress["chunks"][idx]["status"] = "failed"
+                    progress["status"] = "failed"
+                    if progress_file is not None:
+                        write_json(progress_file, progress)
+                    raise
+            progress["chunks"][idx].update(
+                {
+                    "sha256": checksum,
+                    "bytes": encoded_size,
+                    "status": "completed",
+                }
+            )
+            progress["completed_chunks"] += 1
+            if progress_file is not None:
+                write_json(progress_file, progress)
+            if idx:
+                if writer is not None:
+                    _write_silence(writer, len(paragraph_pause if ranges[idx][2] else pause))
+                else:
+                    samples.append(paragraph_pause if ranges[idx][2] else pause)
+            if writer is not None:
+                _write_pcm_chunk(writer, audio)
+            else:
+                samples.append(audio)
+    finally:
+        if writer is not None:
+            writer.close()
     progress["status"] = "completed"
     if progress_file is not None:
         write_json(progress_file, progress)
+    if writer is not None:
+        if output_wav is None:
+            raise AudioError("Temporary chapter WAV path is missing")
+        return output_wav
     return np.concatenate(samples)
 
 
@@ -453,6 +643,25 @@ def _write_chapter_wav(samples: np.ndarray, sample_rate: int, target: Path) -> N
         raise AudioError("Could not write chapter PCM WAV") from None
 
 
+def _validate_chapter_wav(path: Path, sample_rate: int) -> None:
+    """Validate streamed PCM WAV in bounded memory before passing it to FFmpeg."""
+    try:
+        with wave.open(str(path), "rb") as source:
+            if (
+                source.getnchannels() != 1
+                or source.getsampwidth() != 2
+                or source.getframerate() != sample_rate
+                or source.getnframes() <= 0
+            ):
+                raise AudioError("Temporary chapter WAV has invalid audio settings")
+            while source.readframes(65536):
+                pass
+    except AudioError:
+        raise
+    except (OSError, wave.Error, EOFError):
+        raise AudioError("Temporary chapter WAV is invalid or truncated") from None
+
+
 @contextmanager
 def _safe_chapter_workspace(parent: Path) -> Iterator[str]:
     """Convert temporary directory creation and cleanup OS errors to safe diagnostics."""
@@ -470,7 +679,7 @@ class AudioEncoder(Protocol):
 
     def __call__(
         self,
-        samples: np.ndarray,
+        samples: np.ndarray | Path,
         sample_rate: int,
         output: Path,
         *,
@@ -480,12 +689,13 @@ class AudioEncoder(Protocol):
         artist: str | None,
         album: str,
         track: int,
+        cover_image: tuple[bytes, str] | None = None,
     ) -> Path:
         """Encode once, tag and atomically publish output; return its path."""
 
 
 def encode_mp3(
-    samples: np.ndarray,
+    samples: np.ndarray | Path,
     sample_rate: int,
     output: Path,
     *,
@@ -495,6 +705,7 @@ def encode_mp3(
     artist: str | None,
     album: str,
     track: int,
+    cover_image: tuple[bytes, str] | None = None,
 ) -> Path:
     """Encode once from PCM to MP3, tag and atomically publish final file."""
     if shutil.which("ffmpeg") is None:
@@ -506,7 +717,11 @@ def encode_mp3(
     with _safe_chapter_workspace(output.parent) as temp_dir:
         wav_path = Path(temp_dir) / "chapter.wav"
         tmp_mp3 = Path(temp_dir) / "chapter.mp3"
-        _write_chapter_wav(samples, sample_rate, wav_path)
+        if isinstance(samples, Path):
+            _validate_chapter_wav(samples, sample_rate)
+            wav_path = samples
+        else:
+            _write_chapter_wav(samples, sample_rate, wav_path)
         command = [
             "ffmpeg",
             "-hide_banner",
@@ -555,6 +770,13 @@ def encode_mp3(
             if artist:
                 tags["artist"] = artist
             mp3.save()
+            if cover_image is not None:
+                from mutagen.id3 import APIC, ID3
+
+                cover_bytes, mime = cover_image
+                id3_tags = ID3(tmp_mp3)
+                id3_tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=cover_bytes))
+                id3_tags.save(tmp_mp3)
             info = MP3(tmp_mp3).info
             if info is None or info.length <= 0:
                 raise AudioError("Encoded MP3 has zero duration")
@@ -590,6 +812,7 @@ def encode_m4b(
     title: str,
     artist: str | None,
     bitrate: str = "96k",
+    cover_image: tuple[bytes, str] | None = None,
 ) -> Path:
     """Package existing chapter MP3s as a tagged AAC audiobook with chapter marks."""
     if shutil.which("ffmpeg") is None:
@@ -697,6 +920,12 @@ def encode_m4b(
             container.tags["\xa9alb"] = title
             if artist:
                 container.tags["\xa9ART"] = artist
+            if cover_image is not None:
+                from mutagen.mp4 import MP4Cover
+
+                cover_bytes, mime = cover_image
+                image_format = MP4Cover.FORMAT_JPEG if mime == "image/jpeg" else MP4Cover.FORMAT_PNG
+                container.tags["covr"] = [MP4Cover(cover_bytes, imageformat=image_format)]
             container.save()
             # Reparse after tagging before publication.
             if MP4(temp_output).info is None:

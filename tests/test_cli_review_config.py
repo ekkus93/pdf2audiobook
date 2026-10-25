@@ -11,7 +11,7 @@ from pdf2audiobook.cli import app
 runner = CliRunner()
 
 
-@pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache"])
+@pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache", "audio"])
 def test_cli_rejects_scalar_config_sections_with_exit_two(tmp_path: Path, section: str):
     config = tmp_path / "private-config.toml"
     config.write_text(f'{section} = "PRIVATE_SECTION_VALUE"\n')

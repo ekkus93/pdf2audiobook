@@ -37,6 +37,7 @@ def test_interrupted_synthesis_reuses_only_completed_chunks(tmp_path):
         speed=1.0,
         pause_ms=0,
         cache=tmp_path,
+        max_retries=0,
     )
     interrupted = InterruptibleProvider(fail_at=2)
     with pytest.raises(AudioError, match="TTS synthesis failed"):
@@ -64,6 +65,7 @@ def test_no_resume_regenerates_all_chunks(tmp_path):
         speed=1.0,
         pause_ms=0,
         cache=tmp_path,
+        max_retries=0,
     )
     synthesize_chunks(chapter, InterruptibleProvider(), **options)
     forced = InterruptibleProvider()

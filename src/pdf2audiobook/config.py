@@ -133,6 +133,7 @@ class TTS(ConfigModel):
     bitrate: str = "128k"
     sample_rate: int = Field(default=24000, ge=8000, le=96000)
     pause_ms: int = Field(default=250, ge=0, le=5000)
+    max_retries: int = Field(default=2, ge=0, le=10)
     kitten: TTSModel = Field(default_factory=TTSModel)
     piper: PiperTTSModel = Field(default_factory=PiperTTSModel)
     profiles: dict[str, TTSProfile] = Field(default_factory=dict)
@@ -151,19 +152,23 @@ class TTS(ConfigModel):
         if len(value) > 10_000:
             raise ValueError("at most 10000 pronunciation entries are supported")
         normalized: dict[str, str] = {}
+        edge = "\"'()[]{}<>“”‘’"
         for source, spoken in value.items():
-            key = source.strip().casefold() if isinstance(source, str) else ""
+            source_key = source if isinstance(source, str) else ""
+            key = source_key.strip(edge).rstrip(",;:!?…").casefold()
             if (
                 not key
-                or len(key) > 80
-                or any(char.isspace() for char in key)
+                or len(source_key) > 64
+                or any(char.isspace() for char in source_key)
+                or "[[" in source_key
+                or "]]" in source_key
                 or not isinstance(spoken, str)
                 or not spoken.strip()
                 or len(spoken) > 80
                 or any(char.isspace() for char in spoken)
             ):
                 raise ValueError(
-                    "pronunciation keys and values must be nonempty single words up to 80 characters"
+                    "pronunciation keys must be nonempty, whitespace-free and at most 64 characters; values must be one word"
                 )
             if key in normalized:
                 raise ValueError("pronunciation keys must be unique ignoring case")
@@ -176,6 +181,10 @@ class Cache(ConfigModel):
     directory: str = "~/.cache/pdf2audiobook"
 
 
+class Audio(ConfigModel):
+    cover_image: str | None = None
+
+
 class Settings(ConfigModel):
     general: General = Field(default_factory=General)
     pdf: Pdf = Field(default_factory=Pdf)
@@ -183,6 +192,7 @@ class Settings(ConfigModel):
     llm: LLM = Field(default_factory=LLM)
     tts: TTS = Field(default_factory=TTS)
     cache: Cache = Field(default_factory=Cache)
+    audio: Audio = Field(default_factory=Audio)
 
 
 ENV_KEYS = {
@@ -218,6 +228,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_TTS_SPEED": ("tts", "@selected", "speed"),
     "PDF2AUDIOBOOK_TTS_SAMPLE_RATE": ("tts", "sample_rate"),
     "PDF2AUDIOBOOK_TTS_BITRATE": ("tts", "bitrate"),
+    "PDF2AUDIOBOOK_TTS_MAX_RETRIES": ("tts", "max_retries"),
     "PDF2AUDIOBOOK_TTS_PIPER_MODEL_PATH": ("tts", "piper", "model_path"),
     "PDF2AUDIOBOOK_TTS_PIPER_VOICE": ("tts", "piper", "voice"),
     "PDF2AUDIOBOOK_TTS_PIPER_SPEED": ("tts", "piper", "speed"),
@@ -313,7 +324,7 @@ def load_settings(
             ) from None
         if any(
             key in toml and not isinstance(toml[key], dict)
-            for key in ("general", "pdf", "chapters", "llm", "tts", "cache")
+            for key in ("general", "pdf", "chapters", "llm", "tts", "cache", "audio")
         ):
             raise ConfigError("invalid configuration values; check field names and types")
         _merge(data, toml)

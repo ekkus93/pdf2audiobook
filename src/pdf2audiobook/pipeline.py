@@ -2,9 +2,21 @@
 
 from __future__ import annotations
 
+import tempfile
+from functools import lru_cache
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as package_version
 from pathlib import Path
 
-from pdf2audiobook.audio import AudioEncoder, audio_output_path, encode_mp3, synthesize_chunks
+from pdf2audiobook.audio import (
+    AudioEncoder,
+    audio_output_path,
+    encode_mp3,
+    has_speakable_narration,
+    read_cover_image,
+    synthesize_chunks,
+    voice_marker_ids,
+)
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import (
     footnote_anchor_edits,
@@ -14,7 +26,7 @@ from pdf2audiobook.document.structure import (
     render_chapter_texts,
     validate_chapter_coverage,
 )
-from pdf2audiobook.errors import AudioError, LLMError
+from pdf2audiobook.errors import AudioError, LLMError, PartialConversionError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.llm import (
     LLMDecision,
@@ -28,8 +40,9 @@ from pdf2audiobook.llm import (
 from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, generated_chapter_fingerprint
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
-from pdf2audiobook.tts import KittenProvider, PiperProvider, TTSProvider
+from pdf2audiobook.tts import KITTEN_MODEL_ALIASES, KittenProvider, PiperProvider, TTSProvider
 from pdf2audiobook.workspace import (
+    digest_bytes,
     digest_file,
     fingerprint,
     read_manifest,
@@ -51,6 +64,38 @@ def _llm_cache_identity(settings: Settings) -> str:
         settings.llm.chunk_tokens,
         settings.llm.max_output_tokens,
     )
+
+
+@lru_cache(maxsize=128)
+def _model_file_digest(path: str, size: int, mtime_ns: int) -> str:
+    """Memoize local model hashes while still invalidating changed file metadata."""
+    del size, mtime_ns
+    return digest_file(Path(path))
+
+
+def _tts_model_identity(settings: Settings) -> str:
+    """Return content/version identity for the active TTS model without loading it."""
+    if settings.tts.provider == "piper":
+        configured = settings.tts.piper.model_path
+        if not configured:
+            return fingerprint("piper-model-v1", "missing")
+        model_path = Path(configured).expanduser().resolve()
+        digests = []
+        for path in (model_path, Path(f"{model_path}.json")):
+            try:
+                stat = path.stat()
+                digest = _model_file_digest(str(path), stat.st_size, stat.st_mtime_ns)
+            except OSError:
+                digest = "missing"
+            digests.append((path.suffix, digest))
+        return fingerprint("piper-model-v1", str(model_path), digests)
+    model = settings.tts.kitten.model
+    resolved_model = KITTEN_MODEL_ALIASES.get(model, model)
+    try:
+        engine_version = package_version("kittenml")
+    except PackageNotFoundError:
+        engine_version = "not-installed"
+    return fingerprint("kitten-model-v1", resolved_model, engine_version)
 
 
 def _resolve_auto_llm_model(settings: Settings) -> Settings:
@@ -460,7 +505,7 @@ def analyze_book(
     )
     for chapter in chapters:
         has_speakable_source = any(
-            block.id not in omitted and block.text.strip()
+            block.id not in omitted and has_speakable_narration(block.text)
             for block in extracted.blocks[chapter.start_block : chapter.end_block]
         )
         if not has_speakable_source:
@@ -621,15 +666,13 @@ def chapter_audio_fingerprint(
     adapters names injected TTS/encoder replacements so their output never
     shares an identity with the default Kitten/FFmpeg artifacts.
     """
-    model = (
-        settings.tts.piper.model_path
-        if settings.tts.provider == "piper"
-        else settings.tts.kitten.model
-    )
+    model = _tts_model_identity(settings)
     voice = chapter_voice(settings, chapter)
     speed = (
         settings.tts.piper.speed if settings.tts.provider == "piper" else settings.tts.kitten.speed
     )
+    cover = read_cover_image(settings.audio.cover_image)
+    cover_identity = digest_bytes(cover[0]) if cover is not None else None
     return fingerprint(
         text,
         settings.tts.provider,
@@ -640,11 +683,13 @@ def chapter_audio_fingerprint(
         settings.tts.pronunciations,
         settings.tts.bitrate,
         settings.tts.sample_rate,
+        cover_identity,
+        "narration-normalization-v1",
         manifest.title,
         manifest.author,
         chapter.title,
         chapter.number,
-        "mp3-v4",
+        "mp3-v5",
         *adapters,
     )
 
@@ -660,6 +705,7 @@ def convert_book(
     tts_provider: TTSProvider | None = None,
     encoder: AudioEncoder | None = None,
 ) -> list[Path]:
+    cover_image = read_cover_image(settings.audio.cover_image)
     manifest_path = analyze_book(source, settings, extractor=extractor)
     adapters = tuple(
         f"{role}={type(adapter).__module__}.{type(adapter).__qualname__}"
@@ -669,12 +715,53 @@ def convert_book(
     manifest = read_manifest(manifest_path)
     render_chapter_texts(manifest, manifest_path.parent, settings.pdf.footnotes)
     chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
+    preflight_failed: dict[int, int] = {}
+    approved_marker_chapters: dict[int, list[str]] = {}
+    for item in chosen:
+        text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
+        try:
+            marker_ids = voice_marker_ids(text_file.read_text(encoding="utf-8"))
+        except (AudioError, OSError, UnicodeError):
+            raise AudioError("Cannot read approved chapter text; check workspace files") from None
+        if marker_ids and not item.manually_approved:
+            preflight_failed[item.number] = AudioError.exit_code
+        elif marker_ids:
+            approved_marker_chapters[item.number] = marker_ids
+    provider = tts_provider
+    all_marker_ids = {marker for markers in approved_marker_chapters.values() for marker in markers}
+    if all_marker_ids:
+        try:
+            if provider is None:
+                provider = (
+                    PiperProvider(settings.tts.piper.model_path)
+                    if settings.tts.provider == "piper"
+                    else KittenProvider(settings.tts.kitten.model)
+                )
+            available_voices = provider.list_voices()
+        except Exception:
+            available_voices = []
+        if available_voices:
+            for item in chosen:
+                marker_ids = approved_marker_chapters.get(item.number, [])
+                if any(marker not in available_voices for marker in marker_ids):
+                    preflight_failed[item.number] = AudioError.exit_code
     # Audio identities include all audible and encoding settings, not merely the PDF hash.
     pending = []
     outputs = []
+    failed_chapters = set(preflight_failed)
+    conversion_status = {
+        item.id: {
+            "number": item.number,
+            "status": "failed" if item.number in preflight_failed else "pending",
+            **({"error_code": AudioError.exit_code} if item.number in preflight_failed else {}),
+        }
+        for item in chosen
+    }
     for item in chosen:
         output = audio_output_path(manifest, item, manifest_path.parent)
         outputs.append(output)
+        if item.number in preflight_failed:
+            continue
         text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
         try:
             text = text_file.read_text(encoding="utf-8")
@@ -733,9 +820,10 @@ def convert_book(
             # Retain the path and identity, not the full text of every chapter.
             # A long book may have hundreds of pending chapters.
             pending.append((item, output, text_file, record, identity))
+        else:
+            conversion_status[item.id]["status"] = "complete"
         del text
 
-    provider = tts_provider
     encode = encode_mp3 if encoder is None else encoder
     for item, output, text_file, record, identity in pending:
         try:
@@ -747,51 +835,90 @@ def convert_book(
         if chapter_audio_fingerprint(text, settings, manifest, item, adapters) != identity:
             raise AudioError("Approved chapter text changed during conversion; retry")
         if provider is None:
-            if settings.tts.provider == "piper":
-                provider = PiperProvider(settings.tts.piper.model_path)
-            else:
-                provider = KittenProvider(settings.tts.kitten.model)
-        selected_model = (
-            settings.tts.piper.model_path
-            if settings.tts.provider == "piper"
-            else settings.tts.kitten.model
-        )
+            try:
+                if settings.tts.provider == "piper":
+                    provider = PiperProvider(settings.tts.piper.model_path)
+                else:
+                    provider = KittenProvider(settings.tts.kitten.model)
+            except AudioError:
+                failed_chapters.add(item.number)
+                conversion_status[item.id] = {
+                    "number": item.number,
+                    "status": "failed",
+                    "error_code": AudioError.exit_code,
+                }
+                continue
+        selected_model = _tts_model_identity(settings)
         selected_voice = chapter_voice(settings, item)
         selected_speed = (
             settings.tts.piper.speed
             if settings.tts.provider == "piper"
             else settings.tts.kitten.speed
         )
-        samples = synthesize_chunks(
-            text,
-            provider,
-            # Chunk cache keys include the model; qualify it for injected engines.
-            model=":".join((selected_model, *(a for a in adapters if a.startswith("tts=")))),
-            voice=selected_voice,
-            speed=selected_speed,
-            pause_ms=settings.tts.pause_ms,
-            pronunciations=settings.tts.pronunciations,
-            cache=manifest_path.parent / ".cache" / "tts",
-            use_cache=settings.cache.enabled and settings.general.resume and not force,
-            progress_file=(
-                manifest_path.parent
-                / ".cache"
-                / "tts"
-                / "progress"
-                / f"{fingerprint(item.id, item.number)[:32]}.json"
-            ),
-        )
-        encode(
-            samples,
-            provider.sample_rate,
-            output,
-            bitrate=settings.tts.bitrate,
-            target_rate=settings.tts.sample_rate,
-            title=item.title,
-            artist=manifest.author,
-            album=manifest.title,
-            track=item.number,
-        )
+        streamed_wav: Path | None = None
+        try:
+            synth_kwargs = {}
+            if encoder is None:
+                try:
+                    manifest_path.parent.joinpath(".cache", "tts", "chapters").mkdir(
+                        parents=True, exist_ok=True
+                    )
+                    with tempfile.NamedTemporaryFile(
+                        prefix="chapter-",
+                        suffix=".wav",
+                        dir=manifest_path.parent / ".cache" / "tts" / "chapters",
+                        delete=False,
+                    ) as temp_wav:
+                        streamed_wav = Path(temp_wav.name)
+                except OSError:
+                    raise AudioError("Could not create temporary chapter audio") from None
+                synth_kwargs["output_wav"] = streamed_wav
+            samples = synthesize_chunks(
+                text,
+                provider,
+                # Chunk cache keys include the model; qualify it for injected engines.
+                model=":".join((selected_model, *(a for a in adapters if a.startswith("tts=")))),
+                voice=selected_voice,
+                speed=selected_speed,
+                pause_ms=settings.tts.pause_ms,
+                pronunciations=settings.tts.pronunciations,
+                max_retries=settings.tts.max_retries,
+                cache=manifest_path.parent / ".cache" / "tts",
+                use_cache=settings.cache.enabled and settings.general.resume and not force,
+                progress_file=(
+                    manifest_path.parent
+                    / ".cache"
+                    / "tts"
+                    / "progress"
+                    / f"{fingerprint(item.id, item.number)[:32]}.json"
+                ),
+                **synth_kwargs,
+            )
+            encode_kwargs = {
+                "bitrate": settings.tts.bitrate,
+                "target_rate": settings.tts.sample_rate,
+                "title": item.title,
+                "artist": manifest.author,
+                "album": manifest.title,
+                "track": item.number,
+            }
+            if cover_image is not None:
+                encode_kwargs["cover_image"] = cover_image
+            try:
+                encode(samples, provider.sample_rate, output, **encode_kwargs)
+            finally:
+                if streamed_wav is not None:
+                    streamed_wav.unlink(missing_ok=True)
+        except AudioError:
+            if streamed_wav is not None:
+                streamed_wav.unlink(missing_ok=True)
+            failed_chapters.add(item.number)
+            conversion_status[item.id] = {
+                "number": item.number,
+                "status": "failed",
+                "error_code": AudioError.exit_code,
+            }
+            continue
         write_json(
             record,
             {
@@ -801,6 +928,7 @@ def convert_book(
                 "bytes": output.stat().st_size,
             },
         )
+        conversion_status[item.id]["status"] = "complete"
         for previous in output.parent.glob("*.mp3"):
             if previous == output:
                 continue
@@ -814,4 +942,14 @@ def convert_book(
                 raise AudioError(
                     f"Chapter {item.number} was published but old chapter audio could not be removed"
                 ) from None
+    write_json(
+        manifest_path.parent / "reports" / "conversion_status.json",
+        {
+            "schema_version": 1,
+            "chapters": sorted(conversion_status.values(), key=lambda value: int(value["number"])),
+        },
+    )
+    if failed_chapters:
+        numbers = ", ".join(str(number) for number in sorted(failed_chapters))
+        raise PartialConversionError(f"Chapter audio failed for chapter(s): {numbers}")
     return outputs

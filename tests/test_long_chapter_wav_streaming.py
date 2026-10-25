@@ -1,14 +1,66 @@
 """Long chapter encoding must not inherit the short TTS cache WAV limit."""
 
 import shutil
+import tracemalloc
 import wave
 
 import numpy as np
 import pytest
 
 from pdf2audiobook import audio as audio_module
-from pdf2audiobook.audio import encode_mp3, wav_bytes
+from pdf2audiobook.audio import encode_mp3, synthesize_chunks, wav_bytes
 from pdf2audiobook.errors import AudioError
+
+
+class _StreamingProvider:
+    sample_rate = 24000
+
+    def generate(self, text, *, voice, speed):
+        return np.full(24000, 0.05, dtype=np.float32)
+
+
+def test_synthesis_can_stream_chunks_directly_to_wav(tmp_path):
+    chapter = "\n\n".join(f"Sentence number {index} ends here." for index in range(8))
+    output = tmp_path / "streamed.wav"
+    result = synthesize_chunks(
+        chapter,
+        _StreamingProvider(),
+        model="synthetic",
+        voice="default",
+        speed=1.0,
+        pause_ms=0,
+        cache=tmp_path / "cache",
+        use_cache=False,
+        output_wav=output,
+    )
+    assert result == output
+    with wave.open(str(output), "rb") as reader:
+        assert reader.getnchannels() == 1
+        assert reader.getframerate() == 24000
+        assert reader.getnframes() >= 8 * 24000
+
+
+def test_streaming_peak_memory_does_not_grow_with_chapter_length(tmp_path):
+    peaks = []
+    for chunk_count in (10, 40):
+        chapter = "\n\n".join(f"Sentence number {index} ends here." for index in range(chunk_count))
+        tracemalloc.start()
+        synthesize_chunks(
+            chapter,
+            _StreamingProvider(),
+            model="synthetic",
+            voice="default",
+            speed=1.0,
+            pause_ms=0,
+            cache=tmp_path / f"cache-{chunk_count}",
+            use_cache=False,
+            output_wav=tmp_path / f"streamed-{chunk_count}.wav",
+        )
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        peaks.append(peak)
+    # One float32 chunk is 96 KiB. Chapter growth should add less than that.
+    assert peaks[1] - peaks[0] < 24_000 * 4
 
 
 def test_chapter_wav_streaming_exceeds_chunk_cache_limit(monkeypatch, tmp_path):

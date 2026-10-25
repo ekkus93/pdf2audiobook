@@ -231,11 +231,27 @@ LLM decision auditing writes `reports/llm_decisions.json`; the cleanup audit is
 schema v2 and stores only sanitized IDs, hashes and fixed summaries/reason codes.
 LLM cache identity v4 includes resolved provider/model and current request/task
 semantics; existing LLM cache entries become misses and are regenerated on use.
+Chapter audio identity `mp3-v5` invalidates prior MP3 cache entries after
+including the active TTS model identity, narration-normalization version and
+cover-image digest. Piper identity hashes its ONNX model and adjacent JSON
+configuration; Kitten identity includes the resolved model ID and installed
+`kittenml` version. The `kitten` extra is bounded to `>=0.9.4,<0.10` and the
+lockfile currently resolves 0.9.6. Re-encoding is automatic when a chapter is
+next converted; no manifest migration is needed. Chapter synthesis now streams
+PCM to a temporary WAV, so interrupted temporary audio is disposable.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can
 still make mistakes, especially on multi-column layouts, footnotes, tables,
 captions and mathematical content.
+
+Audio can use `audio.cover_image` or a per-run `--cover PATH` override; covers
+must be JPEG or PNG and at most 5 MiB. `tts.max_retries` defaults to 2 and is
+available as `PDF2AUDIOBOOK_TTS_MAX_RETRIES`; chapters still failing after
+retries are reported individually and conversion exits 7 after processing
+remaining chapters. Voice markers are honored only in approved chapters.
+The opt-in real Kitten smoke test requires both the `kitten` extra and
+`PDF2AUDIOBOOK_KITTEN_SMOKE=1`; it is intentionally excluded from CI.
 
 ## Architecture and extension points
 

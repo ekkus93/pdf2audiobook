@@ -34,6 +34,7 @@ def options(tmp_path):
         "pause_ms": 50,
         "cache": tmp_path / "wav",
         "progress_file": tmp_path / "progress" / "chapter.json",
+        "max_retries": 0,
     }
 
 

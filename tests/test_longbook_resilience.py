@@ -82,6 +82,7 @@ def test_many_chunk_interruption_resumes_only_valid_checkpoints(tmp_path):
         pause_ms=30,
         cache=tmp_path / "wav",
         progress_file=tmp_path / "progress.json",
+        max_retries=0,
     )
     failed = InterruptibleVoice(fail_at=7)
     with pytest.raises(AudioError, match="TTS synthesis failed"):

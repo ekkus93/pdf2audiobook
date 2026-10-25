@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0–FX5 complete; FX6 in progress
+**Status:** FX0–FX6 complete; FX7 in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -153,31 +153,31 @@
 
 ## Phase FX6 — TTS and audio
 
-- [ ] FX6.01 Pin `kittenml` to a bounded range that includes the locked version, and regenerate `uv.lock` deliberately (R43).
-- [ ] FX6.02 Identify TTS models by content (R35).
-  - [ ] FX6.02a For Piper, hash the `.onnx` and `.onnx.json` files, memoized by path, size and mtime. For Kitten, use the resolved model ID plus the `kittenml` version. Use this in both the WAV and MP3 keys.
-  - [ ] FX6.02b Tests: replacing the model bytes at the same path invalidates the audio; changing the working directory with an equivalent absolute path does not.
-- [ ] FX6.03 Turn unspeakable paragraphs into pauses (R37). Test: a `* * *` paragraph makes a pause entry and no TTS call, and coverage still passes.
-- [ ] FX6.04 Add narration normalization (R38).
-  - [ ] FX6.04a Add a deterministic table for spoken text only (quotes, dashes, ellipses, ligatures, soft and zero-width characters, NBSP), and put its version in the audio fingerprint.
-  - [ ] FX6.04b Tests for each table entry, plus a check that the source text is unchanged.
-- [ ] FX6.05 Apply pronunciation keys that contain punctuation (R39).
-  - [ ] FX6.05a Validate keys (no whitespace or marker syntax, at most 64 characters) and match whole tokens with the spec's punctuation stripping.
-  - [ ] FX6.05b Tests: `Dr.`, `U.S.,`, `(C++)` and `Hermione.` apply; an invalid key is rejected at load.
-- [ ] FX6.06 Trust voice markers only in approved chapters (R8).
-  - [ ] FX6.06a Honour markers only in approved chapters. An unapproved chapter with markers fails before synthesis, while the others continue and the run exits 7. Check marker voice IDs before any synthesis.
-  - [ ] FX6.06b Tests for the unapproved, approved and unknown-voice cases.
-- [ ] FX6.07 Add TTS retries and partial completion (R36).
-  - [ ] FX6.07a Add `tts.max_retries` (default 2) with bounded backoff. A chapter that still fails is marked failed and the run continues, exiting 7 with the failed chapter numbers.
-  - [ ] FX6.07b Tests: a transient failure is retried; a persistent failure in chapter 2 of 3 still produces 1 and 3 and exits 7; a resume regenerates only chapter 2.
-- [ ] FX6.08 Add optional cover art (R40).
-  - [ ] FX6.08a Add `--cover PATH` (convert and batch) and `audio.cover_image`. Accept JPEG or PNG by magic bytes, up to 5 MiB, embed it as an ID3 APIC front cover, include its hash in the MP3 fingerprint, and embed it in `pack-m4b`.
-  - [ ] FX6.08b Tests: APIC is present and matches (FFmpeg-gated); an invalid or oversized image exits 2; a changed image regenerates the MP3s; a cover privacy test.
-- [ ] FX6.09 Bound chapter audio memory (R41).
-  - [ ] FX6.09a Stream validated chunk PCM to a temporary chapter WAV on disk.
-  - [ ] FX6.09b tracemalloc test: peak memory for N and 4N chunks differs by less than one chunk.
-- [ ] FX6.10 Add an optional real Kitten test (R42), skipped unless `PDF2AUDIOBOOK_KITTEN_SMOKE=1` and the `kitten` extra is installed. It never runs in CI.
-- [ ] FX6.11 Bump the audio fingerprint version (spec §3), add the MAINTAINER_GUIDE upgrade note, and merge the spec §6 §8 cover-flag amendment and the §9 amendment.
+- [x] FX6.01 Pin `kittenml` to a bounded range that includes the locked version, and regenerate `uv.lock` deliberately (R43).
+- [x] FX6.02 Identify TTS models by content (R35).
+  - [x] FX6.02a For Piper, hash the `.onnx` and `.onnx.json` files, memoized by path, size and mtime. For Kitten, use the resolved model ID plus the `kittenml` version. Use this in both the WAV and MP3 keys.
+  - [x] FX6.02b Tests: replacing the model bytes at the same path invalidates the audio; changing the working directory with an equivalent absolute path does not.
+- [x] FX6.03 Turn unspeakable paragraphs into pauses (R37). Test: a `* * *` paragraph makes a pause entry and no TTS call, and coverage still passes.
+- [x] FX6.04 Add narration normalization (R38).
+  - [x] FX6.04a Add a deterministic table for spoken text only (quotes, dashes, ellipses, ligatures, soft and zero-width characters, NBSP), and put its version in the audio fingerprint.
+  - [x] FX6.04b Tests for each table entry, plus a check that the source text is unchanged.
+- [x] FX6.05 Apply pronunciation keys that contain punctuation (R39).
+  - [x] FX6.05a Validate keys (no whitespace or marker syntax, at most 64 characters) and match whole tokens with the spec's punctuation stripping.
+  - [x] FX6.05b Tests: `Dr.`, `U.S.,`, `(C++)` and `Hermione.` apply; an invalid key is rejected at load.
+- [x] FX6.06 Trust voice markers only in approved chapters (R8).
+  - [x] FX6.06a Honour markers only in approved chapters. An unapproved chapter with markers fails before synthesis, while the others continue and the run exits 7. Check marker voice IDs before any synthesis.
+  - [x] FX6.06b Tests for the unapproved, approved and unknown-voice cases.
+- [x] FX6.07 Add TTS retries and partial completion (R36).
+  - [x] FX6.07a Add `tts.max_retries` (default 2) with bounded backoff. A chapter that still fails is marked failed and the run continues, exiting 7 with the failed chapter numbers.
+  - [x] FX6.07b Tests: a transient failure is retried; a persistent failure in chapter 2 of 3 still produces 1 and 3 and exits 7; a resume regenerates only chapter 2.
+- [x] FX6.08 Add optional cover art (R40).
+  - [x] FX6.08a Add `--cover PATH` (convert and batch) and `audio.cover_image`. Accept JPEG or PNG by magic bytes, up to 5 MiB, embed it as an ID3 APIC front cover, include its hash in the MP3 fingerprint, and embed it in `pack-m4b`.
+  - [x] FX6.08b Tests: APIC is present and matches (FFmpeg-gated); an invalid or oversized image exits 2; a changed image regenerates the MP3s; a cover privacy test.
+- [x] FX6.09 Bound chapter audio memory (R41).
+  - [x] FX6.09a Stream validated chunk PCM to a temporary chapter WAV on disk.
+  - [x] FX6.09b tracemalloc test: peak memory for N and 4N chunks differs by less than one chunk.
+- [x] FX6.10 Add an optional real Kitten test (R42), skipped unless `PDF2AUDIOBOOK_KITTEN_SMOKE=1` and the `kitten` extra is installed. It never runs in CI.
+- [x] FX6.11 Bump the audio fingerprint version (spec §3), add the MAINTAINER_GUIDE upgrade note, and merge the spec §6 §8 cover-flag amendment and the §9 amendment.
 
 **FX6 gate:** acceptance #7 and #10 in the parent spec still pass; P4.02, P4.03c, P4.05, F.03 and F.06 are fully met.
 

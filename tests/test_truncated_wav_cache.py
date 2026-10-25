@@ -35,7 +35,16 @@ def test_truncated_wav_with_matching_checksum_is_regenerated(tmp_path: Path) -> 
     cache = tmp_path / "cache"
     cache.mkdir()
     engine = f"{type(provider).__module__}.{type(provider).__qualname__}"
-    key = fingerprint("tts-wav-v2", engine, text, "mini", "voice", 1.0, provider.sample_rate)
+    key = fingerprint(
+        "tts-wav-v3",
+        "narration-normalization-v1",
+        engine,
+        text,
+        "mini",
+        "voice",
+        1.0,
+        provider.sample_rate,
+    )
     wav_path = cache / f"{key}.wav"
     incomplete = wav_bytes(np.zeros(500, dtype=np.float32), provider.sample_rate)[:-40]
     wav_path.write_bytes(incomplete)

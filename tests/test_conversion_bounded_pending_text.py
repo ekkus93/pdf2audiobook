@@ -93,7 +93,7 @@ def test_chapter_edit_between_preflight_and_synthesis_fails_closed(tmp_path, mon
     def change_after_preflight(self, *args, **kwargs):
         if self == chapter_file:
             reads.append(1)
-            if len(reads) == 2:
+            if len(reads) == 3:
                 return "Different prose after preflight."
         return original_read(self, *args, **kwargs)
 
@@ -105,6 +105,6 @@ def test_chapter_edit_between_preflight_and_synthesis_fails_closed(tmp_path, mon
     )
     with pytest.raises(AudioError, match="Approved chapter text changed") as exc:
         pipeline.convert_book(source, settings)
-    assert len(reads) == 2
+    assert len(reads) == 3
     assert "PRIVATE_SOURCE" not in str(exc.value)
     assert not (root / "audio").exists()

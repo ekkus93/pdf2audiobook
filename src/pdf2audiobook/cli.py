@@ -379,6 +379,7 @@ def convert(
     ),
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
     sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
+    cover: Path | None = typer.Option(None, "--cover", help="JPEG or PNG chapter cover image."),
     resume: bool | None = typer.Option(None, "--resume/--no-resume"),
     force: bool = typer.Option(False, "--force", help="Regenerate selected chapter audio."),
     allow_single_chapter: bool | None = typer.Option(
@@ -427,14 +428,17 @@ def convert(
             overrides.setdefault("tts", {}).setdefault(effective_tts_provider, {})["speed"] = speed
         if sample_rate is not None:
             overrides.setdefault("tts", {})["sample_rate"] = sample_rate
+        if cover is not None:
+            overrides.setdefault("audio", {})["cover_image"] = str(cover)
         if chapter is not None and chapter_range is not None:
             raise ConfigError("--chapter and --chapter-range cannot be combined")
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
-        from pdf2audiobook.audio import audio_output_path
+        from pdf2audiobook.audio import audio_output_path, read_cover_image
         from pdf2audiobook.pipeline import analyze_book, convert_book, select_chapters
         from pdf2audiobook.workspace import read_manifest
 
+        read_cover_image(settings.audio.cover_image)
         if dry_run:
             manifest_path = analyze_book(source, settings)
             manifest = read_manifest(manifest_path)
@@ -488,6 +492,7 @@ def batch(
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
     sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
     bitrate: str | None = typer.Option(None, "--bitrate"),
+    cover: Path | None = typer.Option(None, "--cover", help="JPEG or PNG chapter cover image."),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Convert every PDF in a directory, applying a matching named TTS profile."""
@@ -519,7 +524,12 @@ def batch(
             overrides.setdefault("tts", {})["sample_rate"] = sample_rate
         if bitrate is not None:
             overrides.setdefault("tts", {})["bitrate"] = bitrate
+        if cover is not None:
+            overrides.setdefault("audio", {})["cover_image"] = str(cover)
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        from pdf2audiobook.audio import read_cover_image
+
+        read_cover_image(settings.audio.cover_image)
         from pdf2audiobook.pipeline import convert_book, settings_for_book_tts
 
         results: list[dict[str, Any]] = []
@@ -575,18 +585,24 @@ def pack_m4b(
     manifest_path: Path = typer.Argument(..., help="Manifest from an analyzed/converted book."),
     output: Path = typer.Option(..., "--output", help="Destination .m4b file."),
     bitrate: str = typer.Option("96k", "--bitrate"),
+    cover: Path | None = typer.Option(None, "--cover", help="Embed JPEG or PNG cover artwork."),
     config: Path | None = typer.Option(None, "--config"),
     no_config: bool = typer.Option(False, "--no-config"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Package completed chapter MP3s as a single M4B with chapter navigation."""
     try:
-        from pdf2audiobook.audio import audio_output_path, encode_m4b
+        from pdf2audiobook.audio import audio_output_path, encode_m4b, read_cover_image
         from pdf2audiobook.pipeline import chapter_audio_fingerprint, valid_mp3_sidecar
         from pdf2audiobook.workspace import read_manifest
 
-        settings, _ = load_settings(config, no_config=no_config)
+        settings, _ = load_settings(
+            config,
+            no_config=no_config,
+            overrides={"audio": {"cover_image": str(cover)}} if cover is not None else None,
+        )
         manifest = read_manifest(manifest_path)
+        cover_image = read_cover_image(settings.audio.cover_image)
         chapter_files = []
         stale_chapters = []
         for chapter in manifest.chapters:
@@ -619,6 +635,7 @@ def pack_m4b(
                 title=manifest.title,
                 artist=manifest.author,
                 bitrate=bitrate,
+                cover_image=cover_image,
             )
         except OSError:
             raise AudioError("Could not create the M4B output") from None

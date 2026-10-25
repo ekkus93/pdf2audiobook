@@ -31,10 +31,21 @@ def test_contents_analysis_task_has_an_independent_environment_toggle():
 def test_pronunciation_dictionary_is_case_insensitive_and_single_token():
     settings = Settings.model_validate({"tts": {"pronunciations": {"Māori": "Mow-ree"}}})
     assert settings.tts.pronunciations == {"māori": "Mow-ree"}
-    with pytest.raises(ValueError, match="single words"):
+    with pytest.raises(ValueError, match="one word"):
         Settings.model_validate({"tts": {"pronunciations": {"word": "two words"}}})
     with pytest.raises(ValueError, match="unique ignoring case"):
         Settings.model_validate({"tts": {"pronunciations": {"Word": "one", "word": "two"}}})
+
+
+def test_pronunciation_keys_allow_punctuation_but_reject_markers_and_long_keys():
+    settings = Settings.model_validate(
+        {"tts": {"pronunciations": {"Dr.": "Doctor", "U.S.,": "United", "(C++)": "seeplus"}}}
+    )
+    assert settings.tts.pronunciations == {"dr.": "Doctor", "u.s.": "United", "c++": "seeplus"}
+    with pytest.raises(ValueError, match="64 characters"):
+        Settings.model_validate({"tts": {"pronunciations": {"a" * 65: "word"}}})
+    with pytest.raises(ValueError, match="64 characters"):
+        Settings.model_validate({"tts": {"pronunciations": {"[[voice:abc]]": "word"}}})
 
 
 def test_cli_env_file_priority(tmp_path: Path):
@@ -78,7 +89,7 @@ def test_missing_explicit_config_is_error(tmp_path: Path):
         load_settings(tmp_path / "missing.toml", environ={})
 
 
-@pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache"])
+@pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache", "audio"])
 def test_non_table_config_sections_fail_content_free(tmp_path: Path, section: str):
     config = tmp_path / "bad.toml"
     config.write_text(f"{section} = 7\n")
@@ -182,6 +193,7 @@ def test_environment_mapping_covers_every_declared_variable():
         "PDF2AUDIOBOOK_TTS_SPEED": "1.25",
         "PDF2AUDIOBOOK_TTS_SAMPLE_RATE": "22050",
         "PDF2AUDIOBOOK_TTS_BITRATE": "96k",
+        "PDF2AUDIOBOOK_TTS_MAX_RETRIES": "2",
         "PDF2AUDIOBOOK_TTS_PIPER_MODEL_PATH": "/models/voice.onnx",
         "PDF2AUDIOBOOK_TTS_PIPER_VOICE": "3",
         "PDF2AUDIOBOOK_TTS_PIPER_SPEED": "1.5",
