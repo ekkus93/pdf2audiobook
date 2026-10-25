@@ -24,9 +24,9 @@ from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.reading_order import merge_line_fragments, order_two_columns
 from pdf2audiobook.special_material import (
-    _valid_box,
     caption_line_indices,
     equation_line_indices,
+    valid_box,
     vector_artwork_warnings,
 )
 from pdf2audiobook.workspace import digest_file, fingerprint, write_json
@@ -48,6 +48,49 @@ class ExtractedDocument:
     page_sizes: list[tuple[float, float]]
     page_labels: list[str | None] = field(default_factory=list)
     review_reasons: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class _PageVisuals:
+    images: list[dict]
+    drawings: list[dict]
+    image_count: int
+    drawing_count: int
+    image_unavailable: bool = False
+    drawings_unavailable: bool = False
+
+
+_PAGE_VISUAL_ITEM_CAP = 5000
+
+
+def _page_visuals(page: pymupdf.Page) -> _PageVisuals:
+    """Read bounded image and vector metadata once for all page heuristics."""
+    try:
+        raw_images = page.get_image_info()
+        if not isinstance(raw_images, (list, tuple)):
+            raise ValueError("uninspectable image metadata")
+        images = list(raw_images[:_PAGE_VISUAL_ITEM_CAP])
+        image_count = len(raw_images)
+        image_unavailable = False
+    except Exception:
+        images, image_count, image_unavailable = [], 0, True
+    try:
+        raw_drawings = page.get_drawings()
+        if not isinstance(raw_drawings, (list, tuple)):
+            raise ValueError("uninspectable vector metadata")
+        drawings = list(raw_drawings[:_PAGE_VISUAL_ITEM_CAP])
+        drawing_count = len(raw_drawings)
+        drawings_unavailable = False
+    except Exception:
+        drawings, drawing_count, drawings_unavailable = [], 0, True
+    return _PageVisuals(
+        images,
+        drawings,
+        image_count,
+        drawing_count,
+        image_unavailable,
+        drawings_unavailable,
+    )
 
 
 @runtime_checkable
@@ -242,7 +285,7 @@ def page_review_warnings(lines: list[dict], *, page_number: int, origin: str) ->
 
     aligned_separate_lines = 0
     for first, second in zip(lines, lines[1:]):
-        left, right = _valid_box(first.get("bbox")), _valid_box(second.get("bbox"))
+        left, right = valid_box(first.get("bbox")), valid_box(second.get("bbox"))
         if left is None or right is None:
             continue
         overlap = min(left[3], right[3]) - max(left[1], right[1])
@@ -280,7 +323,7 @@ def _table_regions(
                     f"Page {page_number}: table inspection truncated; "
                     "review complex layouts manually"
                 ]
-            bounds = _valid_box(getattr(table, "bbox", None))
+            bounds = valid_box(getattr(table, "bbox", None))
             if bounds is not None:
                 boxes.append(bounds)
     except Exception:
@@ -315,8 +358,16 @@ def _classify_block_kind(
     footnote_indices: set[int],
     caption_indices: set[int],
     equation_indices: set[int],
-) -> Literal["table", "footnote", "caption", "equation", "list", "heading", "unknown"]:
+    *,
+    marker: str | None,
+    sequential_marker: bool,
+    display_heading: bool,
+) -> Literal["heading", "paragraph", "list", "table", "footnote", "caption", "equation", "unknown"]:
     """Assign one explicit structural kind after page-level detectors run."""
+    if display_heading:
+        return "heading"
+    if marker is not None and sequential_marker and not is_heading_line(text):
+        return "list"
     if _inside_table(bbox, table_regions):
         return "table"
     if line_index in footnote_indices:
@@ -328,12 +379,18 @@ def _classify_block_kind(
     if is_heading_line(text):
         return "heading"
     if is_list_line(text):
+        if marker is not None and not sequential_marker:
+            return "unknown"
         return "list"
     return "unknown"
 
 
 def _special_material_warnings(
-    page: pymupdf.Page, lines: list[dict], *, page_number: int
+    page: pymupdf.Page,
+    lines: list[dict],
+    *,
+    page_number: int,
+    visuals: _PageVisuals | None = None,
 ) -> list[str]:
     """Report likely non-prose content without deleting or inventing narration.
 
@@ -342,10 +399,13 @@ def _special_material_warnings(
     """
     result: list[str] = []
     try:
-        images = page.get_image_info()
+        images = visuals.images if visuals is not None else page.get_image_info()
         if not isinstance(images, (list, tuple)):
             raise ValueError("uninspectable image metadata")
-        if len(images) > 5000:
+        if visuals is not None and visuals.image_unavailable:
+            raise ValueError("uninspectable image metadata")
+        image_count = visuals.image_count if visuals is not None else len(images)
+        if image_count > _PAGE_VISUAL_ITEM_CAP:
             result.append(
                 f"Page {page_number}: embedded image inventory truncated; "
                 "review complex image layouts manually"
@@ -354,7 +414,7 @@ def _special_material_warnings(
         for info in images[:5000]:
             if not isinstance(info, dict):
                 raise ValueError("uninspectable image metadata")
-            box = _valid_box(info.get("bbox"))
+            box = valid_box(info.get("bbox"))
             if box is None:
                 raise ValueError("invalid image geometry")
             boxes.append(box)
@@ -382,7 +442,7 @@ def _special_material_warnings(
         median_size = statistics.median(sizes)
         height = _positive_finite_number(page.cropbox.height)
         if height is not None and any(
-            (bounds := _valid_box(line.get("bbox"))) is not None
+            (bounds := valid_box(line.get("bbox"))) is not None
             and (size := _positive_finite_number(line.get("size"))) is not None
             and size <= 0.78 * median_size
             and bounds[1] >= 0.7 * height
@@ -427,7 +487,7 @@ def _footnote_line_indices(
 
     validated: list[tuple[tuple[float, float, float, float] | None, float | None]] = []
     for line in lines:
-        bounds = _valid_box(line.get("bbox"))
+        bounds = valid_box(line.get("bbox"))
         raw_size = line.get("size")
         size: float | None = None
         if not isinstance(raw_size, bool) and isinstance(raw_size, (int, float)):
@@ -602,21 +662,25 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
 
 
 def _page_ocr_strategy(
-    page: pymupdf.Page, lines: list[dict], settings: PdfSettings, page_number: int
+    page: pymupdf.Page,
+    lines: list[dict],
+    settings: PdfSettings,
+    page_number: int,
+    visuals: _PageVisuals | None = None,
 ) -> tuple[bool, str | None, bool, list[str]]:
     """Select embedded text or OCR for one page and describe the evidence."""
     usable, quality_issue = _embedded_text_quality(lines)
     warnings = []
     if settings.ocr == "auto" and usable:
         printable = sum(not char.isspace() for line in lines for char in line["text"])
-        if printable < 120 and _page_has_dominant_raster(page):
+        if printable < 120 and _page_has_dominant_raster(page, visuals):
             usable = False
             quality_issue = "sparse selectable text over dominant raster"
             warnings.append(
                 f"Page {page_number}: sparse selectable text overlays "
                 "a large raster; attempting OCR and requiring coverage review"
             )
-    vector_text_page = not usable and _page_has_dense_vector_art(page)
+    vector_text_page = not usable and _page_has_dense_vector_art(page, visuals)
     if vector_text_page:
         quality_issue = "dense vector artwork without usable text"
         warnings.append(
@@ -624,7 +688,7 @@ def _page_ocr_strategy(
         )
     auto_ocr_needed = not usable and (
         quality_issue == "damaged selectable-text mapping"
-        or _page_has_dominant_raster(page)
+        or _page_has_dominant_raster(page, visuals)
         or vector_text_page
     )
     use_ocr = settings.ocr == "always" or (settings.ocr == "auto" and auto_ocr_needed)
@@ -636,7 +700,7 @@ def _page_ocr_strategy(
     return usable, quality_issue, use_ocr, warnings
 
 
-def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
+def _page_has_dominant_raster(page: pymupdf.Page, visuals: _PageVisuals | None = None) -> bool:
     """Find scan-sized raster coverage, including pages assembled from tiles.
 
     Compute the union of visible image rectangles so overlapping artwork cannot
@@ -651,9 +715,9 @@ def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
         page_area = float(page_bounds.get_area())
         if page_area <= 0:
             return False
-        images = page.get_image_info()
+        images = visuals.images if visuals is not None else page.get_image_info()
         # Bound worst-case geometric work on adversarial image-heavy PDFs.
-        if len(images) > 256:
+        if (visuals.image_count if visuals is not None else len(images)) > 256:
             return False
         regions = []
         for image in images:
@@ -712,14 +776,19 @@ _VECTOR_ARTWORK_MIN_PATHS = 100
 # instead of being treated as blank (a lone rule or border is not).
 _VECTOR_REVIEW_MIN_PATHS = 10
 _VECTOR_ARTWORK_MIN_COVERAGE = 0.15
+_ROMAN_LIST_MARKERS = frozenset({"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"})
+_ROMAN_LIST_VALUES = {
+    marker: value
+    for value, marker in enumerate(("i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"), 1)
+}
 
 
-def _page_has_dense_vector_art(page: pymupdf.Page) -> bool:
+def _page_has_dense_vector_art(page: pymupdf.Page, visuals: _PageVisuals | None = None) -> bool:
     """Detect drawing-only pages that may contain outlined text."""
     try:
         width = float(page.cropbox.width)
         height = float(page.cropbox.height)
-        drawings = page.get_drawings()
+        drawings = visuals.drawings if visuals is not None else page.get_drawings()
         if width <= 0 or height <= 0 or not isinstance(drawings, (list, tuple)):
             return False
         glyph_like = 0
@@ -745,9 +814,9 @@ def _page_has_dense_vector_art(page: pymupdf.Page) -> bool:
         return False
 
 
-def _page_has_drawings(page: pymupdf.Page) -> bool:
+def _page_has_drawings(page: pymupdf.Page, visuals: _PageVisuals | None = None) -> bool:
     try:
-        drawings = page.get_drawings()
+        drawings = visuals.drawings if visuals is not None else page.get_drawings()
         return isinstance(drawings, (list, tuple)) and len(drawings) >= _VECTOR_REVIEW_MIN_PATHS
     except (AttributeError, TypeError, ValueError, RuntimeError):
         return False
@@ -941,31 +1010,8 @@ def _build_page_blocks(
             and ord(b.lower()) == ord(a.lower()) + 1
         ):
             sequential.update((index, index + 1))
-        elif a.lower() in {
-            "i",
-            "ii",
-            "iii",
-            "iv",
-            "v",
-            "vi",
-            "vii",
-            "viii",
-            "ix",
-            "x",
-        } and b.lower() in {"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"}:
-            roman = {
-                "i": 1,
-                "ii": 2,
-                "iii": 3,
-                "iv": 4,
-                "v": 5,
-                "vi": 6,
-                "vii": 7,
-                "viii": 8,
-                "ix": 9,
-                "x": 10,
-            }
-            if roman[b.lower()] == roman[a.lower()] + 1:
+        elif a.lower() in _ROMAN_LIST_MARKERS and b.lower() in _ROMAN_LIST_MARKERS:
+            if _ROMAN_LIST_VALUES[b.lower()] == _ROMAN_LIST_VALUES[a.lower()] + 1:
                 sequential.update((index, index + 1))
     for line_index, line in enumerate(lines):
         ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
@@ -992,7 +1038,7 @@ def _build_page_blocks(
             and float(line["size"]) >= typical_size * 1.35
             and not line["text"].rstrip().endswith((".", "?", "!", ",", ";", ":"))
         )
-        classified = _classify_block_kind(
+        kind = _classify_block_kind(
             line["text"],
             line_index,
             bbox,
@@ -1000,24 +1046,10 @@ def _build_page_blocks(
             footnote_indices,
             caption_indices,
             equation_indices,
+            marker=marker.group(1) if marker is not None else None,
+            sequential_marker=line_index in sequential,
+            display_heading=display_heading,
         )
-        if display_heading:
-            kind: Literal[
-                "heading",
-                "paragraph",
-                "list",
-                "table",
-                "footnote",
-                "caption",
-                "equation",
-                "unknown",
-            ] = "heading"
-        elif marker is not None and line_index in sequential and not is_heading_line(line["text"]):
-            kind = "list"
-        elif marker is not None and line_index not in sequential and classified == "list":
-            kind = "unknown"
-        else:
-            kind = classified
         blocks.append(
             DocumentBlock(
                 id=ident,
@@ -1031,6 +1063,72 @@ def _build_page_blocks(
             )
         )
     return spans, blocks
+
+
+def _apply_ocr_fallback(
+    page: pymupdf.Page,
+    embedded_lines: list[dict],
+    settings: PdfSettings,
+    *,
+    cache_dir: Path | None,
+    input_sha256: str | None,
+    page_index: int,
+    quality_issue: str | None,
+) -> tuple[list[dict], Literal["embedded", "ocr"], list[str]]:
+    """Run OCR when selected and retain the embedded fallback with review warnings."""
+    page_number = page_index + 1
+    warnings: list[str] = []
+    try:
+        lines = _cached_ocr_lines(
+            page,
+            settings,
+            cache_dir=cache_dir,
+            input_sha256=input_sha256,
+            page_index=page_index,
+        )
+    except _InvalidOCRGeometry:
+        raise ExtractionError(
+            f"Page {page_number}: invalid OCR line geometry or metadata"
+        ) from None
+    except Exception:
+        raise ExtractionError(
+            f"OCR failed on PDF page {page_number}; verify Tesseract "
+            "and the configured OCR language"
+        ) from None
+    origin: Literal["embedded", "ocr"] = "ocr"
+    if not lines:
+        warnings.append(f"Page {page_number}: OCR produced no text")
+        if settings.ocr == "auto" and embedded_lines:
+            lines = embedded_lines
+            origin = "embedded"
+            warnings.append(
+                f"Page {page_number}: retained unverified embedded text "
+                "after empty automatic OCR; review against the PDF"
+            )
+    elif (
+        settings.ocr == "auto"
+        and quality_issue
+        in ("too little selectable text", "sparse selectable text over dominant raster")
+        and embedded_lines
+    ):
+        selectable = " ".join(" ".join(line["text"].split()) for line in embedded_lines).casefold()
+        recognized = " ".join(" ".join(line["text"].split()) for line in lines).casefold()
+        if selectable and selectable not in recognized:
+            warnings.append(
+                f"Page {page_number}: automatic OCR did not reproduce "
+                "short selectable text; review page coverage before narration"
+            )
+        elif (
+            quality_issue == "sparse selectable text over dominant raster"
+            and selectable
+            and recognized == selectable
+        ):
+            warnings.append(
+                f"Page {page_number}: OCR found no additional text "
+                "beyond the selectable overlay on a large raster; "
+                "verify scanned body coverage manually"
+            )
+    return lines, origin, warnings
 
 
 def extract_pdf(
@@ -1111,86 +1209,27 @@ def extract_pdf(
                     f"Failed to extract embedded text from PDF page {page_index + 1}; "
                     "check PDF integrity"
                 ) from None
+            visuals = _page_visuals(page)
             usable, quality_issue, use_ocr, strategy_warnings = _page_ocr_strategy(
-                page, page_lines, settings, page_index + 1
+                page, page_lines, settings, page_index + 1, visuals
             )
             warnings.extend(strategy_warnings)
             origin: Literal["embedded", "ocr"] = "embedded"
             if use_ocr:
-                # Retain the original text layer until OCR actually produces
-                # text. A short selectable heading can be the only prose on
-                # a page, and an empty OCR result must not silently erase it.
-                embedded_lines = page_lines
-                try:
-                    page_lines = _cached_ocr_lines(
-                        page,
-                        settings,
-                        cache_dir=ocr_cache_dir,
-                        input_sha256=source_sha256,
-                        page_index=page_index,
-                    )
-                except _InvalidOCRGeometry:
-                    # Only our own validator can produce this safe, fixed error.
-                    # Never inspect or echo arbitrary OCR backend diagnostics.
-                    raise ExtractionError(
-                        f"Page {page_index + 1}: invalid OCR line geometry or metadata"
-                    ) from None
-                except Exception:
-                    # OCR failures can include recognized text and local paths.
-                    raise ExtractionError(
-                        f"OCR failed on PDF page {page_index + 1}; verify Tesseract "
-                        "and the configured OCR language"
-                    ) from None
-                origin = "ocr"
-                if not page_lines:
-                    warnings.append(f"Page {page_index + 1}: OCR produced no text")
-                    if settings.ocr == "auto" and embedded_lines:
-                        page_lines = embedded_lines
-                        origin = "embedded"
-                        warnings.append(
-                            f"Page {page_index + 1}: retained unverified embedded text "
-                            "after empty automatic OCR; review against the PDF"
-                        )
-                elif (
-                    settings.ocr == "auto"
-                    and quality_issue
-                    in (
-                        "too little selectable text",
-                        "sparse selectable text over dominant raster",
-                    )
-                    and embedded_lines
-                ):
-                    # A nonempty OCR result can still omit a short genuine
-                    # heading or other selectable text. Do not merge both text
-                    # layers (which may duplicate prose); require explicit review
-                    # when the original line sequence is absent from OCR.
-                    selectable = " ".join(
-                        " ".join(line["text"].split()) for line in embedded_lines
-                    ).casefold()
-                    recognized = " ".join(
-                        " ".join(line["text"].split()) for line in page_lines
-                    ).casefold()
-                    if selectable and selectable not in recognized:
-                        warnings.append(
-                            f"Page {page_index + 1}: automatic OCR did not reproduce "
-                            "short selectable text; review page coverage before narration"
-                        )
-                    elif (
-                        quality_issue == "sparse selectable text over dominant raster"
-                        and selectable
-                        and recognized == selectable
-                    ):
-                        # Recognition may have recovered only the selectable
-                        # overlay, leaving the scan's prose completely unread.
-                        warnings.append(
-                            f"Page {page_index + 1}: OCR found no additional text "
-                            "beyond the selectable overlay on a large raster; "
-                            "verify scanned body coverage manually"
-                        )
+                page_lines, origin, ocr_warnings = _apply_ocr_fallback(
+                    page,
+                    page_lines,
+                    settings,
+                    cache_dir=ocr_cache_dir,
+                    input_sha256=source_sha256,
+                    page_index=page_index,
+                    quality_issue=quality_issue,
+                )
+                warnings.extend(ocr_warnings)
             if not page_lines and not use_ocr:
                 if settings.ocr == "never":
                     reason = "OCR disabled"
-                elif _page_has_drawings(page):
+                elif _page_has_drawings(page, visuals):
                     reason = "drawings without readable text; verify coverage"
                     if "damaged_source" not in review_reasons:
                         review_reasons.append("damaged_source")
@@ -1201,10 +1240,20 @@ def extract_pdf(
             # Preserve table cell text and annotate only contained blocks.
             table_regions, table_warnings = _table_regions(page, page_number=page_index + 1)
             warnings.extend(table_warnings)
-            warnings.extend(vector_artwork_warnings(page, page_number=page_index + 1))
+            warnings.extend(
+                vector_artwork_warnings(
+                    page,
+                    page_number=page_index + 1,
+                    drawings=visuals.drawings,
+                    unavailable=visuals.drawings_unavailable,
+                    drawing_count=visuals.drawing_count,
+                )
+            )
             # Surface non-prose material without changing the raw transcript.
             warnings.extend(
-                _special_material_warnings(page, page_lines, page_number=page_index + 1)
+                _special_material_warnings(
+                    page, page_lines, page_number=page_index + 1, visuals=visuals
+                )
             )
             # Diagnose the original extraction order before changing it.
             warnings.extend(
@@ -1221,6 +1270,8 @@ def extract_pdf(
                 page_lines,
                 table_regions,
                 page_number=page_index + 1,
+                image_info=visuals.images,
+                drawings=visuals.drawings,
             )
             warnings.extend(caption_warnings)
             footnote_indices = _footnote_line_indices(

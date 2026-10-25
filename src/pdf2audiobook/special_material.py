@@ -19,7 +19,7 @@ _CAPTION = re.compile(
 )
 
 
-def _valid_box(box: object) -> tuple[float, float, float, float] | None:
+def valid_box(box: object) -> tuple[float, float, float, float] | None:
     # PyMuPDF drawing rectangles are pymupdf.Rect iterables, not list/tuple.
     if not isinstance(box, (list, tuple)):
         # pymupdf.Rect supports tuple(rect) but does not register with the
@@ -49,6 +49,10 @@ def _valid_box(box: object) -> tuple[float, float, float, float] | None:
     return (x0, y0, x1, y1)
 
 
+# Backwards-compatible internal name; pdf.py imports the public helper.
+_valid_box = valid_box
+
+
 def _near_region(
     line: tuple[float, float, float, float],
     region: tuple[float, float, float, float],
@@ -64,7 +68,9 @@ def _near_region(
     return gap <= max(32.0, 3 * (line[3] - line[1]))
 
 
-def _vector_caption_regions(page: object) -> list[tuple[float, float, float, float]]:
+def _vector_caption_regions(
+    page: object, drawings: list[dict] | tuple[dict, ...] | None = None
+) -> list[tuple[float, float, float, float]]:
     """Find bounded clusters of sizable vector paths near a figure caption.
 
     A lone page border or rectangle is not enough evidence for a figure.
@@ -76,7 +82,7 @@ def _vector_caption_regions(page: object) -> list[tuple[float, float, float, flo
         return []
     try:
         page_area = max(1.0, float(crop.width) * float(crop.height))
-        drawings = detector()
+        drawings = drawings if drawings is not None else detector()
     except Exception:
         return []
     # A third-party adapter can return an unexpected object instead of a
@@ -128,6 +134,8 @@ def caption_line_indices(
     table_regions: list[tuple[float, float, float, float]],
     *,
     page_number: int,
+    image_info: list[dict] | tuple[dict, ...] | None = None,
+    drawings: list[dict] | tuple[dict, ...] | None = None,
 ) -> tuple[set[int], list[str]]:
     """Identify only explicit, nearby figure/table labels for audit.
 
@@ -136,13 +144,22 @@ def caption_line_indices(
     """
     image_boxes: list[tuple[float, float, float, float]] = []
     detector = getattr(page, "get_image_info", None)
-    if callable(detector):
+    if image_info is not None:
+        image_source = image_info
+    elif callable(detector):
         try:
             # Bound third-party image inventories just as PDF review does.
             # A malformed adapter may expose an unbounded iterable.
+            image_source = detector()
+        except Exception:
+            image_source = []
+    else:
+        image_source = []
+    if image_info is not None or callable(detector):
+        try:
             image_boxes = [
                 box
-                for item in islice(detector(), 5000)
+                for item in islice(image_source, 5000)
                 if isinstance(item, dict)
                 if (box := _valid_box(item.get("bbox"))) is not None
                 # Decorative icons or tiny raster noise are not reliable
@@ -152,7 +169,7 @@ def caption_line_indices(
         except Exception:
             # _special_material_warnings handles image-inspection failures.
             pass
-    vector_boxes = _vector_caption_regions(page)
+    vector_boxes = _vector_caption_regions(page, drawings)
     table_boxes = [box for item in table_regions if (box := _valid_box(item)) is not None]
     identified: set[int] = set()
     for index, item in enumerate(lines):
@@ -232,7 +249,14 @@ def equation_line_indices(
     ]
 
 
-def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
+def vector_artwork_warnings(
+    page: object,
+    *,
+    page_number: int,
+    drawings: list[dict] | tuple[dict, ...] | None = None,
+    unavailable: bool = False,
+    drawing_count: int | None = None,
+) -> list[str]:
     """Flag vector-only diagrams that image enumeration cannot see.
 
     Require multiple sizable drawing paths to avoid mistaking text underlines
@@ -242,9 +266,13 @@ def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
     crop = getattr(page, "cropbox", None)
     if not callable(detector) or crop is None:
         return []
+    if unavailable:
+        return [
+            f"Page {page_number}: vector drawing inspection unavailable; review diagrams manually"
+        ]
     try:
         area = max(1.0, float(crop.width) * float(crop.height))
-        drawings = detector()
+        drawings = drawings if drawings is not None else detector()
     except Exception:
         return [
             f"Page {page_number}: vector drawing inspection unavailable; review diagrams manually"
@@ -269,7 +297,7 @@ def vector_artwork_warnings(page: object, *, page_number: int) -> list[str]:
                     f"Page {page_number}: substantial vector artwork detected; "
                     "verify diagrams, tables and narration manually; source text preserved"
                 ]
-    if len(drawings) > 5000:
+    if (drawing_count if drawing_count is not None else len(drawings)) > 5000:
         return [
             f"Page {page_number}: unusually complex vector drawing content; "
             "review diagrams and narration manually"

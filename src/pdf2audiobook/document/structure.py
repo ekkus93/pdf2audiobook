@@ -463,30 +463,6 @@ def pagination_cleanup(
             return paper, (center - left) / (right - left)
         return paper, paper
 
-    def nearer_edge_than_body(block: DocumentBlock, height: float) -> bool:
-        """Require a folio to sit closer to the paper edge than body text."""
-        assert block.bbox is not None
-        edge_distance = min(block.bbox[1], height - block.bbox[3])
-        body_lines = [
-            other
-            for other in blocks_by_page[block.page_index]
-            if other.id != block.id
-            and other.bbox is not None
-            and _valid_bbox(other.bbox)
-            and other.bbox[1] >= height * 0.12
-            and other.bbox[3] <= height * 0.88
-        ]
-        if body_lines:
-            gaps = []
-            for other in body_lines:
-                assert other.bbox is not None
-                gaps.append(max(other.bbox[1] - block.bbox[3], block.bbox[1] - other.bbox[3], 0.0))
-            gap = min(gaps)
-            return edge_distance < gap
-        # With no extracted body line, require the numeral to be deep in the
-        # outer margin; uncertainty leaves the printed number intact.
-        return edge_distance < height * 0.05
-
     def page_label_matches(page: int, value: int, notation: str) -> bool:
         if page_labels is None or page >= len(page_labels) or page_labels[page] is None:
             return True
@@ -1248,18 +1224,6 @@ def propose_chapters(
         chapters=chapters,
         warnings=warnings,
         review_reasons={"empty_chapter"} if empty_chapter else set(),
-    )
-
-
-def chapter_text(blocks: list[DocumentBlock], chapter: Chapter, omitted: set[str]) -> str:
-    """Only audibly retain blocks not removed by accepted audited edits."""
-    return (
-        "\n".join(
-            block.text
-            for block in blocks[chapter.start_block : chapter.end_block]
-            if block.id not in omitted
-        ).strip()
-        + "\n"
     )
 
 

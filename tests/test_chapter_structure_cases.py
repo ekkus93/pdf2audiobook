@@ -2,7 +2,6 @@
 
 from pdf2audiobook.config import Chapters
 from pdf2audiobook.document.structure import (
-    chapter_text,
     propose_chapters,
     validate_chapter_coverage,
 )
@@ -17,6 +16,18 @@ def block(index: int, page: int, text: str) -> DocumentBlock:
         span_ids=[],
         order=index,
         kind="unknown",
+    )
+
+
+def proposal_text(blocks, chapter, omitted):
+    """Project proposal boundaries in the same form used by chapter text files."""
+    return (
+        "\n".join(
+            item.text
+            for item in blocks[chapter.start_block : chapter.end_block]
+            if item.id not in omitted
+        ).strip()
+        + "\n"
     )
 
 
@@ -52,7 +63,7 @@ def test_front_matter_prologue_multiple_parts_and_epilogue():
     assert [c.end_block for c in chapters] == [1, 3, 4, 6, 8, 9, 11, 13]
     assert any("Pre-chapter material retained" in warning for warning in warnings)
     assert sum(c.end_block - c.start_block for c in chapters) == len(blocks)
-    texts = [chapter_text(blocks, chapter, set()) for chapter in chapters]
+    texts = [proposal_text(blocks, chapter, set()) for chapter in chapters]
     assert "first chapter" in texts[3]
     assert "Another chapter" in texts[4]
     assert all(text.endswith("\n") for text in texts)
@@ -72,7 +83,7 @@ def test_bookmark_boundary_mid_page_and_exact_coverage():
     assert [c.start_block for c in chapters] == [0, 2]
     assert chapters[1].title == "A New Beginning"
     assert "PDF bookmark" in chapters[1].evidence[0]
-    assert "New chapter prose" not in chapter_text(blocks, chapters[0], set())
+    assert "New chapter prose" not in proposal_text(blocks, chapters[0], set())
 
 
 def test_removed_running_header_before_first_heading_is_not_front_matter():
@@ -89,7 +100,7 @@ def test_removed_running_header_before_first_heading_is_not_front_matter():
     assert [(c.start_block, c.end_block) for c in chapters] == [(0, 3), (3, 5)]
     assert all(c.confidence >= 0.75 for c in chapters)
     assert not any("Pre-chapter material retained" in warning for warning in warnings)
-    first = chapter_text(blocks, chapters[0], {"b0"})
+    first = proposal_text(blocks, chapters[0], {"b0"})
     assert first.startswith("Chapter 1") and "KEEPER" not in first
 
 
