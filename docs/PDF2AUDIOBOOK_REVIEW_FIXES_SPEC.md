@@ -913,7 +913,7 @@ These add to §2 and §8.2; they don't replace them.
 - In human mode, log events are rendered as human-readable lines, never JSON. Default human-mode stderr for a failed command starts with "Error:".
 - In `--json` mode, stderr contains exactly one JSON value for a failed command unless `--verbose` is given. Structured events are emitted only with `--verbose` or an explicitly configured `general.log_level`.
 - `command_failed` uses the ERROR level, but is printed only when logging output is enabled as above.
-- **Decision recorded in FX9.07:** events stay JSON lines in both modes. A human-readable renderer needs the output mode, which is unknown while settings are loaded (a configuration warning is logged before the command's `--json` flag is read). The CLI default policy is instead: warnings are shown, INFO progress events and `command_failed` are not. `--verbose` or an explicit `general.log_level` (file, environment or flag) shows everything its level allows. `--quiet` keeps its existing meaning (errors only).
+- **Decision amended by R90:** buffer events until the command's output mode is known. In human mode, default warnings render as `Warning:` lines and failures as `Error:`; in `--json` mode, warnings are included as event-code strings in the single JSON value's `warnings` array. Neither mode emits separate structured events by default. `--verbose` or an explicitly configured `general.log_level` keeps structured events. `--quiet` suppresses warnings and progress while preserving only the command's error diagnostic.
 *Tests:* restore the 2904f19 assertions in `tests/test_cli_json_errors.py` unchanged; add a test that `--verbose` emits the structured events.
 
 **R73 — Review gate uses current state (M, amends R48 and R53) (confirmed).**

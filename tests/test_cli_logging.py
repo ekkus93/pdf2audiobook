@@ -91,3 +91,56 @@ def test_explicit_log_level_enables_progress_and_failure_events(tmp_path):
     assert result.exit_code != 0
     events = [json.loads(line) for line in result.stderr.splitlines() if '"event"' in line]
     assert "command_failed" in [event["event"] for event in events]
+
+
+def test_quiet_json_failure_writes_one_error_object(tmp_path):
+    result = runner.invoke(
+        app,
+        ["--quiet", "analyze", str(tmp_path / "missing.pdf"), "--no-config", "--json"],
+    )
+
+    assert result.exit_code != 0
+    assert len(result.stderr.splitlines()) == 1
+    assert json.loads(result.stderr)["ok"] is False
+
+
+def test_quiet_human_failure_starts_with_error(tmp_path):
+    result = runner.invoke(
+        app, ["--quiet", "analyze", str(tmp_path / "missing.pdf"), "--no-config"]
+    )
+
+    assert result.exit_code != 0
+    assert result.stderr.lstrip().startswith("Error:")
+    assert '"event"' not in result.stderr
+
+
+def test_json_failure_embeds_configuration_warning_code(tmp_path, monkeypatch):
+    import pdf2audiobook.logging as app_logging
+
+    monkeypatch.setattr(app_logging, "_CACHE_DIRECTORY_WARNING_EMITTED", False)
+    config = tmp_path / "settings.toml"
+    config.write_text('[cache]\nenabled = false\ndirectory = "custom-cache"\n')
+    result = runner.invoke(
+        app,
+        ["analyze", str(tmp_path / "missing.pdf"), "--config", str(config), "--json"],
+    )
+
+    assert result.exit_code != 0
+    assert len(result.stderr.splitlines()) == 1
+    diagnostic = json.loads(result.stderr)
+    assert diagnostic["warnings"] == ["cache_directory_ignored"]
+
+
+def test_human_failure_renders_warning_and_error_without_json(tmp_path, monkeypatch):
+    import pdf2audiobook.logging as app_logging
+
+    monkeypatch.setattr(app_logging, "_CACHE_DIRECTORY_WARNING_EMITTED", False)
+    config = tmp_path / "settings.toml"
+    config.write_text('[cache]\nenabled = false\ndirectory = "custom-cache"\n')
+    result = runner.invoke(app, ["analyze", str(tmp_path / "missing.pdf"), "--config", str(config)])
+
+    assert result.exit_code != 0
+    lines = result.stderr.splitlines()
+    assert lines[0].startswith("Warning:")
+    assert lines[-1].startswith("Error:")
+    assert "{" not in result.stderr

@@ -196,8 +196,10 @@ def test_explicit_unused_cache_directory_warns_and_is_labeled(tmp_path: Path, mo
     config.write_text('[cache]\ndirectory = "/private/cache-path"\n')
     result = runner.invoke(app, ["config", "show", "--config", str(config), "--json"])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout)["_unused_settings"] == ["cache.directory"]
-    assert "cache_directory_ignored" in result.stderr
+    assert result.stderr == ""
+    payload = json.loads(result.stdout)
+    assert payload["_unused_settings"] == ["cache.directory"]
+    assert payload["warnings"] == ["cache_directory_ignored"]
     assert "/private/cache-path" not in result.stderr
 
 

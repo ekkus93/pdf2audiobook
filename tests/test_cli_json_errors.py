@@ -46,6 +46,7 @@ def test_json_error_contract(exception, exit_code, capsys):
                 else str(exception)
             ),
         },
+        "warnings": [],
     }
 
 

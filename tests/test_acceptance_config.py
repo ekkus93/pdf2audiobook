@@ -92,7 +92,7 @@ def test_convert_no_llm_and_no_resume_cli_are_explicit_false(monkeypatch):
         ],
     )
     assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout) == {"mp3_files": []}
+    assert json.loads(result.stdout) == {"mp3_files": [], "warnings": []}
     assert captured["source"] == Path("synthetic.pdf")
     assert captured["settings"].llm.enabled is False
     assert captured["settings"].general.resume is False

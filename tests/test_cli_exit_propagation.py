@@ -148,6 +148,7 @@ def test_batch_failure_exits_7_with_one_json_stderr_value(tmp_path):
             "code": 7,
             "message": "One or more books failed",
         },
+        "warnings": [],
     }
 
 

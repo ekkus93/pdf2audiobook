@@ -30,9 +30,12 @@ from pdf2audiobook.errors import (
     PartialConversionError,
 )
 from pdf2audiobook.logging import (
+    begin_cli_command,
     configure_from_settings,
     configure_logging,
     log_event,
+    set_output_mode,
+    take_warning_codes,
     use_default_event_policy,
 )
 
@@ -63,12 +66,14 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
     # Never log exception text, file paths, credentials, or PDF contents.
     log_event("command_failed", level=logging.ERROR, error_code=code)
     if json_output:
+        warnings = take_warning_codes()
         # Diagnostics belong on stderr; stdout is reserved for successful JSON payloads.
         typer.echo(
             json.dumps(
                 {
                     "ok": False,
                     "error": {"type": type(exc).__name__, "code": code, "message": message},
+                    "warnings": warnings,
                 },
                 ensure_ascii=False,
             ),
@@ -84,9 +89,14 @@ def fail_interrupted(*, json_output: bool = False) -> None:
     message = "Interrupted"
     log_event("command_failed", level=logging.ERROR, error_code=130)
     if json_output:
+        warnings = take_warning_codes()
         typer.echo(
             json.dumps(
-                {"ok": False, "error": {"type": "Interrupted", "code": 130, "message": message}}
+                {
+                    "ok": False,
+                    "error": {"type": "Interrupted", "code": 130, "message": message},
+                    "warnings": warnings,
+                }
             ),
             err=True,
         )
@@ -97,7 +107,14 @@ def fail_interrupted(*, json_output: bool = False) -> None:
 
 def emit(payload: dict[str, Any], json_output: bool) -> None:
     if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        result = dict(payload)
+        warning_codes = take_warning_codes()
+        existing_warnings = result.get("warnings")
+        if isinstance(existing_warnings, list):
+            result["warnings"] = [*existing_warnings, *warning_codes]
+        else:
+            result["warnings"] = warning_codes
+        typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
     else:
         console.print_json(data=payload)
 
@@ -123,8 +140,9 @@ def entry(
         raise typer.BadParameter("--verbose and --quiet cannot be combined")
     ctx.obj = {"verbose": verbose, "quiet": quiet}
     configure_logging(verbose=verbose, quiet=quiet)
-    if not verbose and not quiet:
+    if not verbose:
         use_default_event_policy()
+    begin_cli_command()
     log_event("command_started", level=logging.DEBUG, command=ctx.invoked_subcommand or "root")
     if version:
         typer.echo(__version__)
@@ -138,6 +156,7 @@ def show_config(
     sources: bool = typer.Option(False, "--sources"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    set_output_mode(json_output)
     try:
         settings, origin = load_settings(config, no_config=no_config)
         configure_effective_logging(settings, origin)
@@ -161,6 +180,7 @@ def budget_show(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Show content-free request statuses and token/cost totals."""
+    set_output_mode(json_output)
     try:
         from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 
@@ -195,6 +215,7 @@ def budget_resolve(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Resolve an unknown request after checking provider billing evidence."""
+    set_output_mode(json_output)
     try:
         from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 
@@ -244,6 +265,7 @@ def doctor(
     config: Path | None = typer.Option(None, "--config"),
     no_config: bool = typer.Option(False, "--no-config"),
 ) -> None:
+    set_output_mode(json_output)
     try:
         settings, origins = load_settings(config, no_config=no_config)
         configure_effective_logging(settings, origins)
@@ -290,6 +312,7 @@ def inspect(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    set_output_mode(json_output)
     try:
         if source.suffix.lower() == ".json":
             from pdf2audiobook.workspace import read_manifest
@@ -391,6 +414,7 @@ def analyze(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    set_output_mode(json_output)
     try:
         preliminary, _ = load_settings(config, no_config=no_config)
         provider = llm_provider or preliminary.llm.provider
@@ -491,6 +515,7 @@ def convert(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
+    set_output_mode(json_output)
     try:
         preliminary, _ = load_settings(config, no_config=no_config)
         provider = llm_provider or preliminary.llm.provider
@@ -635,6 +660,7 @@ def batch(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Convert every PDF in a directory, applying a matching named TTS profile."""
+    set_output_mode(json_output)
     try:
         preliminary, _ = load_settings(config, no_config=no_config)
         if not source_dir.is_dir():
@@ -753,6 +779,7 @@ def pack_m4b(
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Package completed chapter MP3s as a single M4B with chapter navigation."""
+    set_output_mode(json_output)
     try:
         from pdf2audiobook.audio import audio_output_path, encode_m4b, read_cover_image
         from pdf2audiobook.document.structure import render_chapter_narration
@@ -831,6 +858,7 @@ def review(
     port: int = typer.Option(8765, "--port", min=0, max=65535),
 ) -> None:
     """Open a loopback-only browser editor for chapter titles and boundaries."""
+    set_output_mode(False)
     try:
         from pdf2audiobook.review_ui import create_review_server
 
