@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0–FX6 complete; FX7 in progress
+**Status:** FX0–FX7 complete
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -189,7 +189,7 @@
   - [x] FX7.02b MAINTAINER_GUIDE.md: paired flags, the `budget` command, cover art, TTS retries, the `ollama_context` test marker, and all spec §3 upgrade notes.
   - [x] FX7.02c Confirm that every spec §6 amendment has been merged into docs/PDF2AUDIOBOOK_SPEC.md.
 - [x] FX7.03 Re-check the original TODO items that spec §5 maps to each fixed requirement, citing this TODO's ledger evidence.
-- [ ] FX7.04 Final gate: `/verify` is green on Python 3.11–3.13 for mypy; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; record the SHA and run ID below.
+- [x] FX7.04 Final gate: `/verify` is green on Python 3.11–3.13 for mypy; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; record the SHA and run ID below.
 
 **FX7 gate:** every R1–R45 is implemented with passing tests; the original TODO has no item checked without evidence; exact-head CI is green.
 
@@ -215,3 +215,4 @@
 | 2026-10-25 | c93d7904a3750bf95b43e136ad79538febbbc1ea | FX4.08 (LLM cache identity v4; parent spec §6.2–§6.4 and §8 amendments confirmed) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1081 tests; exact-head CI [40177115817](https://github.com/ekkus93/pdf2audiobook/actions/runs/40177115817) passed on Python 3.11–3.13 | None |
 | 2026-10-25 | 51d9a72f55387185b02bc9d959445d72da018f1f | FX5.01–FX5.10 (strict config sections, paths and typed env parsing, paired switches, provider-specific TTS precedence, batch options, logging, cache warning, parent spec amendments) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1125 tests; exact-head CI [40177704630](https://github.com/ekkus93/pdf2audiobook/actions/runs/40177704630) passed on Python 3.11–3.13 | None |
 | 2026-10-25 | c5096aa1cd1893c26130ff24e6c8443f496bc923 | FX6.01–FX6.11 (model-aware cache identities, narration normalization, retries/partial status, approved voice markers, cover art, bounded-memory WAV streaming and optional Kitten smoke) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1181 passed and 1 skipped; exact-head CI [40178615306](https://github.com/ekkus93/pdf2audiobook/actions/runs/40178615306) passed on Python 3.11–3.13 including wheel/sdist smoke | FX7 remains |
+| 2026-10-25 | 5dc5d4abbd98f3829abef06e36e8f76562f7063c | FX7.01–FX7.04 (examples on every command, README/maintainer updates, original-TODO traceability and final release gate) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1192 passed and 1 skipped; `uv build --wheel --sdist` succeeded; exact-head CI [40178823078](https://github.com/ekkus93/pdf2audiobook/actions/runs/40178823078) passed on Python 3.11–3.13, including wheel/sdist clean-environment smoke | Live OpenAI and llama-server remain deferred per user instruction; optional Piper work remains deferred |

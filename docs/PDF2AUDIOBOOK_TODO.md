@@ -136,10 +136,10 @@
 - [x] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart (review-fixes FX6.07, FX6.09).
 - [x] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
 - [x] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes (review-fixes FX7.01–FX7.02).
-- [ ] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps.
+- [x] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps (review-fixes FX7.04).
   - [x] Previous release checks: local Ruff, repository formatting check, mypy (21 modules), full pytest suite (1013 tests), uv lock check, CLI doctor/help, and wheel/sdist build.
   - [x] Exact-head Python CI for implementation commit d9a0c4c72ab908bca91f6815c7fe0a8c6b0df74f passed on Python 3.11, 3.12 and 3.13 (run 40160505083).
-  - [ ] Review-fixes implementation validation and exact-head CI are pending.
+  - [x] Review-fixes implementation validation and exact-head CI passed: `5dc5d4abbd98f3829abef06e36e8f76562f7063c`, run [40178823078](https://github.com/ekkus93/pdf2audiobook/actions/runs/40178823078); local `/verify` passed with 1,192 tests and 1 opt-in Kitten skip, wheel/sdist smoke passed.
 
 **M5 gate:** all ten release acceptance criteria in the spec pass, with evidence; no unchecked implementation-critical subtasks.
 
@@ -161,6 +161,7 @@
 | --- | --- | --- | --- | --- |
 | 2026-10-16 | 84cd664 | Specification and TODO drafted; no implementation yet | Not run | None identified |
 | 2026-10-25 | 7eb4d25d64c8f092d10b039d91da13f6736c336a | Review findings from docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md recorded; original checklist items found wrong or partial were reopened for evidence-backed repair. | Baseline: Ruff, formatting, mypy (21 modules), uv lock check and 1013 tests passed. | Implementation work tracked in docs/PDF2AUDIOBOOK_REVIEW_FIXES_TODO.md; live OpenAI/llama-server acceptance remains explicitly deferred. |
+| 2026-10-25 | 5dc5d4abbd98f3829abef06e36e8f76562f7063c | Review-fixes FX0–FX7 completed; review findings implemented, regression-tested, documented and traced back to original checklist items. | Local final `/verify`: lock check, Ruff, formatting, mypy (22 modules), 1,192 passed/1 skipped, wheel/sdist build; exact-head CI run [40178823078](https://github.com/ekkus93/pdf2audiobook/actions/runs/40178823078) passed on Python 3.11–3.13 with installed wheel/sdist smoke. | Per user instruction, live OpenAI and llama-server checks remain deferred; Piper remains optional/deferred. |
 | 2026-10-16 | 21954bae6b6fb012ccf86338858f6fb1dd3f454e | uv Python CLI, config, models, PDF/OCR, conservative pagination, chapter boundaries/overrides, LLM provider adapters, Kitten/MP3 chunk pipeline | Python CI run 38889941369 passed; mocked LLM/TTS, real FFmpeg, mixed scanned/text OCR | Real Kitten model and real LLM provider acceptance not yet run; lockfile unavailable from current local PyPI-restricted environment |
 
 | 2026-10-16 | fcbb51d3bea71cc96641b649a13bc53188d8509a | Added provenance-validated cleanup edits, coverage.json, checksum-verified WAV/MP3 resume, and streaming input hashes; restored concise CI after uv lock generation check | Python CI runs 38891383049, 38891702908 and 38891853410 passed | uv.lock still uncommitted; real Kitten and LLM acceptance pending |
