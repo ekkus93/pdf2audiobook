@@ -649,11 +649,14 @@ def _embedded_text_quality(lines: list[dict]) -> tuple[bool, str | None]:
     """
     text = " ".join(line["text"] for line in lines)
     printable = sum(not char.isspace() for char in text)
-    if printable < 24:
-        return False, "too little selectable text"
     damaged = sum(char == "\ufffd" or (ord(char) < 32 and char not in "\t\n\r") for char in text)
     if damaged >= max(2, math.ceil(printable * 0.05)):
         return False, "damaged selectable-text mapping"
+    if printable < 24:
+        normalized = " ".join(text.split())
+        if is_heading_line(normalized):
+            return True, None
+        return False, "too little selectable text"
     return True, None
 
 
@@ -676,7 +679,9 @@ def _page_ocr_strategy(
                 f"Page {page_number}: sparse selectable text overlays "
                 "a large raster; attempting OCR and requiring coverage review"
             )
-    vector_text_page = not usable and _page_has_dense_vector_art(page, visuals)
+    vector_text_page = (
+        settings.ocr == "auto" and not usable and _page_has_dense_vector_art(page, visuals)
+    )
     if vector_text_page:
         quality_issue = "dense vector artwork without usable text"
         warnings.append(
@@ -768,9 +773,6 @@ _VECTOR_GLYPH_MAX_FRACTION = 0.06
 # Dense decorative artwork (many paths of any size) covering this much of the
 # page without any usable text is also sent to OCR.
 _VECTOR_ARTWORK_MIN_PATHS = 100
-# A text-free page with at least this many drawn paths is reported for review
-# instead of being treated as blank (a lone rule or border is not).
-_VECTOR_REVIEW_MIN_PATHS = 10
 _VECTOR_ARTWORK_MIN_COVERAGE = 0.15
 
 
@@ -802,14 +804,6 @@ def _page_has_dense_vector_art(page: pymupdf.Page, visuals: _PageVisuals | None 
             and covered / (width * height) >= _VECTOR_ARTWORK_MIN_COVERAGE
         )
     except (AttributeError, KeyError, TypeError, ValueError, RuntimeError, OverflowError):
-        return False
-
-
-def _page_has_drawings(page: pymupdf.Page, visuals: _PageVisuals | None = None) -> bool:
-    try:
-        drawings = visuals.drawings if visuals is not None else page.get_drawings()
-        return isinstance(drawings, (list, tuple)) and len(drawings) >= _VECTOR_REVIEW_MIN_PATHS
-    except (AttributeError, TypeError, ValueError, RuntimeError):
         return False
 
 
@@ -1204,8 +1198,12 @@ def extract_pdf(
             if not page_lines and not use_ocr:
                 if settings.ocr == "never":
                     reason = "OCR disabled"
-                elif _page_has_drawings(page, visuals):
-                    reason = "drawings without readable text; verify coverage"
+                elif visuals.drawings_unavailable:
+                    reason = "drawing information unavailable; verify coverage"
+                    if "damaged_source" not in review_reasons:
+                        review_reasons.append("damaged_source")
+                elif visuals.drawing_count:
+                    reason = "drawings present but not text-like; verify coverage"
                     if "damaged_source" not in review_reasons:
                         review_reasons.append("damaged_source")
                 else:

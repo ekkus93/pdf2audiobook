@@ -115,7 +115,7 @@ Canonical raw text and intermediate files must remain independently inspectable.
 
 OCR modes: **auto** (default), **always**, **never**. OCR languages default to eng; user can override. Orientation correction, deskew and preprocessing may be added as needed; keep all rasterizations ephemeral or cached locally.
 
-In auto mode, OCR only pages with raster coverage above the configured trigger, unusable embedded text, or dense vector drawings without usable text. Keep short valid selectable text, and do not invoke OCR for image-free blank pages. A drawing-only page is dense vector artwork when it has at least 40 small filled glyph-sized paths (outlined text) or at least 100 paths covering 15% of the page. A text-free page with at least 10 drawn paths that is not OCRed is reported as unreadable drawings and sets `damaged_source`; it is never described as not needing OCR.
+In auto mode, OCR only pages with raster coverage above the configured trigger, unusable embedded text, or dense vector drawings without usable text. Keep short valid selectable text, including recognized headings such as “Part One,” even below the generic text-quality length threshold; ornamental drawings do not make usable text unreadable. Do not invoke OCR for image-free blank pages. A drawing-only page is dense vector artwork when it has at least 40 small filled glyph-sized paths (outlined text) or at least 100 paths covering 15% of the page. In auto mode, a text-free page with drawings that is not OCRed is reported as drawings present but not text-like and sets `damaged_source`; a page with neither text nor drawings is described as such. `--ocr never` warnings say OCR is disabled and never imply an attempt.
 
 ### 4.2 Page-number and header/footer detection
 

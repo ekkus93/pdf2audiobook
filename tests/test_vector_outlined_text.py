@@ -45,7 +45,10 @@ def test_a_single_rule_is_not_sent_to_ocr(tmp_path):
         page.draw_line((50, 400), (550, 400))
         document.save(source)
     result = pdf.extract_pdf(source, Pdf(ocr="auto"))
-    assert any("no readable text (no text or drawings found)" in w for w in result.warnings)
+    assert any(
+        "no readable text (drawings present but not text-like" in warning
+        for warning in result.warnings
+    )
     assert not any("OCR not needed" in warning for warning in result.warnings)
     assert not any("drawings without readable text" in warning for warning in result.warnings)
 
@@ -53,6 +56,7 @@ def test_a_single_rule_is_not_sent_to_ocr(tmp_path):
 def test_drawing_only_page_without_ocr_never_claims_ocr_is_not_needed():
     result = pdf.extract_pdf(FIXTURE, Pdf(ocr="never"))
     assert any("no readable text (OCR disabled)" in warning for warning in result.warnings)
+    assert not any("attempting OCR" in warning for warning in result.warnings)
     assert not any("OCR not needed" in warning for warning in result.warnings)
 
 
@@ -62,3 +66,28 @@ def test_outlined_text_page_is_recognized_by_ocr():
     text = " ".join(block.text for block in result.blocks).casefold()
     assert "harbour" in text and "ferry" in text
     assert not any("OCR not needed" in warning for warning in result.warnings)
+
+
+def test_short_embedded_heading_with_ornament_does_not_require_tesseract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    source = tmp_path / "part-one-ornament.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page(width=600, height=800)
+        page.insert_text((60, 100), "Part One", fontsize=18)
+        for index in range(48):
+            x = 60 + (index % 12) * 8
+            y = 130 + (index // 12) * 8
+            page.draw_rect(pymupdf.Rect(x, y, x + 3, y + 3), fill=(0, 0, 0), color=None)
+        document.save(source)
+
+    monkeypatch.setattr(pdf.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(
+        pdf,
+        "_cached_ocr_lines",
+        lambda *args, **kwargs: pytest.fail("OCR ran despite a valid embedded heading"),
+    )
+
+    result = pdf.extract_pdf(source, Pdf(ocr="auto"))
+
+    assert any(span.text == "Part One" and span.origin == "embedded" for span in result.spans)

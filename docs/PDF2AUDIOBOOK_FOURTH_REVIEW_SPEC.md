@@ -577,7 +577,7 @@ Merge these into docs/PDF2AUDIOBOOK_SPEC.md in the same commit as the fix each o
 | §5 (resume) | Gate-only settings and disabled-LLM settings are outside the analysis fingerprint; `--no-resume` on an approved workspace keeps approved analysis. | R82 |
 | §7 (logging) | Logging-level mapping, `--quiet` semantics, and warnings inside the `--json` object. | R90 |
 | §8 (CLI) | Exit-code consistency for workspace failures; `--resume/--no-resume` on `analyze` and `batch`; dry-run equals convert; workspace lock covers analysis and review saves; `pack-m4b` omits skipped chapters; the `--json` output objects carry a `warnings` array. | R83, R84, R85, R90, R91, R93 |
-| §4.1–§4.2 (extraction) | Footnotes before lists; one list classifier; page-number ambiguity among candidates only; edge-distance tie tolerance; drawings never force OCR on a page with usable text. | R96, R97, R98 |
+| §4.1–§4.2 (extraction) | Footnotes before lists; one list classifier; page-number ambiguity among candidates only; edge-distance tie tolerance; recognized short headings remain usable; drawings never force OCR on a page with usable text; OCR warnings state the actual outcome. | R96, R97, R98 |
 | §6.3 (budget) | JSON-mode rejection is `rejected`; settlement rejects cumulative overflow; `reserve` without a bound under a budget is refused. | R100, R101, R102 |
 | §9 (audio) | Any unspeakable paragraph is a pause; sidecars record rendering inputs. | R84, R105 |
 
