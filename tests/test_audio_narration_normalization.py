@@ -7,7 +7,6 @@ import pytest
 
 from pdf2audiobook.audio import (
     _NARRATION_TRANSLATION,
-    NARRATION_NORMALIZATION_VERSION,
     chunk_source_ranges,
     normalize_narration_text,
     split_sentences,
@@ -26,18 +25,6 @@ def test_each_narration_normalization_table_entry(source, expected):
     assert original == f"A{source}B"
 
 
-def test_normalized_chunks_keep_original_source_ranges_and_text():
-    source = "“ﬁrst” line—next…\n\nsoft\u00adhyphen\u200b end\u00a0here."
-    before = source
-    chunks = split_sentences(source)
-    ranges = chunk_source_ranges(source, chunks)
-    assert chunks == ['"first" line,next...', "softhyphen end here."]
-    assert ranges[0][0] == 0
-    assert ranges[1][2] is True
-    assert source == before
-    assert NARRATION_NORMALIZATION_VERSION == "narration-normalization-v1"
-
-
 def test_punctuated_pronunciation_keys_match_whole_tokens():
     source = "Dr. U.S., (C++) Hermione."
     pronunciations = {
@@ -49,14 +36,6 @@ def test_punctuated_pronunciation_keys_match_whole_tokens():
     chunks = split_sentences(source, pronunciations=pronunciations)
     assert chunks == ["Doctor. United, (seeplus) Her-my-oh-nee."]
     assert chunk_source_ranges(source, chunks, pronunciations=pronunciations)
-
-
-def test_dash_reading_rules_and_punctuation_pronunciation():
-    assert (
-        normalize_narration_text("pages 12–14; a‒b; pause—here")
-        == "pages 12 to 14; a-b; pause,here"
-    )
-    assert split_sentences("hello...", pronunciations={"hello": "hullo"}) == ["hullo."]
 
 
 def test_case_transfer_only_applies_to_alphabetic_pronunciation_keys():

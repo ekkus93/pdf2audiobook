@@ -108,9 +108,6 @@ _NARRATION_TRANSLATION = str.maketrans(
         "‐": "-",
         "‑": "-",
         "‒": "-",
-        "–": ",",
-        "—": ",",
-        "―": ",",
         "…": "...",
         "ﬁ": "fi",
         "ﬂ": "fl",
@@ -132,10 +129,51 @@ _PRONUNCIATION_EDGE = {'"', "'", "(", ")", "[", "]", "{", "}", "<", ">"}
 _PRONUNCIATION_TRAILING = {",", ";", ":", "!", "?", "…"}
 
 
+_DASHES = "–—―"
+_DASH_RUN = re.compile(rf"\s*[{_DASHES}]+\s*")
+
+
 def normalize_narration_text(text: str) -> str:
     """Apply the documented TTS-only character table without changing source data."""
     text = re.sub(r"(?<=\d)–(?=\d)", " to ", text)
+    text = _DASH_RUN.sub(", ", text)
     return text.translate(_NARRATION_TRANSLATION)
+
+
+def _droppable_word(word: str) -> bool:
+    """Source words that legitimately produce no spoken token of their own."""
+    return not word.strip(_DASHES)
+
+
+def _spoken_sequence(words: list[str], pronunciations: Mapping[str, str] | None) -> list[str]:
+    """Spoken text for each source word of one paragraph.
+
+    A word may speak as several tokens ("10–20" becomes "10 to 20") or as none
+    (a bare dash only moves a comma onto the previous spoken word), so callers
+    align on source words, never on token counts.
+    """
+    spoken: list[str] = []
+
+    def attach_comma() -> None:
+        for index in range(len(spoken) - 1, -1, -1):
+            if spoken[index]:
+                if not spoken[index].endswith((",", ";", ":", ".", "!", "?")):
+                    spoken[index] += ","
+                return
+
+    for word in words:
+        core = word.strip(_DASHES)
+        if not core:
+            attach_comma()
+            spoken.append("")
+            continue
+        if word[0] in _DASHES:
+            attach_comma()
+        text = _spoken_token(core, pronunciations)
+        if word[-1] in _DASHES and text and not text.endswith((",", ";", ":", ".", "!", "?")):
+            text += ","
+        spoken.append(text)
+    return spoken
 
 
 def _unspeakable_ranges(text: str) -> list[tuple[int, int]]:
@@ -257,18 +295,16 @@ def split_sentences(
         if not has_speakable_narration(paragraph):
             continue
         current = ""
-        for sentence in re.split(r"(?<=[.!?])\s+", paragraph):
-            for source_word in sentence.split():
-                word = _spoken_token(source_word, pronunciations)
-                if len(word) > max_chars:
-                    raise AudioError("A single narration token exceeds the chunk limit")
-                if current and len(current) + len(word) + 1 > max_chars:
-                    chunks.append(current)
-                    current = ""
-                current = f"{current} {word}".strip()
-                if word.endswith((".", "!", "?")) and len(current) >= max_chars // 2:
-                    chunks.append(current)
-                    current = ""
+        for word in _spoken_sequence(paragraph.split(), pronunciations):
+            if len(word) > max_chars:
+                raise AudioError("A single narration token exceeds the chunk limit")
+            if current and len(current) + len(word) + 1 > max_chars:
+                chunks.append(current)
+                current = ""
+            current = f"{current} {word}".strip()
+            if word.endswith((".", "!", "?")) and len(current) >= max_chars // 2:
+                chunks.append(current)
+                current = ""
         if current:
             chunks.append(current)
     return chunks
@@ -286,20 +322,62 @@ def chunk_source_ranges(
         for match in re.finditer(r"\S+", chapter_text)
         if not any(start <= match.start() and match.end() <= end for start, end in scene_ranges)
     ]
+    spoken: list[list[str]] = []
+    group: list[re.Match[str]] = []
+    for match in words:
+        if group and _PARAGRAPH_BREAK.search(chapter_text[group[-1].end() : match.start()]):
+            spoken.extend(
+                part.split()
+                for part in _spoken_sequence([item.group() for item in group], pronunciations)
+            )
+            group = []
+        group.append(match)
+    if group:
+        spoken.extend(
+            part.split()
+            for part in _spoken_sequence([item.group() for item in group], pronunciations)
+        )
     positions: list[tuple[int, int, bool]] = []
     cursor = 0
     previous_end = 0
+    failure = "Narration chunk source alignment failed"
     for chunk in chunks:
         parts = chunk.split()
-        group = words[cursor : cursor + len(parts)]
-        if not group or [_spoken_token(match.group(), pronunciations) for match in group] != parts:
-            raise AudioError("Narration chunk source alignment failed")
-        start, end = group[0].start(), group[-1].end()
+        if not parts:
+            raise AudioError(failure)
+        while cursor < len(words) and not spoken[cursor] and _droppable_word(words[cursor].group()):
+            cursor += 1
+        first = last = cursor
+        index = 0
+        while index < len(parts):
+            if cursor >= len(words):
+                raise AudioError(failure)
+            tokens = spoken[cursor]
+            if not tokens:
+                if not _droppable_word(words[cursor].group()):
+                    raise AudioError(failure)
+            elif parts[index : index + len(tokens)] != tokens:
+                raise AudioError(failure)
+            else:
+                index += len(tokens)
+                last = cursor
+            cursor += 1
+        while (
+            cursor < len(words)
+            and not spoken[cursor]
+            and _droppable_word(words[cursor].group())
+            and not _PARAGRAPH_BREAK.search(chapter_text[words[last].end() : words[cursor].start()])
+        ):
+            last = cursor
+            cursor += 1
+        start, end = words[first].start(), words[last].end()
         paragraph_boundary = bool(_PARAGRAPH_BREAK.search(chapter_text[previous_end:start]))
         positions.append((start, end, paragraph_boundary))
         previous_end = end
-        cursor += len(parts)
-    if cursor != len(words):
+    if any(
+        spoken[rest] or not _droppable_word(words[rest].group())
+        for rest in range(cursor, len(words))
+    ):
         raise AudioError("Narration chunks do not cover all source words")
     return positions
 
