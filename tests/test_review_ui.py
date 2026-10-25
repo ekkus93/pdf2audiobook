@@ -174,6 +174,27 @@ def test_review_server_accepts_implicit_port_80_authority():
     assert _expected_authorities("127.0.0.1", 80) == {"127.0.0.1", "127.0.0.1:80"}
 
 
+def test_review_page_offers_acknowledgement_control_for_ambiguous_pagination(tmp_path):
+    manifest_path = _manifest(tmp_path)
+    manifest = read_manifest(manifest_path)
+    manifest.review_required = ["ambiguous_page_numbers"]
+    write_manifest(manifest_path, manifest)
+    server = create_review_server(manifest_path, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        with urllib.request.urlopen(url + "/", timeout=3) as response:
+            page = response.read().decode()
+        assert "ambiguous_page_numbers" in page
+        assert "ambiguous page-number cleanup" in page
+        assert "checkbox.type='checkbox'" in page
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
 def test_review_server_rejects_mismatched_post_origin(tmp_path):
     manifest_path = _manifest(tmp_path)
     server = create_review_server(manifest_path, port=0)

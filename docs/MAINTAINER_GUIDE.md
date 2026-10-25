@@ -313,8 +313,10 @@ rewriting the manifest. Empty chapters require approval of that chapter in the
 review UI and are skipped with a report entry. Approval is per chapter: if a
 different chapter becomes empty later, it is gated again. A legacy
 `empty_chapter` value in `review_acknowledged` is retained in v3 manifests but
-ignored, with a content-free `review_warning` event. A plain review save never
-acknowledges a book-wide reason.
+ignored, with a content-free `review_warning` event. The review page shows a
+separate checkbox for each currently present book-wide reason; a title or
+boundary save without its checkbox never acknowledges that reason, and chapter
+approval never waives it.
 Default stderr of a failed command is its own `Error:` line or one JSON object.
 Events print for warnings; `--verbose` or an explicit `general.log_level` adds progress
 and `command_failed`. Unexpected exceptions print "Unexpected internal error"; `OSError` and

@@ -537,7 +537,7 @@ def convert(
         if chapter is not None and chapter_range is not None:
             raise ConfigError("--chapter and --chapter-range cannot be combined")
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
-        from pdf2audiobook.pipeline import BOOK_WIDE_REVIEW_REASON_CODES
+        from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
 
         if "empty_chapter" in accept_review:
             raise ConfigError(

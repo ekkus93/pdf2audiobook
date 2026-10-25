@@ -88,3 +88,45 @@ def test_dry_run_applies_and_reports_the_acknowledgement(tmp_path, monkeypatch):
     payload = json.loads(allowed.stdout)
     assert payload["would_acknowledge"] == ["damaged_source"]
     assert read_manifest(path).review_required == ["damaged_source"]
+
+
+def test_cli_acknowledges_ambiguous_page_numbers_after_chapter_approval(tmp_path, monkeypatch):
+    source, path = _damaged_workspace(tmp_path)
+    manifest = read_manifest(path)
+    manifest.review_required = ["ambiguous_page_numbers"]
+    for chapter in manifest.chapters:
+        chapter.manually_approved = True
+    write_manifest(path, manifest)
+    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: path)
+
+    blocked = runner.invoke(
+        app,
+        [
+            "convert",
+            str(source),
+            "--no-config",
+            "--output",
+            str(path.parent),
+            "--dry-run",
+            "--json",
+        ],
+    )
+    assert blocked.exit_code == 6
+
+    allowed = runner.invoke(
+        app,
+        [
+            "convert",
+            str(source),
+            "--no-config",
+            "--output",
+            str(path.parent),
+            "--dry-run",
+            "--json",
+            "--accept-review",
+            "ambiguous_page_numbers",
+        ],
+    )
+    assert allowed.exit_code == 0, allowed.stderr
+    assert json.loads(allowed.stdout)["would_acknowledge"] == ["ambiguous_page_numbers"]
+    assert read_manifest(path).review_required == ["ambiguous_page_numbers"]

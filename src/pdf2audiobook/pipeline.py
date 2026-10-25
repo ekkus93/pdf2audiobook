@@ -47,6 +47,10 @@ from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.logging import log_event
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, generated_chapter_fingerprint
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
+from pdf2audiobook.review_reasons import (
+    BOOK_WIDE_REVIEW_REASON_CODES,
+    REVIEW_REASON_CODES,
+)
 from pdf2audiobook.tts import KITTEN_MODEL_ALIASES, KittenProvider, PiperProvider, TTSProvider
 from pdf2audiobook.workspace import (
     digest_bytes,
@@ -689,10 +693,6 @@ def analyze_book(
     return manifest_path
 
 
-REVIEW_REASON_CODES = ("damaged_source", "empty_chapter", "ambiguous_page_numbers")
-BOOK_WIDE_REVIEW_REASON_CODES = ("damaged_source", "ambiguous_page_numbers")
-
-
 def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) -> None:
     """Recompute the empty-chapter review reason from the manifest as it is now.
 
@@ -763,12 +763,18 @@ def select_chapters(
             raise AudioError(
                 f"Chapter {item.number} has no speakable text; review and approve it before synthesis"
             )
-        if "damaged_source" in manifest.review_required and not item.manually_approved:
+        if (
+            "damaged_source" in manifest.review_required
+            and "damaged_source" not in manifest.review_acknowledged
+        ):
             raise AudioError(
                 f"Chapter {item.number} comes from a damaged source; "
                 "review and approve it before synthesis"
             )
-        if "ambiguous_page_numbers" in manifest.review_required and not item.manually_approved:
+        if (
+            "ambiguous_page_numbers" in manifest.review_required
+            and "ambiguous_page_numbers" not in manifest.review_acknowledged
+        ):
             raise AudioError(
                 f"Chapter {item.number} has ambiguous page-number cleanup; review and approve it"
             )

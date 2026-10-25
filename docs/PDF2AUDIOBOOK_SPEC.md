@@ -154,6 +154,8 @@ At analysis time, compute speakable text for each chapter after accepted cleanup
 
 Review reason codes are structured results from extraction and structure; gate decisions never depend on warning wording. Empty chapters are cleared only by approving that chapter. `--accept-review` accepts only the book-wide reasons `damaged_source` and `ambiguous_page_numbers`; chapter approval never acknowledges a book-wide reason. An approved empty chapter is skipped and named in the conversion report. In schema v3 manifests, a legacy `empty_chapter` acknowledgement is ignored and retained, and conversion emits a content-free warning that empty chapters require chapter approval.
 
+While a book-wide reason is present in `review_required` and absent from `review_acknowledged`, conversion refuses every chapter, even if the chapter was approved in the review UI. The UI provides a separate acknowledgement checkbox for each currently present book-wide reason. A title or boundary save without that checkbox does not acknowledge the reason. `convert --accept-review REASON` is the other explicit acknowledgement path.
+
 ## 6. LLM layer
 
 ### 6.1 Providers

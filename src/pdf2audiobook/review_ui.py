@@ -14,10 +14,15 @@ from urllib.parse import urlparse
 from pdf2audiobook.document.structure import chapter_coverage_report, render_chapter_texts
 from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.models import BookManifest
+from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
 from pdf2audiobook.workspace import read_manifest, write_manifest
 
 _MAX_REQUEST_BYTES = 1024 * 1024
 _MAX_PREVIEW_CHARS = 1200
+_REASON_LABELS = {
+    "damaged_source": "I reviewed the damaged source and checked its page coverage.",
+    "ambiguous_page_numbers": "I reviewed the ambiguous page-number cleanup.",
+}
 
 _HTML = """<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
@@ -32,12 +37,12 @@ button{font:inherit;padding:.6rem 1rem}#status{margin-left:1rem}
 <h1>Chapter review</h1><p>Adjust titles and zero-based, end-exclusive block boundaries. Saving
 validates complete, non-overlapping coverage and marks the chapters manually approved.</p>
 <main id="chapters">Loading manifest…</main>
-<label id="damaged" hidden><input type="checkbox" id="ack-damaged"> I have checked the pages that
-could not be read cleanly (damaged source)</label><br>
+<div id="review-acknowledgements"></div>
 <button id="save">Save reviewed boundaries</button>
 <span id="status" role="status"></span>
 <script>
 const token=__TOKEN__;
+const reasonLabels=__REASON_LABELS__;
 const statusNode=document.querySelector('#status');
 function addField(parent,label,name,value,type='text'){
  const wrap=document.createElement('label'); wrap.append(document.createTextNode(label));
@@ -59,7 +64,16 @@ async function load(){
   const preview=document.createElement('pre'); preview.textContent=chapter.preview; card.append(preview);
   root.append(card);
  }
- document.querySelector('#damaged').hidden=!(data.review_required||[]).includes('damaged_source');
+ const acknowledgements=document.querySelector('#review-acknowledgements');
+ acknowledgements.textContent='';
+ for(const reason of data.review_required||[]){
+  if(!Object.prototype.hasOwnProperty.call(reasonLabels,reason)) continue;
+  const label=document.createElement('label');
+  const checkbox=document.createElement('input'); checkbox.type='checkbox';
+  checkbox.dataset.reviewReason=reason; label.append(checkbox);
+  label.append(document.createTextNode(reasonLabels[reason]));
+  acknowledgements.append(label,document.createElement('br'));
+ }
 }
 document.querySelector('#save').addEventListener('click',async()=>{
  try{
@@ -72,7 +86,7 @@ document.querySelector('#save').addEventListener('click',async()=>{
   const response=await fetch('/api/chapters',{method:'POST',
    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
    body:JSON.stringify({chapters,acknowledge:
-    document.querySelector('#ack-damaged').checked?['damaged_source']:[]})});
+    [...document.querySelectorAll('[data-review-reason]:checked')].map(input=>input.dataset.reviewReason)})});
   const result=await response.json();
   if(!response.ok) throw new Error(result.error||'Save failed');
   statusNode.textContent='Saved and approved. Derived chapter text was refreshed.';
@@ -120,7 +134,9 @@ def save_chapter_updates(manifest_path: Path, updates: Any, acknowledge: Any = N
     """
     if acknowledge is None:
         acknowledge = []
-    if not isinstance(acknowledge, list) or not set(acknowledge) <= {"damaged_source"}:
+    if not isinstance(acknowledge, list) or not set(acknowledge) <= set(
+        BOOK_WIDE_REVIEW_REASON_CODES
+    ):
         raise ExtractionError("Review acknowledgement is invalid")
     manifest = read_manifest(manifest_path)
     if not isinstance(updates, list) or len(updates) != len(manifest.chapters):
@@ -241,7 +257,11 @@ def create_review_server(
                 self._json(403, {"error": "Forbidden"})
                 return
             if route == "/":
-                html = _HTML.replace("__TOKEN__", json.dumps(token)).encode("utf-8")
+                html = (
+                    _HTML.replace("__TOKEN__", json.dumps(token))
+                    .replace("__REASON_LABELS__", json.dumps(_REASON_LABELS))
+                    .encode("utf-8")
+                )
                 self._respond(200, html, "text/html; charset=utf-8")
             elif route == "/api/manifest" and self._authorized():
                 try:

@@ -9,7 +9,7 @@ from pdf2audiobook.cli import app
 from pdf2audiobook.config import Settings
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
-from pdf2audiobook.pipeline import convert_book
+from pdf2audiobook.pipeline import convert_book, select_chapters
 from pdf2audiobook.review_ui import _review_payload, save_chapter_updates
 from pdf2audiobook.workspace import read_manifest, write_manifest
 
@@ -222,3 +222,31 @@ def _source_and_workspace(tmp_path):
     source.write_bytes(b"synthetic")
     path = _workspace(tmp_path, _manifest())
     return source, path
+
+
+@pytest.mark.parametrize(
+    ("reason", "message"),
+    [("damaged_source", "damaged source"), ("ambiguous_page_numbers", "ambiguous page-number")],
+)
+def test_title_only_review_save_does_not_waive_book_wide_reason(tmp_path, reason, message):
+    manifest = _manifest(review_required=[reason])
+    path = _workspace(tmp_path, manifest)
+    updates = _updates(manifest)
+    updates[0]["title"] = "Reviewed title"
+    save_chapter_updates(path, updates)
+    saved = read_manifest(path)
+    assert all(chapter.manually_approved for chapter in saved.chapters)
+    assert saved.review_required == [reason]
+    with pytest.raises(AudioError, match=message):
+        select_chapters(saved, Settings())
+
+
+@pytest.mark.parametrize("reason", ["damaged_source", "ambiguous_page_numbers"])
+def test_explicit_review_ui_acknowledgement_unblocks_book_wide_reason(tmp_path, reason):
+    manifest = _manifest(review_required=[reason])
+    path = _workspace(tmp_path, manifest)
+    save_chapter_updates(path, _updates(manifest), [reason])
+    saved = read_manifest(path)
+    assert saved.review_required == []
+    assert saved.review_acknowledged == [reason]
+    assert len(select_chapters(saved, Settings())) == 2

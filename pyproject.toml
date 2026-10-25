@@ -58,6 +58,7 @@ files = [
     "src/pdf2audiobook/cli.py",
     "src/pdf2audiobook/llm/vision.py",
     "src/pdf2audiobook/review_ui.py",
+    "src/pdf2audiobook/review_reasons.py",
 ]
 check_untyped_defs = true
 warn_unused_ignores = true
