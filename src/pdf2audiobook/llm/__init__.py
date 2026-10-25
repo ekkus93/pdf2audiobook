@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from pdf2audiobook.config import Settings
 from pdf2audiobook.errors import LLMError
+from pdf2audiobook.llm.usage import AttemptOutcome, valid_usage_count
 from pdf2audiobook.models import CleanupEdit, DocumentBlock
 
 LLM_PROMPT_SCHEMA_VERSION = "llm-advisory-v3"
@@ -175,7 +176,7 @@ class OpenAICompatibleProvider:
         }
         self._attempt_started: Callable[[], int] | None = None
         self.require_output_cap = False
-        self._attempt_settled: Callable[[int, dict | None, str], None] | None = None
+        self._attempt_settled: Callable[[int, dict | None, AttemptOutcome], None] | None = None
         self._client = httpx.Client(
             timeout=timeout,
             transport=transport,
@@ -191,7 +192,7 @@ class OpenAICompatibleProvider:
     def set_attempt_accounting(
         self,
         started: Callable[[], int],
-        settled: Callable[[int, dict | None, str], None],
+        settled: Callable[[int, dict | None, AttemptOutcome], None],
     ) -> None:
         """Attach per-HTTP-attempt accounting supplied by the cache wrapper."""
         self._attempt_started = started
@@ -491,21 +492,53 @@ class OpenAICompatibleProvider:
             attempt_id = self._attempt_started() if self._attempt_started is not None else None
 
             def finish_attempt(
-                usage: dict | None = None, *, unbilled: bool = False, rejected: bool = False
-            ) -> None:
+                usage: dict | None = None,
+                *,
+                outcome: AttemptOutcome = "settled",
+            ) -> AttemptOutcome:
                 nonlocal attempt_id
                 if attempt_id is not None and self._attempt_settled is not None:
                     current_id = attempt_id
                     attempt_id = None
-                    outcome = "unbilled" if unbilled else "rejected" if rejected else "settled"
                     self._attempt_settled(current_id, usage, outcome)
+                return outcome
+
+            def settle_success(usage: dict | None) -> AttemptOutcome:
+                return finish_attempt(usage)
+
+            def settle_retryable() -> AttemptOutcome:
+                return finish_attempt()
+
+            def settle_rejected_parameter() -> AttemptOutcome:
+                return finish_attempt(outcome="rejected")
+
+            def settle_json_mode_fallback() -> AttemptOutcome:
+                return finish_attempt()
+
+            def settle_non_retryable(response: httpx.Response) -> AttemptOutcome:
+                if 400 <= response.status_code < 500 and response.status_code not in (408, 429):
+                    try:
+                        error_payload = response.json()
+                    except (ValueError, json.JSONDecodeError):
+                        error_payload = None
+                    error_usage = (
+                        error_payload.get("usage") if isinstance(error_payload, dict) else None
+                    )
+                    return finish_attempt(
+                        error_usage if isinstance(error_usage, dict) else None,
+                        outcome=("settled" if isinstance(error_usage, dict) else "rejected"),
+                    )
+                return finish_attempt()
+
+            def settle_unexpected_error() -> AttemptOutcome:
+                return finish_attempt()
 
             try:
                 response = self._client.post(f"{self.base_url}/chat/completions", json=payload)
                 if self._unsupported_json_mode(response) and not format_fallback_used:
                     # Older OpenAI-compatible local servers sometimes lack JSON mode.
                     # Output is still schema-validated by callers after decoding.
-                    finish_attempt()
+                    settle_json_mode_fallback()
                     payload.pop("response_format")
                     format_fallback_used = True
                     continue
@@ -520,7 +553,7 @@ class OpenAICompatibleProvider:
                     None,
                 )
                 if rejected_parameter is not None:
-                    finish_attempt(rejected=True)
+                    settle_rejected_parameter()
                     payload.pop(rejected_parameter, None)
                     self._unsupported_parameters.add(rejected_parameter)
                     if (
@@ -534,39 +567,25 @@ class OpenAICompatibleProvider:
                 # reached") as HTTP 500; a resample usually succeeds.
                 if response.status_code in (429, 500, 502, 503, 504):
                     if retry_count < self.max_retries:
-                        finish_attempt()
+                        settle_retryable()
                         time.sleep(min(0.2 * (2**retry_count), 2.0))
                         retry_count += 1
                         continue
                 if not response.is_success:
-                    if 400 <= response.status_code < 500 and response.status_code not in (408, 429):
-                        try:
-                            error_payload = response.json()
-                        except (ValueError, json.JSONDecodeError):
-                            error_payload = None
-                        error_usage = (
-                            error_payload.get("usage") if isinstance(error_payload, dict) else None
-                        )
-                        finish_attempt(
-                            error_usage if isinstance(error_usage, dict) else None,
-                            rejected=not isinstance(error_usage, dict),
-                        )
-                    else:
-                        finish_attempt()
+                    settle_non_retryable(response)
                 response.raise_for_status()
                 reply = response.json()
                 # Provider usage is billable even when generated JSON is malformed.
                 # Account for it before attempting to parse or validate the content.
                 usage = reply.get("usage", {}) if isinstance(reply, dict) else {}
-                finish_attempt(usage if isinstance(usage, dict) else None)
+                settle_success(usage if isinstance(usage, dict) else None)
                 self.last_usage = {}
                 if isinstance(usage, dict):
                     for field in self.total_usage:
                         count = usage.get(field)
                         if (
-                            isinstance(count, int)
-                            and not isinstance(count, bool)
-                            and 0 <= count <= (2**63 - 1) - self.total_usage[field]
+                            valid_usage_count(count)
+                            and count <= (2**63 - 1) - self.total_usage[field]
                         ):
                             # Persisted token ledgers use signed SQLite integers.
                             # Malformed or overflowing usage must stay unknown,
@@ -594,7 +613,13 @@ class OpenAICompatibleProvider:
                 self.request_count += 1
                 return decoded
             except httpx.TransportError as exc:
-                finish_attempt(unbilled=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)))
+                finish_attempt(
+                    outcome=(
+                        "unbilled"
+                        if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout))
+                        else "settled"
+                    )
+                )
                 if retry_count < self.max_retries:
                     time.sleep(min(0.2 * (2**retry_count), 2.0))
                     retry_count += 1
@@ -609,10 +634,10 @@ class OpenAICompatibleProvider:
                     unbilled=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)),
                 ) from None
             except LLMError:
-                finish_attempt()
+                settle_unexpected_error()
                 raise
             except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError):
-                finish_attempt()
+                settle_unexpected_error()
                 # Never print raw response bodies, exception chains or untrusted
                 # provider labels: an API can echo book text or secrets.
                 label = (
@@ -622,7 +647,7 @@ class OpenAICompatibleProvider:
                 )
                 raise LLMError(f"{label} LLM request or JSON decoding failed") from None
             except Exception:
-                finish_attempt()
+                settle_unexpected_error()
                 raise
 
 

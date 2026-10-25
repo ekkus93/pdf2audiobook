@@ -14,6 +14,11 @@ from pathlib import Path
 from typing import cast
 
 from pdf2audiobook.errors import LLMError
+from pdf2audiobook.llm.usage import (
+    MAX_SIGNED_TOKEN_COUNT,
+    valid_usage_count,
+    verified_usage,
+)
 
 
 def read_ledger_schema_version(path: Path) -> int:
@@ -320,32 +325,7 @@ class BookLLMBudgetLedger:
         # Validate each provider counter independently before using any of
         # them for persistent accounting. A failed or malformed response is
         # deliberately settled as unknown rather than undercounted.
-        verified: dict[str, int] | None = None
-        if isinstance(usage, dict):
-            prompt = usage.get("prompt_tokens")
-            completion = usage.get("completion_tokens")
-            total = usage.get("total_tokens")
-            if (
-                isinstance(prompt, int)
-                and not isinstance(prompt, bool)
-                and isinstance(completion, int)
-                and not isinstance(completion, bool)
-                and isinstance(total, int)
-                and not isinstance(total, bool)
-                and prompt >= 0
-                and completion >= 0
-                # SQLite INTEGER is signed 64-bit. Never mark a provider
-                # report verified if it cannot be persisted without overflow.
-                and prompt <= (1 << 63) - 1
-                and completion <= (1 << 63) - 1
-                and total <= (1 << 63) - 1
-                and total >= prompt + completion
-            ):
-                verified = {
-                    "prompt_tokens": prompt,
-                    "completion_tokens": completion,
-                    "total_tokens": total,
-                }
+        verified = verified_usage(usage)
         price = None
         if verified is not None and input_rate is not None and output_rate is not None:
             # Bad price configuration must never create negative/NaN charges or
@@ -440,21 +420,14 @@ class BookLLMBudgetLedger:
                 prompt = usage.get("prompt_tokens") if isinstance(usage, dict) else None
                 completion = usage.get("completion_tokens") if isinstance(usage, dict) else None
                 total = usage.get("total_tokens") if isinstance(usage, dict) else None
-                limit = (1 << 63) - 1
-                if not all(
-                    isinstance(v, int) and not isinstance(v, bool)
-                    for v in (prompt, completion, total)
-                ):
+                if not all(valid_usage_count(value) for value in (prompt, completion, total)):
                     raise LLMError("Verified token counts are invalid")
                 prompt = cast(int, prompt)
                 completion = cast(int, completion)
                 total = cast(int, total)
-                if (
-                    min(prompt, completion, total) < 0
-                    or max(prompt, completion, total) > limit
-                    or total < prompt + completion
-                ):
+                if total < prompt + completion:
                     raise LLMError("Verified token counts exceed supported totals")
+                limit = MAX_SIGNED_TOKEN_COUNT
                 prior = connection.execute(
                     "SELECT prompt_tokens, completion_tokens, total_tokens, estimated_usd "
                     "FROM calls WHERE id != ? AND status='complete'",

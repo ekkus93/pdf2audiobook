@@ -57,6 +57,7 @@ files = [
     "src/pdf2audiobook/pipeline.py",
     "src/pdf2audiobook/cli.py",
     "src/pdf2audiobook/llm/vision.py",
+    "src/pdf2audiobook/llm/usage.py",
     "src/pdf2audiobook/review_ui.py",
     "src/pdf2audiobook/review_reasons.py",
 ]
