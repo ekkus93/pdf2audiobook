@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.09 complete; FX10.10 is next.
+**Status:** FX10.00–FX10.10 complete; FX10.11 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -121,14 +121,14 @@
 
 ### CLI, configuration and logging
 
-- [ ] FX10.10 Keep stderr to one JSON value in `--json` mode and "Error:" in human mode (R90).
-  - [ ] FX10.10a Regression tests:
+- [x] FX10.10 Keep stderr to one JSON value in `--json` mode and "Error:" in human mode (R90).
+  - [x] FX10.10a Regression tests:
     - `--quiet --json` failure gives one JSON value on stderr;
     - `--quiet` human failure starts with "Error:";
     - a config warning plus a failure in `--json` mode gives one JSON value containing the warning code;
     - in human mode the same gives `Warning:` and `Error:` lines and no `{`.
-  - [ ] FX10.10b Buffer events until the output mode is known. Put warnings in the JSON object's `warnings` array; render human `Warning:` lines. `--quiet` never adds output.
-  - [ ] FX10.10c Amend R72's decision text in the previous review spec. Merge the spec §11 §7 amendment and the §8 `warnings`-array contract. Document the `warnings` array in README.md.
+  - [x] FX10.10b Buffer events until the output mode is known. Put warnings in the JSON object's `warnings` array; render human `Warning:` lines. `--quiet` never adds output.
+  - [x] FX10.10c Amend R72's decision text in the previous review spec. Merge the spec §11 §7 amendment and the §8 `warnings`-array contract. Document the `warnings` array in README.md.
 - [ ] FX10.11 Use one exit code for workspace failures (R91).
   - [ ] FX10.11a Regression test: a parametrized CLI test over `analyze`, `convert`, `convert --dry-run`, `batch`, `review` and `pack-m4b` with an unusable `--output`, in text and JSON modes, asserting the code, the fixed message, and no path or errno text.
   - [ ] FX10.11b Raise one typed workspace error; record its code per book in `batch`.
@@ -285,3 +285,4 @@
 | 2026-10-25 | 03fb1249c4c2a8ff2e7eb4c9215b3ef4340552b3 | FX10.07a–b (R83): convert and dry-run share chapter-gate selection, recompute empty-chapter reasons, report approved empty chapters as skipped, and log acknowledgements without dry-run writes; §8 CLI contract updated. | At parent 4439352, `tests/test_accept_review_flag.py::test_dry_run_reports_an_approved_empty_chapter_as_skipped` and `::test_dry_run_logs_acknowledgement_without_writing` failed; `::test_dry_run_refuses_a_hand_emptied_chapter` already passed. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1401 passed, 1 optional Kitten skip. Exact-head CI [40241803578](https://github.com/ekkus93/pdf2audiobook/actions/runs/40241803578) passed Python 3.11–3.13 with 1401 passed and 1 optional Kitten skip per job; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | 1a4bab99fd9a7c563ffb8d8636055e383ab1fa42 | FX10.08a–c (R84, first step): `pack-m4b` uses shared chapter selection, omits approved empty chapters and reports skipped chapter numbers; no sidecar format change. | At parent b4219aa, `tests/test_pack_m4b_manifest_text.py::test_pack_omits_approved_empty_chapter_and_reports_its_number` failed because the approved empty chapter was treated as missing audio. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1402 passed, 1 optional Kitten skip. Exact-head CI [40242048096](https://github.com/ekkus93/pdf2audiobook/actions/runs/40242048096) passed Python 3.11–3.13 with 1402 passed and 1 optional Kitten skip per job; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | deeef53bc585b46dc8afdc3d8d5606b2f2e5daba | FX10.09a–e (R82, R86, R87): gate-only and disabled-LLM settings no longer invalidate analysis; unchanged approved analysis is retained under `--no-resume`; MP3 cleanup skips uninspectable candidates with a content-free warning; rejected deterministic cleanup decisions are preserved or fail with a chapter-only conflict. Parent spec §5 resume amendment updated. | At parent 782f89a, these regressions failed: `tests/test_analysis_resume_fx10.py::test_approved_analysis_accepts_min_boundary_confidence_change`, `::test_disabled_llm_model_change_does_not_invalidate_approved_analysis`, `::test_no_resume_dry_run_keeps_approved_analysis_when_stages_match`, `::test_rejected_page_number_removal_survives_reanalysis`, `tests/test_convert_robustness_fx9.py::test_dangling_mp3_symlink_survives_successful_conversion`, and `tests/test_analysis_resume_privacy.py::test_unmatched_rejected_page_number_names_chapter_without_source_text`. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1408 passed, 1 optional Kitten skip. Exact-head CI [40242577944](https://github.com/ekkus93/pdf2audiobook/actions/runs/40242577944) passed Python 3.11–3.13 with 1408 passed and 1 optional Kitten skip per job; FFmpeg and Tesseract were installed. The obsolete assertion that unchanged approved analysis must fail under `--no-resume` was replaced with the R82 requirement, as stated in the commit body. | None |
+| 2026-10-25 | eeb011f0d3d33b7f55e4fc68f1d3cb72329ddafd | FX10.10a–c (R90): CLI buffers startup events until output mode is known; default human warnings use fixed `Warning:` lines, JSON results carry warning codes, and quiet mode leaves only the command error. R72 and parent spec §§7–8 plus README were updated. | At parent 999d66c, all four new regressions failed: `tests/test_cli_logging.py::test_quiet_json_failure_writes_one_error_object`, `::test_quiet_human_failure_starts_with_error`, `::test_json_failure_embeds_configuration_warning_code`, and `::test_human_failure_renders_warning_and_error_without_json`. Local `/verify`: lock check, Ruff, formatting, mypy (23 files), 1412 passed, 1 optional Kitten skip. Exact-head CI [40243089194](https://github.com/ekkus93/pdf2audiobook/actions/runs/40243089194) passed Python 3.11–3.13, each with 1412 passed and 1 optional Kitten skip; FFmpeg and Tesseract were installed. | None |
