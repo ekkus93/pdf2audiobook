@@ -66,3 +66,49 @@ def test_batch_converts_sorted_pdfs_and_applies_matching_profile(tmp_path, monke
     payload = json.loads(result.stdout)
     assert payload["failed"] == 0
     assert [book["book"] for book in payload["books"]] == ["Alpha.PDF", "zeta.pdf"]
+
+
+def test_batch_cli_tts_options_override_per_book_profile(tmp_path, monkeypatch):
+    books = tmp_path / "books"
+    books.mkdir()
+    (books / "Story.pdf").write_bytes(b"fixture")
+    config = tmp_path / "settings.toml"
+    config.write_text(
+        '[tts.profiles.Story]\nprovider="piper"\npiper_model_path="profile.onnx"\n'
+        'voice="1"\nspeed=1.0\n',
+        encoding="utf-8",
+    )
+    seen = []
+
+    def convert(_source: Path, settings: Settings):
+        seen.append(settings)
+        return []
+
+    monkeypatch.setattr("pdf2audiobook.pipeline.convert_book", convert)
+    result = CliRunner().invoke(
+        app,
+        [
+            "batch",
+            str(books),
+            "--config",
+            str(config),
+            "--tts-model",
+            "cli.onnx",
+            "--voice",
+            "3",
+            "--speed",
+            "1.5",
+            "--sample-rate",
+            "22050",
+            "--bitrate",
+            "96k",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    settings = seen[0]
+    assert settings.tts.provider == "piper"
+    assert settings.tts.piper.model_path == "cli.onnx"
+    assert settings.tts.piper.voice == "3"
+    assert settings.tts.piper.speed == 1.5
+    assert settings.tts.sample_rate == 22050
+    assert settings.tts.bitrate == "96k"

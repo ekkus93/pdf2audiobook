@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0–FX4 complete; FX5 in progress
+**Status:** FX0–FX5 complete; FX6 in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -130,24 +130,24 @@
 
 ## Phase FX5 — Configuration and CLI
 
-- [ ] FX5.01 Reject config sections that aren't tables (R27). Parametrized test: each top-level section set to a scalar exits 2 with a content-free message.
-- [ ] FX5.02 Fix the config directory lookup and path resolution (R28).
-  - [ ] FX5.02a Ignore an empty or relative `XDG_CONFIG_HOME`.
-  - [ ] FX5.02b Tests: `user_config_path` under unset, empty, relative and absolute values; relative `output_dir` from CLI, env and explicit TOML.
-- [ ] FX5.03 Parse env values by field type (R29). Parametrized test over the env table, including `PDF2AUDIOBOOK_LLM_MODEL=7` and `PDF2AUDIOBOOK_OUTPUT_DIR=2024`.
-- [ ] FX5.04 Accept only MP3-compatible sample rates (R30). Test: 96000 from CLI, env or TOML exits 2 before any synthesis.
-- [ ] FX5.05 Give every boolean switch both forms (R24).
-  - [ ] FX5.05a Add `--llm/--no-llm`, `--allow-remote-content/--no-allow-remote-content`, `--vision/--no-vision` and `--allow-single-chapter/--no-allow-single-chapter`, each defaulting to unset. Audit every command for any other one-way boolean.
-  - [ ] FX5.05b CLI-level tests: for each switch, the negative flag overrides a TOML `true`, including revoking remote consent (acceptance #6).
-- [ ] FX5.06 Apply TTS options to the provider in use (R25).
-  - [ ] FX5.06a Resolve the effective provider first, then apply the generic CLI and env TTS options to it. Provider-specific env vars win over generic ones, and the CLI wins over both. Check values against the provider.
-  - [ ] FX5.06b CLI tests for `--tts-provider`, `--tts-model`, `--voice`, `--speed`, `--sample-rate` and `--bitrate`, with Piper selected by TOML, by env and by CLI.
-- [ ] FX5.07 Add TTS options to `batch` (R34). CLI test showing CLI > per-book profile > config.
-- [ ] FX5.08 Fix logging levels (R31).
-  - [ ] FX5.08a Give each event a level, make `--quiet` ERROR and `--verbose` DEBUG, and use `general.log_level` when neither flag is given.
-  - [ ] FX5.08b Tests of stderr at each level; a failure is visible at the default level.
-- [ ] FX5.09 Warn about the unused `cache.directory` (R32). The warning appears when it is set; `config show` labels it unused; it is removed from docs and examples.
-- [ ] FX5.10 Merge the spec §6 §7 amendment and the §8 paired-flag amendment into the parent spec.
+- [x] FX5.01 Reject config sections that aren't tables (R27). Parametrized CLI tests cover every top-level section and assert exit 2 with content-free diagnostics.
+- [x] FX5.02 Fix the config directory lookup and path resolution (R28).
+  - [x] FX5.02a Ignore an empty or relative `XDG_CONFIG_HOME`.
+  - [x] FX5.02b Tests: `user_config_path` under unset, empty, relative and absolute values; relative `output_dir` from CLI, env and explicit TOML.
+- [x] FX5.03 Parse env values by field type (R29). Regression covers every declared environment variable, including numeric-looking model and output-directory strings.
+- [x] FX5.04 Accept only MP3-compatible sample rates (R30). CLI, env and TOML values of 96000 fail with exit 2 before synthesis.
+- [x] FX5.05 Give every boolean switch both forms (R24).
+  - [x] FX5.05a Add paired `--llm`, remote-consent, vision and single-chapter options with unset defaults; audit recursion and resume for paired forms.
+  - [x] FX5.05b CLI tests prove negative flags override TOML `true`, including revoking remote consent.
+- [x] FX5.06 Apply TTS options to the provider in use (R25).
+  - [x] FX5.06a Resolve the effective provider first; provider-specific environment values override generic ones, and CLI options override both. Validate Piper speaker IDs before synthesis.
+  - [x] FX5.06b CLI tests cover Kitten and Piper selected by TOML, environment and CLI.
+- [x] FX5.07 Add TTS options to `batch` (R34). CLI options override per-book profile values while non-overridden profile values still apply.
+- [x] FX5.08 Fix logging levels (R31).
+  - [x] FX5.08a Failures are ERROR, warnings WARNING, command starts DEBUG; `--quiet` selects ERROR, `--verbose` DEBUG, and `general.log_level` applies otherwise.
+  - [x] FX5.08b Tests cover configured levels, quiet warnings and visible default CLI failures.
+- [x] FX5.09 Warn about the unused `cache.directory` (R32). Explicit settings warn once, `config show` labels it unused, and examples no longer recommend it.
+- [x] FX5.10 Merge the configuration/environment/path amendments into parent spec §7 and the paired-flag/CLI amendment into §8; §6 requirements remain merged from FX4.
 
 **FX5 gate:** acceptance #6 in the parent spec passes at the CLI level for every switch; every TTS option reaches the provider that is actually used.
 

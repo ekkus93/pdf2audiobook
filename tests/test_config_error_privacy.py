@@ -100,6 +100,17 @@ def test_toml_scalar_llm_section_is_rejected_before_provider_selection(tmp_path:
     assert raised.value.__cause__ is None
 
 
+@pytest.mark.parametrize("section", ["general", "pdf", "chapters", "llm", "tts", "cache"])
+def test_toml_scalar_sections_keep_diagnostics_content_free(tmp_path: Path, section: str) -> None:
+    config = tmp_path / f"{SENTINEL}.toml"
+    config.write_text(f'{section} = "{SENTINEL}"\n', encoding="utf-8")
+    with pytest.raises(ConfigError) as raised:
+        load_settings(config, environ={"PDF2AUDIOBOOK_RESUME": "yes"})
+    assert str(raised.value) == "invalid configuration values; check field names and types"
+    assert SENTINEL not in str(raised.value)
+    assert raised.value.__cause__ is None
+
+
 @pytest.mark.parametrize(
     "field",
     [

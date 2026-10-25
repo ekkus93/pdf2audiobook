@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from pathlib import Path
@@ -36,7 +37,8 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
     else:
         message = "Unexpected internal error"
     # Never log exception text, file paths, credentials, or PDF contents.
-    log_event("command_failed", error_code=code)
+    if logging.getLogger("pdf2audiobook").isEnabledFor(logging.DEBUG):
+        log_event("command_failed", level=logging.ERROR, error_code=code)
     if json_output:
         # Diagnostics belong on stderr; stdout is reserved for successful JSON payloads.
         typer.echo(
@@ -72,8 +74,9 @@ def entry(
 ) -> None:
     if verbose and quiet:
         raise typer.BadParameter("--verbose and --quiet cannot be combined")
+    ctx.obj = {"verbose": verbose, "quiet": quiet}
     configure_logging(verbose=verbose, quiet=quiet)
-    log_event("command_started", command=ctx.invoked_subcommand or "root")
+    log_event("command_started", level=logging.DEBUG, command=ctx.invoked_subcommand or "root")
     if version:
         typer.echo(__version__)
         raise typer.Exit()
@@ -89,6 +92,8 @@ def show_config(
     try:
         settings, origin = load_settings(config, no_config=no_config)
         payload = settings_public(settings)
+        if origin.get("cache.directory", "built-in") != "built-in":
+            payload["_unused_settings"] = ["cache.directory"]
         if sources:
             payload["_sources"] = origin
         emit(payload, json_output)
@@ -233,12 +238,12 @@ def _overrides(
     llm_provider: str | None,
     llm_model: str | None,
     llm_url: str | None,
-    allow_remote_content: bool,
+    allow_remote_content: bool | None,
     tts_model: str | None,
     voice: str | None,
     bitrate: str | None,
     resume: bool | None,
-    allow_single_chapter: bool,
+    allow_single_chapter: bool | None,
 ) -> dict[str, Any]:
     value: dict[str, Any] = {}
     if output is not None:
@@ -251,8 +256,8 @@ def _overrides(
         value.setdefault("llm", {})["provider"] = llm_provider
     if no_llm:
         value.setdefault("llm", {})["enabled"] = False
-    if allow_remote_content:
-        value.setdefault("llm", {})["allow_remote_content"] = True
+    if allow_remote_content is not None:
+        value.setdefault("llm", {})["allow_remote_content"] = allow_remote_content
     if llm_model is not None or llm_url is not None:
         provider = (llm_provider or "ollama").replace("-", "_")
         section = value.setdefault("llm", {}).setdefault(provider, {})
@@ -260,14 +265,10 @@ def _overrides(
             section["model"] = llm_model
         if llm_url is not None:
             section["base_url"] = llm_url
-    if tts_model:
-        value.setdefault("tts", {}).setdefault("kitten", {})["model"] = tts_model
-    if voice:
-        value.setdefault("tts", {}).setdefault("kitten", {})["voice"] = voice
     if bitrate:
         value.setdefault("tts", {})["bitrate"] = bitrate
-    if allow_single_chapter:
-        value.setdefault("chapters", {})["allow_single_chapter"] = True
+    if allow_single_chapter is not None:
+        value.setdefault("chapters", {})["allow_single_chapter"] = allow_single_chapter
     return value
 
 
@@ -279,13 +280,21 @@ def analyze(
     output: Path | None = typer.Option(None, "--output"),
     ocr: str | None = typer.Option(None, "--ocr"),
     pdf_password_env: str | None = typer.Option(None, "--pdf-password-env"),
-    no_llm: bool = typer.Option(False, "--no-llm"),
     llm_provider: str | None = typer.Option(None, "--llm-provider"),
     llm_model: str | None = typer.Option(None, "--llm-model"),
     llm_url: str | None = typer.Option(None, "--llm-url"),
-    allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
-    vision: bool = typer.Option(False, "--vision", help="Enable opt-in page-image review."),
-    allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
+    allow_remote_content: bool | None = typer.Option(
+        None, "--allow-remote-content/--no-allow-remote-content"
+    ),
+    llm: bool | None = typer.Option(
+        None, "--llm/--no-llm", help="Enable or disable LLM assistance."
+    ),
+    vision: bool | None = typer.Option(
+        None, "--vision/--no-vision", help="Enable opt-in page-image review."
+    ),
+    allow_single_chapter: bool | None = typer.Option(
+        None, "--allow-single-chapter/--no-allow-single-chapter"
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     try:
@@ -294,7 +303,7 @@ def analyze(
         overrides = _overrides(
             output,
             ocr,
-            no_llm,
+            llm is False,
             llm_provider,
             llm_model,
             llm_url,
@@ -311,8 +320,10 @@ def analyze(
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
         if pdf_password_env is not None:
             overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
-        if vision:
-            overrides.setdefault("llm", {})["vision"] = True
+        if llm is True:
+            overrides.setdefault("llm", {})["enabled"] = True
+        if vision is not None:
+            overrides.setdefault("llm", {})["vision"] = vision
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import analyze_book
 
@@ -346,9 +357,15 @@ def convert(
     llm_provider: str | None = typer.Option(None, "--llm-provider"),
     llm_model: str | None = typer.Option(None, "--llm-model"),
     llm_url: str | None = typer.Option(None, "--llm-url"),
-    no_llm: bool = typer.Option(False, "--no-llm"),
-    allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
-    vision: bool = typer.Option(False, "--vision", help="Enable opt-in page-image review."),
+    allow_remote_content: bool | None = typer.Option(
+        None, "--allow-remote-content/--no-allow-remote-content"
+    ),
+    llm: bool | None = typer.Option(
+        None, "--llm/--no-llm", help="Enable or disable LLM assistance."
+    ),
+    vision: bool | None = typer.Option(
+        None, "--vision/--no-vision", help="Enable opt-in page-image review."
+    ),
     tts_provider: str | None = typer.Option(None, "--tts-provider"),
     tts_model: str | None = typer.Option(None, "--tts-model"),
     voice: str | None = typer.Option(None, "--voice"),
@@ -364,7 +381,9 @@ def convert(
     sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
     resume: bool | None = typer.Option(None, "--resume/--no-resume"),
     force: bool = typer.Option(False, "--force", help="Regenerate selected chapter audio."),
-    allow_single_chapter: bool = typer.Option(False, "--allow-single-chapter"),
+    allow_single_chapter: bool | None = typer.Option(
+        None, "--allow-single-chapter/--no-allow-single-chapter"
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     try:
@@ -373,7 +392,7 @@ def convert(
         overrides = _overrides(
             output,
             ocr,
-            no_llm,
+            llm is False,
             llm_provider,
             llm_model,
             llm_url,
@@ -388,22 +407,24 @@ def convert(
             selected = provider.replace("-", "_")
             if selected != "ollama" and llm_provider is None:
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
+        effective_tts_provider = tts_provider or preliminary.tts.provider
+        tts_values = overrides.setdefault("tts", {})
         if tts_provider is not None:
-            overrides.setdefault("tts", {})["provider"] = tts_provider
-        if tts_provider == "piper":
-            piper = overrides.setdefault("tts", {}).setdefault("piper", {})
-            if tts_model is not None:
-                piper["model_path"] = tts_model
-            if voice is not None:
-                piper["voice"] = voice
+            tts_values["provider"] = tts_provider
+        if tts_model is not None:
+            key = "model_path" if effective_tts_provider == "piper" else "model"
+            section = "piper" if effective_tts_provider == "piper" else "kitten"
+            tts_values.setdefault(section, {})[key] = tts_model
+        if voice is not None:
+            tts_values.setdefault(effective_tts_provider, {})["voice"] = voice
         if pdf_password_env is not None:
             overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
-        if vision:
-            overrides.setdefault("llm", {})["vision"] = True
+        if llm is True:
+            overrides.setdefault("llm", {})["enabled"] = True
+        if vision is not None:
+            overrides.setdefault("llm", {})["vision"] = vision
         if speed is not None:
-            overrides.setdefault("tts", {}).setdefault("kitten", {})["speed"] = speed
-            if tts_provider == "piper":
-                overrides.setdefault("tts", {}).setdefault("piper", {})["speed"] = speed
+            overrides.setdefault("tts", {}).setdefault(effective_tts_provider, {})["speed"] = speed
         if sample_rate is not None:
             overrides.setdefault("tts", {})["sample_rate"] = sample_rate
         if chapter is not None and chapter_range is not None:
@@ -448,13 +469,30 @@ def batch(
     config: Path | None = typer.Option(None, "--config"),
     no_config: bool = typer.Option(False, "--no-config"),
     output: Path | None = typer.Option(None, "--output"),
-    recursive: bool = typer.Option(False, "--recursive", help="Search nested directories."),
-    no_llm: bool = typer.Option(False, "--no-llm"),
-    allow_remote_content: bool = typer.Option(False, "--allow-remote-content"),
+    recursive: bool = typer.Option(
+        False, "--recursive/--no-recursive", help="Search nested directories."
+    ),
+    llm: bool | None = typer.Option(
+        None, "--llm/--no-llm", help="Enable or disable LLM assistance."
+    ),
+    allow_remote_content: bool | None = typer.Option(
+        None, "--allow-remote-content/--no-allow-remote-content"
+    ),
+    vision: bool | None = typer.Option(None, "--vision/--no-vision"),
+    allow_single_chapter: bool | None = typer.Option(
+        None, "--allow-single-chapter/--no-allow-single-chapter"
+    ),
+    tts_provider: str | None = typer.Option(None, "--tts-provider"),
+    tts_model: str | None = typer.Option(None, "--tts-model"),
+    voice: str | None = typer.Option(None, "--voice"),
+    speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
+    sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
+    bitrate: str | None = typer.Option(None, "--bitrate"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Convert every PDF in a directory, applying a matching named TTS profile."""
     try:
+        preliminary, _ = load_settings(config, no_config=no_config)
         if not source_dir.is_dir():
             raise ConfigError("batch source must be a directory")
         files = source_dir.rglob("*") if recursive else source_dir.glob("*")
@@ -467,17 +505,46 @@ def batch(
         overrides: dict[str, Any] = {}
         if output is not None:
             overrides.setdefault("general", {})["output_dir"] = str(output)
-        if no_llm:
-            overrides.setdefault("llm", {})["enabled"] = False
-        if allow_remote_content:
-            overrides.setdefault("llm", {})["allow_remote_content"] = True
+        if llm is not None:
+            overrides.setdefault("llm", {})["enabled"] = llm
+        if allow_remote_content is not None:
+            overrides.setdefault("llm", {})["allow_remote_content"] = allow_remote_content
+        if vision is not None:
+            overrides.setdefault("llm", {})["vision"] = vision
+        if allow_single_chapter is not None:
+            overrides.setdefault("chapters", {})["allow_single_chapter"] = allow_single_chapter
+        if tts_provider is not None:
+            overrides.setdefault("tts", {})["provider"] = tts_provider
+        if sample_rate is not None:
+            overrides.setdefault("tts", {})["sample_rate"] = sample_rate
+        if bitrate is not None:
+            overrides.setdefault("tts", {})["bitrate"] = bitrate
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import convert_book, settings_for_book_tts
 
         results: list[dict[str, Any]] = []
         failures = 0
         for source in sources:
-            book_settings = settings_for_book_tts(settings, source.stem)
+            explicit = frozenset(
+                key
+                for key, present in (
+                    ("tts_provider", tts_provider is not None),
+                    ("tts_model", tts_model is not None),
+                    ("voice", voice is not None),
+                    ("speed", speed is not None),
+                )
+                if present
+            )
+            book_settings = settings_for_book_tts(settings, source.stem, explicit=explicit)
+            selected_provider = book_settings.tts.provider
+            if tts_model is not None:
+                section = "piper" if selected_provider == "piper" else "kitten"
+                key = "model_path" if section == "piper" else "model"
+                setattr(getattr(book_settings.tts, section), key, tts_model)
+            if voice is not None:
+                getattr(book_settings.tts, selected_provider).voice = voice
+            if speed is not None:
+                getattr(book_settings.tts, selected_provider).speed = speed
             try:
                 outputs = convert_book(source, book_settings)
             except (AudiobookError, OSError, ValueError) as exc:

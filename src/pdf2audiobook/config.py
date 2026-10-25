@@ -10,7 +10,14 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from pdf2audiobook.errors import ConfigError
 
@@ -94,6 +101,13 @@ class PiperTTSModel(ConfigModel):
     voice: str = ""
     speed: float = Field(default=1.0, gt=0, le=3)
 
+    @field_validator("voice")
+    @classmethod
+    def validate_speaker_id(cls, value: str) -> str:
+        if value and (not value.isdecimal() or len(value) > 10):
+            raise ValueError("Piper voice must be a nonnegative decimal speaker ID")
+        return value
+
 
 class TTSProfile(ConfigModel):
     provider: Literal["kitten", "piper"] | None = None
@@ -101,6 +115,16 @@ class TTSProfile(ConfigModel):
     piper_model_path: str | None = None
     voice: str | None = None
     speed: float | None = Field(default=None, gt=0, le=3)
+
+    @model_validator(mode="after")
+    def validate_piper_profile(self) -> TTSProfile:
+        if (
+            self.provider == "piper"
+            and self.voice is not None
+            and (not self.voice.isdecimal() or len(self.voice) > 10)
+        ):
+            raise ValueError("Piper profile voice must be a decimal speaker ID")
+        return self
 
 
 class TTS(ConfigModel):
@@ -113,6 +137,13 @@ class TTS(ConfigModel):
     piper: PiperTTSModel = Field(default_factory=PiperTTSModel)
     profiles: dict[str, TTSProfile] = Field(default_factory=dict)
     pronunciations: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("sample_rate")
+    @classmethod
+    def validate_sample_rate(cls, value: int) -> int:
+        if value not in {8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000}:
+            raise ValueError("sample_rate must be supported by MPEG audio")
+        return value
 
     @field_validator("pronunciations")
     @classmethod
@@ -169,22 +200,36 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS": ("llm", "max_output_tokens"),
     "PDF2AUDIOBOOK_LLM_MAX_REPORTED_TOKENS": ("llm", "max_reported_tokens"),
     "PDF2AUDIOBOOK_LLM_MAX_ESTIMATED_COST_USD": ("llm", "max_estimated_cost_usd"),
+    "PDF2AUDIOBOOK_LLM_INPUT_COST_USD_PER_MILLION_TOKENS": (
+        "llm",
+        "input_cost_usd_per_million_tokens",
+    ),
+    "PDF2AUDIOBOOK_LLM_OUTPUT_COST_USD_PER_MILLION_TOKENS": (
+        "llm",
+        "output_cost_usd_per_million_tokens",
+    ),
     "PDF2AUDIOBOOK_LLM_MODEL": ("llm", "@selected", "model"),
     "PDF2AUDIOBOOK_LLM_URL": ("llm", "@selected", "base_url"),
     "PDF2AUDIOBOOK_ALLOW_REMOTE_CONTENT": ("llm", "allow_remote_content"),
     "PDF2AUDIOBOOK_LLM_FALLBACK_TO_DETERMINISTIC": ("llm", "fallback_to_deterministic"),
-    "PDF2AUDIOBOOK_TTS_VOICE": ("tts", "kitten", "voice"),
+    "PDF2AUDIOBOOK_TTS_PROVIDER": ("tts", "provider"),
+    "PDF2AUDIOBOOK_TTS_MODEL": ("tts", "@selected", "model"),
+    "PDF2AUDIOBOOK_TTS_VOICE": ("tts", "@selected", "voice"),
+    "PDF2AUDIOBOOK_TTS_SPEED": ("tts", "@selected", "speed"),
+    "PDF2AUDIOBOOK_TTS_SAMPLE_RATE": ("tts", "sample_rate"),
+    "PDF2AUDIOBOOK_TTS_BITRATE": ("tts", "bitrate"),
     "PDF2AUDIOBOOK_TTS_PIPER_MODEL_PATH": ("tts", "piper", "model_path"),
     "PDF2AUDIOBOOK_TTS_PIPER_VOICE": ("tts", "piper", "voice"),
     "PDF2AUDIOBOOK_TTS_PIPER_SPEED": ("tts", "piper", "speed"),
-    "PDF2AUDIOBOOK_TTS_MODEL": ("tts", "kitten", "model"),
 }
 
 
 def user_config_path() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))) / (
-        "pdf2audiobook/config.toml"
-    )
+    xdg = os.environ.get("XDG_CONFIG_HOME", "")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".config"
+    if not base.is_absolute():
+        base = Path.home() / ".config"
+    return base / "pdf2audiobook/config.toml"
 
 
 def _apply(obj: dict[str, Any], path: tuple[str, ...], value: Any) -> None:
@@ -211,13 +256,31 @@ def _merge(base: dict[str, Any], extra: dict[str, Any]) -> None:
             base[key] = deepcopy(value)
 
 
-def _parse_env(value: str) -> Any:
-    if value.lower() in ("true", "false"):
-        return value.lower() == "true"
-    try:
-        return json.loads(value)
-    except (ValueError, TypeError):
+def _parse_env(value: str, current: Any) -> Any:
+    if isinstance(current, str) or current is None:
         return value
+    if isinstance(current, bool):
+        normalized = value.casefold()
+        if normalized in {"true", "1", "yes"}:
+            return True
+        if normalized in {"false", "0", "no"}:
+            return False
+        return value
+    if isinstance(current, (int, float)) and not isinstance(current, bool):
+        try:
+            parsed = json.loads(value)
+        except (ValueError, TypeError):
+            return value
+        return (
+            parsed if isinstance(parsed, (int, float)) and not isinstance(parsed, bool) else value
+        )
+    if isinstance(current, (dict, list)):
+        try:
+            parsed = json.loads(value)
+        except (ValueError, TypeError):
+            return value
+        return parsed if isinstance(parsed, type(current)) else value
+    return value
 
 
 def load_settings(
@@ -248,6 +311,11 @@ def load_settings(
             raise ConfigError(
                 "cannot read configuration file; check permissions and encoding"
             ) from None
+        if any(
+            key in toml and not isinstance(toml[key], dict)
+            for key in ("general", "pdf", "chapters", "llm", "tts", "cache")
+        ):
+            raise ConfigError("invalid configuration values; check field names and types")
         _merge(data, toml)
         sources.update({key: f"file:{path}" for key in _flatten(toml)})
     env = environ if environ is not None else os.environ
@@ -261,10 +329,26 @@ def load_settings(
         "provider", env.get("PDF2AUDIOBOOK_LLM_PROVIDER", llm_data["provider"])
     )
     selected = str(selected).replace("-", "_")
+    tts_data = data.get("tts")
+    tts_overrides = (overrides or {}).get("tts", {})
+    if not isinstance(tts_data, dict) or not isinstance(tts_overrides, dict):
+        raise ConfigError("invalid configuration values; check field names and types")
+    tts_provider = tts_overrides.get(
+        "provider", env.get("PDF2AUDIOBOOK_TTS_PROVIDER", tts_data["provider"])
+    )
+    tts_provider = str(tts_provider)
     for env_name, setting_path in ENV_KEYS.items():
         if env_name in env:
-            actual = tuple(selected if key == "@selected" else key for key in setting_path)
-            _apply(data, actual, _parse_env(env[env_name]))
+            if setting_path[0] == "tts" and "@selected" in setting_path:
+                actual = tuple(tts_provider if key == "@selected" else key for key in setting_path)
+                if env_name == "PDF2AUDIOBOOK_TTS_MODEL" and tts_provider == "piper":
+                    actual = ("tts", "piper", "model_path")
+            else:
+                actual = tuple(selected if key == "@selected" else key for key in setting_path)
+            current: Any = data
+            for part in actual:
+                current = current.get(part) if isinstance(current, dict) else None
+            _apply(data, actual, _parse_env(env[env_name], current))
             sources[".".join(actual)] = f"env:{env_name}"
     if overrides:
         _merge(data, overrides)
@@ -274,6 +358,7 @@ def load_settings(
     except ValidationError:
         # Pydantic errors can echo rejected values, including provider URLs and secrets.
         raise ConfigError("invalid configuration values; check field names and types") from None
+    result.general.output_dir = str(Path(result.general.output_dir).expanduser().resolve())
     if result.llm.max_estimated_cost_usd is not None and (
         result.llm.input_cost_usd_per_million_tokens is None
         or result.llm.output_cost_usd_per_million_tokens is None
@@ -283,6 +368,12 @@ def load_settings(
         raise ConfigError("llm.chunk_tokens must be smaller than llm.max_context_tokens")
     if result.llm.max_output_tokens + 128 >= result.llm.max_context_tokens:
         raise ConfigError("llm.max_output_tokens leaves no context room for messages")
+    from pdf2audiobook.logging import configure_from_settings
+
+    configure_from_settings(
+        result.general.log_level,
+        cache_directory_configured=sources.get("cache.directory", "built-in") != "built-in",
+    )
     return result, sources
 
 

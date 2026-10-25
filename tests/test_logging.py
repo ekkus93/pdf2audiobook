@@ -3,7 +3,12 @@
 import json
 import logging
 
-from pdf2audiobook.logging import EventFormatter, configure_logging, log_event
+from pdf2audiobook.logging import (
+    EventFormatter,
+    configure_from_settings,
+    configure_logging,
+    log_event,
+)
 
 
 def test_allowlisted_fields_and_event():
@@ -52,3 +57,22 @@ def test_debug_events_and_quiet_mode(capsys):
     log_event("command_started", command="analyze")
     assert capsys.readouterr().err == ""
     configure_logging()
+
+
+def test_settings_log_level_controls_event_visibility(capsys):
+    configure_logging()
+    configure_from_settings("WARNING", cache_directory_configured=False)
+    log_event("progress", level=logging.INFO, stage="analysis")
+    log_event("degraded", level=logging.WARNING, status="fallback")
+    log_event("command_failed", level=logging.ERROR, error_code=5)
+    lines = capsys.readouterr().err.splitlines()
+    assert [json.loads(line)["level"] for line in lines] == ["warning", "error"]
+
+
+def test_quiet_level_keeps_errors_and_suppresses_warnings(capsys):
+    configure_logging(quiet=True)
+    log_event("degraded", level=logging.WARNING, status="fallback")
+    log_event("command_failed", level=logging.ERROR, error_code=5)
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["level"] == "error"

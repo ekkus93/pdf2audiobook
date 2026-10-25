@@ -197,9 +197,9 @@ Selecting openai does not automatically permit uploading book text: require --al
 
 ## 7. Configuration
 
-Default config path: ~/.config/pdf2audiobook/config.toml on Unix; platform-appropriate user configuration directory elsewhere. Search optional project config only when explicitly supplied via --config, to avoid surprising uploads/settings. Resolve relative output paths from the process working directory; relative paths in explicit config should be documented and tested.
+Default config path: `~/.config/pdf2audiobook/config.toml` on Unix; platform-appropriate user configuration directory elsewhere. Empty or relative `XDG_CONFIG_HOME` is ignored. Search optional project config only when explicitly supplied via `--config`, to avoid surprising uploads/settings. Resolve all relative output paths from the process working directory, including values from explicit config.
 
-Resolution (highest wins): **explicit CLI option > PDF2AUDIOBOOK_* environment setting > user TOML > built-in defaults**. Credentials are *only* taken from environment variables or an OS credential mechanism, never printed by config show. All CLI boolean switches need positive/negative forms and a way to distinguish unset from explicit false. Support --config FILE, --no-config, and config show --sources with secrets redacted.
+Resolution (highest wins): **explicit CLI option > PDF2AUDIOBOOK_* environment setting > user TOML > built-in defaults**. Environment values are parsed by field type: strings stay strings, booleans accept true/false, 1/0 or yes/no, numeric fields parse numbers, and only list/table values accept JSON. Generic TTS environment values apply to the selected provider; provider-specific values override them. Credentials are *only* taken from environment variables or an OS credential mechanism, never printed by config show. Boolean setting switches use paired positive/negative forms and preserve an unset state. Support `--config FILE`, `--no-config`, and `config show --sources` with secrets redacted.
 
 Example (models/voices are illustrative and must be checked against what is installed):
 
@@ -263,10 +263,9 @@ speed = 1.0
 
 [cache]
 enabled = true
-directory = "~/.cache/pdf2audiobook"
 ```
 
-Example environment names: PDF2AUDIOBOOK_LLM_PROVIDER, PDF2AUDIOBOOK_LLM_MODEL, PDF2AUDIOBOOK_LLM_URL, PDF2AUDIOBOOK_TTS_VOICE, and OPENAI_API_KEY. Document typed parsing of numbers/booleans and reject unknown configuration keys or unsupported combinations with actionable messages.
+Example environment names: `PDF2AUDIOBOOK_LLM_PROVIDER`, `PDF2AUDIOBOOK_LLM_MODEL`, `PDF2AUDIOBOOK_LLM_URL`, `PDF2AUDIOBOOK_TTS_PROVIDER`, `PDF2AUDIOBOOK_TTS_MODEL`, `PDF2AUDIOBOOK_TTS_VOICE`, `PDF2AUDIOBOOK_TTS_SPEED`, and `OPENAI_API_KEY`. Reject unknown configuration keys, non-table sections, and unsupported combinations with content-free actionable messages. Only MPEG-compatible sample rates are accepted. `cache.directory` is retained for compatibility, but ignored with a warning when explicitly set.
 
 ## 8. CLI contract
 
@@ -287,7 +286,7 @@ pdf2audiobook doctor
 pdf2audiobook config show --sources
 ```
 
-**analyze** performs extraction, OCR, cleanup and chapter plan generation without TTS; **inspect** prints metadata, chapter boundaries, confidence, warnings and coverage; **convert** reuses analysis and synthesizes; **doctor** checks FFmpeg/Tesseract/TTS/LLM connectivity and lists useful diagnostics. A loopback-only **review** UI lets users inspect and save validated chapter titles/boundaries, marking them manually approved. **batch** processes directories; **pack-m4b** packages chapter MP3s with navigation metadata. Provide --dry-run, --json for machine-readable reports, --verbose, --quiet, --force, --resume/--no-resume, --chapter N, --chapter-range A:B, --ocr auto|always|never, --ocr-language, --llm-provider, --llm-model, --llm-url, --tts-provider, --tts-model, --voice, --bitrate, --output and remote consent flags. Resolve the chapter-selection convention (human-friendly 1-based indices) consistently.
+**analyze** performs extraction, OCR, cleanup and chapter plan generation without TTS; **inspect** prints metadata, chapter boundaries, confidence, warnings and coverage; **convert** reuses analysis and synthesizes; **doctor** checks FFmpeg/Tesseract/TTS/LLM connectivity and lists useful diagnostics. A loopback-only **review** UI lets users inspect and save validated chapter titles/boundaries, marking them manually approved. **batch** processes directories and accepts the same provider/model/voice/speed/sample-rate/bitrate options as `convert`; explicit CLI values override per-book profiles, which override config. **pack-m4b** packages chapter MP3s with navigation metadata. Provide `--dry-run`, `--json`, `--verbose`, `--quiet`, `--force`, `--resume/--no-resume`, `--recursive/--no-recursive`, `--chapter N`, `--chapter-range A:B`, `--ocr auto|always|never`, `--ocr-language`, `--llm/--no-llm`, `--allow-remote-content/--no-allow-remote-content`, `--vision/--no-vision`, `--allow-single-chapter/--no-allow-single-chapter`, `--llm-provider`, `--llm-model`, `--llm-url`, `--tts-provider`, `--tts-model`, `--voice`, `--speed`, `--sample-rate`, `--bitrate`, `--output` and `--cover`. Boolean setting pairs default to unset so config and environment values remain effective unless a flag is supplied. Resolve the chapter-selection convention (human-friendly 1-based indices) consistently.
 
 The review UI validates the `Host` authority on every request against its bound loopback address and port before returning a page, token, or manifest data. A mismatch receives a generic 421 response. API GET requests reject a present mismatched `Origin`, and save requests require the matching origin and bearer token.
 
