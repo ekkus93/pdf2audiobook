@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX8 implementation complete except Piper-specific marker validation (deferred by user), exact-head CI, and final dependency re-check
+**Status:** FX8 implementation and exact-head CI complete except Piper-specific marker validation, deferred by user
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R63; R46–R63 and amendments in §8)
@@ -267,7 +267,7 @@ The second review of `7eb4d25..2904f19` found regressions, an existing test whos
 - [ ] FX8.19 Closure.
   - [x] FX8.19a Re-check each FX item unchecked in FX8.01, citing the FX8 task and its evidence. Re-check the original TODO items from FX8.01c only when every FX item they depend on is checked.
   - [x] FX8.19b Merge every remaining §8 parent-spec amendment, and update README.md and MAINTAINER_GUIDE.md for `--accept-review`, the `rejected` budget status, the `pack-m4b` cover behaviour and the page-number limitation.
-  - [ ] FX8.19c Final gate: `/verify` is green, with mypy on Python 3.11, 3.12 and 3.13; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; record the SHA and run ID below.
+  - [x] FX8.19c Final gate: `/verify` is green, with mypy on Python 3.11, 3.12 and 3.13; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; record the SHA and run ID below.
 
 **FX8 gate:**
 - the numbered-heading book yields its chapters;
@@ -305,3 +305,4 @@ The second review of `7eb4d25..2904f19` found regressions, an existing test whos
 | 2026-10-25 | 2904f1975ef131f11ed340264b0b8151e85101a9 | Second review of 7eb4d25..2904f19: FX8 phase and spec §8 (R46–R63) drafted; items to reopen listed in FX8.01 | Local gates green at 2904f19 (1192 passed, 1 skipped); CI green; regressions found by probes (numbered headings, tight folios, budgeted retries, pack-m4b freshness) | FX8.01–FX8.02a complete; implementation remains in progress |
 | 2026-10-25 | 2904f1975ef131f11ed340264b0b8151e85101a9 | FX8.01 reopened the second-review findings R46–R63 and reclassified affected FX0–FX7 evidence; FX8.02a restored the baseline tight-folio fixture at y=474 | The restored regression now fails on 2904f19: it removes no tight footer folios | FX8 implementation in progress |
 | 2026-10-25 | a176375 (review baseline source) | FX8.02b audit of changed existing test assertions and fixture inputs: schema v1→v2 edits follow FX0.03; blank-page raster edits preserve raster OCR/cache coverage while new image-free coverage was added; CLI error wording follows R2; config wording/import edits accompany typed config behavior; read-count +1 reflects voice-marker preflight; LLM wording/decision/context assertions follow R18/R20/R21; review UI voice assertion was an incomplete R10 check and FX8.02c will test the actual JS request; WAV cache identity follows FX6; PDF vector→raster fixture preserves raster OCR while vector behavior gets dedicated coverage. The scan fixture's y=500 edit had no justification and was restored to y=474. | Diff audit covered every changed file existing at 7eb4d25; new tests are additive. | FX8.02c regressions remain |
+| 2026-10-25 | 5c8eff7160f3f02506b7092ac75196860df6bc13 | FX8.02–FX8.18 and FX8.19a–b: second-review regressions, privacy, extraction/page numbering, damaged-source gates, budget accounting, packaging freshness, manifest edit protection, TTS robustness (Piper speaker-count validation remains user-deferred), logging, and docs | Local: Ruff, formatting, mypy (22 files), `uv lock --check`, wheel/sdist build, 1240 passed and 1 optional Kitten smoke skipped. Exact-head CI [40186391382](https://github.com/ekkus93/pdf2audiobook/actions/runs/40186391382) passed on Python 3.11–3.13, including wheel/sdist clean-environment smoke | Piper-specific speaker-count validation remains deferred under FX8.14c |
