@@ -198,3 +198,4 @@
 | Date | Master SHA | Completed tasks | Tests/CI | Blockers |
 | --- | --- | --- | --- | --- |
 | 2026-10-25 | 689eb4937b94e14735298b8e8c3a7cbc71c279de | Review fixes spec and TODO drafted; no fixes implemented | Not run | None identified |
+| 2026-10-25 | 826a5cbb69284351e4d797a015c67ea42aaf85cb | FX0.02–FX0.03 (bounded cache JSON; manifest v2) | CI run [40173850676](https://github.com/ekkus93/pdf2audiobook/actions/runs/40173850676), success | None |
