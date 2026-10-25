@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00 status correction complete; implementation and CI qualification are pending.
+**Status:** FX10.00 and FX10.01a–b complete; FX10.01c awaits hosted CI evidence.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -46,8 +46,8 @@
     - append a ledger row, plus a correction row saying the "worktree after 1664fdd" row's mypy count should be 19.
   - [x] FX10.00f Update both TODOs' status lines to point to this TODO.
 - [ ] FX10.01 Make CI show what ran (R111).
-  - [ ] FX10.01a Run `pytest -q -ra` in ci.yml. Install Node explicitly with a pinned major version, or document that the runner provides it.
-  - [ ] FX10.01b Add an assertion for `-ra` and the Node step to tests/test_ci_uv_pin.py (or a sibling). Update `/verify` and MAINTAINER_GUIDE.md.
+  - [x] FX10.01a Run `pytest -q -ra` in ci.yml. Install Node explicitly with a pinned major version, or document that the runner provides it.
+  - [x] FX10.01b Add an assertion for `-ra` and the Node step to tests/test_ci_uv_pin.py (or a sibling). Update `/verify` and MAINTAINER_GUIDE.md.
   - [ ] FX10.01c Record in the ledger the CI log lines showing the Tesseract, FFmpeg and Node tests ran.
 
 **Checkpoint:** the status record matches this review; CI evidence for gated tests can be checked.
@@ -275,3 +275,4 @@
 | --- | --- | --- | --- | --- |
 | 2026-10-25 | 6eedfa4c283e5eb54c4e17100e1d16c7be894949 | Fourth review of `0c19845..6eedfa4`: spec R80–R112 and FX10 drafted; no fixes implemented | Local at 6eedfa4: ruff, format, mypy (22 files) clean; 1331 passed, 32 skipped (FFmpeg, Tesseract and the Kitten extra absent locally). CI run 40214615871 succeeded | FX10.00 status correction pending |
 | 2026-10-25 | f3cb375c769d38f2a281bb592b539ed059aa104b | FX10.00: corrected previous-review and original TODO statuses; added fourth-review spec and task plan; corrected the historical CI and mypy ledger notes. | Docs-only commit; `git diff --cached --check` passed; no code tests required. | FX10.01 CI skip-summary verification remains |
+| 2026-10-25 | d9adb61f3a0b74ba81a98590f10e8a9535bf1427 | FX10.01a–b: CI prints pytest skip reasons and explicitly installs Node.js 22; `/verify`, AGENTS.md and MAINTAINER_GUIDE.md updated. At parent 6eedfa4, `test_ci_prints_pytest_skip_reasons` and `test_ci_installs_a_pinned_node_major_for_script_tests` failed as expected. | Local gates: uv lock check, Ruff, formatting, mypy (22 files), 1333 passed and 32 skipped with `pytest -q -ra`. FFmpeg and Tesseract are unavailable locally. | FX10.01c needs exact-head CI logs showing the FFmpeg, Tesseract and Node tests ran |
