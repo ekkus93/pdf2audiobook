@@ -42,6 +42,7 @@ files = [
     "src/pdf2audiobook/models.py",
     "src/pdf2audiobook/errors.py",
     "src/pdf2audiobook/workspace.py",
+    "src/pdf2audiobook/jsonio.py",
     "src/pdf2audiobook/logging.py",
     "src/pdf2audiobook/config.py",
     "src/pdf2audiobook/reading_order.py",

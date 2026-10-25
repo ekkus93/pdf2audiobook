@@ -22,6 +22,7 @@ from pdf2audiobook.workspace import digest_bytes
         "42",
         "{broken json",
         '{"padding":"' + "x" * 5000 + '"}',
+        "[" * 100_000,
     ],
 )
 def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
@@ -44,6 +45,7 @@ def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
         confidence=1.0,
     )
     manifest = BookManifest(
+        schema_version=2,
         input_sha256="synthetic-sha",
         title="Synthetic Book",
         source_path=str(source),

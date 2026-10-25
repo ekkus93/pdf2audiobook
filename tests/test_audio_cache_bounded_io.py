@@ -78,6 +78,15 @@ def test_oversized_wav_is_rejected_before_cache_replay(monkeypatch, tmp_path):
     assert voice.calls == 2
 
 
+def test_deeply_nested_wav_metadata_is_a_miss_and_regenerates(tmp_path):
+    voice = StubVoice()
+    _synthesize(tmp_path, voice)
+    metadata = next(tmp_path.glob("*.meta.json"))
+    metadata.write_bytes(b"[" * 100_000)
+    _synthesize(tmp_path, voice)
+    assert voice.calls == 2
+
+
 def test_generated_chunk_exceeding_cache_bound_fails_with_progress(monkeypatch, tmp_path):
     monkeypatch.setattr("pdf2audiobook.audio._MAX_CACHED_WAV_BYTES", 256)
     voice = StubVoice(size=200)

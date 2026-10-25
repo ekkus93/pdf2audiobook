@@ -217,6 +217,9 @@ The analysis directory is
 Inspect `manifest.json`, `coverage.json`, warnings and chapter text against
 the original PDF before listening or distributing. The schema currently
 **rejects** unsupported versions; it does not auto-migrate manifests.
+Manifest schema v2 is required after the review-fixes release. Existing v1
+workspaces are intentionally rejected; re-run `analyze` with a fresh output
+directory to create a v2 workspace.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can

@@ -27,6 +27,7 @@ def _setup_conversion(tmp_path, monkeypatch, chapter_texts):
         for index in range(1, len(chapter_texts) + 1)
     ]
     manifest = BookManifest(
+        schema_version=2,
         input_sha256="synthetic",
         title="Synthetic book",
         source_path=str(source),

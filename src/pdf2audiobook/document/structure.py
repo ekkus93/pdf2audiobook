@@ -14,7 +14,13 @@ from pathlib import Path
 from pdf2audiobook.config import Chapters as ChapterSettings
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ExtractionError
-from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, DocumentBlock
+from pdf2audiobook.models import (
+    BookManifest,
+    Chapter,
+    CleanupEdit,
+    DocumentBlock,
+    generated_chapter_fingerprint,
+)
 
 # "Chapter" including common scan misreadings (CHAPTEE, CHAPTEK, CIIAPTER).
 CHAPTER_WORD = r"c(?:h|ii|li)apte[rek]"
@@ -980,17 +986,19 @@ def propose_chapters(
             name = "Full Book"
             confidence = 0.5
             evidence = ["explicit single chapter override"]
-        chapters.append(
-            Chapter(
-                id=f"c{number:04d}",
-                number=number,
-                title=name,
-                start_block=0 if number == 1 else start,
-                end_block=end,
-                confidence=confidence,
-                evidence=evidence,
-            )
+        chapter = Chapter(
+            id=f"c{number:04d}",
+            number=number,
+            title=name,
+            start_block=0 if number == 1 else start,
+            end_block=end,
+            confidence=confidence,
+            evidence=evidence,
         )
+        if confidence < 0.85:
+            chapter.warnings.append("Chapter boundary has low confidence; verify manually")
+        chapter.generated_fingerprint = generated_chapter_fingerprint(chapter)
+        chapters.append(chapter)
     return chapters, warnings
 
 

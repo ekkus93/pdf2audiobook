@@ -14,6 +14,8 @@ from pdf2audiobook.workspace import read_manifest, write_manifest
     [
         b'{"title":"PRIVATE_BOOK_TEXT", bad-json',
         b'{"schema_version":99,"input_sha256":"abc","title":"PRIVATE_BOOK_TEXT","source_path":"private.pdf"}',
+        b'{"schema_version":1,"input_sha256":"abc","title":"PRIVATE_BOOK_TEXT","source_path":"private.pdf"}',
+        b'{"input_sha256":"abc","title":"PRIVATE_BOOK_TEXT","source_path":"private.pdf"}',
         b'{"title":"PRIVATE_BOOK_TEXT","source_path":"private.pdf","chapters":[{"id":"chapter","number":0,"title":"PRIVATE_BOOK_TEXT","start_block":0,"end_block":1,"confidence":1.0}]}',
         b"\\xff\\xfePRIVATE_BOOK_TEXT",
     ],
@@ -44,7 +46,7 @@ def test_missing_manifest_does_not_leak_path(tmp_path):
 def test_valid_manifest_round_trip_is_unchanged(tmp_path):
     path = tmp_path / "manifest.json"
     manifest = BookManifest(
-        input_sha256="a" * 64, title="Ordinary book", source_path="ordinary.pdf"
+        schema_version=2, input_sha256="a" * 64, title="Ordinary book", source_path="ordinary.pdf"
     )
     write_manifest(path, manifest)
     assert read_manifest(path) == manifest

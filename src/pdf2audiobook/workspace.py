@@ -59,7 +59,9 @@ def read_manifest(path: Path) -> BookManifest:
         # Pydantic diagnostics can include untrusted field values and input
         # fragments; filesystem exceptions may contain private workspace paths.
         # Preserve the existing manifest for user recovery on read failures.
-        raise ExtractionError("Cannot read or validate audiobook manifest") from None
+        raise ExtractionError(
+            "Cannot read or validate audiobook manifest; re-run analyze with a new output directory"
+        ) from None
 
 
 def write_manifest(path: Path, manifest: BookManifest) -> None:

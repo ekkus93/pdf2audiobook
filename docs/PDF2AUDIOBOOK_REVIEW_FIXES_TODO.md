@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** Not started
+**Status:** FX0 complete; FX1 implementation in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -18,18 +18,18 @@
 
 ## Phase FX0 — Foundations and honest status
 
-- [ ] FX0.01 Record the review's findings in docs/PDF2AUDIOBOOK_TODO.md (R45).
-  - [ ] FX0.01a Uncheck the items found wrong (P1.04c, P4.03c, F.05) and the partial items listed in spec §5. Add a progress-ledger row citing this review and the baseline SHA.
-  - [ ] FX0.01b Remove the stale P0.01d note ("Retain P0.01b open…"). Annotate P5.05 so its open live-acceptance subitems are visible. Update P5.10's "mypy (19 modules)" to the current count.
-- [ ] FX0.02 Add a shared bounded JSON loader (R23).
-  - [ ] FX0.02a Add `src/pdf2audiobook/jsonio.py` with `load_bounded_json(path, *, max_bytes, max_depth)`. It caps bytes read, checks depth without recursion before decoding, rejects NaN/Infinity, and returns `None` for anything malformed. Add the module to the mypy list.
-  - [ ] FX0.02b Move `_bounded_cache_json_structure` out of llm/cache.py, and use the loader in the LLM cache, the OCR cache (pdf.py), MP3 sidecars (pipeline.py) and the WAV chunk cache metadata.
-  - [ ] FX0.02c Regression tests: a `b"[" * 100000` entry in each of those four caches is a miss and gets regenerated, with no `RecursionError`.
-- [ ] FX0.03 Add manifest schema v2 (R12; this is the manifest bump in spec §3).
-  - [ ] FX0.03a Make `schema_version` required, and accept only 2. Add `Chapter.generated_fingerprint` and `Chapter.warnings`.
-  - [ ] FX0.03b Make analysis fill in `generated_fingerprint` and attach boundary-specific warnings to their chapter.
-  - [ ] FX0.03c Tests: a manifest with no version, or with v1, is rejected with a content-free message; per-chapter warnings round-trip; boundary warnings land on the right chapter.
-  - [ ] FX0.03d Add the MAINTAINER_GUIDE upgrade note ("re-run analyze").
+- [x] FX0.01 Record the review's findings in docs/PDF2AUDIOBOOK_TODO.md (R45).
+  - [x] FX0.01a Reopen items found wrong or partial in spec §5; add a ledger row citing review spec and baseline SHA.
+  - [x] FX0.01b Remove stale P0.01d text, annotate P5.05's deferred live checks, and correct the prior mypy module count.
+- [x] FX0.02 Add a shared bounded JSON loader (R23).
+  - [x] FX0.02a Add `src/pdf2audiobook/jsonio.py` with bounded byte reads, non-recursive nesting checks, nonfinite-number rejection and malformed-cache misses; add it to mypy.
+  - [x] FX0.02b Use it in LLM, OCR and MP3 caches and add bounded JSON metadata for WAV chunks; move the in-memory depth check into jsonio.
+  - [x] FX0.02c Deeply nested entries in all four caches miss and regenerate without `RecursionError`.
+- [x] FX0.03 Add manifest schema v2 (R12; this is the manifest bump in spec §3).
+  - [x] FX0.03a Require `schema_version=2`; add `Chapter.generated_fingerprint` and `Chapter.warnings`.
+  - [x] FX0.03b Analysis fingerprints generated chapter title/ranges/voice and stores low-confidence boundary warnings on the affected chapter.
+  - [x] FX0.03c Missing/v1 manifests fail content-free; per-chapter warnings round-trip and structure tests verify boundary warnings are attached.
+  - [x] FX0.03d Add the MAINTAINER_GUIDE upgrade note: v1 workspaces require re-analysis in a fresh output directory.
 
 **FX0 gate:** the original TODO shows its true status; every JSON cache read goes through the bounded loader; the v2 manifest is in place.
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 import os
 import re
@@ -21,6 +20,7 @@ import pymupdf
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.document.structure import CHAPTER_WORD
 from pdf2audiobook.errors import ExtractionError, InputError
+from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.reading_order import merge_line_fragments, order_two_columns
 from pdf2audiobook.special_material import (
@@ -793,16 +793,10 @@ def _cached_ocr_lines(
     )
     target = cache_dir / (key + ".json")
     if target.is_file():
-        try:
-            # Avoid reading arbitrarily large or attacker-modified cache entries.
-            if target.stat().st_size > 32 * 1024 * 1024:
-                raise ValueError("oversized OCR cache")
-            parsed = json.loads(target.read_text(encoding="utf-8"))
-            cached_lines = _valid_cached_lines(parsed)
-            if cached_lines:
-                return cached_lines
-        except (OSError, UnicodeError, ValueError, TypeError):
-            pass
+        parsed = load_bounded_json(target, max_bytes=32 * 1024 * 1024, max_depth=64)
+        cached_lines = _valid_cached_lines(parsed)
+        if cached_lines:
+            return cached_lines
     lines = _ocr_page_lines(page, settings)
     verified = _valid_cached_lines({"schema_version": 1, "lines": lines})
     # Invalid fresh OCR must not silently enter the transcript or poison

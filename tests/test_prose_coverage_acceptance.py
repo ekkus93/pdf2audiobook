@@ -34,6 +34,7 @@ def book():
         Chapter(id="c2", number=2, title="Second", start_block=2, end_block=5, confidence=0.99),
     ]
     return BookManifest(
+        schema_version=2,
         input_sha256="1" * 64,
         title="Synthetic",
         source_path="synthetic.pdf",

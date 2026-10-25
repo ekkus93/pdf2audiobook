@@ -11,6 +11,7 @@ PRIVATE = "SYNTHETIC_PRIVATE_MANIFEST_IDENTIFIER_642"
 
 def _manifest() -> BookManifest:
     return BookManifest(
+        schema_version=2,
         input_sha256="a" * 64,
         title="Synthetic",
         source_path="fixture.pdf",

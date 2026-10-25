@@ -43,6 +43,7 @@ def _manifest():
     from pdf2audiobook.models import BookManifest
 
     return BookManifest(
+        schema_version=2,
         input_sha256="0" * 64,
         title="Synthetic",
         source_path="synthetic.pdf",

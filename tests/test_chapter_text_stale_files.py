@@ -21,6 +21,7 @@ def _manifest(count: int) -> BookManifest:
         for n in range(count)
     ]
     return BookManifest(
+        schema_version=2,
         input_sha256="synthetic",
         title="Synthetic",
         source_path="synthetic.pdf",

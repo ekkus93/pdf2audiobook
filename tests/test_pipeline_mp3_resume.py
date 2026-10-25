@@ -12,7 +12,11 @@ from pdf2audiobook.models import BookManifest, Chapter
 def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
     chapter = Chapter(id="c1", number=1, title="First", start_block=0, end_block=1, confidence=1)
     manifest = BookManifest(
-        input_sha256="a" * 64, title="Book", source_path="book.pdf", chapters=[chapter]
+        schema_version=2,
+        input_sha256="a" * 64,
+        title="Book",
+        source_path="book.pdf",
+        chapters=[chapter],
     )
     path = tmp_path / "manifest.json"
     settings = Settings()

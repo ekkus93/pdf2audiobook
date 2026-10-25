@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -56,6 +58,8 @@ class Chapter(StrictModel):
     evidence: list[str] = Field(default_factory=list)
     manually_approved: bool = False
     voice_id: str | None = None
+    generated_fingerprint: str | None = None
+    warnings: list[str] = Field(default_factory=list)
 
     @field_validator("voice_id")
     @classmethod
@@ -81,7 +85,7 @@ class NarrationChunk(StrictModel):
 
 
 class BookManifest(StrictModel):
-    schema_version: int = 1
+    schema_version: Literal[2]
     input_sha256: str
     title: str
     author: str | None = None
@@ -95,8 +99,12 @@ class BookManifest(StrictModel):
     approved: bool = False
     analysis_fingerprint: str | None = None
 
-    @model_validator(mode="after")
-    def check_version(self) -> "BookManifest":
-        if self.schema_version != 1:
-            raise ValueError("unsupported manifest schema version")
-        return self
+
+def generated_chapter_fingerprint(chapter: Chapter) -> str:
+    """Hash analysis-generated chapter identity fields for edit detection."""
+    payload = json.dumps(
+        [chapter.title, chapter.start_block, chapter.end_block, chapter.voice_id],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()

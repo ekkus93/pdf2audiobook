@@ -50,6 +50,16 @@ def test_corruption_and_forged_fingerprint_cause_regeneration(tmp_path):
     assert provider.calls == 3
 
 
+def test_deeply_nested_cache_is_a_miss_and_regenerates(tmp_path):
+    provider = Stub()
+    worker = CachedLLMProvider(provider, cache_dir=tmp_path, identity="model")
+    worker.complete_json(instructions="prompt", document_text="source")
+    path = next(tmp_path.glob("*.json"))
+    path.write_bytes(b"[" * 100_000)
+    worker.complete_json(instructions="prompt", document_text="source")
+    assert provider.calls == 2
+
+
 def test_disabled_cache_and_failed_response_are_not_persisted(tmp_path):
     provider = Stub()
     worker = CachedLLMProvider(

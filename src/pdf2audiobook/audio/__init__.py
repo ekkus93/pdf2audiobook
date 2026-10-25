@@ -19,6 +19,7 @@ from mutagen.mp3 import MP3
 from mutagen.mp4 import MP4
 
 from pdf2audiobook.errors import AudioError
+from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.tts import TTSProvider
 from pdf2audiobook.workspace import atomic_write, digest_bytes, fingerprint, write_json
@@ -318,10 +319,16 @@ def synthesize_chunks(
     ):
         chunk_path = cache / f"{identity}.wav"
         checksum_path = chunk_path.with_suffix(".sha256")
+        metadata_path = chunk_path.with_suffix(".meta.json")
         audio = None
         checksum = None
         encoded_size = None
-        if use_cache and chunk_path.is_file() and checksum_path.is_file():
+        if (
+            use_cache
+            and chunk_path.is_file()
+            and checksum_path.is_file()
+            and metadata_path.is_file()
+        ):
             try:
                 # Check file size before loading untrusted cache bytes into RAM.
                 if chunk_path.stat().st_size > _MAX_CACHED_WAV_BYTES:
@@ -337,8 +344,16 @@ def synthesize_chunks(
                     saved_digest = checksum_stream.read(66)
                 if len(saved_digest) > 65:
                     raise AudioError("Cached WAV checksum sidecar is oversized")
+                metadata = load_bounded_json(metadata_path, max_bytes=1024, max_depth=4)
                 candidate = digest_bytes(cached_bytes)
-                if candidate.encode("ascii") == saved_digest.strip():
+                if (
+                    isinstance(metadata, dict)
+                    and metadata.get("schema_version") == 1
+                    and metadata.get("sha256") == candidate
+                    and metadata.get("bytes") == len(cached_bytes)
+                    and metadata.get("sample_rate") == rate
+                    and candidate.encode("ascii") == saved_digest.strip()
+                ):
                     audio = read_wav(cached_bytes, rate)
                     checksum = candidate
                     encoded_size = len(cached_bytes)
@@ -366,6 +381,15 @@ def synthesize_chunks(
                 checksum = digest_bytes(encoded)
                 atomic_write(chunk_path, encoded)
                 atomic_write(checksum_path, (checksum + "\n").encode())
+                write_json(
+                    metadata_path,
+                    {
+                        "schema_version": 1,
+                        "sha256": checksum,
+                        "bytes": len(encoded),
+                        "sample_rate": rate,
+                    },
+                )
                 encoded_size = len(encoded)
             except Exception:
                 progress["chunks"][idx]["status"] = "failed"

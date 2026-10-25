@@ -1,12 +1,11 @@
 """Atomic content-addressed cache for LLM JSON responses (always revalidated by callers)."""
 
-import json
-import math
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
 from pdf2audiobook.errors import LLMError
+from pdf2audiobook.jsonio import json_within_depth, load_bounded_json
 from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 from pdf2audiobook.workspace import digest_bytes, fingerprint, write_json
 
@@ -14,31 +13,6 @@ from pdf2audiobook.workspace import digest_bytes, fingerprint, write_json
 # matches. Bound the read independently of an earlier stat() to handle races.
 _MAX_CACHED_LLM_JSON_BYTES = 2 * 1024 * 1024
 _MAX_CACHED_LLM_JSON_DEPTH = 64
-
-
-def _bounded_cache_json_structure(value: Any) -> bool:
-    """Check nested containers iteratively: CPython JSON may accept very deep input."""
-    pending = [(value, 0)]
-    while pending:
-        item, depth = pending.pop()
-        if not isinstance(item, (dict, list)):
-            continue
-        if depth >= _MAX_CACHED_LLM_JSON_DEPTH:
-            return False
-        children = item.values() if isinstance(item, dict) else item
-        pending.extend((child, depth + 1) for child in children)
-    return True
-
-
-def _reject_nonstandard_json_constant(_value: str) -> None:
-    raise ValueError("Nonstandard JSON numeric constant")
-
-
-def _finite_json_float(value: str) -> float:
-    number = float(value)
-    if not math.isfinite(number):
-        raise ValueError("Nonfinite JSON number")
-    return number
 
 
 class CachedLLMProvider:
@@ -210,32 +184,20 @@ class CachedLLMProvider:
             )
         target = self.cache_dir / f"{key}.json"
         if self.enabled:
-            try:
-                if target.is_file():
-                    # A cache entry may grow between stat and read; enforce the
-                    # byte ceiling on the actual read, not only filesystem metadata.
-                    with target.open("rb") as cached:
-                        payload = cached.read(_MAX_CACHED_LLM_JSON_BYTES + 1)
-                    if len(payload) > _MAX_CACHED_LLM_JSON_BYTES:
-                        raise ValueError("oversized LLM cache")
-                    entry = json.loads(
-                        payload,
-                        parse_constant=_reject_nonstandard_json_constant,
-                        parse_float=_finite_json_float,
-                    )
-                    if (
-                        isinstance(entry, dict)
-                        and entry.get("schema_version") == 1
-                        and entry.get("fingerprint") == key
-                        and isinstance(entry.get("response"), dict)
-                        and _bounded_cache_json_structure(entry)
-                    ):
-                        self.hits += 1
-                        self._write_usage()
-                        return entry["response"]
-            except (OSError, ValueError, UnicodeError, TypeError, RecursionError):
-                # Corrupt, hostile or inaccessible cache files are cache misses.
-                pass
+            entry = load_bounded_json(
+                target,
+                max_bytes=_MAX_CACHED_LLM_JSON_BYTES,
+                max_depth=_MAX_CACHED_LLM_JSON_DEPTH,
+            )
+            if (
+                isinstance(entry, dict)
+                and entry.get("schema_version") == 1
+                and entry.get("fingerprint") == key
+                and isinstance(entry.get("response"), dict)
+            ):
+                self.hits += 1
+                self._write_usage()
+                return entry["response"]
         self.misses += 1
         # Server-side limits need the server, so check them only on a miss:
         # a fully cached rerun must not require a running provider.
@@ -305,7 +267,7 @@ class CachedLLMProvider:
             self._write_usage()
         if not isinstance(reply, dict):
             raise ValueError("LLM cache requires a JSON-object response")
-        if not _bounded_cache_json_structure(reply):
+        if not json_within_depth(reply, _MAX_CACHED_LLM_JSON_DEPTH):
             raise LLMError("LLM response exceeds supported JSON nesting depth")
         if self.ledger is not None:
             self.ledger.check_spend(

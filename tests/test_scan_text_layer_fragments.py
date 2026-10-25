@@ -80,6 +80,7 @@ def test_fragmented_pdf_lines_become_one_block_with_every_span(tmp_path):
         "here.",
     ]
     manifest = BookManifest(
+        schema_version=2,
         input_sha256="0" * 64,
         title="t",
         source_path="fragments.pdf",

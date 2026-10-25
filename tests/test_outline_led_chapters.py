@@ -66,6 +66,10 @@ def test_without_outline_typography_still_finds_headings():
     chapters, _ = propose_chapters(blocks, set(), [], Chapters())
     assert [c.title for c in chapters] == ["The Opening", "The Ending"]
     assert all(c.confidence == 0.82 for c in chapters)
+    assert all(
+        c.warnings == ["Chapter boundary has low confidence; verify manually"] for c in chapters
+    )
+    assert all(c.generated_fingerprint for c in chapters)
 
 
 def test_wrapped_large_font_lines_are_not_typographic_headings():

@@ -14,6 +14,7 @@ from pdf2audiobook.document.structure import (
     render_chapter_texts,
 )
 from pdf2audiobook.errors import AudioError, LLMError
+from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.llm import (
     CleanupDecision,
     create_provider,
@@ -343,6 +344,7 @@ def analyze_book(
     if settings.llm.enabled and not settings.llm.structure:
         warnings.append("LLM structure analysis disabled in settings")
     manifest = BookManifest(
+        schema_version=2,
         input_sha256=book_hash,
         title=extracted.title,
         author=extracted.author,
@@ -482,17 +484,13 @@ def convert_book(
             cache_files_ready = False
         if cache_files_ready:
             try:
-                import json
-
                 from mutagen import MutagenError
                 from mutagen.easyid3 import EasyID3
                 from mutagen.mp3 import MP3
 
                 # A cache sidecar is tiny (three scalar fields). Never parse
                 # an unbounded or non-object JSON document from disk.
-                with record.open("rb") as sidecar:
-                    raw_metadata = sidecar.read(4097)
-                metadata = json.loads(raw_metadata) if len(raw_metadata) <= 4096 else None
+                metadata = load_bounded_json(record, max_bytes=4096, max_depth=8)
                 cached = (
                     isinstance(metadata, dict)
                     and metadata.get("fingerprint") == identity

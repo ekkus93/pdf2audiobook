@@ -96,6 +96,19 @@ def test_ocr_cache_invalidation_and_corruption(monkeypatch, tmp_path: Path):
     assert len(calls) == 8
 
 
+def test_deeply_nested_ocr_cache_is_a_miss_and_regenerates(monkeypatch, tmp_path: Path):
+    source = tmp_path / "book.pdf"
+    make_pdf(source)
+    calls = []
+    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", ocr_stub(calls))
+    cache = tmp_path / "ocr"
+    extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
+    entry = next(cache.glob("*.json"))
+    entry.write_bytes(b"[" * 100_000)
+    extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
+    assert calls == [(0, "eng", 300), (0, "eng", 300)]
+
+
 def test_empty_ocr_is_retried_not_cached(monkeypatch, tmp_path: Path):
     source = tmp_path / "blank-scan.pdf"
     make_pdf(source)
