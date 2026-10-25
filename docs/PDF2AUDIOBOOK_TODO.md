@@ -1,6 +1,6 @@
 # PDF2Audiobook — Implementation TODO
 
-**Status:** Core implementation in place; speaker segmentation and external acceptance pending
+**Status:** Core implementation and explicit speaker markers are in place; external acceptance pending
 **Date:** 2026-10-24
 **Specification:** docs/PDF2AUDIOBOOK_SPEC.md  
 **Target:** Python CLI, chapter MP3s, Kitten TTS, optional OpenAI/Ollama/llama-server intelligence.
@@ -135,9 +135,9 @@
 - [x] P5.07 Stress-test long books, retries, partial failures, invalid PDFs and clean restart.
 - [x] P5.08 Document install, Tesseract language packs, FFmpeg, Kitten model setup, OpenAI/Ollama/llama-server setup, config samples, privacy and troubleshooting.
 - [x] P5.09 Add complete CLI usage examples, development workflow and maintainer architecture notes.
-- [x] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps.
+- [ ] P5.10 Run lint, types, unit/integration and exact-head CI; record SHA/test evidence and unresolved external acceptance gaps.
   - [x] Local Ruff, repository formatting check, mypy (19 modules), full pytest suite (1011 tests), uv lock check, CLI doctor/help, and wheel/sdist build.
-  - [x] Exact-head Python CI for implementation commit 9bd8fc12b0a71dca04a01313e66d0d91d833df2b passed on Python 3.11, 3.12 and 3.13 (run 40160316883).
+  - [ ] Exact-head Python CI for the updated implementation commit will run on push.
 
 **M5 gate:** all ten release acceptance criteria in the spec pass, with evidence; no unchecked implementation-critical subtasks.
 
@@ -151,7 +151,7 @@
 - [ ] F.06 Multi-speaker narration and pronunciation dictionaries.
   - [x] Add a validated single-token pronunciation dictionary applied to TTS chunks while preserving original chapter text and source ranges.
   - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity.
-  - [ ] Add within-chapter dialogue speaker changes (marker/assignment format awaiting user preference; I asked whether you prefer explicit markers or reviewed LLM proposals).
+  - [x] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech and preserved in source ranges; markers are deterministic and require no LLM calls.
 
 ## Progress ledger
 
@@ -429,4 +429,5 @@
 | 2026-10-24 | worktree after 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | F.03/F.04: added `batch` PDF directory conversion with opt-in recursion and exact-stem TTS profiles; added EPUB support through inspection, OCR selection, source spans and standard analysis outputs (reflowable page warning); added `pack-m4b` AAC packaging with title/author tags and chapter navigation. | New batch/profile, EPUB and FFmpeg M4B tests passed (8); changed Python passes Ruff and format checks. | EPUB page numbers are renderer-dependent; M4B uses AAC re-encoding and currently requires completed per-chapter MP3s. |
 | 2026-10-24 | worktree after 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | F.02: added opt-in visual page analysis with image/vector/two-column candidate selection, 12-page and 4 MiB PNG bounds, review-only schema, image-digest cache identity, and remote-consent enforcement through the existing provider boundary. Synthetic pipeline test confirms source chapter text is unchanged. Live local Ollama vision analysis on a generated triangle page returned one figure review. | Offline vision tests passed (4); live qwen35-128k run completed against only a synthetic PDF page. | Vision descriptions remain model suggestions requiring human review; scan/image behavior across varied books is not yet human-qualified. |
 | 2026-10-24 | worktree after 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | F.06 partial: added case-insensitive, single-token pronunciation replacements applied only to speakable chunks while preserving original source ranges; review UI now assigns a TTS voice per chapter and voice changes invalidate audio. F.01–F.05 implementation additions and synthetic review coverage are recorded above. | Exact local checks passed: Ruff, formatting, mypy (19 modules), `uv lock --check`, CLI doctor/help, wheel/sdist build, and 1011 pytest tests. | Within-chapter speaker attribution needs user preference on explicit markers vs reviewed LLM assignments; live llama-server/OpenAI and real Piper/Kitten listening acceptance remain unavailable. |
-| 2026-10-24 | 9bd8fc12b0a71dca04a01313e66d0d91d833df2b | P5.10: completed the exact-head release validation record; the implementation commit passed CI across Python 3.11/3.12/3.13. | GitHub Actions run 40160316883 passed: Ruff, format, mypy/schema, full unit suite, CLI smoke and built wheel/sdist smoke; local pytest passed 1011 tests. | llama-server is unavailable; OpenAI needs credentials and explicit remote-content consent; actual Piper/Kitten voice listening and within-chapter speaker attribution remain outstanding. |
+| 2026-10-24 | 9bd8fc12b0a71dca04a01313e66d0d91d833df2b | P5.10 validation before within-chapter voice-marker addition; implementation passed CI across Python 3.11/3.12/3.13. | GitHub Actions run 40160316883 passed: Ruff, format, mypy/schema, full unit suite, CLI smoke and built wheel/sdist smoke; local pytest passed 1011 tests. | Run exact-head CI after speaker-marker implementation is committed. |
+| 2026-10-24 | worktree after 08cfbfe | F.06: completed multi-speaker narration with paragraph-level `[[voice:VOICE_ID]]` markers in approved chapter text; markers are omitted from speech, alter per-chunk cache identity, and retain original source offsets. Documented marker format and validation boundaries. | Ruff, format, mypy and full pytest passed (1013 tests); new tests cover voice routing, original source ranges and invalid marker boundaries. | Exact-head CI pending; live llama-server/OpenAI acceptance and actual Piper/Kitten voice listening remain unavailable. |

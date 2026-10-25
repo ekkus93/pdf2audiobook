@@ -57,6 +57,18 @@ speed = 1.05
 
 Pronunciation replacements apply only to speech output; they must be a single token. Source chapter text remains unchanged and progress ranges still point to the original words.
 
+For dialogue, edit an approved chapter text file and put `[[voice:VOICE_ID]]` on its own line between blank lines before the paragraph that voice should narrate. For example:
+
+~~~text
+The narrator introduces the scene.
+
+[[voice:OtherVoice]]
+
+“We should leave,” she said.
+~~~
+
+The marker is omitted from speech; that voice continues until another marker or the end of the chapter. The chapter's configured voice is used before the first marker. Markers require blank-line paragraph boundaries, and their source offsets remain in the narration progress record.
+
 After converting all chapters, package them as a single AAC audiobook with chapter navigation:
 
 ~~~bash
@@ -69,7 +81,7 @@ Open a local browser editor for chapter titles and boundaries with:
 uv run pdf2audiobook review ./audiobooks/BOOK/manifest.json
 ~~~
 
-The review server binds only to loopback, requires a per-run token for manifest data, and marks saved chapter boundaries as manually approved. It also accepts an optional TTS voice ID per chapter; each chapter remains a single voice.
+The review server binds only to loopback, requires a per-run token for manifest data, and marks saved chapter boundaries as manually approved. It also accepts an optional TTS voice ID per chapter; paragraph-level voice markers in the approved chapter text can override it for dialogue.
 
 **Lockfile:** The generated `uv.lock` is committed and pins the project's declared default, `dev`, and optional `kitten` dependency graphs. For reproducible development installs, run `uv sync --locked --extra dev`; for the heavyweight voice extra, run `uv sync --locked --extra kitten --extra dev`. Regenerate the lockfile deliberately with `uv lock` when changing dependencies and review the resulting diff. **CI verifies `uv lock --check` and installs development dependencies using `uv sync --locked --extra dev`** on Python 3.11, 3.12 and 3.13; the optional Kitten model remains an explicit heavyweight, environment-dependent acceptance gate.
 

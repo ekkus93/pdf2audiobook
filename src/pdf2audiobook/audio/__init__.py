@@ -49,6 +49,9 @@ class _SynthesisProgress(TypedDict):
 # indentation between them. The same rule controls chunking and source spans.
 _PARAGRAPH_BREAK = re.compile(r"(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)+")
 _PRONUNCIATION_TOKEN = re.compile(r"(?P<prefix>\W*)(?P<word>\w+(?:['’\-]\w+)*)(?P<suffix>\W*)")
+_VOICE_MARKER = re.compile(
+    r"(?m)^\[\[voice:([A-Za-z0-9][A-Za-z0-9_.-]{0,127})\]\][ \t]*(?:\r?\n|$)"
+)
 
 
 # Short TTS chunks must never require a 128 MiB WAV cache entry.
@@ -68,6 +71,27 @@ def _spoken_token(token: str, pronunciations: Mapping[str, str] | None = None) -
     elif word.istitle():
         spoken = spoken.capitalize()
     return f"{match.group('prefix')}{spoken}{match.group('suffix')}"
+
+
+def _voice_markers(text: str, default_voice: str) -> tuple[str, list[tuple[int, str]]]:
+    """Mask paragraph-level ``[[voice:ID]]`` markers and return source offsets."""
+    changes: list[tuple[int, str]] = []
+    masked = list(text)
+    for match in _VOICE_MARKER.finditer(text):
+        start, end = match.span()
+        before = text[:start]
+        after = text[end:]
+        if before.strip() and not _PARAGRAPH_BREAK.search(before[-16:]):
+            raise AudioError("Speaker markers must start a new paragraph")
+        if after.strip() and not after.startswith(("\n", "\r")):
+            raise AudioError("Speaker markers must end before a blank line")
+        # Keep newlines and character offsets intact for source-range records.
+        for index in range(start, end):
+            if masked[index] not in "\r\n":
+                masked[index] = " "
+        changes.append((end, match.group(1)))
+    voices = [(0, default_voice), *changes]
+    return "".join(masked), voices
 
 
 def split_sentences(
@@ -232,19 +256,29 @@ def synthesize_chunks(
         raise AudioError("Could not inspect TTS provider chunk limit") from None
     if isinstance(chunk_limit, bool) or not isinstance(chunk_limit, int) or chunk_limit < 40:
         raise AudioError("TTS provider max_chars_per_chunk must be an integer >= 40")
-    chunks = split_sentences(chapter_text, max_chars=chunk_limit, pronunciations=pronunciations)
+    spoken_source, voice_changes = _voice_markers(chapter_text, voice)
+    chunks = split_sentences(spoken_source, max_chars=chunk_limit, pronunciations=pronunciations)
     if not chunks:
         raise AudioError("Chapter has no speakable text")
     # Use one validated snapshot of the engine rate throughout the request.
     pause = np.zeros(int(rate * pause_ms / 1000), dtype=np.float32)
     paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
-    ranges = chunk_source_ranges(chapter_text, chunks, pronunciations=pronunciations)
+    ranges = chunk_source_ranges(spoken_source, chunks, pronunciations=pronunciations)
+    chunk_voices: list[str] = []
+    change_index = 0
+    active_voice = voice
+    for start, _end, _boundary in ranges:
+        while change_index < len(voice_changes) and voice_changes[change_index][0] <= start:
+            active_voice = voice_changes[change_index][1]
+            change_index += 1
+        chunk_voices.append(active_voice)
     # Chunk WAVs are shared across chapters, but never across different
     # synthesis engines even when their model/voice labels and rates coincide.
     # The version marker invalidates older engine-agnostic cache keys.
     engine = f"{type(provider).__module__}.{type(provider).__qualname__}"
     identities = [
-        fingerprint("tts-wav-v2", engine, text, model, voice, speed, rate) for text in chunks
+        fingerprint("tts-wav-v2", engine, text, model, chunk_voice, speed, rate)
+        for text, chunk_voice in zip(chunks, chunk_voices, strict=True)
     ]
     # The ledger is diagnostic; it never authorizes reuse without WAV and SHA-256 validation.
     # No source text, voice content, or absolute paths are persisted in the ledger.
@@ -255,7 +289,7 @@ def synthesize_chunks(
             digest_bytes(chapter_text.encode("utf-8")),
             identities,
             model,
-            voice,
+            chunk_voices,
             speed,
             rate,
             pause_ms,
@@ -279,7 +313,9 @@ def synthesize_chunks(
     }
     if progress_file is not None:
         write_json(progress_file, progress)
-    for idx, (text, identity) in enumerate(zip(chunks, identities, strict=True)):
+    for idx, (text, identity, chunk_voice) in enumerate(
+        zip(chunks, identities, chunk_voices, strict=True)
+    ):
         chunk_path = cache / f"{identity}.wav"
         checksum_path = chunk_path.with_suffix(".sha256")
         audio = None
@@ -311,7 +347,7 @@ def synthesize_chunks(
         if audio is None:
             try:
                 try:
-                    audio = provider.generate(text, voice=voice, speed=speed)
+                    audio = provider.generate(text, voice=chunk_voice, speed=speed)
                 except Exception:
                     # Arbitrary TTS engines can echo book text in their errors.
                     raise AudioError("TTS synthesis failed; verify model and voice") from None
