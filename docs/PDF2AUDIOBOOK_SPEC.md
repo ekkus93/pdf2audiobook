@@ -275,6 +275,8 @@ pdf2audiobook config show --sources
 
 **analyze** performs extraction, OCR, cleanup and chapter plan generation without TTS; **inspect** prints metadata, chapter boundaries, confidence, warnings and coverage; **convert** reuses analysis and synthesizes; **doctor** checks FFmpeg/Tesseract/TTS/LLM connectivity and lists useful diagnostics. A loopback-only **review** UI lets users inspect and save validated chapter titles/boundaries, marking them manually approved. **batch** processes directories; **pack-m4b** packages chapter MP3s with navigation metadata. Provide --dry-run, --json for machine-readable reports, --verbose, --quiet, --force, --resume/--no-resume, --chapter N, --chapter-range A:B, --ocr auto|always|never, --ocr-language, --llm-provider, --llm-model, --llm-url, --tts-provider, --tts-model, --voice, --bitrate, --output and remote consent flags. Resolve the chapter-selection convention (human-friendly 1-based indices) consistently.
 
+The review UI validates the `Host` authority on every request against its bound loopback address and port before returning a page, token, or manifest data. A mismatch receives a generic 421 response. API GET requests reject a present mismatched `Origin`, and save requests require the matching origin and bearer token.
+
 Exit codes: 0 success, 2 invalid CLI/config, 3 unreadable/unsupported PDF, 4 extraction/OCR/structure failure, 5 LLM failure, 6 TTS/audio failure, 7 partial conversion (manifest contains details). Never claim success when requested chapters are incomplete.
 
 ## 9. Audio, output files and resumability

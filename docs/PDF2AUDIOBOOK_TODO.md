@@ -21,13 +21,13 @@
   - [x] P0.01c Add GitHub Actions lint/unit CI with no remote keys/model downloads.
   - [x] P0.01d Commit a generated uv.lock covering default, dev and optional Kitten dependencies; CI now verifies the lockfile and uses locked development installs. Formatting qualification is complete; see P5.10 evidence.
 - [ ] P0.02 Establish src/pdf2audiobook/{cli,config,pdf,document,llm,tts,audio,pipeline} and public adapter protocols.
-  - [ ] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics.
+  - [x] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics; CLI errors are content-free for non-domain exceptions.
   - [ ] P0.02b Add structured logging with text/key redaction and --verbose/--quiet controls.
 - [ ] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
   - [ ] P0.03a Implement lookup of per-user config directory; --config and --no-config.
   - [ ] P0.03b Implement precedence CLI > PDF2AUDIOBOOK_* env > TOML > built-ins, including explicit boolean false.
   - [ ] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options.
-  - [ ] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples.
+  - [x] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples.
   - [ ] P0.03e Unit-test overlay precedence, parsing, missing/unknown keys and path resolution.
 - [ ] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation.
 - [x] P0.05 Implement atomic output workspace/manifest schema, input hash, stable IDs and versioned per-stage caching.
@@ -148,10 +148,10 @@
 - [x] F.02 Optional vision LLM for figures, diagrams, equations and complicated page order: opt-in rendered-page review covers image/vector content and likely two-column layouts, validates bounded review-only responses, caches by image digest, and never alters source text.
 - [ ] F.03 Directory/batch conversion and per-book voice profiles: added sorted PDF discovery with opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence.
 - [ ] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF now accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from completed MP3s.
-- [ ] F.05 Optional GUI and user-assisted chapter editor: added a loopback-only browser UI for chapter title/boundary review, with bearer-token API access, origin checks, range/coverage validation and manual approval.
+- [x] F.05 Optional GUI and user-assisted chapter editor: loopback review UI enforces the bound Host authority and Origin checks, validates ranges/coverage, and marks saved chapters manually approved.
 - [ ] F.06 Multi-speaker narration and pronunciation dictionaries.
   - [ ] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges.
-  - [ ] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity and survives review saves.
+  - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity and survives review saves, including omitted fields in partial clients.
   - [ ] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval.
 
 ## Progress ledger

@@ -62,7 +62,8 @@ document.querySelector('#save').addEventListener('click',async()=>{
   const chapters=[...document.querySelectorAll('article')].map(card=>({
    id:card.dataset.id,title:card.querySelector('[name=title]').value,
    start_block:Number(card.querySelector('[name=start]').value),
-   end_block:Number(card.querySelector('[name=end]').value)
+   end_block:Number(card.querySelector('[name=end]').value),
+   voice_id:card.querySelector('[name=voice_id]').value
   }));
   const response=await fetch('/api/chapters',{method:'POST',
    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
@@ -106,6 +107,7 @@ def save_chapter_updates(manifest_path: Path, updates: Any) -> None:
         title = update.get("title")
         start = update.get("start_block")
         end = update.get("end_block")
+        has_voice_id = "voice_id" in update
         voice_id = update.get("voice_id")
         if (
             not isinstance(title, str)
@@ -118,16 +120,21 @@ def save_chapter_updates(manifest_path: Path, updates: Any) -> None:
             or start < 0
             or end > len(manifest.blocks)
             or end <= start
-            or (voice_id is not None and (not isinstance(voice_id, str) or len(voice_id) > 128))
+            or (
+                has_voice_id
+                and voice_id is not None
+                and (not isinstance(voice_id, str) or len(voice_id) > 128)
+            )
         ):
             raise ExtractionError("Review update has an invalid title or block range")
         chapter.title = title.strip()
         chapter.start_block = start
         chapter.end_block = end
         chapter.manually_approved = True
-        chapter.voice_id = (
-            voice_id.strip() if isinstance(voice_id, str) and voice_id.strip() else None
-        )
+        if has_voice_id:
+            chapter.voice_id = (
+                voice_id.strip() if isinstance(voice_id, str) and voice_id.strip() else None
+            )
     chapter_coverage_report(manifest)
     write_manifest(manifest_path, manifest)
     render_chapter_texts(manifest, manifest_path.parent)
@@ -137,13 +144,21 @@ def create_review_server(
     manifest_path: Path, *, host: str = "127.0.0.1", port: int = 8765
 ) -> ThreadingHTTPServer:
     """Build a loopback-only server; caller owns serve_forever and shutdown."""
-    try:
-        if not ipaddress.ip_address(host).is_loopback:
-            raise ValueError
-    except ValueError:
-        raise ValueError("Review UI can only bind to a loopback IP address") from None
+    if host.casefold() == "localhost":
+        host = "localhost"
+    else:
+        try:
+            is_loopback = ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            is_loopback = False
+        if not is_loopback:
+            raise ValueError(
+                "Review UI can only bind to a loopback IP address or localhost"
+            ) from None
     resolved_manifest = manifest_path.resolve()
     token = secrets.token_urlsafe(32)
+    expected_authority: str | None = None
+    expected_origin: str | None = None
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, _format: str, *_args: object) -> None:
@@ -151,7 +166,15 @@ def create_review_server(
 
         def _authorized(self) -> bool:
             supplied = self.headers.get("Authorization", "")
-            return hmac.compare_digest(supplied, f"Bearer {token}")
+            try:
+                supplied_bytes = supplied.encode("latin-1", "strict")
+            except (AttributeError, UnicodeEncodeError):
+                return False
+            return hmac.compare_digest(supplied_bytes, f"Bearer {token}".encode("ascii"))
+
+        def _valid_host(self) -> bool:
+            host_values = self.headers.get_all("Host", [])
+            return len(host_values) == 1 and host_values[0] == expected_authority
 
         def _respond(self, status: int, body: bytes, content_type: str) -> None:
             self.send_response(status)
@@ -177,6 +200,13 @@ def create_review_server(
 
         def do_GET(self) -> None:
             route = urlparse(self.path).path
+            if not self._valid_host():
+                self._respond(421, b"Invalid request authority", "text/plain; charset=utf-8")
+                return
+            origin = self.headers.get("Origin")
+            if route.startswith("/api/") and origin is not None and origin != expected_origin:
+                self._json(403, {"error": "Forbidden"})
+                return
             if route == "/":
                 html = _HTML.replace("__TOKEN__", json.dumps(token)).encode("utf-8")
                 self._respond(200, html, "text/html; charset=utf-8")
@@ -191,11 +221,10 @@ def create_review_server(
                 self._json(404, {"error": "Not found"})
 
         def do_POST(self) -> None:
-            authority = f"[{host}]" if ":" in host else host
-            address = self.server.server_address
-            port = address[1] if isinstance(address, tuple) else None
-            origin = f"http://{authority}:{port}"
-            if not self._authorized() or self.headers.get("Origin") != origin:
+            if not self._valid_host():
+                self._respond(421, b"Invalid request authority", "text/plain; charset=utf-8")
+                return
+            if not self._authorized() or self.headers.get("Origin") != expected_origin:
                 self._json(403, {"error": "Forbidden"})
                 return
             try:
@@ -216,5 +245,8 @@ def create_review_server(
             self._json(200, {"ok": True})
 
     server = ThreadingHTTPServer((host, port), Handler)
+    authority = f"[{host}]" if ":" in host else host
+    expected_authority = f"{authority}:{server.server_address[1]}"
+    expected_origin = f"http://{expected_authority}"
     server.review_token = token  # type: ignore[attr-defined]
     return server

@@ -13,7 +13,7 @@ from rich.console import Console
 
 from pdf2audiobook import __version__
 from pdf2audiobook.config import load_settings, settings_public
-from pdf2audiobook.errors import AudiobookError, ConfigError
+from pdf2audiobook.errors import AudiobookError, AudioError, ConfigError, ExtractionError
 from pdf2audiobook.logging import configure_logging, log_event
 
 app = typer.Typer(no_args_is_help=True, help="Convert PDF books to chapter-based audiobooks.")
@@ -25,6 +25,14 @@ console = Console(stderr=True)
 def fail(exc: Exception, *, json_output: bool = False) -> None:
     """Report a stable exit code and optionally a machine-readable stderr diagnostic."""
     code = exc.exit_code if isinstance(exc, AudiobookError) else 1
+    if isinstance(exc, AudiobookError):
+        message = str(exc)
+    elif isinstance(exc, OSError):
+        message = "A filesystem operation failed"
+    elif isinstance(exc, ValueError):
+        message = "Invalid input value"
+    else:
+        message = "Unexpected internal error"
     # Never log exception text, file paths, credentials, or PDF contents.
     log_event("command_failed", error_code=code)
     if json_output:
@@ -33,14 +41,14 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
             json.dumps(
                 {
                     "ok": False,
-                    "error": {"type": type(exc).__name__, "code": code, "message": str(exc)},
+                    "error": {"type": type(exc).__name__, "code": code, "message": message},
                 },
                 ensure_ascii=False,
             ),
             err=True,
         )
     else:
-        console.print(f"[red]Error:[/red] {exc}")
+        console.print(f"[red]Error:[/red] {message}")
     raise typer.Exit(code=code) from exc
 
 
@@ -245,7 +253,11 @@ def analyze(
         settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
         from pdf2audiobook.pipeline import analyze_book
 
-        emit({"manifest": str(analyze_book(source, settings))}, json_output)
+        try:
+            manifest_path = analyze_book(source, settings)
+        except OSError:
+            raise ExtractionError("Could not create or update the output workspace") from None
+        emit({"manifest": str(manifest_path)}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
         fail(exc, json_output=json_output)
 
@@ -352,13 +364,16 @@ def convert(
                 {"dry_run": True, "chapters": len(chapters), "mp3_files": output_files}, json_output
             )
         else:
-            outputs = convert_book(
-                source,
-                settings,
-                chapter=chapter,
-                chapter_range=selected_range,
-                force=force,
-            )
+            try:
+                outputs = convert_book(
+                    source,
+                    settings,
+                    chapter=chapter,
+                    chapter_range=selected_range,
+                    force=force,
+                )
+            except OSError:
+                raise AudioError("Could not create or update chapter audio") from None
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
         fail(exc, json_output=json_output)
@@ -404,11 +419,14 @@ def batch(
                 outputs = convert_book(source, book_settings)
             except (AudiobookError, OSError, ValueError) as exc:
                 failures += 1
+                code = getattr(exc, "exit_code", 1)
+                if isinstance(exc, OSError):
+                    code = AudioError.exit_code
                 results.append(
                     {
                         "book": source.name,
                         "ok": False,
-                        "error_code": getattr(exc, "exit_code", 1),
+                        "error_code": code,
                     }
                 )
             else:
@@ -441,13 +459,16 @@ def pack_m4b(
         ]
         if any(not path.is_file() for path, _ in chapter_files):
             raise ConfigError("all chapter MP3 files must exist before M4B packaging")
-        result = encode_m4b(
-            chapter_files,
-            output,
-            title=manifest.title,
-            artist=manifest.author,
-            bitrate=bitrate,
-        )
+        try:
+            result = encode_m4b(
+                chapter_files,
+                output,
+                title=manifest.title,
+                artist=manifest.author,
+                bitrate=bitrate,
+            )
+        except OSError:
+            raise AudioError("Could not create the M4B output") from None
         emit({"m4b_file": str(result)}, json_output)
     except (AudiobookError, OSError, ValueError) as exc:
         fail(exc, json_output=json_output)

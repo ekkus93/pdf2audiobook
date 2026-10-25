@@ -8,6 +8,7 @@ import tomllib
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
@@ -285,4 +286,30 @@ def load_settings(
 
 def settings_public(settings: Settings) -> dict[str, Any]:
     # Stored provider credentials are names of environment variables, never secret values.
-    return settings.model_dump()
+    return _redact_public_value(settings.model_dump())
+
+
+def _redact_public_value(value: Any, field_name: str = "") -> Any:
+    """Recursively redact secret-like fields and URL credentials in config output."""
+    normalized_name = field_name.casefold()
+    is_env_name = normalized_name.endswith("_env")
+    if any(secret in normalized_name for secret in ("key", "token", "secret", "password")):
+        if not is_env_name and value is not None:
+            return "***"
+    if isinstance(value, dict):
+        return {key: _redact_public_value(item, str(key)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_public_value(item, field_name) for item in value]
+    if isinstance(value, str) and "://" in value:
+        try:
+            parsed = urlsplit(value)
+        except ValueError:
+            return "***"
+        if not parsed.scheme or not parsed.netloc:
+            return value
+        netloc = parsed.netloc
+        if "@" in netloc:
+            netloc = "***@" + netloc.rsplit("@", 1)[1]
+        query = "***" if parsed.query else ""
+        return urlunsplit((parsed.scheme, netloc, parsed.path, query, parsed.fragment))
+    return value

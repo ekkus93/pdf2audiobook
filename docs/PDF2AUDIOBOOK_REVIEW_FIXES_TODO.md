@@ -1,6 +1,6 @@
 # PDF2Audiobook — Review Fixes TODO
 
-**Status:** FX0 complete; FX1 implementation in progress
+**Status:** FX0–FX1 implementation complete; FX2 in progress
 **Date:** 2026-10-25
 **Baseline:** master at 689eb4937b94e14735298b8e8c3a7cbc71c279de
 **Specification:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_SPEC.md (requirement IDs R1–R45)
@@ -35,24 +35,24 @@
 
 ## Phase FX1 — Security and privacy
 
-- [ ] FX1.01 Fix the review UI's Host and token exposure (R1).
-  - [ ] FX1.01a Check `Host` against the bound loopback authority on every request, and respond 421 or 403 with a generic body before rendering the token or reading the manifest.
-  - [ ] FX1.01b Reject an `Origin` header that doesn't match the server on `/api/*` GET requests.
-  - [ ] FX1.01c Tests: a wrong Host on `/`, `/api/manifest` and POST is rejected without the token or book text in the response; the correct Host works; a mismatched Origin on GET is rejected.
-- [ ] FX1.02 Stop the review UI from wiping voices on save (R10).
-  - [ ] FX1.02a Make the page's script send `voice_id`. On the server, a missing key means unchanged and an empty string or `null` means clear.
-  - [ ] FX1.02b Test with the exact request body the page's script builds (extract the builder or mirror it in a fixture): existing voices are kept and edited voices are saved.
-- [ ] FX1.03 Harden the review UI (R15).
-  - [ ] FX1.03a Compare tokens as bytes. A non-ASCII or malformed `Authorization` header gets 401 instead of crashing the handler.
-  - [ ] FX1.03b Tests: mismatched POST Origin (403), oversized body (413), non-ASCII auth (401).
-- [ ] FX1.04 Make CLI diagnostics content-free (R2).
-  - [ ] FX1.04a Change `fail()` to print exception text only for `AudiobookError`. Every other exception gets a fixed message for its exception family, which may include the class name.
-  - [ ] FX1.04b Wrap filesystem operations on output paths so they raise typed errors with fixed, context-specific messages and the right exit codes.
-  - [ ] FX1.04c Rewrite `tests/test_cli_json_errors.py` so it asserts no path or errno text appears. Add `tests/test_cli_error_privacy.py` covering `analyze --output <file>/sub` in text and JSON modes.
-- [ ] FX1.05 Redact secrets in `config show` (R26).
-  - [ ] FX1.05a Mask URL userinfo, query strings, and fields whose names suggest secrets (keep env-var-name fields such as `api_key_env`).
-  - [ ] FX1.05b Tests: a credential-bearing URL set through env and through TOML never appears in `config show` or `config show --sources`.
-- [ ] FX1.06 Merge the review-UI part of the spec §6 §8 amendment (the 421 on Host mismatch) into the parent spec.
+- [x] FX1.01 Fix the review UI's Host and token exposure (R1).
+  - [x] FX1.01a Check `Host` against the bound loopback authority on every request, and respond 421 or 403 with a generic body before rendering the token or reading the manifest.
+  - [x] FX1.01b Reject an `Origin` header that doesn't match the server on `/api/*` GET requests.
+  - [x] FX1.01c Tests: a wrong Host on `/`, `/api/manifest` and POST is rejected without the token or book text in the response; the correct Host works; a mismatched Origin on GET is rejected.
+- [x] FX1.02 Stop the review UI from wiping voices on save (R10).
+  - [x] FX1.02a Make the page's script send `voice_id`. On the server, a missing key means unchanged and an empty string or `null` means clear.
+  - [x] FX1.02b Test with the exact request body the page's script builds (extract the builder or mirror it in a fixture): existing voices are kept and edited voices are saved.
+- [x] FX1.03 Harden the review UI (R15).
+  - [x] FX1.03a Compare tokens as bytes. A non-ASCII or malformed `Authorization` header gets 401 instead of crashing the handler.
+  - [x] FX1.03b Tests: mismatched POST Origin (403), oversized body (413), non-ASCII auth (401).
+- [x] FX1.04 Make CLI diagnostics content-free (R2).
+  - [x] FX1.04a Change `fail()` to print exception text only for `AudiobookError`. Every other exception gets a fixed message for its exception family, which may include the class name.
+  - [x] FX1.04b Wrap filesystem operations on output paths so they raise typed errors with fixed, context-specific messages and the right exit codes.
+  - [x] FX1.04c Rewrite `tests/test_cli_json_errors.py` so it asserts no path or errno text appears. Add `tests/test_cli_error_privacy.py` covering `analyze --output <file>/sub` in text and JSON modes.
+- [x] FX1.05 Redact secrets in `config show` (R26).
+  - [x] FX1.05a Mask URL userinfo, query strings, and fields whose names suggest secrets (keep env-var-name fields such as `api_key_env`).
+  - [x] FX1.05b Tests: a credential-bearing URL set through env and through TOML never appears in `config show` or `config show --sources`.
+- [x] FX1.06 Merge the review-UI part of the spec §6 §8 amendment (the 421 on Host mismatch) into the parent spec.
 
 **FX1 gate:** a DNS-rebinding request learns nothing; no CLI path prints OS text or paths; `config show` prints no secrets; all new privacy tests pass.
 
@@ -199,3 +199,4 @@
 | --- | --- | --- | --- | --- |
 | 2026-10-25 | 689eb4937b94e14735298b8e8c3a7cbc71c279de | Review fixes spec and TODO drafted; no fixes implemented | Not run | None identified |
 | 2026-10-25 | 826a5cbb69284351e4d797a015c67ea42aaf85cb | FX0.02–FX0.03 (bounded cache JSON; manifest v2) | CI run [40173850676](https://github.com/ekkus93/pdf2audiobook/actions/runs/40173850676), success | None |
+| 2026-10-25 | pending | FX1.01–FX1.06 (review UI security, voice saves, CLI privacy, config redaction) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1038 tests passed | Exact-head CI pending |

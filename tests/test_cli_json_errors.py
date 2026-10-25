@@ -40,7 +40,11 @@ def test_json_error_contract(exception, exit_code, capsys):
         "error": {
             "type": type(exception).__name__,
             "code": exit_code,
-            "message": str(exception),
+            "message": (
+                "A filesystem operation failed"
+                if isinstance(exception, OSError)
+                else str(exception)
+            ),
         },
     }
 
@@ -63,3 +67,20 @@ def test_human_error_output_remains_human_readable(tmp_path):
     assert result.exit_code == 2
     assert "Error:" in result.stderr
     assert not result.stderr.lstrip().startswith("{")
+
+
+@pytest.mark.parametrize(
+    ("exception", "expected"),
+    [
+        (OSError("/private/book.pdf: permission denied"), "A filesystem operation failed"),
+        (ValueError("PRIVATE_INPUT_VALUE"), "Invalid input value"),
+        (RuntimeError("PRIVATE_EXCEPTION_TEXT"), "Unexpected internal error"),
+    ],
+)
+def test_non_domain_exception_diagnostics_are_content_free(exception, expected, capsys):
+    with pytest.raises(typer.Exit):
+        fail(exception, json_output=True)
+    diagnostic = json.loads(capsys.readouterr().err)
+    assert diagnostic["error"]["message"] == expected
+    assert "/private/book.pdf" not in diagnostic["error"]["message"]
+    assert "PRIVATE_" not in diagnostic["error"]["message"]
