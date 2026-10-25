@@ -384,6 +384,17 @@ def analyze_book(
         settings.chapters,
         extra_heading_ids=llm_ids,
     )
+    for chapter in chapters:
+        has_speakable_source = any(
+            block.id not in omitted and block.text.strip()
+            for block in extracted.blocks[chapter.start_block : chapter.end_block]
+        )
+        if not has_speakable_source:
+            chapter.warnings.append("No speakable text after accepted cleanup; review manually")
+            warnings.append(
+                f"Chapter {chapter.number} has no speakable text after cleanup; "
+                "review before synthesis"
+            )
     if hand_edited_chapters and existing_manifest is not None:
         new_positions = {block.id: index for index, block in enumerate(extracted.blocks)}
         preserved_numbers = []
@@ -492,6 +503,13 @@ def select_chapters(
     if not chosen:
         raise AudioError(f"Chapter {chapter} does not exist")
     for item in chosen:
+        if (
+            "No speakable text after accepted cleanup; review manually" in item.warnings
+            and not item.manually_approved
+        ):
+            raise AudioError(
+                f"Chapter {item.number} has no speakable text; review and approve it before synthesis"
+            )
         if (
             any(
                 warning == "source PDF was damaged and repaired; verify page coverage"

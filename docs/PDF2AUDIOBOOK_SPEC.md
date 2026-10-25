@@ -148,6 +148,8 @@ Support books without a TOC, front matter, prologue/epilogue and mid-page transi
 
 Provide a confidence value and evidence list for each proposed boundary. A manual chapter manifest is authoritative after validation; reanalysis must not clobber manual edits.
 
+At analysis time, compute speakable text for each chapter after accepted cleanup. A chapter with no narration receives a per-chapter warning and appears in the coverage report; synthesis must wait for explicit chapter approval.
+
 ## 6. LLM layer
 
 ### 6.1 Providers

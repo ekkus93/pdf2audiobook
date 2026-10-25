@@ -65,7 +65,7 @@
   - [x] P2.01a Handle prologues, epilogues, front matter, multiple parts and mid-page starts.
   - [ ] P2.01b Rank evidence and attach confidence/warnings to each boundary.
 - [x] P2.02 Build nonoverlapping stable chapter spans and enforce full prose coverage exactly once.
-  - [ ] P2.02a Reject overlapping/missing/empty chapter spans and source holes; emit a coverage report.
+  - [x] P2.02a Reject overlapping/missing chapter spans and source holes; emit a coverage report with chapters left empty by accepted cleanup.
   - [x] P2.02b Require review for low-confidence/no-chapter books; allow explicit --allow-single-chapter.
 - [x] P2.03 Persist editable chapter manifest plus per-chapter UTF-8 text files and inspection report.
   - [x] P2.03a Implement manifest override validation and preserve generated-fingerprint-detected chapter edits across reanalysis.

@@ -1103,7 +1103,7 @@ def validate_chapter_coverage(blocks: list[DocumentBlock], chapters: list[Chapte
         raise ExtractionError("Manifest does not cover all original source blocks")
 
 
-def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
+def chapter_coverage_report(manifest: BookManifest) -> dict[str, object]:
     """Validate provenance, cleanup anchors and exact-once block coverage."""
     validate_chapter_coverage(manifest.blocks, manifest.chapters)
     ids = [block.id for block in manifest.blocks]
@@ -1136,6 +1136,14 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
             if edit.block_id in accepted:
                 raise ExtractionError("Multiple accepted edits for source block")
             accepted[edit.block_id] = edit.replacement
+    empty_chapters = [
+        chapter.number
+        for chapter in manifest.chapters
+        if not any(
+            accepted.get(block.id, block.text).strip()
+            for block in manifest.blocks[chapter.start_block : chapter.end_block]
+        )
+    ]
     return {
         "valid": True,
         "source_blocks": len(ids),
@@ -1148,6 +1156,7 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, int | bool]:
             1 for block in manifest.blocks if accepted.get(block.id, block.text).strip()
         ),
         "chapters": len(manifest.chapters),
+        "empty_chapters": empty_chapters,
     }
 
 
