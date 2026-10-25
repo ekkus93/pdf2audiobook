@@ -31,7 +31,10 @@ button{font:inherit;padding:.6rem 1rem}#status{margin-left:1rem}
 </style>
 <h1>Chapter review</h1><p>Adjust titles and zero-based, end-exclusive block boundaries. Saving
 validates complete, non-overlapping coverage and marks the chapters manually approved.</p>
-<main id="chapters">Loading manifest…</main><button id="save">Save reviewed boundaries</button>
+<main id="chapters">Loading manifest…</main>
+<label id="damaged" hidden><input type="checkbox" id="ack-damaged"> I have checked the pages that
+could not be read cleanly (damaged source)</label><br>
+<button id="save">Save reviewed boundaries</button>
 <span id="status" role="status"></span>
 <script>
 const token=__TOKEN__;
@@ -56,6 +59,7 @@ async function load(){
   const preview=document.createElement('pre'); preview.textContent=chapter.preview; card.append(preview);
   root.append(card);
  }
+ document.querySelector('#damaged').hidden=!(data.review_required||[]).includes('damaged_source');
 }
 document.querySelector('#save').addEventListener('click',async()=>{
  try{
@@ -67,7 +71,8 @@ document.querySelector('#save').addEventListener('click',async()=>{
   }));
   const response=await fetch('/api/chapters',{method:'POST',
    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-   body:JSON.stringify({chapters})});
+   body:JSON.stringify({chapters,acknowledge:
+    document.querySelector('#ack-damaged').checked?['damaged_source']:[]})});
   const result=await response.json();
   if(!response.ok) throw new Error(result.error||'Save failed');
   statusNode.textContent='Saved and approved. Derived chapter text was refreshed.';
@@ -93,7 +98,11 @@ def _review_payload(manifest: BookManifest) -> dict[str, Any]:
                 "preview": preview,
             }
         )
-    return {"title": manifest.title, "chapters": chapters}
+    return {
+        "title": manifest.title,
+        "chapters": chapters,
+        "review_required": list(manifest.review_required),
+    }
 
 
 def _expected_authorities(host: str, port: int) -> set[str]:
@@ -104,8 +113,15 @@ def _expected_authorities(host: str, port: int) -> set[str]:
     return result
 
 
-def save_chapter_updates(manifest_path: Path, updates: Any) -> None:
-    """Validate and atomically persist title/boundary edits from the local UI."""
+def save_chapter_updates(manifest_path: Path, updates: Any, acknowledge: Any = None) -> None:
+    """Validate and atomically persist title/boundary edits from the local UI.
+
+    A review reason is acknowledged only when the user names it explicitly.
+    """
+    if acknowledge is None:
+        acknowledge = []
+    if not isinstance(acknowledge, list) or not set(acknowledge) <= {"damaged_source"}:
+        raise ExtractionError("Review acknowledgement is invalid")
     manifest = read_manifest(manifest_path)
     if not isinstance(updates, list) or len(updates) != len(manifest.chapters):
         raise ExtractionError("Review update must include every existing chapter")
@@ -143,10 +159,11 @@ def save_chapter_updates(manifest_path: Path, updates: Any) -> None:
             chapter.voice_id = (
                 voice_id.strip() if isinstance(voice_id, str) and voice_id.strip() else None
             )
-    manifest.review_acknowledged = sorted(set(manifest.review_acknowledged) | {"damaged_source"})
-    manifest.review_required = [
-        code for code in manifest.review_required if code != "damaged_source"
-    ]
+    if acknowledge:
+        manifest.review_acknowledged = sorted(set(manifest.review_acknowledged) | set(acknowledge))
+        manifest.review_required = [
+            code for code in manifest.review_required if code not in set(acknowledge)
+        ]
     chapter_coverage_report(manifest)
     write_manifest(manifest_path, manifest)
     render_chapter_texts(manifest, manifest_path.parent)
@@ -257,7 +274,9 @@ def create_review_server(
                 payload = json.loads(self.rfile.read(size))
                 if not isinstance(payload, dict):
                     raise ValueError
-                save_chapter_updates(resolved_manifest, payload.get("chapters"))
+                save_chapter_updates(
+                    resolved_manifest, payload.get("chapters"), payload.get("acknowledge")
+                )
             except Exception:
                 self._json(400, {"error": "Review update was invalid; no changes were saved"})
                 return

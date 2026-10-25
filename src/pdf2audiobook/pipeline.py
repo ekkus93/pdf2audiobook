@@ -692,6 +692,32 @@ def analyze_book(
     return manifest_path
 
 
+def refresh_empty_chapter_reason(manifest_path: Path, manifest: BookManifest) -> None:
+    """Recompute the empty-chapter review reason from the manifest as it is now.
+
+    Analysis only knew the chapters it proposed; a hand edit or a review-UI save
+    can empty a chapter later, or fix one that was empty.
+    """
+    if not manifest.blocks:
+        return  # No source blocks to judge; coverage validation reports this elsewhere.
+    replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
+    has_empty = any(
+        not chapter_has_speakable_text(
+            manifest.blocks, chapter.start_block, chapter.end_block, replacements
+        )
+        for chapter in manifest.chapters
+    )
+    needed = has_empty and "empty_chapter" not in manifest.review_acknowledged
+    required = [code for code in manifest.review_required if code != "empty_chapter"]
+    if needed:
+        required = manifest.review_required + (
+            [] if "empty_chapter" in manifest.review_required else ["empty_chapter"]
+        )
+    if required != manifest.review_required:
+        manifest.review_required = required
+        write_manifest(manifest_path, manifest)
+
+
 def select_chapters(
     manifest: BookManifest,
     settings: Settings,
@@ -817,6 +843,7 @@ def convert_book(
         if adapter is not None
     )
     manifest = read_manifest(manifest_path)
+    refresh_empty_chapter_reason(manifest_path, manifest)
     if accept_review:
         allowed = {"damaged_source", "empty_chapter", "ambiguous_page_numbers"}
         if not set(accept_review) <= allowed:
