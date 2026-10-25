@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.19 complete; FX10.20 is next.
+**Status:** FX10.00–FX10.20 complete; FX10.21 is next.
 **Date:** 2026-10-25
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -181,9 +181,9 @@
 - [x] FX10.19 **Refactor** the LLM request loop (R104).
   - [x] FX10.19a Split `_complete_json_request` into named settle paths with a `Literal` outcome type.
   - [x] FX10.19b Write the usage-validation predicate once. Build the capability-file path once and write it only on change. Remove or align the no-ledger budget path.
-- [ ] FX10.20 Settle JSON-mode rejections as `rejected` and remember them (R100).
-  - [ ] FX10.20a Regression test: three requests against a stub rejecting `response_format` give one `rejected` row and three `complete` rows, and the capability persists across provider instances.
-  - [ ] FX10.20b Settle the rejection `rejected`; store the fallback in the capability store.
+- [x] FX10.20 Settle JSON-mode rejections as `rejected` and remember them (R100).
+  - [x] FX10.20a Regression test: three requests against a stub rejecting `response_format` give one `rejected` row and three `complete` rows, and the capability persists across provider instances.
+  - [x] FX10.20b Settle the rejection `rejected`; store the fallback in the capability store.
 - [ ] FX10.21 Reject cumulative overflow at settlement (R101).
   - [ ] FX10.21a Regression test: two 2^62-token responses leave `budget show` working, with the second row `unknown` and resolvable.
   - [ ] FX10.21b Check cumulative totals inside the settlement transaction; settle with validated usage only.
@@ -295,3 +295,4 @@
 | 2026-10-25 | c578b9a9525c0ad62d61e13eb2ea099ea786558a | FX10.17a–b (R97): pagination ambiguity now counts candidate numerals only; PDF labels are checked against the selected sequence; edge distances under the documented 2pt tolerance tie. Updated parent §4.2. | At parent b65cb3a, `tests/test_pagination_multiple_margin_numerals.py::test_table_cell_numerals_do_not_create_page_number_ambiguity`, `::test_edge_distances_within_two_points_are_tied`, and `tests/test_page_number_sequences.py::test_poem_numerals_survive_while_edge_folios_are_removed` failed. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1454 passed, 1 optional Kitten skip. Exact-head CI [40245977219](https://github.com/ekkus93/pdf2audiobook/actions/runs/40245977219) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | c9b82e28d906fd41cc281b0de7f51e110db46c3e | FX10.18a–c (R98): recognized short headings remain usable despite small ornaments; auto OCR's glyph-art trigger applies only without usable text; `--ocr never` no longer claims OCR was attempted; empty-page warnings distinguish disabled OCR, non-text-like drawings and no drawings; parent §§4.1–4.2 updated. | At parent 10ec872, these regressions failed: `tests/test_vector_outlined_text.py::test_short_embedded_heading_with_ornament_does_not_require_tesseract`, `::test_drawing_only_page_without_ocr_never_claims_ocr_is_not_needed`, and `::test_a_single_rule_is_not_sent_to_ocr`. Local `/verify`: lock check, Ruff, format, mypy (23 source files), 1455 passed, 1 optional Kitten skip. Exact-head CI [40246285382](https://github.com/ekkus93/pdf2audiobook/actions/runs/40246285382) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | ec618d407dee62cbaaaffa988ec5c2025664e2b9 | FX10.19a–b (R104): named settlement paths use a `Literal` outcome; shared token and complete-usage validation serves provider, cache and ledger; capability paths are centralized and unchanged files are not rewritten; direct budgeted wrappers use per-attempt ledger accounting. | No behavior-specific tests added per R104; full local `/verify` passed unchanged: lock check, Ruff, format, mypy (24 source files), 1455 passed, 1 optional Kitten skip. Exact-head CI [40246671206](https://github.com/ekkus93/pdf2audiobook/actions/runs/40246671206) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
+| 2026-10-25 | c3c91eaf96ed0f0e209bfe2e0c3ae980a0c75439 | FX10.20a–b (R100): JSON-mode rejection without usage settles as `rejected`; provider capability files remember the unsupported JSON mode, so later provider instances omit `response_format`. | At parent 1b4cf1a, `tests/test_llm_retry_budget_attempts.py::test_json_mode_rejection_is_rejected_and_capability_persists_between_providers` failed because `response_format` was retried across each provider and rejected rows were not settled `rejected`. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1456 passed, 1 optional Kitten skip. Exact-head CI [40246884881](https://github.com/ekkus93/pdf2audiobook/actions/runs/40246884881) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
