@@ -82,12 +82,12 @@
   - [x] P3.01c Implement llama-server adapter with configurable local base URL/model and optional auth.
   - [ ] P3.01d Probe or adapt capabilities for JSON/schema response and provider-specific unsupported parameters.
 - [x] P3.02 Implement bounded prompt/context splitting with stable block references and schema versioning.
-  - [ ] P3.02a Structure classification: proposed headings, TOC and anchored boundaries.
+  - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries; TOC task is independently toggleable and verifier-anchored (review-fixes FX4.07).
   - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
   - [x] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
 - [x] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
   - [x] P3.03a Track accepted/rejected decisions, evidence, confidence, review flags and provenance for each LLM task; see review-fixes ledger FX4.06.
-  - [x] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
+  - [x] P3.03b Support independently toggleable structure, contents, cleanup, classification and narration LLM tasks.
 - [x] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
 - [x] P3.05 Enforce remote-data opt-in (--allow-remote-content/config) and warning before sending book content. See review-fixes ledger FX4.03 for separate scope warnings.
   - [x] P3.05a Validate TLS/loopback rules; block accidental external HTTP upload.

@@ -169,6 +169,8 @@ If a provider explicitly rejects `max_tokens` or `temperature`, retry once witho
 ### 6.2 LLM tasks
 
 - **Structure detection:** classify headings and TOC candidates; return anchored block IDs and confidence, never free-form chapter text.
+- **Contents and boundary proposals:** when independently enabled, classify printed contents entries and body boundary candidates using exact existing block IDs. Verify source titles and page references; accepted boundaries remain weak evidence below PDF outlines, matching printed contents and numbered labels.
+- The contents/boundary task is independently controlled by `llm.contents` (TOML or `PDF2AUDIOBOOK_LLM_CONTENTS`); it is disabled by default.
 - **OCR/cleanup suggestions:** propose precise edits to anchored source blocks, with original substring, replacement, reason and confidence.
 - **Content classification:** distinguish running headers, body prose, footnotes, bibliographies, page labels, captions and ornamental material.
 - **Narration policy:** flag terms that need pronunciation/speech normalization while retaining source text unchanged.

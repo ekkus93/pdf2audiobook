@@ -22,6 +22,7 @@ from pdf2audiobook.llm import (
     detect_llm_headings,
     propose_llm_classification,
     propose_llm_cleanup,
+    propose_llm_contents_boundaries,
     propose_llm_narration,
 )
 from pdf2audiobook.llm.cache import CachedLLMProvider
@@ -60,6 +61,7 @@ def _resolve_auto_llm_model(settings: Settings) -> Settings:
     if not any(
         (
             settings.llm.structure,
+            settings.llm.contents,
             settings.llm.cleanup,
             settings.llm.classification,
             settings.llm.narration,
@@ -296,6 +298,7 @@ def analyze_book(
     try:
         if settings.llm.enabled and (
             settings.llm.structure
+            or settings.llm.contents
             or settings.llm.cleanup
             or settings.llm.classification
             or settings.llm.narration
@@ -340,6 +343,15 @@ def analyze_book(
                     # Keep deterministic footnote-policy warnings in the audit.
                     # Replacing the list also corrupts the fallback warning prefix.
                     warnings.extend(heading_warnings)
+                if settings.llm.contents:
+                    content_heading_ids, content_warnings = propose_llm_contents_boundaries(
+                        source_blocks,
+                        worker,
+                        chunk_tokens=settings.llm.chunk_tokens,
+                        decisions=llm_decisions,
+                    )
+                    llm_ids.update(content_heading_ids)
+                    warnings.extend(content_warnings)
                 if settings.llm.cleanup:
                     suggestions, edit_warnings = propose_llm_cleanup(
                         source_blocks,

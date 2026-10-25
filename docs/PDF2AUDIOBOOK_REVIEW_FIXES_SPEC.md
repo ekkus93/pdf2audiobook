@@ -490,6 +490,7 @@ Merge these during the work. Each amendment goes into the parent spec in the sam
 - **§4.2:** the numeral rules for "nearer the edge" and "ambiguous sequences are retained" (R3).
 - **§4.3:** discretionary hyphens are removed only when the unhyphenated word appears elsewhere in the document (R5).
 - **§5:** per-chapter warnings, the empty-chapter gate and protection of user-edited chapters (R9, R11, R12).
+- **§6.2:** a separately toggleable bounded task proposes anchored contents entries and body boundary candidates; verified boundary proposals remain weak evidence (R22).
 - **§6.3:** ledger statuses including `unbilled`, per-attempt budgeting, and that the analysis fingerprint excludes operational settings (R13, R16, R17).
 - **§6.4:** one warning per data scope (R18).
 - **§7:** env values parsed by field type, XDG handling, the allowed sample rates, how logging levels map, and that the generic TTS options target the effective provider (R25, R28–R31).

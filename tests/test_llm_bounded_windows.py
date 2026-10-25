@@ -9,6 +9,7 @@ from pdf2audiobook.llm import (
     detect_llm_headings,
     propose_llm_classification,
     propose_llm_cleanup,
+    propose_llm_contents_boundaries,
     propose_llm_narration,
 )
 from pdf2audiobook.models import DocumentBlock
@@ -18,6 +19,7 @@ from pdf2audiobook.models import DocumentBlock
     ("task", "response_key"),
     [
         (detect_llm_headings, "headings"),
+        (propose_llm_contents_boundaries, "entries"),
         (propose_llm_cleanup, "edits"),
         (propose_llm_classification, "labels"),
         (propose_llm_narration, "suggestions"),

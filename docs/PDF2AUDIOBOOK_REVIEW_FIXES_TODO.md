@@ -121,9 +121,9 @@
 - [x] FX4.06 Record LLM decisions for every task (R21).
   - [x] FX4.06a Generalize to an `LLMDecision` record, emitted for the heading, cleanup, classification and narration tasks, and persist it in `reports/`.
   - [x] FX4.06b Tests: accepted and rejected records for each task.
-- [ ] FX4.07 Add the LLM task for contents-page entries and chapter boundaries (R22).
-  - [ ] FX4.07a Add a bounded, anchored, toggleable task whose results are weak evidence below outline, printed contents and numbered labels, verified the same way as headings.
-  - [ ] FX4.07b Tests with stubbed responses: valid proposals, unknown IDs and invented text.
+- [x] FX4.07 Add the LLM task for contents-page entries and chapter boundaries (R22).
+  - [x] FX4.07a Add a bounded, anchored, toggleable task whose results are weak evidence below outline, printed contents and numbered labels, verified the same way as headings.
+  - [x] FX4.07b Tests with stubbed responses: valid proposals, unknown IDs and invented text.
 - [ ] FX4.08 Bump the LLM cache identity (spec §3) and merge the spec §6 §6.3 and §6.4 amendments, plus the §8 budget command.
 
 **FX4 gate:** budgets reflect every attempt and never deadlock on provably unsent requests; consent warnings are accurate; P3.01d, P3.02a, P3.03a and P3.06 are fully met.
@@ -211,3 +211,4 @@
 | 2026-10-25 | pending | FX4.02 (per-attempt ledger reservations); FX4.03 (separate image and whole-book text consent warnings) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1064 tests; exact-head CI pending | FX4 continues |
 | 2026-10-25 | pending | FX4.05 (provider-specific fallback for unsupported `max_tokens` and `temperature`) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1070 tests; exact-head CI pending | FX4 continues |
 | 2026-10-25 | pending | FX4.06 (privacy-preserving decision records for heading, cleanup, classification and narration) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1074 tests; exact-head CI pending | FX4 continues |
+| 2026-10-25 | pending | FX4.07 (bounded, optional contents-entry and chapter-boundary proposals) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1081 tests; exact-head CI pending | FX4 continues |

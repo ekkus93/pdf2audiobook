@@ -63,6 +63,7 @@ class LLM(ConfigModel):
     input_cost_usd_per_million_tokens: float | None = Field(default=None, ge=0)
     output_cost_usd_per_million_tokens: float | None = Field(default=None, ge=0)
     structure: bool = True
+    contents: bool = False
     cleanup: bool = True
     classification: bool = True
     narration: bool = True
@@ -162,6 +163,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_OCR_DPI": ("pdf", "ocr_dpi"),
     "PDF2AUDIOBOOK_LLM_ENABLED": ("llm", "enabled"),
     "PDF2AUDIOBOOK_LLM_VISION": ("llm", "vision"),
+    "PDF2AUDIOBOOK_LLM_CONTENTS": ("llm", "contents"),
     "PDF2AUDIOBOOK_LLM_PROVIDER": ("llm", "provider"),
     "PDF2AUDIOBOOK_LLM_MAX_REQUESTS": ("llm", "max_requests"),
     "PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS": ("llm", "max_output_tokens"),

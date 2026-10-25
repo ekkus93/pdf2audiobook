@@ -11,6 +11,21 @@ def test_defaults():
     assert settings.llm.provider == "ollama"
     assert sources["llm.provider"] == "built-in"
     assert Settings().pdf.ocr == "auto"
+    assert settings.llm.contents is False
+
+
+def test_contents_analysis_task_has_an_independent_environment_toggle():
+    enabled, _ = load_settings(
+        no_config=True,
+        environ={"PDF2AUDIOBOOK_LLM_CONTENTS": "true"},
+    )
+    disabled, _ = load_settings(
+        no_config=True,
+        environ={"PDF2AUDIOBOOK_LLM_CONTENTS": "false"},
+    )
+    assert enabled.llm.contents is True
+    assert enabled.llm.structure is True
+    assert disabled.llm.contents is False
 
 
 def test_pronunciation_dictionary_is_case_insensitive_and_single_token():
