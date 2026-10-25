@@ -22,6 +22,7 @@ from pdf2audiobook.errors import LLMError
 from pdf2audiobook.models import CleanupEdit, DocumentBlock
 
 LLM_PROMPT_SCHEMA_VERSION = "llm-advisory-v3"
+MAX_VISUAL_REVIEW_PAGES = 12
 
 
 class HeadingProposal(BaseModel):
@@ -134,7 +135,7 @@ class OpenAICompatibleProvider:
         self.max_retries = max_retries
         self.max_context_tokens = max_context_tokens
         self.max_output_tokens = max_output_tokens
-        self._remote_content_warned = False
+        self._remote_content_warned_scopes: set[str] = set()
         self._served_context: int | None = None
         self.request_count = 0
         self.last_usage: dict[str, int] = {}
@@ -392,16 +393,25 @@ class OpenAICompatibleProvider:
             payload["reasoning_effort"] = "none"
         # A remote-content opt-in must be accompanied by a visible warning
         # before the first upload, not only after analysis has completed.
-        if not _loopback(urlparse(self.base_url).hostname) and not self._remote_content_warned:
+        scope_key = "page-images" if vision else "book-text"
+        if (
+            not _loopback(urlparse(self.base_url).hostname)
+            and scope_key not in self._remote_content_warned_scopes
+        ):
             safe_provider = json.dumps(str(self.provider)[:80], ensure_ascii=True)
             safe_model = json.dumps(str(payload["model"])[:80], ensure_ascii=True)
+            scope = (
+                f"up to {MAX_VISUAL_REVIEW_PAGES} rendered PDF page images"
+                if vision
+                else "the whole book in bounded analysis windows"
+            )
             print(
                 f"Warning: uploading PDF-derived {'page image' if vision else 'book text'} to remote LLM "
                 f"provider {safe_provider}, model {safe_model}; "
-                f"data scope: {'one rendered PDF page' if vision else 'the current analysis block window'}.",
+                f"data scope: {scope}.",
                 file=sys.stderr,
             )
-            self._remote_content_warned = True
+            self._remote_content_warned_scopes.add(scope_key)
         format_fallback_used = False
         retry_count = 0
         while True:

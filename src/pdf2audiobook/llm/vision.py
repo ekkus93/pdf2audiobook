@@ -11,8 +11,8 @@ import pymupdf
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from pdf2audiobook.errors import LLMError
+from pdf2audiobook.llm import MAX_VISUAL_REVIEW_PAGES
 
-_MAX_REVIEW_PAGES = 12
 _MAX_RENDER_PIXELS = 1_500_000
 _VISION_PROMPT_VERSION = "visual-review-v1"
 
@@ -119,7 +119,7 @@ def review_visual_pages(
         for index, page in enumerate(document.pages()):
             if not _has_visual_content(page):
                 continue
-            if len(pages) >= _MAX_REVIEW_PAGES:
+            if len(pages) >= MAX_VISUAL_REVIEW_PAGES:
                 skipped += 1
                 continue
             image = _render_png(page)

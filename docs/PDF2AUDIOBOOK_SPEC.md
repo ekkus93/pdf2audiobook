@@ -188,7 +188,7 @@ Use bounded requests with nearby-context overlap, stable IDs and prompt versioni
 
 ### 6.4 Data privacy
 
-Selecting openai does not automatically permit uploading book text: require --allow-remote-content or a persistent explicit configuration choice. Before first remote request, report provider, data scope and selected model. Never log plaintext API keys, auth headers or full text by default. Local hosts other than loopback or URLs using insecure HTTP beyond loopback require deliberate opt-in.
+Selecting openai does not automatically permit uploading book text: require --allow-remote-content or a persistent explicit configuration choice. Before upload, warn once per distinct data scope and name the provider and selected model. Page-image review is capped at 12 rendered pages; text analysis may upload the whole book in bounded windows. Image and text uploads receive separate warnings. Never log plaintext API keys, auth headers or full text by default. Local hosts other than loopback or URLs using insecure HTTP beyond loopback require deliberate opt-in.
 
 ## 7. Configuration
 

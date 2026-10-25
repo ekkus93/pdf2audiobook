@@ -115,7 +115,7 @@ def test_remote_book_content_warning_precedes_first_upload_only(capsys):
     assert "remote LLM" in seen[0]
     assert "openai" in seen[0]
     assert "mock-remote" in seen[0]
-    assert "current analysis block window" in seen[0]
+    assert "whole book in bounded analysis windows" in seen[0]
     assert "PRIVATE_BOOK_TEXT" not in seen[0]
     assert seen[1] == ""
 

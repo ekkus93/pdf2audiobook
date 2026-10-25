@@ -89,10 +89,11 @@
   - [ ] P3.03a Track accepted/rejected edits, evidence, confidence, review flags and provenance.
   - [x] P3.03b Support independently toggleable structure, cleanup, classification and narration LLM tasks.
 - [x] P3.04 Implement local-only behavior (--no-llm); fail-safe provider errors and explicitly configured fallback.
-- [ ] P3.05 Enforce remote-data opt-in (--allow-remote-content/config) and warning before sending book content.
+- [x] P3.05 Enforce remote-data opt-in (--allow-remote-content/config) and warning before sending book content. See review-fixes ledger FX4.03 for separate scope warnings.
   - [x] P3.05a Validate TLS/loopback rules; block accidental external HTTP upload.
   - [x] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
   - [x] P3.05c Ensure logs, crash reports and config show redact credentials and full text.
+  - [x] P3.05d Warn separately for page images and whole-book text windows, naming the provider, model and image page cap.
 - [ ] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting.
 - [x] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
 - [x] P3.08 Add opt-in real backend smoke checks for local Ollama/llama-server and explicitly consented OpenAI.
