@@ -39,8 +39,8 @@ def test_analyze_output_path_failure_is_content_free(tmp_path, json_output):
         assert private not in result.stderr
     if json_output:
         diagnostic = json.loads(result.stderr)
-        assert diagnostic["error"]["type"] == "ExtractionError"
-        assert diagnostic["error"]["message"] == "Could not create or update the output workspace"
+        assert diagnostic["error"]["type"] == "WorkspaceError"
+        assert diagnostic["error"]["message"] == "Cannot create the output workspace"
 
 
 def test_batch_partial_failure_diagnostic_is_content_free(tmp_path):

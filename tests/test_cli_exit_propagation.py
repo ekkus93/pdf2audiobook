@@ -97,6 +97,7 @@ def test_commands_reraise_nonzero_typer_exit(monkeypatch, tmp_path, command):
         monkeypatch.setattr(
             "pdf2audiobook.review_ui.create_review_server", lambda *_a, **_k: _ReviewServer()
         )
+        (tmp_path / "manifest.json").write_text("{}", encoding="utf-8")
     if command != "review":
         monkeypatch.setattr("pdf2audiobook.cli.emit", raise_exit)
 

@@ -28,6 +28,7 @@ from pdf2audiobook.errors import (
     ExtractionError,
     LLMError,
     PartialConversionError,
+    WorkspaceError,
 )
 from pdf2audiobook.logging import (
     begin_cli_command,
@@ -449,7 +450,7 @@ def analyze(
         try:
             manifest_path = analyze_book(source, settings)
         except OSError:
-            raise ExtractionError("Could not create or update the output workspace") from None
+            raise WorkspaceError("Cannot create the output workspace") from None
         emit({"manifest": str(manifest_path)}, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
@@ -621,7 +622,7 @@ def convert(
                     accept_review=tuple(accept_review),
                 )
             except OSError:
-                raise AudioError("Could not create or update chapter audio") from None
+                raise WorkspaceError("Cannot create the output workspace") from None
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
@@ -836,7 +837,7 @@ def pack_m4b(
                 cover_image=cover_image,
             )
         except OSError:
-            raise AudioError("Could not create the M4B output") from None
+            raise WorkspaceError("Cannot create the output workspace") from None
         emit(
             {
                 "m4b_file": str(result),
@@ -856,12 +857,15 @@ def pack_m4b(
 def review(
     manifest_path: Path = typer.Argument(..., help="A generated manifest.json to review."),
     port: int = typer.Option(8765, "--port", min=0, max=65535),
+    json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Open a loopback-only browser editor for chapter titles and boundaries."""
-    set_output_mode(False)
+    set_output_mode(json_output)
     try:
         from pdf2audiobook.review_ui import create_review_server
 
+        if not manifest_path.is_file():
+            raise WorkspaceError("Cannot create the output workspace")
         try:
             server = create_review_server(manifest_path, port=port)
         except OSError:
@@ -876,8 +880,8 @@ def review(
         finally:
             server.server_close()
     except KeyboardInterrupt:
-        fail_interrupted()
+        fail_interrupted(json_output=json_output)
     except (typer.Exit, ClickExit):
         raise
     except Exception as exc:
-        fail(exc)
+        fail(exc, json_output=json_output)

@@ -17,6 +17,10 @@ class ExtractionError(AudiobookError):
     exit_code = 4
 
 
+class WorkspaceError(ExtractionError):
+    """The application could not create or update an output workspace."""
+
+
 class LLMError(AudiobookError):
     exit_code = 5
 

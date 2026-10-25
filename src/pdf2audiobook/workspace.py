@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from pdf2audiobook.errors import ExtractionError, WorkspaceLockedError
+from pdf2audiobook.errors import ExtractionError, WorkspaceError, WorkspaceLockedError
 from pdf2audiobook.models import BookManifest
 
 _workspace_locks = threading.local()
@@ -33,7 +33,7 @@ def workspace_lock(folder: Path, *, blocking: bool = False) -> Iterator[None]:
         folder.mkdir(parents=True, exist_ok=True)
         handle = (folder / ".convert.lock").open("a+")
     except OSError:
-        raise WorkspaceLockedError("Could not lock the book workspace") from None
+        raise WorkspaceError("Cannot create the output workspace") from None
     try:
         operation = fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
         try:
@@ -69,18 +69,23 @@ def fingerprint(*parts: Any) -> str:
 
 
 def atomic_write(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = None
     try:
+        path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(dir=path.parent, prefix=".tmp-", delete=False) as handle:
             temp_path = Path(handle.name)
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temp_path, path)
+    except OSError:
+        raise WorkspaceError("Cannot create the output workspace") from None
     finally:
         if temp_path:
-            temp_path.unlink(missing_ok=True)
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def write_json(path: Path, obj: Any) -> None:
