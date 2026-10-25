@@ -699,20 +699,56 @@ def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
     return False
 
 
+# A page of outlined text is a set of small filled paths, one per glyph. One
+# outlined line of prose has more than this many; a rule or a logo has fewer.
+_VECTOR_GLYPH_MIN_PATHS = 40
+# A glyph path is no wider or taller than this fraction of the page.
+_VECTOR_GLYPH_MAX_FRACTION = 0.06
+# Dense decorative artwork (many paths of any size) covering this much of the
+# page without any usable text is also sent to OCR.
+_VECTOR_ARTWORK_MIN_PATHS = 100
+# A text-free page with at least this many drawn paths is reported for review
+# instead of being treated as blank (a lone rule or border is not).
+_VECTOR_REVIEW_MIN_PATHS = 10
+_VECTOR_ARTWORK_MIN_COVERAGE = 0.15
+
+
 def _page_has_dense_vector_art(page: pymupdf.Page) -> bool:
-    """Detect dense drawing-only pages that may contain outlined text."""
+    """Detect drawing-only pages that may contain outlined text."""
     try:
-        area = float(page.cropbox.width) * float(page.cropbox.height)
+        width = float(page.cropbox.width)
+        height = float(page.cropbox.height)
         drawings = page.get_drawings()
-        if area <= 0 or not isinstance(drawings, (list, tuple)) or len(drawings) < 100:
+        if width <= 0 or height <= 0 or not isinstance(drawings, (list, tuple)):
             return False
-        covered = sum(
-            max(0.0, float(rect.width)) * max(0.0, float(rect.height))
-            for drawing in drawings
-            if (rect := drawing.get("rect")) is not None
+        glyph_like = 0
+        covered = 0.0
+        for drawing in drawings:
+            rect = drawing.get("rect")
+            if rect is None:
+                continue
+            path_width = max(0.0, float(rect.width))
+            path_height = max(0.0, float(rect.height))
+            covered += path_width * path_height
+            if (
+                drawing.get("fill") is not None
+                and 0 < path_width <= width * _VECTOR_GLYPH_MAX_FRACTION
+                and 0 < path_height <= height * _VECTOR_GLYPH_MAX_FRACTION
+            ):
+                glyph_like += 1
+        return glyph_like >= _VECTOR_GLYPH_MIN_PATHS or (
+            len(drawings) >= _VECTOR_ARTWORK_MIN_PATHS
+            and covered / (width * height) >= _VECTOR_ARTWORK_MIN_COVERAGE
         )
-        return covered / area >= 0.15
     except (AttributeError, KeyError, TypeError, ValueError, RuntimeError, OverflowError):
+        return False
+
+
+def _page_has_drawings(page: pymupdf.Page) -> bool:
+    try:
+        drawings = page.get_drawings()
+        return isinstance(drawings, (list, tuple)) and len(drawings) >= _VECTOR_REVIEW_MIN_PATHS
+    except (AttributeError, TypeError, ValueError, RuntimeError):
         return False
 
 
@@ -1147,7 +1183,12 @@ def extract_pdf(
                             "verify scanned body coverage manually"
                         )
             if not page_lines and not use_ocr:
-                reason = "OCR disabled" if settings.ocr == "never" else "OCR not needed"
+                if settings.ocr == "never":
+                    reason = "OCR disabled"
+                elif _page_has_drawings(page):
+                    reason = "drawings without readable text; verify coverage"
+                else:
+                    reason = "no text or drawings found"
                 warnings.append(f"Page {page_index + 1}: no readable text ({reason})")
             page_lines = merge_line_fragments(page_lines)
             # Preserve table cell text and annotate only contained blocks.

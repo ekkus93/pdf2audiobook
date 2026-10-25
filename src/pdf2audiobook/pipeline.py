@@ -656,6 +656,7 @@ def analyze_book(
                 if any(
                     warning == "source PDF was damaged and repaired; verify page coverage"
                     or "could not be loaded; verify coverage" in warning
+                    or "drawings without readable text; verify coverage" in warning
                     for warning in extracted.warnings
                 )
                 else []

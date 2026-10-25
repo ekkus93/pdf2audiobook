@@ -109,6 +109,16 @@ uv run pdf2audiobook analyze scanned.pdf --no-llm --ocr always
 
 Avoid storing passwords or copyrighted source text in shared logs.
 
+In `auto` mode a page with no usable text is also OCRed when its drawings look
+like outlined text (`pdf.py`): at least `_VECTOR_GLYPH_MIN_PATHS` (40) small
+filled paths, each no larger than `_VECTOR_GLYPH_MAX_FRACTION` (6%) of the page
+in either direction, or at least `_VECTOR_ARTWORK_MIN_PATHS` (100) paths of any
+size covering `_VECTOR_ARTWORK_MIN_COVERAGE` (15%) of it. A text-free page with
+`_VECTOR_REVIEW_MIN_PATHS` (10) or more drawn paths that is not OCRed is
+reported as "drawings without readable text" and sets the `damaged_source`
+review reason; a lone rule or border is treated as blank. The Tesseract test in
+`tests/test_vector_outlined_text.py` runs in CI, whose job installs Tesseract.
+
 ### Optional local and remote LLMs
 
 The built-in default provider is Ollama at `http://127.0.0.1:11434/v1`
