@@ -155,7 +155,7 @@ def _analysis_stage_fingerprints(
     chapter_settings = settings.chapters.model_dump(exclude={"allow_single_chapter"})
     return {
         "extraction": fingerprint(
-            "analysis-v20",
+            "analysis-v21",
             book_hash,
             settings.pdf.model_dump(),
             *(() if extractor is None else ("extractor", extractor.name)),
@@ -803,6 +803,12 @@ def select_chapters(
     return chosen
 
 
+# Bump when spoken text changes for unchanged chapter text (alignment, dashes,
+# invisible characters, pronunciation punctuation) so chapter MP3s regenerate.
+# Chunk WAV keys carry the spoken chunk text itself and need no bump.
+CHAPTER_AUDIO_NARRATION_VERSION = "narration-normalization-v2"
+
+
 def chapter_audio_fingerprint(
     text: str,
     settings: Settings,
@@ -833,7 +839,7 @@ def chapter_audio_fingerprint(
         settings.tts.bitrate,
         settings.tts.sample_rate,
         cover_identity,
-        "narration-normalization-v1",
+        CHAPTER_AUDIO_NARRATION_VERSION,
         manifest.title,
         manifest.author,
         chapter.title,

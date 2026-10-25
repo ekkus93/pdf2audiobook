@@ -279,6 +279,15 @@ configuration; Kitten identity includes the resolved model ID and installed
 lockfile currently resolves 0.9.6. Re-encoding is automatic when a chapter is
 next converted; no manifest migration is needed. Chapter synthesis now streams
 PCM to a temporary WAV, so interrupted temporary audio is disposable.
+
+Upgrade note (FX9): the analysis fingerprint is now `analysis-v21` (one-letter Roman
+headings, wrapped initials and years, glyph-like vector pages sent to OCR), so existing
+workspaces re-run analysis; unapproved workspaces recompute, approved ones are protected
+as before. Chapter audio carries `narration-normalization-v2` (alignment on source words,
+dash and invisible-character handling, pronunciation punctuation), so chapter MP3s
+regenerate on the next `convert`. Chunk WAV keys contain the spoken chunk text and are not
+bumped: unchanged chunks stay cached. No manifest schema change; `budget` ledger rows
+without a recorded bound block token and USD budgets until `budget resolve` settles them.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can
