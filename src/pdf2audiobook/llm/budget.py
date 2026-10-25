@@ -455,6 +455,10 @@ class BookLLMBudgetLedger:
                     "WHERE id=?",
                     (prompt, completion, total, price, call_id),
                 )
+                # Everything `budget show` and later reservations sum, including
+                # the upper bounds of other open rows, must still be representable.
+                # A failure here rolls the whole transaction back.
+                self._stats(connection)
                 return "complete"
         except (sqlite3.Error, InvalidOperation, ValueError, TypeError, OverflowError):
             raise LLMError("Cannot resolve per-book LLM budget") from None
