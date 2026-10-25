@@ -384,6 +384,7 @@ def load_settings(
     configure_from_settings(
         result.general.log_level,
         cache_directory_configured=sources.get("cache.directory", "built-in") != "built-in",
+        explicit=sources.get("general.log_level", "built-in") != "built-in",
     )
     return result, sources
 

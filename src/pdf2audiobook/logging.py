@@ -10,6 +10,9 @@ import sys
 LOGGER = logging.getLogger("pdf2audiobook")
 _OVERRIDE_LEVEL: int | None = None
 _CACHE_DIRECTORY_WARNING_EMITTED = False
+# The CLI default: warnings are shown, stage progress is not, and a failed
+# command is reported by its own "Error:" line or JSON diagnostic alone.
+_DEFAULT_POLICY = False
 ALLOWED = frozenset({"command", "stage", "status", "provider", "error_code", "count"})
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_-]{0,39}$")
 
@@ -38,6 +41,15 @@ class EventFormatter(logging.Formatter):
         return json.dumps(data, sort_keys=True)
 
 
+class _DefaultPolicyFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (
+            _DEFAULT_POLICY
+            and isinstance(record.msg, dict)
+            and record.msg.get("event") == "command_failed"
+        )
+
+
 class CurrentStderrHandler(logging.StreamHandler):
     """Write to the active stderr stream, including when CLI tests swap it."""
 
@@ -53,23 +65,46 @@ def configure_logging(
         raise ValueError("--verbose and --quiet cannot be combined")
     handler = CurrentStderrHandler()
     handler.setFormatter(EventFormatter())
+    handler.addFilter(_DefaultPolicyFilter())
     for old in LOGGER.handlers[:]:
         LOGGER.removeHandler(old)
         old.close()
     LOGGER.addHandler(handler)
-    global _OVERRIDE_LEVEL
+    global _OVERRIDE_LEVEL, _DEFAULT_POLICY
+    _DEFAULT_POLICY = False
     configured = getattr(logging, log_level.upper(), logging.INFO)
     _OVERRIDE_LEVEL = logging.DEBUG if verbose else logging.ERROR if quiet else None
     LOGGER.setLevel(_OVERRIDE_LEVEL if _OVERRIDE_LEVEL is not None else configured)
     LOGGER.propagate = False
 
 
-def configure_from_settings(log_level: str, *, cache_directory_configured: bool) -> None:
-    """Apply file/environment logging policy after settings are loaded."""
-    global _CACHE_DIRECTORY_WARNING_EMITTED
+def use_default_event_policy() -> None:
+    """Show warnings only, and leave failure reporting to the command itself."""
+    global _DEFAULT_POLICY
+    _DEFAULT_POLICY = True
+    if LOGGER.handlers and _OVERRIDE_LEVEL is None:
+        LOGGER.setLevel(logging.WARNING)
+
+
+def configure_from_settings(
+    log_level: str, *, cache_directory_configured: bool, explicit: bool = True
+) -> None:
+    """Apply file/environment logging policy after settings are loaded.
+
+    ``explicit`` is false when ``general.log_level`` is only the built-in
+    default, which keeps the CLI's default policy.
+    """
+    global _CACHE_DIRECTORY_WARNING_EMITTED, _DEFAULT_POLICY
+    if explicit and _OVERRIDE_LEVEL is None:
+        _DEFAULT_POLICY = False
     if LOGGER.handlers:
         configured = getattr(logging, log_level.upper(), logging.INFO)
-        LOGGER.setLevel(_OVERRIDE_LEVEL if _OVERRIDE_LEVEL is not None else configured)
+        if _OVERRIDE_LEVEL is not None:
+            LOGGER.setLevel(_OVERRIDE_LEVEL)
+        elif _DEFAULT_POLICY and not explicit:
+            LOGGER.setLevel(logging.WARNING)
+        else:
+            LOGGER.setLevel(configured)
     if cache_directory_configured and not _CACHE_DIRECTORY_WARNING_EMITTED:
         _CACHE_DIRECTORY_WARNING_EMITTED = True
         log_event("cache_directory_ignored", level=logging.WARNING)

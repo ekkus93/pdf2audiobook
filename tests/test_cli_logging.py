@@ -58,3 +58,36 @@ def test_verbose_error_events_never_include_invalid_config_path(tmp_path):
     ]
     assert [event["event"] for event in events] == ["command_started", "command_failed"]
     assert all(secret not in json.dumps(event) for event in events)
+
+
+def test_default_stderr_of_a_failed_command_is_only_the_error(tmp_path):
+    missing = tmp_path / "missing.pdf"
+    human = runner.invoke(app, ["analyze", str(missing), "--no-config"])
+    assert human.exit_code != 0
+    assert human.stderr.lstrip().startswith("Error:")
+    machine = runner.invoke(app, ["analyze", str(missing), "--no-config", "--json"])
+    assert machine.exit_code != 0
+    assert json.loads(machine.stderr)["ok"] is False
+
+
+def test_verbose_failed_analyze_emits_stage_and_failure_events(tmp_path):
+    result = runner.invoke(
+        app, ["--verbose", "analyze", str(tmp_path / "missing.pdf"), "--no-config", "--json"]
+    )
+    assert result.exit_code != 0
+    lines = [line for line in result.stderr.splitlines() if line.startswith("{")]
+    events = [json.loads(line) for line in lines if '"event"' in line]
+    names = [event["event"] for event in events]
+    assert "command_failed" in names
+    assert any(event.get("level") == "error" for event in events)
+
+
+def test_explicit_log_level_enables_progress_and_failure_events(tmp_path):
+    config = tmp_path / "settings.toml"
+    config.write_text('[general]\nlog_level = "INFO"\n')
+    result = runner.invoke(
+        app, ["analyze", str(tmp_path / "missing.pdf"), "--config", str(config), "--json"]
+    )
+    assert result.exit_code != 0
+    events = [json.loads(line) for line in result.stderr.splitlines() if '"event"' in line]
+    assert "command_failed" in [event["event"] for event in events]

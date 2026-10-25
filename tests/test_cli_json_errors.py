@@ -36,7 +36,7 @@ def test_json_error_contract(exception, exit_code, capsys):
     captured = capsys.readouterr()
     assert raised.value.exit_code == exit_code
     assert captured.out == ""
-    assert json.loads(captured.err.splitlines()[-1]) == {
+    assert json.loads(captured.err) == {
         "ok": False,
         "error": {
             "type": type(exception).__name__,
@@ -55,7 +55,7 @@ def test_config_show_json_error_is_only_on_stderr(tmp_path):
     result = CliRunner().invoke(app, ["config", "show", "--json", "--config", str(missing)])
     assert result.exit_code == 2
     assert result.stdout == ""
-    diagnostic = json.loads(result.stderr.splitlines()[-1])
+    diagnostic = json.loads(result.stderr)
     assert diagnostic["ok"] is False
     assert diagnostic["error"]["type"] == "ConfigError"
     assert diagnostic["error"]["code"] == 2
@@ -67,7 +67,7 @@ def test_human_error_output_remains_human_readable(tmp_path):
     result = CliRunner().invoke(app, ["config", "show", "--config", str(missing)])
     assert result.exit_code == 2
     assert "Error:" in result.stderr
-    assert "Error:" in result.stderr
+    assert not result.stderr.lstrip().startswith("{")
 
 
 @pytest.mark.parametrize(
@@ -81,7 +81,7 @@ def test_human_error_output_remains_human_readable(tmp_path):
 def test_non_domain_exception_diagnostics_are_content_free(exception, expected, capsys):
     with pytest.raises(typer.Exit):
         fail(exception, json_output=True)
-    diagnostic = json.loads(capsys.readouterr().err.splitlines()[-1])
+    diagnostic = json.loads(capsys.readouterr().err)
     assert diagnostic["error"]["message"] == expected
     assert "/private/book.pdf" not in diagnostic["error"]["message"]
     assert "PRIVATE_" not in diagnostic["error"]["message"]

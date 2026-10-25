@@ -16,7 +16,12 @@ from rich.console import Console
 from pdf2audiobook import __version__
 from pdf2audiobook.config import Settings, load_settings, settings_public
 from pdf2audiobook.errors import AudiobookError, AudioError, ConfigError, ExtractionError, LLMError
-from pdf2audiobook.logging import configure_from_settings, configure_logging, log_event
+from pdf2audiobook.logging import (
+    configure_from_settings,
+    configure_logging,
+    log_event,
+    use_default_event_policy,
+)
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -84,6 +89,7 @@ def configure_effective_logging(settings: Settings, origins: dict[str, str]) -> 
     configure_from_settings(
         settings.general.log_level,
         cache_directory_configured=origins.get("cache.directory", "built-in") != "built-in",
+        explicit=origins.get("general.log_level", "built-in") != "built-in",
     )
 
 
@@ -100,6 +106,8 @@ def entry(
         raise typer.BadParameter("--verbose and --quiet cannot be combined")
     ctx.obj = {"verbose": verbose, "quiet": quiet}
     configure_logging(verbose=verbose, quiet=quiet)
+    if not verbose and not quiet:
+        use_default_event_policy()
     log_event("command_started", level=logging.DEBUG, command=ctx.invoked_subcommand or "root")
     if version:
         typer.echo(__version__)

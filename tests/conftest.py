@@ -18,3 +18,12 @@ def _served_ollama_context(request, monkeypatch):
         monkeypatch.setattr(
             OpenAICompatibleProvider, "_ollama_served_context", lambda self, model: 1 << 20
         )
+
+
+@pytest.fixture(autouse=True)
+def _default_event_policy():
+    """Start every test from the CLI's default logging policy, as a fresh process would."""
+    from pdf2audiobook.logging import configure_logging, use_default_event_policy
+
+    configure_logging()
+    use_default_event_policy()
