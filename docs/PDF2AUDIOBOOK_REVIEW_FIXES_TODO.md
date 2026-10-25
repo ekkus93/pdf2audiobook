@@ -82,9 +82,9 @@
 
 ## Phase FX3 — Manifest, review and resume
 
-- [ ] FX3.01 Protect hand-edited chapters (R11).
-  - [ ] FX3.01a Treat a chapter whose current values don't match `generated_fingerprint` as user-edited, and protect it like `manually_approved` under `--no-resume` and `--force`. Warn with the chapter numbers only.
-  - [ ] FX3.01b Test: an unapproved title edit survives a settings change and reanalysis, while unedited chapters are still recomputed.
+- [x] FX3.01 Protect hand-edited chapters (R11).
+  - [x] FX3.01a Treat a chapter whose current values don't match `generated_fingerprint` as user-edited, and protect it like `manually_approved` under `--no-resume` and `--force`. Warn with the chapter numbers only.
+  - [x] FX3.01b Test: an unapproved title edit survives a settings change and reanalysis, while unedited chapters are still recomputed.
 - [ ] FX3.02 Narrow the analysis fingerprint (R13).
   - [ ] FX3.02a Leave budgets, request limits, timeouts, retries, `allow_single_chapter` and consent flags out of the fingerprint. When it really does change, name the changed stage without giving values.
   - [ ] FX3.02b Tests: after approval, changing `max_requests` or `allow_single_chapter` is accepted; changing the OCR language gives the stage-naming error; the confirmed case "approve in the review UI, then analyze with `allow_single_chapter=True`" now works.
@@ -203,3 +203,4 @@
 | 2026-10-25 | 5ee08690ab2f0577175551b088b6cd31ceaa4f82 | FX2.01a, FX2.01c, FX2.02, FX2.04–FX2.05 (shared heading/list classification, OCR selection, hyphen joining) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1041 tests; CI run [40174435021](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174435021) passed | FX2 continues |
 | 2026-10-25 | b3e6bbadcd83e4388474b113d3bf6feaa47d739a | FX2.03, FX2.06–FX2.07 (safe folio detection; damaged-source review gate; extraction fingerprint v19) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1045 tests; CI run [40174780336](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174780336) passed | FX2 extraction refactor FX2.01b and final phase gate remain |
 | 2026-10-25 | 471e17c29d41424d6ca2fe619dc00449f3f543b0 | FX2.01 (extraction strategy/block construction refactor) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1045 tests; CI run [40174895909](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174895909) passed | FX3+ remain |
+| 2026-10-25 | pending | FX3.01 (preserve unapproved hand-edited chapter values during reanalysis) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1047 tests; exact-head CI pending | FX3 continues |

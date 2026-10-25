@@ -12,6 +12,7 @@ from pdf2audiobook.document.structure import (
     place_footnotes,
     propose_chapters,
     render_chapter_texts,
+    validate_chapter_coverage,
 )
 from pdf2audiobook.errors import AudioError, LLMError
 from pdf2audiobook.jsonio import load_bounded_json
@@ -24,7 +25,7 @@ from pdf2audiobook.llm import (
     propose_llm_narration,
 )
 from pdf2audiobook.llm.cache import CachedLLMProvider
-from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit
+from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, generated_chapter_fingerprint
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
 from pdf2audiobook.tts import KittenProvider, PiperProvider, TTSProvider
 from pdf2audiobook.workspace import (
@@ -116,8 +117,17 @@ def analyze_book(
         # A replacement backend must never reuse the default extractor's analysis.
         *(() if extractor is None else ("extractor", extractor.name)),
     )
+    hand_edited_chapters: list[Chapter] = []
+    existing_manifest: BookManifest | None = None
     if manifest_path.is_file():
         existing = read_manifest(manifest_path)
+        existing_manifest = existing
+        hand_edited_chapters = [
+            chapter
+            for chapter in existing.chapters
+            if chapter.generated_fingerprint is not None
+            and chapter.generated_fingerprint != generated_chapter_fingerprint(chapter)
+        ]
         same_input = existing.input_sha256 == book_hash
         same_analysis = existing.analysis_fingerprint == analysis_key
         approved_content = (
@@ -329,6 +339,46 @@ def analyze_book(
         settings.chapters,
         extra_heading_ids=llm_ids,
     )
+    if hand_edited_chapters and existing_manifest is not None:
+        new_positions = {block.id: index for index, block in enumerate(extracted.blocks)}
+        preserved_numbers = []
+        for edited in hand_edited_chapters:
+            if edited.start_block >= len(existing_manifest.blocks):
+                raise ExtractionError(
+                    f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
+                )
+            start_id = existing_manifest.blocks[edited.start_block].id
+            end_id = (
+                existing_manifest.blocks[edited.end_block].id
+                if edited.end_block < len(existing_manifest.blocks)
+                else None
+            )
+            new_start = new_positions.get(start_id)
+            new_end = new_positions.get(end_id) if end_id is not None else len(extracted.blocks)
+            match = next(
+                (
+                    chapter
+                    for chapter in chapters
+                    if chapter.start_block == new_start and chapter.end_block == new_end
+                ),
+                next((chapter for chapter in chapters if chapter.number == edited.number), None),
+            )
+            if match is None or new_start is None or new_end is None:
+                raise ExtractionError(
+                    f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
+                )
+            match.start_block = new_start
+            match.end_block = new_end
+            match.title = edited.title
+            match.voice_id = edited.voice_id
+            match.generated_fingerprint = edited.generated_fingerprint
+            match.warnings = list(edited.warnings)
+            preserved_numbers.append(edited.number)
+        validate_chapter_coverage(extracted.blocks, chapters)
+        warnings.append(
+            "Preserved user-edited chapter numbers: "
+            + ", ".join(str(number) for number in sorted(preserved_numbers))
+        )
     warnings.extend(chapter_warnings)
     if footnotes and settings.pdf.footnotes in {"inline", "end"}:
         relocated = kept = 0

@@ -68,7 +68,7 @@
   - [ ] P2.02a Reject overlapping/missing/empty chapter spans and source holes; emit a coverage report.
   - [x] P2.02b Require review for low-confidence/no-chapter books; allow explicit --allow-single-chapter.
 - [x] P2.03 Persist editable chapter manifest plus per-chapter UTF-8 text files and inspection report.
-  - [ ] P2.03a Implement manifest override validation and preserve user edits across reruns.
+  - [x] P2.03a Implement manifest override validation and preserve generated-fingerprint-detected chapter edits across reanalysis.
   - [x] P2.03b Support inspect, analyze, --dry-run, --json, --chapter and --chapter-range.
 - [x] P2.04 Test bookmark, no-TOC, TOC-offset, prose heading and chapter-mid-page fixtures.
 
