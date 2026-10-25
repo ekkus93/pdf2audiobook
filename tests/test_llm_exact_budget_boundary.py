@@ -9,6 +9,9 @@ from pdf2audiobook.llm.cache import CachedLLMProvider
 
 
 class FixedUsageProvider:
+    max_context_tokens = 512
+    max_output_tokens = 1
+
     def __init__(self, tokens: int):
         self.tokens = tokens
         self.calls = 0
@@ -38,10 +41,10 @@ def test_exactly_exhausted_budget_delivers_result_then_denies_next_call(
 ) -> None:
     provider = FixedUsageProvider(12)
     options = (
-        {"max_reported_tokens": 12}
+        {"max_reported_tokens": 145}
         if limit_kind == "tokens"
         else {
-            "max_estimated_cost_usd": 0.000012,
+            "max_estimated_cost_usd": 0.000145,
             "input_cost_usd_per_million_tokens": 1.0,
             "output_cost_usd_per_million_tokens": 1.0,
         }
@@ -75,7 +78,7 @@ def test_overspent_token_budget_still_fails_closed(tmp_path: Path, persistent: b
     )
     with pytest.raises(LLMError, match="token budget"):
         cached.complete_json(instructions="return JSON", document_text="first")
-    assert provider.calls == 1
+    assert provider.calls == 0
     with pytest.raises(LLMError, match="token budget"):
         cached.complete_json(instructions="return JSON", document_text="second")
-    assert provider.calls == 1
+    assert provider.calls == 0

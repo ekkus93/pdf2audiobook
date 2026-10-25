@@ -96,15 +96,16 @@ uv run pdf2audiobook convert path/to/book.pdf --no-llm --allow-single-chapter
 uv run pdf2audiobook batch ./books --no-llm --recursive
 uv run pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b
 uv run pdf2audiobook convert path/to/book.pdf --cover ./cover.jpg
+uv run pdf2audiobook convert path/to/damaged.pdf --accept-review damaged_source
 uv run pdf2audiobook budget show --output ./audiobooks/BOOK
 uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
 ~~~
 
-`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with the selected TTS provider; `--cover PATH` embeds JPEG/PNG artwork (up to 5 MiB). The same option works with `batch`, and `audio.cover_image` configures a default. `budget show` reports content-free LLM request accounting; `budget resolve` settles an ambiguous request only after explicit confirmation. TTS retries default to two, and conversion continues through other chapters before reporting partial failures. Models are loaded on demand.
+`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with the selected TTS provider; `--cover PATH` embeds JPEG/PNG artwork (up to 5 MiB). The same option works with `batch`, and `audio.cover_image` configures a default. `pack-m4b --cover` applies artwork to the M4B only; packaging freshness is based on chapter text. `budget show` reports content-free LLM request accounting; unknown and pending attempts count at their worst-case token and cost bounds. A rejected provider request still counts toward `max_requests`, but does not consume token or cost budget when it reports no usage. `budget resolve` settles an ambiguous request only after explicit confirmation. TTS retries default to two and are limited to transient failures; failed chapters are visible with `inspect`, and conversion continues through other chapters before reporting partial failures. Use `--accept-review REASON` only after reviewing the flagged issue.
 
 Install Tesseract separately for scanned pages. For synthesis, run `uv sync --extra kitten --extra dev` and install FFmpeg. The Kitten model alias `mini` resolves to the lightweight 0.8 mini model.
 
-**Limitations:** Chapter detection is provisional, especially for complex layouts. Tables, footnotes, OCR ambiguities and LLM-assisted text corrections remain in progress. Review chapter text before distributing audiobook files.
+**Limitations:** Chapter detection is provisional, especially for complex layouts. A poem or section-number sequence in the only qualifying margin band can be mistaken for folios; disable removal with `pdf.remove_page_numbers = false` if needed. Tables, footnotes, OCR ambiguities and LLM-assisted text corrections remain in progress. Review chapter text before distributing audiobook files.
 
 ## Chapter preview and selective conversion
 

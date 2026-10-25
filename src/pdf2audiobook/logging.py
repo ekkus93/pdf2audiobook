@@ -38,12 +38,20 @@ class EventFormatter(logging.Formatter):
         return json.dumps(data, sort_keys=True)
 
 
+class CurrentStderrHandler(logging.StreamHandler):
+    """Write to the active stderr stream, including when CLI tests swap it."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.stream = sys.stderr
+        super().emit(record)
+
+
 def configure_logging(
     *, verbose: bool = False, quiet: bool = False, log_level: str = "INFO"
 ) -> None:
     if verbose and quiet:
         raise ValueError("--verbose and --quiet cannot be combined")
-    handler = logging.StreamHandler(sys.stderr)
+    handler = CurrentStderrHandler()
     handler.setFormatter(EventFormatter())
     for old in LOGGER.handlers[:]:
         LOGGER.removeHandler(old)

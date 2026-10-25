@@ -12,7 +12,7 @@ from pdf2audiobook.models import BookManifest, Chapter
 def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
     chapter = Chapter(id="c1", number=1, title="First", start_block=0, end_block=1, confidence=1)
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="a" * 64,
         title="Book",
         source_path="book.pdf",
@@ -56,13 +56,18 @@ def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
     pipeline.convert_book(tmp_path / "book.pdf", settings)
     pipeline.convert_book(tmp_path / "book.pdf", settings)
     assert len(calls) == 1
-    pipeline.convert_book(tmp_path / "book.pdf", settings, force=True)
+    sidecar = next((tmp_path / "audio").glob("*.cache.json"))
+    sidecar.write_bytes(b"[" * 10 + b"0" + b"]" * 10)
+    assert sidecar.stat().st_size < 4096
+    pipeline.convert_book(tmp_path / "book.pdf", settings)
     assert len(calls) == 2
+    pipeline.convert_book(tmp_path / "book.pdf", settings, force=True)
+    assert len(calls) == 3
     disabled = settings.model_copy(
         update={"general": settings.general.model_copy(update={"resume": False})}
     )
     pipeline.convert_book(tmp_path / "book.pdf", disabled)
-    assert len(calls) == 3
+    assert len(calls) == 4
     changed = settings.model_copy(
         update={
             "tts": settings.tts.model_copy(
@@ -71,4 +76,4 @@ def test_mp3_resume_force_and_no_resume(tmp_path, monkeypatch):
         }
     )
     pipeline.convert_book(tmp_path / "book.pdf", changed)
-    assert calls == ["Jasper", "Jasper", "Jasper", "OtherVoice"]
+    assert calls == ["Jasper", "Jasper", "Jasper", "Jasper", "OtherVoice"]

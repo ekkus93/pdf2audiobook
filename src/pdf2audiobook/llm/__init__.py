@@ -438,7 +438,12 @@ class OpenAICompatibleProvider:
         }
         # Do not silently drop the response cap for an incompatible provider.
         if self.max_context_tokens is not None:
-            payload["max_tokens"] = self.max_output_tokens
+            parameter = (
+                "max_completion_tokens"
+                if "max_tokens" in self._unsupported_parameters
+                else "max_tokens"
+            )
+            payload[parameter] = self.max_output_tokens
         for parameter in self._unsupported_parameters:
             payload.pop(parameter, None)
         if self.provider == "ollama":
@@ -491,7 +496,7 @@ class OpenAICompatibleProvider:
                 rejected_parameter = next(
                     (
                         parameter
-                        for parameter in ("max_tokens", "temperature")
+                        for parameter in ("max_tokens", "max_completion_tokens", "temperature")
                         if parameter in payload
                         and parameter not in self._unsupported_parameters
                         and self._unsupported_parameter(response, parameter)
@@ -499,8 +504,12 @@ class OpenAICompatibleProvider:
                     None,
                 )
                 if rejected_parameter is not None:
-                    finish_attempt()
-                    payload.pop(rejected_parameter)
+                    finish_attempt({"rejected": True})
+                    if rejected_parameter == "max_tokens":
+                        payload.pop("max_tokens", None)
+                        payload["max_completion_tokens"] = self.max_output_tokens
+                    else:
+                        payload.pop(rejected_parameter, None)
                     self._unsupported_parameters.add(rejected_parameter)
                     continue
                 # Ollama reports an aborted generation ("token repeat limit
@@ -512,7 +521,19 @@ class OpenAICompatibleProvider:
                         retry_count += 1
                         continue
                 if not response.is_success:
-                    finish_attempt()
+                    if 400 <= response.status_code < 500 and response.status_code != 408:
+                        try:
+                            error_payload = response.json()
+                        except (ValueError, json.JSONDecodeError):
+                            error_payload = None
+                        error_usage = (
+                            error_payload.get("usage") if isinstance(error_payload, dict) else None
+                        )
+                        finish_attempt(
+                            error_usage if isinstance(error_usage, dict) else {"rejected": True}
+                        )
+                    else:
+                        finish_attempt()
                 response.raise_for_status()
                 reply = response.json()
                 # Provider usage is billable even when generated JSON is malformed.
@@ -934,6 +955,7 @@ def propose_llm_contents_boundaries(
             "text": block.text,
         },
     ):
+        primary_ids = {block.id for block in window}
         if not window:
             _record_decision(
                 decisions,
@@ -979,7 +1001,7 @@ def propose_llm_contents_boundaries(
         for item in response.entries:
             source = by_id.get(item.block_id)
             safe_id = _diagnostic_block_id(item.block_id, known_ids)
-            if source is None or item.block_id in seen_entries:
+            if source is None or item.block_id not in primary_ids or item.block_id in seen_entries:
                 _record_decision(
                     decisions,
                     task="contents",
@@ -1043,7 +1065,11 @@ def propose_llm_contents_boundaries(
         for boundary in response.boundaries:
             source = by_id.get(boundary.block_id)
             safe_id = _diagnostic_block_id(boundary.block_id, known_ids)
-            if source is None or boundary.block_id in seen_boundaries:
+            if (
+                source is None
+                or boundary.block_id not in primary_ids
+                or boundary.block_id in seen_boundaries
+            ):
                 _record_decision(
                     decisions,
                     task="contents",
@@ -1056,7 +1082,7 @@ def propose_llm_contents_boundaries(
                 warnings.append("LLM boundary references an unknown/duplicate block " + safe_id)
                 continue
             seen_boundaries.add(boundary.block_id)
-            if exact_text_key(boundary.title) != exact_text_key(source.text):
+            if boundary.title != source.text:
                 _record_decision(
                     decisions,
                     task="contents",
@@ -1067,6 +1093,23 @@ def propose_llm_contents_boundaries(
                     source=source,
                 )
                 warnings.append("LLM boundary did not match an exact heading source line")
+                continue
+            from pdf2audiobook.document.structure import is_heading_line
+
+            short_line = len(source.text.split()) <= 12 and not source.text.rstrip().endswith(
+                (".", "?", "!", ",", ";", ":")
+            )
+            if not is_heading_line(source.text) and not short_line:
+                _record_decision(
+                    decisions,
+                    task="contents",
+                    block_id=source.id,
+                    status="rejected",
+                    reason_code="boundary_not_heading_like",
+                    confidence=boundary.confidence,
+                    source=source,
+                )
+                warnings.append("LLM boundary did not resemble a heading")
                 continue
             if boundary.confidence < 0.75:
                 _record_decision(

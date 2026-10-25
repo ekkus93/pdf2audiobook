@@ -43,9 +43,11 @@ class _SynthesisProgress(TypedDict):
     schema_version: int
     fingerprint: str
     total_chunks: int
+    pause_count: int
     completed_chunks: int
     status: str
     chunks: list[_ChunkProgress]
+    mapping: list[dict[str, int | str]]
 
 
 def _open_streaming_wav(path: Path, sample_rate: int) -> wave.Wave_write:
@@ -67,6 +69,8 @@ def _write_pcm_chunk(writer: wave.Wave_write, samples: np.ndarray) -> None:
         raise AudioError("TTS returned invalid audio sample data") from None
     if audio.ndim != 1 or audio.size == 0 or not np.isfinite(audio).all():
         raise AudioError("TTS returned invalid mono audio samples")
+    if getattr(writer, "_datawritten", 0) + audio.size * 2 > 0xFFFFFFFF - 36:
+        raise AudioError("Chapter audio exceeds the WAV RIFF size limit")
     for offset in range(0, audio.size, 65536):
         part = audio[offset : offset + 65536]
         pcm = (np.clip(part, -1, 1) * 32767).astype("<i2")
@@ -74,6 +78,8 @@ def _write_pcm_chunk(writer: wave.Wave_write, samples: np.ndarray) -> None:
 
 
 def _write_silence(writer: wave.Wave_write, sample_count: int) -> None:
+    if getattr(writer, "_datawritten", 0) + sample_count * 2 > 0xFFFFFFFF - 36:
+        raise AudioError("Chapter audio exceeds the WAV RIFF size limit")
     block = b"\0" * (65536 * 2)
     remaining = sample_count
     while remaining:
@@ -101,7 +107,7 @@ _NARRATION_TRANSLATION = str.maketrans(
         "‟": '"',
         "‐": "-",
         "‑": "-",
-        "‒": ",",
+        "‒": "-",
         "–": ",",
         "—": ",",
         "―": ",",
@@ -128,6 +134,7 @@ _PRONUNCIATION_TRAILING = {",", ";", ":", "!", "?", "…"}
 
 def normalize_narration_text(text: str) -> str:
     """Apply the documented TTS-only character table without changing source data."""
+    text = re.sub(r"(?<=\d)–(?=\d)", " to ", text)
     return text.translate(_NARRATION_TRANSLATION)
 
 
@@ -195,15 +202,15 @@ def _spoken_token(token: str, pronunciations: Mapping[str, str] | None = None) -
         end -= 1
     core = normalized[start:end]
     has_terminal_period = core.endswith(".") and not normalized[end:].startswith(",")
-    pronunciation_core = core[:-1] if has_terminal_period else core
+    pronunciation_core = (core[:-1] if has_terminal_period else core).rstrip(".")
     spoken = pronunciations.get(core.casefold())
     if spoken is None:
         spoken = pronunciations.get(pronunciation_core.casefold())
     if spoken is None:
         return normalized
-    if pronunciation_core.isupper():
+    if pronunciation_core.isalpha() and pronunciation_core.isupper():
         spoken = spoken.upper()
-    elif pronunciation_core.istitle():
+    elif pronunciation_core.isalpha() and pronunciation_core.istitle():
         spoken = spoken.capitalize()
     period = "." if has_terminal_period else ""
     return f"{normalized[:start]}{spoken}{period}{normalized[end:]}"
@@ -420,6 +427,11 @@ def synthesize_chunks(
     pause = np.zeros(int(rate * pause_ms / 1000), dtype=np.float32)
     paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
     ranges = chunk_source_ranges(spoken_source, chunks, pronunciations=pronunciations)
+    pause_ranges = [
+        (start, end)
+        for start, end in _unspeakable_ranges(spoken_source)
+        if _SCENE_BREAK.fullmatch(spoken_source[start:end].strip())
+    ]
     chunk_voices: list[str] = []
     change_index = 0
     active_voice = voice
@@ -445,6 +457,18 @@ def synthesize_chunks(
         )
         for text, chunk_voice in zip(chunks, chunk_voices, strict=True)
     ]
+    chunk_mapping: list[dict[str, int | str]] = []
+    for index, (start, end, _boundary) in enumerate(ranges):
+        chunk_mapping.append(
+            {
+                "kind": "speech",
+                "number": index + 1,
+                "source_start": start,
+                "source_end": end,
+            }
+        )
+    for start, end in pause_ranges:
+        chunk_mapping.append({"kind": "pause", "source_start": start, "source_end": end})
     # The ledger is diagnostic; it never authorizes reuse without WAV and SHA-256 validation.
     # No source text, voice content, or absolute paths are persisted in the ledger.
     progress: _SynthesisProgress = {
@@ -461,6 +485,7 @@ def synthesize_chunks(
             chunk_limit,
         ),
         "total_chunks": len(chunks),
+        "pause_count": len(pause_ranges),
         "completed_chunks": 0,
         "status": "in_progress",
         "chunks": [
@@ -475,6 +500,10 @@ def synthesize_chunks(
             }
             for index, identity in enumerate(identities)
         ],
+        "mapping": sorted(
+            chunk_mapping,
+            key=lambda item: (item["source_start"], item["source_end"]),
+        ),
     }
     if progress_file is not None:
         write_json(progress_file, progress)
@@ -531,8 +560,15 @@ def synthesize_chunks(
                         try:
                             audio = provider.generate(text, voice=chunk_voice, speed=speed)
                             break
-                        except Exception:
-                            if attempt >= max_retries:
+                        except Exception as exc:
+                            classifier = getattr(provider, "is_transient_error", None)
+                            transient = getattr(exc, "transient", False) is True
+                            if callable(classifier):
+                                try:
+                                    transient = classifier(exc) is True
+                                except Exception:
+                                    transient = False
+                            if not transient or attempt >= max_retries:
                                 # Arbitrary TTS engines can echo book text in their errors.
                                 raise AudioError(
                                     "TTS synthesis failed; verify model and voice"

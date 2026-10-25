@@ -324,10 +324,10 @@ def _classify_block_kind(
         return "caption"
     if line_index in equation_indices:
         return "equation"
-    if is_list_line(text):
-        return "list"
     if is_heading_line(text):
         return "heading"
+    if is_list_line(text):
+        return "list"
     return "unknown"
 
 
@@ -615,8 +615,16 @@ def _page_ocr_strategy(
                 f"Page {page_number}: sparse selectable text overlays "
                 "a large raster; attempting OCR and requiring coverage review"
             )
+    vector_text_page = not usable and _page_has_dense_vector_art(page)
+    if vector_text_page:
+        quality_issue = "dense vector artwork without usable text"
+        warnings.append(
+            f"Page {page_number}: dense vector artwork has no usable text; attempting OCR"
+        )
     auto_ocr_needed = not usable and (
-        quality_issue == "damaged selectable-text mapping" or _page_has_dominant_raster(page)
+        quality_issue == "damaged selectable-text mapping"
+        or _page_has_dominant_raster(page)
+        or vector_text_page
     )
     use_ocr = settings.ocr == "always" or (settings.ocr == "auto" and auto_ocr_needed)
     if settings.ocr == "auto" and quality_issue == "damaged selectable-text mapping":
@@ -689,6 +697,23 @@ def _page_has_dominant_raster(page: pymupdf.Page) -> bool:
         # Uninspectable image metadata must not replace selectable text.
         return False
     return False
+
+
+def _page_has_dense_vector_art(page: pymupdf.Page) -> bool:
+    """Detect dense drawing-only pages that may contain outlined text."""
+    try:
+        area = float(page.cropbox.width) * float(page.cropbox.height)
+        drawings = page.get_drawings()
+        if area <= 0 or not isinstance(drawings, (list, tuple)) or len(drawings) < 100:
+            return False
+        covered = sum(
+            max(0.0, float(rect.width)) * max(0.0, float(rect.height))
+            for drawing in drawings
+            if (rect := drawing.get("rect")) is not None
+        )
+        return covered / area >= 0.15
+    except (AttributeError, KeyError, TypeError, ValueError, RuntimeError, OverflowError):
+        return False
 
 
 @lru_cache(maxsize=1)
@@ -858,6 +883,53 @@ def _build_page_blocks(
     """Build source-aligned spans and classified blocks for one extracted page."""
     spans: list[SourceSpan] = []
     blocks: list[DocumentBlock] = []
+    marker_re = re.compile(r"^\s*(\d+|[A-Za-z]|[ivxlcdm]+)[.)]\s+", re.I)
+    marked = [(marker_re.match(str(line.get("text", ""))), line) for line in lines]
+    sizes = sorted(
+        float(line["size"]) for line in lines if isinstance(line.get("size"), (int, float))
+    )
+    typical_size = sizes[(len(sizes) - 1) // 2] if sizes else 0.0
+    sequential: set[int] = set()
+    for index in range(len(marked) - 1):
+        first, second = marked[index][0], marked[index + 1][0]
+        if first is None or second is None:
+            continue
+        a, b = first.group(1), second.group(1)
+        if a.isdigit() and b.isdigit() and int(b) == int(a) + 1:
+            sequential.update((index, index + 1))
+        elif (
+            len(a) == len(b) == 1
+            and a.isalpha()
+            and b.isalpha()
+            and ord(b.lower()) == ord(a.lower()) + 1
+        ):
+            sequential.update((index, index + 1))
+        elif a.lower() in {
+            "i",
+            "ii",
+            "iii",
+            "iv",
+            "v",
+            "vi",
+            "vii",
+            "viii",
+            "ix",
+            "x",
+        } and b.lower() in {"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"}:
+            roman = {
+                "i": 1,
+                "ii": 2,
+                "iii": 3,
+                "iv": 4,
+                "v": 5,
+                "vi": 6,
+                "vii": 7,
+                "viii": 8,
+                "ix": 9,
+                "x": 10,
+            }
+            if roman[b.lower()] == roman[a.lower()] + 1:
+                sequential.update((index, index + 1))
     for line_index, line in enumerate(lines):
         ident = f"p{page_index + 1:05d}-l{line_index + 1:05d}"
         bbox = _finite_bbox(line["bbox"])
@@ -876,6 +948,39 @@ def _build_page_blocks(
                     font_size=part.get("size"),
                 )
             )
+        marker = marked[line_index][0]
+        display_heading = (
+            marker is not None
+            and typical_size > 0
+            and float(line["size"]) >= typical_size * 1.35
+            and not line["text"].rstrip().endswith((".", "?", "!", ",", ";", ":"))
+        )
+        classified = _classify_block_kind(
+            line["text"],
+            line_index,
+            bbox,
+            table_regions,
+            footnote_indices,
+            caption_indices,
+            equation_indices,
+        )
+        if display_heading:
+            kind: Literal[
+                "heading",
+                "paragraph",
+                "list",
+                "table",
+                "footnote",
+                "caption",
+                "equation",
+                "unknown",
+            ] = "heading"
+        elif marker is not None and line_index in sequential and not is_heading_line(line["text"]):
+            kind = "list"
+        elif marker is not None and line_index not in sequential and classified == "list":
+            kind = "unknown"
+        else:
+            kind = classified
         blocks.append(
             DocumentBlock(
                 id=ident,
@@ -885,15 +990,7 @@ def _build_page_blocks(
                 bbox=bbox,
                 font_size=line["size"],
                 order=order_offset + len(blocks),
-                kind=_classify_block_kind(
-                    line["text"],
-                    line_index,
-                    bbox,
-                    table_regions,
-                    footnote_indices,
-                    caption_indices,
-                    equation_indices,
-                ),
+                kind=kind,
             )
         )
     return spans, blocks
@@ -947,6 +1044,7 @@ def extract_pdf(
                     page = load_page(page_index)
                 except Exception:
                     warnings.append(f"Page {page_index + 1}: could not be loaded; verify coverage")
+                    sizes.append((0.0, 0.0))
                     continue
             else:
                 page = next(islice(iter(document), page_index, page_index + 1))

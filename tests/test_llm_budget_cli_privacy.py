@@ -19,3 +19,23 @@ def test_budget_show_corrupt_ledger_error_is_content_free(tmp_path):
     assert result.exit_code == 5
     for private in ("PRIVATE_BUDGET_WORKSPACE", "PRIVATE_LEDGER_BYTES", str(tmp_path)):
         assert private not in result.stdout + result.stderr
+
+
+def test_budget_commands_do_not_create_missing_ledger(tmp_path):
+    workspace = tmp_path / "mistyped-output"
+    show = CliRunner().invoke(app, ["budget", "show", "--output", str(workspace)])
+    resolve = CliRunner().invoke(
+        app,
+        [
+            "budget",
+            "resolve",
+            "1",
+            "--output",
+            str(workspace),
+            "--confirm",
+            "--unbilled",
+            "--no-config",
+        ],
+    )
+    assert show.exit_code == resolve.exit_code == 2
+    assert not workspace.exists()

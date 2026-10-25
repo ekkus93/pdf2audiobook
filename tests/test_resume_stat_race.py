@@ -23,7 +23,7 @@ def test_resume_recovers_from_output_stat_race_without_leaking_path(tmp_path, mo
         confidence=1.0,
     )
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="synthetic",
         title="Synthetic book",
         source_path=str(source),

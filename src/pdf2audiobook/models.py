@@ -59,6 +59,10 @@ class Chapter(StrictModel):
     manually_approved: bool = False
     voice_id: str | None = None
     generated_fingerprint: str | None = None
+    generated_title: str | None = None
+    generated_start_block: int | None = None
+    generated_end_block: int | None = None
+    generated_voice_id: str | None = None
     warnings: list[str] = Field(default_factory=list)
 
     @field_validator("voice_id")
@@ -85,7 +89,7 @@ class NarrationChunk(StrictModel):
 
 
 class BookManifest(StrictModel):
-    schema_version: Literal[2]
+    schema_version: Literal[3]
     input_sha256: str
     title: str
     author: str | None = None
@@ -96,6 +100,8 @@ class BookManifest(StrictModel):
     chapters: list[Chapter] = Field(default_factory=list)
     chunks: list[NarrationChunk] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    review_required: list[str] = Field(default_factory=list)
+    review_acknowledged: list[str] = Field(default_factory=list)
     approved: bool = False
     analysis_fingerprint: str | None = None
 

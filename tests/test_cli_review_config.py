@@ -141,6 +141,53 @@ def test_negative_cli_switches_revoke_toml_true_values(tmp_path: Path, monkeypat
     assert settings.chapters.allow_single_chapter is False
 
 
+@pytest.mark.parametrize("command", ["convert", "batch"])
+def test_convert_and_batch_negative_switches_override_toml(
+    tmp_path: Path, monkeypatch, command: str
+):
+    config = tmp_path / "settings.toml"
+    config.write_text(
+        "[llm]\nenabled = true\nvision = true\nallow_remote_content = true\n"
+        "[chapters]\nallow_single_chapter = true\n"
+    )
+    observed = []
+    from pdf2audiobook import pipeline
+
+    def fake_convert(_source, settings, **_kwargs):
+        observed.append(settings)
+        return []
+
+    monkeypatch.setattr(pipeline, "convert_book", fake_convert)
+    if command == "convert":
+        source = tmp_path / "book.pdf"
+        source.write_bytes(b"synthetic")
+        args = [command, str(source)]
+    else:
+        source = tmp_path / "books"
+        source.mkdir()
+        (source / "book.pdf").write_bytes(b"synthetic")
+        args = [command, str(source)]
+    result = runner.invoke(
+        app,
+        args
+        + [
+            "--config",
+            str(config),
+            "--no-llm",
+            "--no-vision",
+            "--no-allow-remote-content",
+            "--no-allow-single-chapter",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert len(observed) == 1
+    settings = observed[0]
+    assert settings.llm.enabled is False
+    assert settings.llm.vision is False
+    assert settings.llm.allow_remote_content is False
+    assert settings.chapters.allow_single_chapter is False
+
+
 def test_explicit_unused_cache_directory_warns_and_is_labeled(tmp_path: Path, monkeypatch):
     from pdf2audiobook import logging as app_logging
 

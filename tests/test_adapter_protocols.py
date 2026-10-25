@@ -127,7 +127,7 @@ def test_injected_extractor_never_reuses_default_analysis(tmp_path):
 def test_injected_audio_adapters_change_chapter_identity(adapters):
     settings = Settings()
     manifest = BookManifest(
-        schema_version=2, input_sha256="0" * 64, title="Book", source_path="book.pdf"
+        schema_version=3, input_sha256="0" * 64, title="Book", source_path="book.pdf"
     )
     chapter = Chapter(id="c1", number=1, title="One", start_block=0, end_block=1, confidence=1.0)
     default = chapter_audio_fingerprint("Read.", settings, manifest, chapter)

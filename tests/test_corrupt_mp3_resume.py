@@ -45,7 +45,7 @@ def test_resume_replaces_corrupt_mp3_even_with_matching_checksum(
         confidence=1.0,
     )
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="synthetic-sha",
         title="Synthetic Book",
         source_path=str(source),

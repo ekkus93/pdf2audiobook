@@ -7,7 +7,7 @@ from pdf2audiobook.workspace import atomic_write, fingerprint, read_manifest, wr
 def test_manifest(tmp_path):
     path = tmp_path / "manifest.json"
     book = BookManifest(
-        schema_version=2, input_sha256="a" * 64, title="Test", source_path="book.pdf"
+        schema_version=3, input_sha256="a" * 64, title="Test", source_path="book.pdf"
     )
     write_manifest(path, book)
     assert read_manifest(path) == book

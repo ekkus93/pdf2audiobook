@@ -388,22 +388,25 @@ def load_settings(
     return result, sources
 
 
+_SECRET_CONFIG_PATHS = frozenset({"pdf.password"})
+
+
 def settings_public(settings: Settings) -> dict[str, Any]:
-    # Stored provider credentials are names of environment variables, never secret values.
+    # Secret fields are explicitly listed; arbitrary user dictionary keys remain data.
     return _redact_public_value(settings.model_dump())
 
 
-def _redact_public_value(value: Any, field_name: str = "") -> Any:
-    """Recursively redact secret-like fields and URL credentials in config output."""
-    normalized_name = field_name.casefold()
-    is_env_name = normalized_name.endswith("_env")
-    if any(secret in normalized_name for secret in ("key", "token", "secret", "password")):
-        if not is_env_name and value is not None:
-            return "***"
+def _redact_public_value(value: Any, field_name: str = "", _path: str = "") -> Any:
+    """Redact only declared secret fields and URL credential components."""
+    if _path in _SECRET_CONFIG_PATHS and value is not None:
+        return "***"
     if isinstance(value, dict):
-        return {key: _redact_public_value(item, str(key)) for key, item in value.items()}
+        return {
+            key: _redact_public_value(item, str(key), f"{_path}.{key}".strip("."))
+            for key, item in value.items()
+        }
     if isinstance(value, list):
-        return [_redact_public_value(item, field_name) for item in value]
+        return [_redact_public_value(item, field_name, _path) for item in value]
     if isinstance(value, str) and "://" in value:
         try:
             parsed = urlsplit(value)
@@ -415,5 +418,6 @@ def _redact_public_value(value: Any, field_name: str = "") -> Any:
         if "@" in netloc:
             netloc = "***@" + netloc.rsplit("@", 1)[1]
         query = "***" if parsed.query else ""
-        return urlunsplit((parsed.scheme, netloc, parsed.path, query, parsed.fragment))
+        fragment = "***" if parsed.fragment else ""
+        return urlunsplit((parsed.scheme, netloc, parsed.path, query, fragment))
     return value

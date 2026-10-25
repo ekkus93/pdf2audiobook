@@ -19,7 +19,7 @@ def test_render_chapter_texts_streams_existing_artifact_comparison(tmp_path, mon
         confidence=1.0,
     )
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="synthetic",
         title="Synthetic",
         source_path="synthetic.pdf",

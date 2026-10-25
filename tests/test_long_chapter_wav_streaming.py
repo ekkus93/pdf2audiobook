@@ -100,3 +100,14 @@ def test_chapter_wav_streaming_rejects_nonfinite_samples(tmp_path, bad):
     samples = np.array([0.1, bad, 0.2], dtype=np.float32)
     with pytest.raises(AudioError, match="empty/nonfinite"):
         audio_module._write_chapter_wav(samples, 24000, tmp_path / "invalid.wav")
+
+
+def test_streaming_wav_checks_riff_limit_before_writing(monkeypatch):
+    class NearLimitWriter:
+        _datawritten = 0xFFFFFFFF - 37
+
+        def writeframesraw(self, _data):
+            raise AssertionError("oversized PCM must not be written")
+
+    with pytest.raises(AudioError, match="RIFF size limit"):
+        audio_module._write_pcm_chunk(NearLimitWriter(), np.ones(1, dtype=np.float32))

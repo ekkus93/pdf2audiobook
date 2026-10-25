@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import logging
+import os
 import tempfile
 from functools import lru_cache
 from importlib.metadata import PackageNotFoundError
@@ -12,13 +15,13 @@ from pdf2audiobook.audio import (
     AudioEncoder,
     audio_output_path,
     encode_mp3,
-    has_speakable_narration,
     read_cover_image,
     synthesize_chunks,
     voice_marker_ids,
 )
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import (
+    chapter_has_speakable_text,
     footnote_anchor_edits,
     pagination_cleanup,
     place_footnotes,
@@ -26,7 +29,7 @@ from pdf2audiobook.document.structure import (
     render_chapter_texts,
     validate_chapter_coverage,
 )
-from pdf2audiobook.errors import AudioError, LLMError, PartialConversionError
+from pdf2audiobook.errors import AudioError, ExtractionError, LLMError, PartialConversionError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.llm import (
     LLMDecision,
@@ -38,6 +41,7 @@ from pdf2audiobook.llm import (
     propose_llm_narration,
 )
 from pdf2audiobook.llm.cache import CachedLLMProvider
+from pdf2audiobook.logging import log_event
 from pdf2audiobook.models import BookManifest, Chapter, CleanupEdit, generated_chapter_fingerprint
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
 from pdf2audiobook.tts import KITTEN_MODEL_ALIASES, KittenProvider, PiperProvider, TTSProvider
@@ -148,7 +152,7 @@ def _analysis_stage_fingerprints(
     chapter_settings = settings.chapters.model_dump(exclude={"allow_single_chapter"})
     return {
         "extraction": fingerprint(
-            "analysis-v19",
+            "analysis-v20",
             book_hash,
             settings.pdf.model_dump(),
             *(() if extractor is None else ("extractor", extractor.name)),
@@ -188,6 +192,8 @@ def valid_mp3_sidecar(audio_path: Path) -> dict[str, object] | None:
     try:
         valid = (
             isinstance(data.get("chapter_id"), str)
+            and data.get("sidecar_version") == 2
+            and isinstance(data.get("text_sha256"), str)
             and isinstance(data.get("fingerprint"), str)
             and isinstance(data.get("bytes"), int)
             and not isinstance(data.get("bytes"), bool)
@@ -242,6 +248,8 @@ def analyze_book(
 ) -> Path:
     from pdf2audiobook.errors import InputError
 
+    log_event("stage_started", level=logging.INFO, stage="analysis")
+
     # These exceptions can include private book names and absolute paths.
     # Avoid rendering user-supplied source identifiers in public diagnostics.
     try:
@@ -279,8 +287,6 @@ def analyze_book(
             render_chapter_texts(existing, folder, settings.pdf.footnotes)
             return manifest_path
         if approved_content:
-            from pdf2audiobook.errors import ExtractionError
-
             changed_stages = _changed_analysis_stages(folder, stage_fingerprints)
             raise ExtractionError(
                 "This workspace contains manually approved or protected chapter/cleanup edits. "
@@ -298,6 +304,9 @@ def analyze_book(
         extracted = extractor.extract(
             source, settings.pdf, ocr_cache_dir=ocr_cache_dir, source_sha256=book_hash
         )
+    log_event(
+        "stage_completed", level=logging.INFO, stage="extraction", count=len(extracted.blocks)
+    )
     pagination_warnings: list[str] = []
     edits = pagination_cleanup(
         extracted.blocks,
@@ -503,57 +512,111 @@ def analyze_book(
         settings.chapters,
         extra_heading_ids=llm_ids,
     )
-    for chapter in chapters:
-        has_speakable_source = any(
-            block.id not in omitted and has_speakable_narration(block.text)
-            for block in extracted.blocks[chapter.start_block : chapter.end_block]
-        )
-        if not has_speakable_source:
-            chapter.warnings.append("No speakable text after accepted cleanup; review manually")
-            warnings.append(
-                f"Chapter {chapter.number} has no speakable text after cleanup; "
-                "review before synthesis"
-            )
     if hand_edited_chapters and existing_manifest is not None:
         new_positions = {block.id: index for index, block in enumerate(extracted.blocks)}
         preserved_numbers = []
         for edited in hand_edited_chapters:
-            if edited.start_block >= len(existing_manifest.blocks):
+            if edited.start_block >= len(existing_manifest.blocks) or edited.end_block > len(
+                existing_manifest.blocks
+            ):
                 raise ExtractionError(
                     f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
                 )
-            start_id = existing_manifest.blocks[edited.start_block].id
-            end_id = (
-                existing_manifest.blocks[edited.end_block].id
-                if edited.end_block < len(existing_manifest.blocks)
-                else None
-            )
-            new_start = new_positions.get(start_id)
-            new_end = new_positions.get(end_id) if end_id is not None else len(extracted.blocks)
-            match = next(
-                (
-                    chapter
-                    for chapter in chapters
-                    if chapter.start_block == new_start and chapter.end_block == new_end
-                ),
-                next((chapter for chapter in chapters if chapter.number == edited.number), None),
-            )
-            if match is None or new_start is None or new_end is None:
+            match = next((chapter for chapter in chapters if chapter.number == edited.number), None)
+            if match is None:
                 raise ExtractionError(
                     f"Chapter {edited.number} was edited but cannot be aligned after reanalysis"
                 )
-            match.start_block = new_start
-            match.end_block = new_end
-            match.title = edited.title
-            match.voice_id = edited.voice_id
+            generated = match.model_copy(deep=True)
+            title_edited = (
+                edited.generated_title is not None and edited.title != edited.generated_title
+            )
+            start_edited = (
+                edited.generated_start_block is not None
+                and edited.start_block != edited.generated_start_block
+            )
+            end_edited = (
+                edited.generated_end_block is not None
+                and edited.end_block != edited.generated_end_block
+            )
+            voice_edited = edited.generated_voice_id != edited.voice_id
+            if start_edited:
+                start_id = existing_manifest.blocks[edited.start_block].id
+                mapped_start = new_positions.get(start_id)
+                if mapped_start is None:
+                    raise ExtractionError(
+                        f"Chapter {edited.number} boundary cannot be aligned; approve or revert the edit"
+                    )
+                match.start_block = mapped_start
+            if end_edited:
+                end_id = (
+                    existing_manifest.blocks[edited.end_block].id
+                    if edited.end_block < len(existing_manifest.blocks)
+                    else None
+                )
+                mapped_end = (
+                    new_positions.get(end_id) if end_id is not None else len(extracted.blocks)
+                )
+                if mapped_end is None:
+                    raise ExtractionError(
+                        f"Chapter {edited.number} boundary cannot be aligned; approve or revert the edit"
+                    )
+                match.end_block = mapped_end
+            if title_edited:
+                match.title = edited.title
+            if voice_edited:
+                match.voice_id = edited.voice_id
             match.generated_fingerprint = edited.generated_fingerprint
-            match.warnings = list(edited.warnings)
+            match.generated_title = generated.title
+            match.generated_start_block = generated.start_block
+            match.generated_end_block = generated.end_block
+            match.generated_voice_id = generated.voice_id
+            if match.end_block <= match.start_block:
+                raise ExtractionError(
+                    f"Edited chapter {edited.number} would be empty; approve or revert the edit"
+                )
+            if start_edited and match.number > 1:
+                previous = next(
+                    (chapter for chapter in chapters if chapter.number == match.number - 1), None
+                )
+                if previous is not None:
+                    if match.start_block <= previous.start_block:
+                        raise ExtractionError(
+                            f"Edited boundary between chapters {previous.number} and "
+                            f"{match.number} cannot be aligned"
+                        )
+                    previous.end_block = match.start_block
+            if end_edited and match.number < len(chapters):
+                following = next(
+                    (chapter for chapter in chapters if chapter.number == match.number + 1), None
+                )
+                if following is not None:
+                    if match.end_block >= following.end_block:
+                        raise ExtractionError(
+                            f"Edited boundary between chapters {match.number} and "
+                            f"{following.number} cannot be aligned"
+                        )
+                    following.start_block = match.end_block
             preserved_numbers.append(edited.number)
         validate_chapter_coverage(extracted.blocks, chapters)
         warnings.append(
             "Preserved user-edited chapter numbers: "
             + ", ".join(str(number) for number in sorted(preserved_numbers))
         )
+    for chapter in chapters:
+        chapter.warnings = [
+            warning
+            for warning in chapter.warnings
+            if warning != "No speakable text after accepted cleanup; review manually"
+        ]
+        speakable = chapter_has_speakable_text(
+            extracted.blocks, chapter.start_block, chapter.end_block, {i: "" for i in omitted}
+        )
+        if not speakable:
+            chapter.warnings.append("No speakable text after accepted cleanup; review manually")
+            warnings.append(
+                f"Chapter {chapter.number} has no speakable text after cleanup; review before synthesis"
+            )
     warnings.extend(chapter_warnings)
     if footnotes and settings.pdf.footnotes in {"inline", "end"}:
         relocated = kept = 0
@@ -576,7 +639,7 @@ def analyze_book(
     if settings.llm.enabled and not settings.llm.structure:
         warnings.append("LLM structure analysis disabled in settings")
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256=book_hash,
         title=extracted.title,
         author=extracted.author,
@@ -587,6 +650,34 @@ def analyze_book(
         chapters=chapters,
         analysis_fingerprint=analysis_key,
         warnings=extracted.warnings + warnings,
+        review_required=(
+            (
+                ["damaged_source"]
+                if any(
+                    warning == "source PDF was damaged and repaired; verify page coverage"
+                    or "could not be loaded; verify coverage" in warning
+                    for warning in extracted.warnings
+                )
+                else []
+            )
+            + (
+                ["empty_chapter"]
+                if any(
+                    "No speakable text after accepted cleanup; review manually" in chapter.warnings
+                    for chapter in chapters
+                )
+                else []
+            )
+            + (
+                ["ambiguous_page_numbers"]
+                if any(
+                    "page-number sequences retained" in warning
+                    or "page-number candidates" in warning
+                    for warning in pagination_warnings
+                )
+                else []
+            )
+        ),
     )
     render_chapter_texts(manifest, folder, settings.pdf.footnotes)
     write_manifest(manifest_path, manifest)
@@ -594,6 +685,9 @@ def analyze_book(
         folder / "reports" / "analysis_fingerprints.json",
         {"schema_version": 1, "stages": stage_fingerprints},
     )
+    for _warning in extracted.warnings + warnings:
+        log_event("review_warning", level=logging.WARNING, stage="analysis")
+    log_event("stage_completed", level=logging.INFO, stage="analysis", count=len(chapters))
     return manifest_path
 
 
@@ -623,26 +717,26 @@ def select_chapters(
         raise AudioError(f"Chapter {chapter} does not exist")
     for item in chosen:
         if (
-            "No speakable text after accepted cleanup; review manually" in item.warnings
+            "empty_chapter" in manifest.review_required
+            and not chapter_has_speakable_text(
+                manifest.blocks,
+                item.start_block,
+                item.end_block,
+                {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted},
+            )
             and not item.manually_approved
         ):
             raise AudioError(
                 f"Chapter {item.number} has no speakable text; review and approve it before synthesis"
             )
-        if (
-            any(
-                warning == "source PDF was damaged and repaired; verify page coverage"
-                or (
-                    warning.startswith("Page ")
-                    and "could not be loaded; verify coverage" in warning
-                )
-                for warning in manifest.warnings
-            )
-            and not item.manually_approved
-        ):
+        if "damaged_source" in manifest.review_required and not item.manually_approved:
             raise AudioError(
                 f"Chapter {item.number} comes from a damaged source; "
                 "review and approve it before synthesis"
+            )
+        if "ambiguous_page_numbers" in manifest.review_required and not item.manually_approved:
+            raise AudioError(
+                f"Chapter {item.number} has ambiguous page-number cleanup; review and approve it"
             )
         if item.confidence < settings.chapters.min_boundary_confidence and not (
             item.manually_approved or settings.chapters.allow_single_chapter
@@ -689,7 +783,7 @@ def chapter_audio_fingerprint(
         manifest.author,
         chapter.title,
         chapter.number,
-        "mp3-v5",
+        "mp3-v6",
         *adapters,
     )
 
@@ -701,23 +795,63 @@ def convert_book(
     chapter_range: tuple[int, int] | None = None,
     *,
     force: bool = False,
+    accept_review: tuple[str, ...] = (),
     extractor: DocumentExtractor | None = None,
     tts_provider: TTSProvider | None = None,
     encoder: AudioEncoder | None = None,
 ) -> list[Path]:
+    log_event("stage_started", level=logging.INFO, stage="conversion")
     cover_image = read_cover_image(settings.audio.cover_image)
     manifest_path = analyze_book(source, settings, extractor=extractor)
+    temporary_wav_dir = manifest_path.parent / ".cache" / "tts" / "chapters"
+    try:
+        if temporary_wav_dir.is_dir():
+            for stale_wav in temporary_wav_dir.glob("chapter-*.wav"):
+                stale_wav.unlink(missing_ok=True)
+    except OSError:
+        raise AudioError("Could not clean stale temporary chapter audio") from None
     adapters = tuple(
         f"{role}={type(adapter).__module__}.{type(adapter).__qualname__}"
         for role, adapter in (("tts", tts_provider), ("encoder", encoder))
         if adapter is not None
     )
     manifest = read_manifest(manifest_path)
+    if accept_review:
+        allowed = {"damaged_source", "empty_chapter", "ambiguous_page_numbers"}
+        if not set(accept_review) <= allowed:
+            raise AudioError("Unknown review reason code")
+        manifest.review_acknowledged = sorted(
+            set(manifest.review_acknowledged) | set(accept_review)
+        )
+        manifest.review_required = [
+            code for code in manifest.review_required if code not in set(accept_review)
+        ]
+        write_manifest(manifest_path, manifest)
     render_chapter_texts(manifest, manifest_path.parent, settings.pdf.footnotes)
     chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
+    skipped_empty = set()
+    empty_chapter_policy = (
+        "empty_chapter" in manifest.review_required
+        or "empty_chapter" in manifest.review_acknowledged
+    )
+    for item in chosen:
+        if (
+            empty_chapter_policy
+            and (item.manually_approved or "empty_chapter" in manifest.review_acknowledged)
+            and not chapter_has_speakable_text(
+                manifest.blocks,
+                item.start_block,
+                item.end_block,
+                {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted},
+            )
+        ):
+            skipped_empty.add(item.id)
     preflight_failed: dict[int, int] = {}
+    preflight_reasons: dict[int, str] = {}
     approved_marker_chapters: dict[int, list[str]] = {}
     for item in chosen:
+        if item.id in skipped_empty:
+            continue
         text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
         try:
             marker_ids = voice_marker_ids(text_file.read_text(encoding="utf-8"))
@@ -739,12 +873,17 @@ def convert_book(
                 )
             available_voices = provider.list_voices()
         except Exception:
-            available_voices = []
+            available_voices = None
+            for item in chosen:
+                if approved_marker_chapters.get(item.number):
+                    preflight_failed[item.number] = AudioError.exit_code
+                    preflight_reasons[item.number] = "voice_validation_failed"
         if available_voices:
             for item in chosen:
                 marker_ids = approved_marker_chapters.get(item.number, [])
                 if any(marker not in available_voices for marker in marker_ids):
                     preflight_failed[item.number] = AudioError.exit_code
+                    preflight_reasons[item.number] = "invalid_voice_marker"
     # Audio identities include all audible and encoding settings, not merely the PDF hash.
     pending = []
     outputs = []
@@ -752,12 +891,26 @@ def convert_book(
     conversion_status = {
         item.id: {
             "number": item.number,
-            "status": "failed" if item.number in preflight_failed else "pending",
+            "status": (
+                "skipped"
+                if item.id in skipped_empty
+                else "failed"
+                if item.number in preflight_failed
+                else "pending"
+            ),
+            **({"reason_code": "empty_chapter"} if item.id in skipped_empty else {}),
             **({"error_code": AudioError.exit_code} if item.number in preflight_failed else {}),
+            **(
+                {"reason_code": preflight_reasons[item.number]}
+                if item.number in preflight_reasons
+                else {}
+            ),
         }
         for item in chosen
     }
     for item in chosen:
+        if item.id in skipped_empty:
+            continue
         output = audio_output_path(manifest, item, manifest_path.parent)
         outputs.append(output)
         if item.number in preflight_failed:
@@ -873,6 +1026,13 @@ def convert_book(
                 except OSError:
                     raise AudioError("Could not create temporary chapter audio") from None
                 synth_kwargs["output_wav"] = streamed_wav
+            progress_path = (
+                manifest_path.parent
+                / ".cache"
+                / "tts"
+                / "progress"
+                / f"{fingerprint(item.id, item.number)[:32]}.json"
+            )
             samples = synthesize_chunks(
                 text,
                 provider,
@@ -885,13 +1045,7 @@ def convert_book(
                 max_retries=settings.tts.max_retries,
                 cache=manifest_path.parent / ".cache" / "tts",
                 use_cache=settings.cache.enabled and settings.general.resume and not force,
-                progress_file=(
-                    manifest_path.parent
-                    / ".cache"
-                    / "tts"
-                    / "progress"
-                    / f"{fingerprint(item.id, item.number)[:32]}.json"
-                ),
+                progress_file=progress_path,
                 **synth_kwargs,
             )
             encode_kwargs = {
@@ -904,34 +1058,49 @@ def convert_book(
             }
             if cover_image is not None:
                 encode_kwargs["cover_image"] = cover_image
-            try:
-                encode(samples, provider.sample_rate, output, **encode_kwargs)
-            finally:
-                if streamed_wav is not None:
-                    streamed_wav.unlink(missing_ok=True)
+            encode(samples, provider.sample_rate, output, **encode_kwargs)
+            progress = load_bounded_json(progress_path, max_bytes=1024 * 1024, max_depth=16)
+            mapping = progress.get("mapping", []) if isinstance(progress, dict) else []
+            pauses = [
+                row for row in mapping if isinstance(row, dict) and row.get("kind") == "pause"
+            ]
+            conversion_status[item.id]["pause_count"] = len(pauses)
+            conversion_status[item.id]["chunk_mapping"] = mapping
         except AudioError:
-            if streamed_wav is not None:
-                streamed_wav.unlink(missing_ok=True)
             failed_chapters.add(item.number)
-            conversion_status[item.id] = {
+            failure_status = {
                 "number": item.number,
                 "status": "failed",
                 "error_code": AudioError.exit_code,
             }
+            if item.number in preflight_reasons:
+                failure_status["reason_code"] = preflight_reasons[item.number]
+            conversion_status[item.id] = failure_status
             continue
+        finally:
+            if streamed_wav is not None:
+                streamed_wav.unlink(missing_ok=True)
         write_json(
             record,
             {
                 "chapter_id": item.id,
+                "sidecar_version": 2,
+                "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 "fingerprint": identity,
                 "sha256": digest_file(output),
                 "bytes": output.stat().st_size,
             },
         )
         conversion_status[item.id]["status"] = "complete"
+        log_event("stage_completed", level=logging.INFO, stage="chapter_audio", count=item.number)
         for previous in output.parent.glob("*.mp3"):
-            if previous == output:
-                continue
+            try:
+                if os.path.samefile(previous, output):
+                    continue
+            except OSError:
+                if previous == output:
+                    continue
+                raise AudioError("Could not verify chapter audio file identity") from None
             metadata = valid_mp3_sidecar(previous)
             if metadata is None or metadata.get("chapter_id") != item.id:
                 continue
@@ -946,10 +1115,16 @@ def convert_book(
         manifest_path.parent / "reports" / "conversion_status.json",
         {
             "schema_version": 1,
+            "pause_count": sum(
+                int(row.get("pause_count", 0)) for row in conversion_status.values()
+            ),
             "chapters": sorted(conversion_status.values(), key=lambda value: int(value["number"])),
         },
     )
     if failed_chapters:
+        log_event(
+            "degraded_output", level=logging.WARNING, stage="conversion", count=len(failed_chapters)
+        )
         numbers = ", ".join(str(number) for number in sorted(failed_chapters))
         raise PartialConversionError(f"Chapter audio failed for chapter(s): {numbers}")
     return outputs

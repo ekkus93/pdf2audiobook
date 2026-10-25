@@ -75,7 +75,7 @@ def test_cover_bytes_change_fingerprint_and_regenerate_mp3(tmp_path: Path, monke
     manifest_path = tmp_path / "out" / "manifest.json"
     chapter = Chapter(id="c1", number=1, title="First", start_block=0, end_block=1, confidence=1)
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="a" * 64,
         title="Book",
         source_path="book.pdf",

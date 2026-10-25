@@ -48,6 +48,7 @@ def test_budget_gates_use_exact_cost(
             max_requests=None,
             max_tokens=None,
             max_usd=0.3,
+            upper_bound_usd="0",
         )
 
     if reserve_reject:

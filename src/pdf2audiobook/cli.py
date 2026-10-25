@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -13,14 +14,15 @@ import typer
 from rich.console import Console
 
 from pdf2audiobook import __version__
-from pdf2audiobook.config import load_settings, settings_public
-from pdf2audiobook.errors import AudiobookError, AudioError, ConfigError, ExtractionError
-from pdf2audiobook.logging import configure_logging, log_event
+from pdf2audiobook.config import Settings, load_settings, settings_public
+from pdf2audiobook.errors import AudiobookError, AudioError, ConfigError, ExtractionError, LLMError
+from pdf2audiobook.logging import configure_from_settings, configure_logging, log_event
 
 app = typer.Typer(
     no_args_is_help=True,
     help="Convert PDF books to chapter-based audiobooks.",
     epilog="Example: pdf2audiobook convert ./book.pdf --no-llm --cover ./cover.jpg",
+    pretty_exceptions_enable=False,
 )
 config_app = typer.Typer(help="Inspect effective configuration.")
 app.add_typer(config_app, name="config")
@@ -34,15 +36,10 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
     code = exc.exit_code if isinstance(exc, AudiobookError) else 1
     if isinstance(exc, AudiobookError):
         message = str(exc)
-    elif isinstance(exc, OSError):
-        message = "A filesystem operation failed"
-    elif isinstance(exc, ValueError):
-        message = "Invalid input value"
     else:
         message = "Unexpected internal error"
     # Never log exception text, file paths, credentials, or PDF contents.
-    if logging.getLogger("pdf2audiobook").isEnabledFor(logging.DEBUG):
-        log_event("command_failed", level=logging.ERROR, error_code=code)
+    log_event("command_failed", level=logging.ERROR, error_code=code)
     if json_output:
         # Diagnostics belong on stderr; stdout is reserved for successful JSON payloads.
         typer.echo(
@@ -60,11 +57,34 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
     raise typer.Exit(code=code) from exc
 
 
+def fail_interrupted(*, json_output: bool = False) -> None:
+    """Exit cleanly and privately when the operator interrupts a command."""
+    message = "Interrupted"
+    log_event("command_failed", level=logging.ERROR, error_code=130)
+    if json_output:
+        typer.echo(
+            json.dumps(
+                {"ok": False, "error": {"type": "Interrupted", "code": 130, "message": message}}
+            ),
+            err=True,
+        )
+    else:
+        console.print(f"[red]Error:[/red] {message}")
+    raise typer.Exit(code=130)
+
+
 def emit(payload: dict[str, Any], json_output: bool) -> None:
     if json_output:
         typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         console.print_json(data=payload)
+
+
+def configure_effective_logging(settings: Settings, origins: dict[str, str]) -> None:
+    configure_from_settings(
+        settings.general.log_level,
+        cache_directory_configured=origins.get("cache.directory", "built-in") != "built-in",
+    )
 
 
 @app.callback()
@@ -95,13 +115,16 @@ def show_config(
 ) -> None:
     try:
         settings, origin = load_settings(config, no_config=no_config)
+        configure_effective_logging(settings, origin)
         payload = settings_public(settings)
         if origin.get("cache.directory", "built-in") != "built-in":
             payload["_unused_settings"] = ["cache.directory"]
         if sources:
             payload["_sources"] = origin
         emit(payload, json_output)
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -114,9 +137,17 @@ def budget_show(
     try:
         from pdf2audiobook.llm.budget import BookLLMBudgetLedger
 
-        ledger = BookLLMBudgetLedger(output / "reports" / "llm_budget.sqlite3")
-        emit({"requests": ledger.rows(), "totals": ledger.totals()}, json_output)
-    except (AudiobookError, OSError, ValueError) as exc:
+        ledger_path = output / "reports" / "llm_budget.sqlite3"
+        if not ledger_path.is_file():
+            raise ConfigError("Per-book LLM budget ledger does not exist")
+        ledger = BookLLMBudgetLedger(ledger_path)
+        emit(
+            {"requests": ledger.rows(readonly=True), "totals": ledger.totals(readonly=True)},
+            json_output,
+        )
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -153,19 +184,26 @@ def budget_resolve(
                 "completion_tokens": completion,
                 "total_tokens": prompt + completion,
             }
-        settings, _ = load_settings(config, no_config=no_config)
-        ledger = BookLLMBudgetLedger(output / "reports" / "llm_budget.sqlite3")
-        ledger.resolve_unknown(
-            request_id,
-            usage=usage,
-            input_rate=settings.llm.input_cost_usd_per_million_tokens,
-            output_rate=settings.llm.output_cost_usd_per_million_tokens,
-            unbilled=unbilled,
-        )
-        emit(
-            {"resolved": request_id, "status": "unbilled" if unbilled else "complete"}, json_output
-        )
-    except (AudiobookError, OSError, ValueError) as exc:
+        settings, origins = load_settings(config, no_config=no_config)
+        configure_effective_logging(settings, origins)
+        ledger_path = output / "reports" / "llm_budget.sqlite3"
+        if not ledger_path.is_file():
+            raise ConfigError("Per-book LLM budget ledger does not exist")
+        ledger = BookLLMBudgetLedger(ledger_path)
+        try:
+            stored_status = ledger.resolve_unknown(
+                request_id,
+                usage=usage,
+                input_rate=settings.llm.input_cost_usd_per_million_tokens,
+                output_rate=settings.llm.output_cost_usd_per_million_tokens,
+                unbilled=unbilled,
+            )
+        except LLMError:
+            raise ConfigError("Resolved values are invalid or exceed ledger limits") from None
+        emit({"resolved": request_id, "status": stored_status}, json_output)
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -176,7 +214,8 @@ def doctor(
     no_config: bool = typer.Option(False, "--no-config"),
 ) -> None:
     try:
-        settings, _ = load_settings(config, no_config=no_config)
+        settings, origins = load_settings(config, no_config=no_config)
+        configure_effective_logging(settings, origins)
         try:
             from importlib import import_module
 
@@ -204,7 +243,9 @@ def doctor(
             },
             json_output,
         )
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -229,12 +270,23 @@ def inspect(
                 "warnings": manifest.warnings,
                 "coverage": chapter_coverage_report(manifest),
             }
+            from pdf2audiobook.jsonio import load_bounded_json
+
+            conversion_status = load_bounded_json(
+                source.parent / "reports" / "conversion_status.json",
+                max_bytes=1024 * 1024,
+                max_depth=16,
+            )
+            if isinstance(conversion_status, dict):
+                payload["conversion_status"] = conversion_status
         else:
             from pdf2audiobook.pdf import inspect_pdf
 
             payload = inspect_pdf(source, password_env=pdf_password_env)
         emit(payload, json_output)
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -331,7 +383,8 @@ def analyze(
             overrides.setdefault("llm", {})["enabled"] = True
         if vision is not None:
             overrides.setdefault("llm", {})["vision"] = vision
-        settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
+        configure_effective_logging(settings, origins)
         from pdf2audiobook.pipeline import analyze_book
 
         try:
@@ -339,7 +392,9 @@ def analyze(
         except OSError:
             raise ExtractionError("Could not create or update the output workspace") from None
         emit({"manifest": str(manifest_path)}, json_output)
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -389,6 +444,9 @@ def convert(
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
     sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
     cover: Path | None = typer.Option(None, "--cover", help="JPEG or PNG chapter cover image."),
+    accept_review: list[str] = typer.Option(
+        [], "--accept-review", help="Acknowledge a review reason code for this book."
+    ),
     resume: bool | None = typer.Option(None, "--resume/--no-resume"),
     force: bool = typer.Option(False, "--force", help="Regenerate selected chapter audio."),
     allow_single_chapter: bool | None = typer.Option(
@@ -442,7 +500,8 @@ def convert(
         if chapter is not None and chapter_range is not None:
             raise ConfigError("--chapter and --chapter-range cannot be combined")
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
-        settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
+        configure_effective_logging(settings, origins)
         from pdf2audiobook.audio import audio_output_path, read_cover_image
         from pdf2audiobook.pipeline import analyze_book, convert_book, select_chapters
         from pdf2audiobook.workspace import read_manifest
@@ -468,11 +527,14 @@ def convert(
                     chapter=chapter,
                     chapter_range=selected_range,
                     force=force,
+                    accept_review=tuple(accept_review),
                 )
             except OSError:
                 raise AudioError("Could not create or update chapter audio") from None
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -535,7 +597,8 @@ def batch(
             overrides.setdefault("tts", {})["bitrate"] = bitrate
         if cover is not None:
             overrides.setdefault("audio", {})["cover_image"] = str(cover)
-        settings, _ = load_settings(config, no_config=no_config, overrides=overrides)
+        settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
+        configure_effective_logging(settings, origins)
         from pdf2audiobook.audio import read_cover_image
 
         read_cover_image(settings.audio.cover_image)
@@ -543,6 +606,7 @@ def batch(
 
         results: list[dict[str, Any]] = []
         failures = 0
+        batch_jobs = []
         for source in sources:
             explicit = frozenset(
                 key
@@ -555,18 +619,28 @@ def batch(
                 if present
             )
             book_settings = settings_for_book_tts(settings, source.stem, explicit=explicit)
+            validated = book_settings.model_dump()
             selected_provider = book_settings.tts.provider
             if tts_model is not None:
                 section = "piper" if selected_provider == "piper" else "kitten"
                 key = "model_path" if section == "piper" else "model"
-                setattr(getattr(book_settings.tts, section), key, tts_model)
+                validated["tts"][section][key] = tts_model
             if voice is not None:
-                getattr(book_settings.tts, selected_provider).voice = voice
+                validated["tts"][selected_provider]["voice"] = voice
             if speed is not None:
-                getattr(book_settings.tts, selected_provider).speed = speed
+                validated["tts"][selected_provider]["speed"] = speed
+            try:
+                book_settings = Settings.model_validate(validated)
+            except Exception:
+                raise ConfigError("Invalid per-book TTS settings for batch conversion") from None
+            batch_jobs.append((source, book_settings))
+        for source, book_settings in batch_jobs:
+            configure_effective_logging(book_settings, origins)
             try:
                 outputs = convert_book(source, book_settings)
-            except (AudiobookError, OSError, ValueError) as exc:
+            except KeyboardInterrupt:
+                raise
+            except Exception as exc:
                 failures += 1
                 code = getattr(exc, "exit_code", 1)
                 if isinstance(exc, OSError):
@@ -585,7 +659,9 @@ def batch(
         emit({"books": results, "failed": failures}, json_output)
         if failures:
             raise typer.Exit(code=7)
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -605,14 +681,15 @@ def pack_m4b(
     """Package completed chapter MP3s as a single M4B with chapter navigation."""
     try:
         from pdf2audiobook.audio import audio_output_path, encode_m4b, read_cover_image
-        from pdf2audiobook.pipeline import chapter_audio_fingerprint, valid_mp3_sidecar
+        from pdf2audiobook.pipeline import valid_mp3_sidecar
         from pdf2audiobook.workspace import read_manifest
 
-        settings, _ = load_settings(
+        settings, origins = load_settings(
             config,
             no_config=no_config,
             overrides={"audio": {"cover_image": str(cover)}} if cover is not None else None,
         )
+        configure_effective_logging(settings, origins)
         manifest = read_manifest(manifest_path)
         cover_image = read_cover_image(settings.audio.cover_image)
         chapter_files = []
@@ -626,11 +703,10 @@ def pack_m4b(
                 stale_chapters.append(chapter.number)
                 continue
             metadata = valid_mp3_sidecar(path)
-            expected = chapter_audio_fingerprint(text, settings, manifest, chapter)
             if (
                 metadata is None
                 or metadata.get("chapter_id") != chapter.id
-                or metadata.get("fingerprint") != expected
+                or metadata.get("text_sha256") != hashlib.sha256(text.encode("utf-8")).hexdigest()
             ):
                 stale_chapters.append(chapter.number)
                 continue
@@ -652,7 +728,9 @@ def pack_m4b(
         except OSError:
             raise AudioError("Could not create the M4B output") from None
         emit({"m4b_file": str(result)}, json_output)
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
@@ -671,8 +749,10 @@ def review(
         try:
             server.serve_forever()
         except KeyboardInterrupt:
-            pass
+            raise
         finally:
             server.server_close()
-    except (AudiobookError, OSError, ValueError) as exc:
+    except KeyboardInterrupt:
+        fail_interrupted()
+    except Exception as exc:
         fail(exc)

@@ -205,7 +205,9 @@ def _number_value(raw: str) -> tuple[int, str] | None:
 
 def labelled_heading(text: str) -> bool:
     """A chapter/part/prologue label line, not prose that cites one."""
-    return (
+    stripped = text.strip()
+    roman_title = re.fullmatch(r"[IVXLCDM]{1,8}[.)]\s+[A-Z][A-Z\s'’:-]{2,80}", stripped)
+    return roman_title is not None or (
         HEADING.match(text) is not None and len(text.split()) <= 12 and not LABEL_PROSE.match(text)
     )
 
@@ -220,7 +222,16 @@ LIST_LINE = re.compile(r"^\s*(?:\d+[.)]|[A-Za-z][.)]|[•*])\s+")
 
 def is_list_line(text: str) -> bool:
     """Recognize explicit list markers without treating dialogue dashes as lists."""
-    return LIST_LINE.match(text) is not None
+    match = LIST_LINE.match(text)
+    if match is None:
+        return False
+    marker = match.group().strip()
+    rest = text[match.end() :]
+    if re.fullmatch(r"[A-Z]", marker[:-1]) and re.match(r"[A-Z][a-z]+\b", rest):
+        return False
+    if re.match(r"\d{3,}\)\s", text):
+        return False
+    return True
 
 
 def _wordlike(text: str) -> bool:
@@ -367,6 +378,7 @@ def pagination_cleanup(
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
     text_occurrences: dict[tuple[str, str], list[tuple[int, float, float]]] = defaultdict(list)
     numbered: dict[str, list[tuple[int, int, tuple[float, float] | None, str]]] = defaultdict(list)
+    vertical_positions: dict[tuple[str, int, int, str], list[float]] = defaultdict(list)
     blocks_by_page: dict[int, list[DocumentBlock]] = defaultdict(list)
     body_text: set[str] = set()
 
@@ -465,8 +477,10 @@ def pagination_cleanup(
         # Fail closed when the apparent margin element is continuous with
         # nearby body text; repeated dialogue and list labels are not folios.
         # A title repeated on three or more pages with its folio is not.
-        if not (running_title and embedded_folio is not None) and _adjacent_body_line(
-            block, blocks_by_page[block.page_index], band
+        if (
+            not (running_title and embedded_folio is not None)
+            and _adjacent_body_line(block, blocks_by_page[block.page_index], band)
+            and block.kind != "footnote"
         ):
             continue
         # Fail closed on standalone quotations, numbered list markers and
@@ -585,8 +599,6 @@ def pagination_cleanup(
                 for position in positions(block)
             ):
                 continue
-            if not nearer_edge_than_body(block, height):
-                continue
         candidates[block.id] = (block, band)
         width = sizes[block.page_index][0]
         if width > 0 and height > 0:
@@ -596,6 +608,9 @@ def pagination_cleanup(
         parsed = _number_value(raw)
         if parsed is not None:
             numbered[band].append((block.page_index, parsed[0], positions(block), parsed[1]))
+            vertical_positions[(band, block.page_index, parsed[0], parsed[1])].append(
+                ((block.bbox[1] + block.bbox[3]) / 2) / height
+            )
         elif embedded_folio is not None and running_title:
             # The folio inside a running head still sequences its neighbours;
             # its position is the title's, so alignment is not compared.
@@ -620,13 +635,48 @@ def pagination_cleanup(
         )
         if band and _number_value(block.text.strip()) is not None:
             numeric_counts[(band, block.page_index)] += 1
-    ambiguous_numeric_bands = {key for key, count in numeric_counts.items() if count > 1}
+    preferred_numeric: dict[tuple[str, int], set[tuple[int, str]]] = defaultdict(set)
+    ambiguous_numeric_bands: set[tuple[str, int]] = set()
+    for band_page, count in numeric_counts.items():
+        if count < 2:
+            continue
+        page = band_page[1]
+        numerals = [
+            (block, _number_value(block.text.strip()))
+            for block, block_band in candidates.values()
+            if block_band == band_page[0]
+            and block.page_index == page
+            and _number_value(block.text.strip()) is not None
+            and block.bbox is not None
+        ]
+        ranked = sorted(
+            (
+                min(block.bbox[1], sizes[page][1] - block.bbox[3]),
+                parsed,
+            )
+            for block, parsed in numerals
+            if parsed is not None and block.bbox is not None
+        )
+        if ranked and (len(ranked) == 1 or ranked[0][0] < ranked[1][0]):
+            preferred_numeric[band_page].add(ranked[0][1])
+        else:
+            ambiguous_numeric_bands.add(band_page)
     if ambiguous_numeric_bands and warnings is not None:
-        warnings.append("Multiple margin numerals retained; verify page-number candidates")
+        warnings.append(
+            "Equally positioned margin numerals retained; verify page-number candidates"
+        )
     sequential_pages: dict[str, set[int]] = defaultdict(set)
     qualifying_sequences: dict[tuple[str, int, str], set[int]] = defaultdict(set)
     for band, entries in numbered.items():
-        entries = [entry for entry in entries if (band, entry[0]) not in ambiguous_numeric_bands]
+        entries = [
+            entry
+            for entry in entries
+            if (band, entry[0]) not in ambiguous_numeric_bands
+            and (
+                (band, entry[0]) not in preferred_numeric
+                or (entry[1], entry[3]) in preferred_numeric[(band, entry[0])]
+            )
+        ]
         by_key: dict[tuple[int, int, str], list[tuple[float, float] | None]] = defaultdict(list)
         for page, folio_number, position, notation in entries:
             by_key[(page, folio_number, notation)].append(position)
@@ -635,8 +685,16 @@ def pagination_cleanup(
             for next_position in successors:
                 if not _aligned_folios(position, next_position):
                     continue
-                if not page_label_matches(page, folio_number, notation) or not page_label_matches(
-                    page + 1, folio_number + 1, notation
+                current_y = vertical_positions.get((band, page, folio_number, notation), [])
+                next_y = vertical_positions.get((band, page + 1, folio_number + 1, notation), [])
+                if (
+                    current_y
+                    and next_y
+                    and not any(
+                        abs(first_y - second_y) <= 0.025
+                        for first_y in current_y
+                        for second_y in next_y
+                    )
                 ):
                     continue
                 if notation == "arabic":
@@ -657,9 +715,53 @@ def pagination_cleanup(
     for series, pages in qualifying_sequences.items():
         for page in pages:
             series_at_page[page].add(series)
-    ambiguous_sequence_pages = {page for page, series in series_at_page.items() if len(series) > 1}
+    selected_sequences: dict[int, set[tuple[str, int, str]]] = defaultdict(set)
+    ambiguous_sequence_pages: set[int] = set()
+    for page, series_set in series_at_page.items():
+        if len(series_set) == 1:
+            selected_sequences[page].update(series_set)
+            continue
+        ranked_series = []
+        for series in series_set:
+            band, offset, notation = series
+            distances = []
+            for block, block_band in candidates.values():
+                parsed = _number_value(block.text.strip())
+                if (
+                    block_band == band
+                    and block.page_index == page
+                    and parsed == (page + offset, notation)
+                    and block.bbox is not None
+                ):
+                    distances.append(min(block.bbox[1], sizes[page][1] - block.bbox[3]))
+            if distances:
+                ranked_series.append(
+                    (
+                        0 if page_label_matches(page, page + offset, notation) else 1,
+                        min(distances),
+                        series,
+                    )
+                )
+        ranked_series.sort(key=lambda item: (item[0], item[1]))
+        if ranked_series and (
+            len(ranked_series) == 1 or ranked_series[0][:2] < ranked_series[1][:2]
+        ):
+            selected_sequences[page].add(ranked_series[0][2])
+        else:
+            ambiguous_sequence_pages.add(page)
     if ambiguous_sequence_pages and warnings is not None:
         warnings.append("Multiple page-number sequences retained; verify pagination")
+    if (
+        page_labels is not None
+        and any(
+            not page_label_matches(page, number, notation)
+            for (_band, offset, notation), pages in qualifying_sequences.items()
+            for page in pages
+            for number in (page + offset,)
+        )
+        and warnings is not None
+    ):
+        warnings.append("Printed page numbers disagree with PDF page labels")
     edits = []
     for block, band in candidates.values():
         bbox = block.bbox
@@ -672,6 +774,15 @@ def pagination_cleanup(
             and (band, block.page_index) not in ambiguous_numeric_bands
             and block.page_index not in ambiguous_sequence_pages
             and block.page_index in sequential_pages[band]
+            and (
+                not series_at_page.get(block.page_index)
+                or (
+                    band,
+                    (_number_value(block.text.strip()) or (0, ""))[0] - block.page_index,
+                    (_number_value(block.text.strip()) or (0, ""))[1],
+                )
+                in selected_sequences[block.page_index]
+            )
         )
         # Repetition alone is insufficient: separate margin prose may recur
         # at unrelated horizontal or vertical positions on different pages.
@@ -1068,6 +1179,10 @@ def propose_chapters(
         if confidence < 0.85:
             chapter.warnings.append("Chapter boundary has low confidence; verify manually")
         chapter.generated_fingerprint = generated_chapter_fingerprint(chapter)
+        chapter.generated_title = chapter.title
+        chapter.generated_start_block = chapter.start_block
+        chapter.generated_end_block = chapter.end_block
+        chapter.generated_voice_id = chapter.voice_id
         chapters.append(chapter)
     return chapters, warnings
 
@@ -1101,6 +1216,22 @@ def validate_chapter_coverage(blocks: list[DocumentBlock], chapters: list[Chapte
         expected = chapter.end_block
     if expected != len(blocks):
         raise ExtractionError("Manifest does not cover all original source blocks")
+
+
+def chapter_has_speakable_text(
+    blocks: list[DocumentBlock],
+    start: int,
+    end: int,
+    replacements: dict[str, str] | None = None,
+) -> bool:
+    """Use one cleanup-aware narration rule for coverage and conversion gates."""
+    from pdf2audiobook.audio import has_speakable_narration
+
+    replacement_map = replacements or {}
+    return any(
+        has_speakable_narration(replacement_map.get(block.id, block.text))
+        for block in blocks[start:end]
+    )
 
 
 def chapter_coverage_report(manifest: BookManifest) -> dict[str, object]:
@@ -1139,9 +1270,8 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, object]:
     empty_chapters = [
         chapter.number
         for chapter in manifest.chapters
-        if not any(
-            accepted.get(block.id, block.text).strip()
-            for block in manifest.blocks[chapter.start_block : chapter.end_block]
+        if not chapter_has_speakable_text(
+            manifest.blocks, chapter.start_block, chapter.end_block, accepted
         )
     ]
     return {
@@ -1153,7 +1283,7 @@ def chapter_coverage_report(manifest: BookManifest) -> dict[str, object]:
         "duplicate_blocks": 0,
         "accepted_cleanup_blocks": len(accepted),
         "narrated_blocks": sum(
-            1 for block in manifest.blocks if accepted.get(block.id, block.text).strip()
+            1 for block in manifest.blocks if chapter_has_speakable_text([block], 0, 1, accepted)
         ),
         "chapters": len(manifest.chapters),
         "empty_chapters": empty_chapters,
@@ -1321,7 +1451,7 @@ def render_chapter_texts(manifest: BookManifest, folder: Path, footnotes: str = 
 
 def _is_wrapped_line(before: DocumentBlock, after: DocumentBlock) -> bool:
     """Join nearby consecutive body lines only when geometry supports a soft wrap."""
-    if before.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
+    if before.kind in {"heading", "table", "footnote", "caption", "equation"}:
         return False
     if after.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
         return False

@@ -26,13 +26,14 @@ def test_invalid_json_response_still_charges_book_token_ledger(tmp_path):
         allow_remote=False,
         transport=httpx.MockTransport(respond),
         max_retries=0,
+        max_context_tokens=4096,
     ) as provider:
         worker = CachedLLMProvider(
             provider,
             cache_dir=tmp_path / "cache",
             identity="model",
             ledger_path=tmp_path / "ledger.sqlite3",
-            max_reported_tokens=100,
+            max_reported_tokens=2000,
         )
         with pytest.raises(LLMError):
             worker.complete_json(instructions="task", document_text="fixture")

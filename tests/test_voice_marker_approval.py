@@ -31,7 +31,7 @@ class VoiceProvider:
 def _run(tmp_path: Path, monkeypatch, chapters: list[Chapter], texts: list[str], provider):
     manifest_path = tmp_path / "out" / "manifest.json"
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="a" * 64,
         title="Book",
         source_path="book.pdf",
@@ -77,7 +77,7 @@ def test_unapproved_markers_fail_the_chapter_but_other_chapters_continue(tmp_pat
     provider = VoiceProvider(["Jasper", "Known"])
     chapters = [_chapter(1), _chapter(2)]
     texts = ["Before.\n\n[[voice:Known]]\n\nAfter.", "Ordinary chapter prose."]
-    with pytest.raises(PartialConversionError, match="chapter\(s\): 1") as raised:
+    with pytest.raises(PartialConversionError, match=r"chapter\(s\): 1") as raised:
         _run(tmp_path, monkeypatch, chapters, texts, provider)
     assert raised.value.exit_code == 7
     assert [voice for _text, voice in provider.calls] == ["Jasper"]
@@ -102,7 +102,7 @@ def test_approved_marker_uses_its_voice_and_unknown_marker_fails_preflight(tmp_p
     assert [voice for _text, voice in provider.calls] == ["Jasper", "Known"]
 
     unknown_provider = VoiceProvider(["Jasper"])
-    with pytest.raises(PartialConversionError, match="chapter\(s\): 1"):
+    with pytest.raises(PartialConversionError, match=r"chapter\(s\): 1"):
         _run(
             tmp_path / "unknown",
             monkeypatch,
@@ -111,3 +111,39 @@ def test_approved_marker_uses_its_voice_and_unknown_marker_fails_preflight(tmp_p
             unknown_provider,
         )
     assert unknown_provider.calls == []
+
+
+def test_conversion_report_records_scene_break_pause_mapping(tmp_path, monkeypatch):
+    provider = VoiceProvider(["Jasper"])
+    _run(
+        tmp_path / "pause",
+        monkeypatch,
+        [_chapter(1)],
+        ["Before.\n\n* * *\n\nAfter."],
+        provider,
+    )
+    status = json.loads((tmp_path / "pause/out/reports/conversion_status.json").read_text())
+    assert status["pause_count"] == 1
+    chapter = status["chapters"][0]
+    assert chapter["pause_count"] == 1
+    assert [row["kind"] for row in chapter["chunk_mapping"]].count("pause") == 1
+
+
+def test_voice_listing_failure_fails_only_marked_chapter_privately(tmp_path, monkeypatch):
+    class BrokenVoiceProvider(VoiceProvider):
+        def list_voices(self):
+            raise RuntimeError("PRIVATE PROVIDER DETAIL")
+
+    provider = BrokenVoiceProvider(["Jasper"])
+    with pytest.raises(PartialConversionError, match=r"chapter\(s\): 1"):
+        _run(
+            tmp_path,
+            monkeypatch,
+            [_chapter(1, approved=True), _chapter(2)],
+            ["Before.\n\n[[voice:Known]]\n\nAfter.", "Ordinary prose."],
+            provider,
+        )
+    assert [voice for _text, voice in provider.calls] == ["Jasper"]
+    status = json.loads((tmp_path / "out/reports/conversion_status.json").read_text())
+    assert status["chapters"][0]["reason_code"] == "voice_validation_failed"
+    assert status["chapters"][1]["status"] == "complete"

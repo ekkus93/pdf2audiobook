@@ -96,6 +96,14 @@ def _review_payload(manifest: BookManifest) -> dict[str, Any]:
     return {"title": manifest.title, "chapters": chapters}
 
 
+def _expected_authorities(host: str, port: int) -> set[str]:
+    authority = f"[{host}]" if ":" in host else host
+    result = {f"{authority}:{port}"}
+    if port == 80:
+        result.add(authority)
+    return result
+
+
 def save_chapter_updates(manifest_path: Path, updates: Any) -> None:
     """Validate and atomically persist title/boundary edits from the local UI."""
     manifest = read_manifest(manifest_path)
@@ -135,6 +143,10 @@ def save_chapter_updates(manifest_path: Path, updates: Any) -> None:
             chapter.voice_id = (
                 voice_id.strip() if isinstance(voice_id, str) and voice_id.strip() else None
             )
+    manifest.review_acknowledged = sorted(set(manifest.review_acknowledged) | {"damaged_source"})
+    manifest.review_required = [
+        code for code in manifest.review_required if code != "damaged_source"
+    ]
     chapter_coverage_report(manifest)
     write_manifest(manifest_path, manifest)
     render_chapter_texts(manifest, manifest_path.parent)
@@ -148,17 +160,21 @@ def create_review_server(
         host = "localhost"
     else:
         try:
-            is_loopback = ipaddress.ip_address(host).is_loopback
+            address = ipaddress.ip_address(host)
+            is_loopback = address.is_loopback
         except ValueError:
+            address = None
             is_loopback = False
         if not is_loopback:
             raise ValueError(
                 "Review UI can only bind to a loopback IP address or localhost"
             ) from None
+        if address is not None and address.version == 6:
+            raise ValueError("Review UI does not support IPv6 hosts") from None
     resolved_manifest = manifest_path.resolve()
     token = secrets.token_urlsafe(32)
-    expected_authority: str | None = None
-    expected_origin: str | None = None
+    expected_authorities: set[str] = set()
+    expected_origins: set[str] = set()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, _format: str, *_args: object) -> None:
@@ -174,7 +190,7 @@ def create_review_server(
 
         def _valid_host(self) -> bool:
             host_values = self.headers.get_all("Host", [])
-            return len(host_values) == 1 and host_values[0] == expected_authority
+            return len(host_values) == 1 and host_values[0] in expected_authorities
 
         def _respond(self, status: int, body: bytes, content_type: str) -> None:
             self.send_response(status)
@@ -204,7 +220,7 @@ def create_review_server(
                 self._respond(421, b"Invalid request authority", "text/plain; charset=utf-8")
                 return
             origin = self.headers.get("Origin")
-            if route.startswith("/api/") and origin is not None and origin != expected_origin:
+            if route.startswith("/api/") and origin is not None and origin not in expected_origins:
                 self._json(403, {"error": "Forbidden"})
                 return
             if route == "/":
@@ -224,7 +240,10 @@ def create_review_server(
             if not self._valid_host():
                 self._respond(421, b"Invalid request authority", "text/plain; charset=utf-8")
                 return
-            if not self._authorized() or self.headers.get("Origin") != expected_origin:
+            if not self._authorized():
+                self._json(401, {"error": "Unauthorized"})
+                return
+            if self.headers.get("Origin") not in expected_origins:
                 self._json(403, {"error": "Forbidden"})
                 return
             try:
@@ -245,8 +264,11 @@ def create_review_server(
             self._json(200, {"ok": True})
 
     server = ThreadingHTTPServer((host, port), Handler)
+    bound_port = server.server_address[1]
     authority = f"[{host}]" if ":" in host else host
-    expected_authority = f"{authority}:{server.server_address[1]}"
-    expected_origin = f"http://{expected_authority}"
+    expected_authorities.update(_expected_authorities(host, bound_port))
+    expected_origins.add(f"http://{authority}:{bound_port}")
+    if bound_port == 80:
+        expected_origins.add(f"http://{authority}")
     server.review_token = token  # type: ignore[attr-defined]
     return server

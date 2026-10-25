@@ -17,6 +17,7 @@ def test_invalid_token_rates_are_unpriced_not_trusted(tmp_path, rate):
         max_requests=None,
         max_tokens=None,
         max_usd=0.01,
+        upper_bound_usd="0.00001",
     )
     ledger.settle(
         call_id,
@@ -37,6 +38,7 @@ def test_invalid_token_rates_are_unpriced_not_trusted(tmp_path, rate):
             max_requests=None,
             max_tokens=None,
             max_usd=0.01,
+            upper_bound_usd="0.00001",
         )
 
 
@@ -75,6 +77,7 @@ def test_valid_zero_pricing_is_permitted(tmp_path):
         max_requests=None,
         max_tokens=None,
         max_usd=0.01,
+        upper_bound_usd="0.00001",
     )
     ledger.settle(
         call_id,

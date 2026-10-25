@@ -357,7 +357,8 @@ If more than one numeric sequence on the same pages still qualifies after these 
 *Problem:* A single transient TTS failure aborts the whole book (pipeline.py:528-582).
 *Required:*
 - Add `tts.max_retries` (default 2) with bounded backoff for each chunk.
-- If a chapter still fails after its retries, mark it failed in the manifest and continue with the remaining chapters. Exit 7 and list the failed chapter numbers.
+- Retry only failures explicitly marked transient by the provider. Unknown voices, validation errors and other unmarked failures fail immediately.
+- If a chapter still fails after its retries, record it in `reports/conversion_status.json` and continue with the remaining chapters. Do not modify the user-owned manifest. Exit 7 and list failed chapter numbers; `inspect` and `inspect --json` expose the report.
 - Completed chunks and chapters stay reusable.
 *Tests:* a transient failure succeeds on retry; a persistent failure in chapter 2 of 3 still produces chapters 1 and 3 and exits 7; a resume regenerates only chapter 2.
 

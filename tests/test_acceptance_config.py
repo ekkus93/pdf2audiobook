@@ -74,7 +74,7 @@ def test_environment_explicit_false_overrides_file(tmp_path: Path):
 def test_convert_no_llm_and_no_resume_cli_are_explicit_false(monkeypatch):
     captured = {}
 
-    def fake_convert(source, settings, chapter=None, chapter_range=None, *, force=False):
+    def fake_convert(source, settings, chapter=None, chapter_range=None, **_kwargs):
         captured["settings"] = settings
         captured["source"] = source
         return []

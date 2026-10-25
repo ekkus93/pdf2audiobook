@@ -44,7 +44,7 @@ def test_one_failed_chapter_continues_and_resume_only_regenerates_it(tmp_path, m
         for number in (1, 2, 3)
     ]
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="b" * 64,
         title="Book",
         source_path="book.pdf",
@@ -99,3 +99,43 @@ def test_one_failed_chapter_continues_and_resume_only_regenerates_it(tmp_path, m
     assert provider.calls == [1, 2, 3, 2]
     status = json.loads((tmp_path / "out/reports/conversion_status.json").read_text())
     assert [row["status"] for row in status["chapters"]] == ["complete"] * 3
+
+
+def test_keyboard_interrupt_removes_temporary_chapter_wav(tmp_path, monkeypatch):
+    source = tmp_path / "book.pdf"
+    manifest_path = tmp_path / "out" / "manifest.json"
+    chapter = Chapter(
+        id="chapter-1", number=1, title="Chapter 1", start_block=0, end_block=1, confidence=1
+    )
+    manifest = BookManifest(
+        schema_version=3,
+        input_sha256="c" * 64,
+        title="Book",
+        source_path="book.pdf",
+        chapters=[chapter],
+    )
+    settings = Settings()
+    settings.general.output_dir = str(tmp_path / "out")
+    settings.pdf.ocr = "never"
+    settings.llm.enabled = False
+    stale_dir = tmp_path / "out/.cache/tts/chapters"
+    stale_dir.mkdir(parents=True)
+    (stale_dir / "chapter-stale.wav").write_bytes(b"stale")
+
+    def render(_manifest, folder, *_args):
+        path = folder / "chapters" / "001.txt"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("Narration text.", encoding="utf-8")
+
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *_args, **_kwargs: manifest_path)
+    monkeypatch.setattr(pipeline, "read_manifest", lambda _path: manifest)
+    monkeypatch.setattr(pipeline, "render_chapter_texts", render)
+    monkeypatch.setattr(
+        pipeline,
+        "synthesize_chunks",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        pipeline.convert_book(source, settings, tts_provider=ChapterProvider())
+    assert list(stale_dir.glob("chapter-*.wav")) == []

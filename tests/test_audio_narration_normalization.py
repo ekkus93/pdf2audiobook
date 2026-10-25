@@ -47,8 +47,27 @@ def test_punctuated_pronunciation_keys_match_whole_tokens():
         "hermione.": "Her-my-oh-nee",
     }
     chunks = split_sentences(source, pronunciations=pronunciations)
-    assert chunks == ["Doctor. UNITED, (SEEPLUS) Her-my-oh-nee."]
+    assert chunks == ["Doctor. United, (seeplus) Her-my-oh-nee."]
     assert chunk_source_ranges(source, chunks, pronunciations=pronunciations)
+
+
+def test_dash_reading_rules_and_punctuation_pronunciation():
+    assert (
+        normalize_narration_text("pages 12–14; a‒b; pause—here")
+        == "pages 12 to 14; a-b; pause,here"
+    )
+    assert split_sentences("hello...", pronunciations={"hello": "hullo"}) == ["hullo."]
+
+
+def test_case_transfer_only_applies_to_alphabetic_pronunciation_keys():
+    assert split_sentences("C++", pronunciations={"c++": "seeplus"}) == ["seeplus"]
+
+
+def test_bom_and_zero_width_characters_do_not_split_alignment_tokens():
+    source = "\ufeffsoft\u200bware and hy\u00adphen."
+    chunks = split_sentences(source)
+    assert chunks == ["software and hyphen."]
+    assert chunk_source_ranges(source, chunks)
 
 
 class RecordingProvider:
@@ -80,4 +99,6 @@ def test_scene_break_creates_pause_without_tts_call(tmp_path):
     progress = json.loads(progress_path.read_text())
     assert provider.calls == ["Before sentence.", "After sentence."]
     assert progress["chunks"][1]["paragraph_boundary_before"] is True
+    assert progress["pause_count"] == 1
+    assert [item["kind"] for item in progress["mapping"]].count("pause") == 1
     assert samples.size == 2 * 24 + 2 * (24000 // 4)

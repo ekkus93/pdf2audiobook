@@ -38,6 +38,6 @@ def test_analyze_output_path_failure_is_content_free(tmp_path, json_output):
     for private in ("PRIVATE_BOOK_STEM", "PRIVATE_OUTPUT_PATH", "NotADirectoryError", "errno"):
         assert private not in result.stderr
     if json_output:
-        diagnostic = json.loads(result.stderr)
+        diagnostic = json.loads(result.stderr.splitlines()[-1])
         assert diagnostic["error"]["type"] == "ExtractionError"
         assert diagnostic["error"]["message"] == "Could not create or update the output workspace"

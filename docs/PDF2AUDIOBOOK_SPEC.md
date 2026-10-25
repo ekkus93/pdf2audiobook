@@ -115,7 +115,7 @@ Canonical raw text and intermediate files must remain independently inspectable.
 
 OCR modes: **auto** (default), **always**, **never**. OCR languages default to eng; user can override. Orientation correction, deskew and preprocessing may be added as needed; keep all rasterizations ephemeral or cached locally.
 
-In auto mode, OCR only pages with raster coverage above the configured trigger or unusable embedded text. Keep short valid selectable text, and do not invoke OCR for image-free blank pages.
+In auto mode, OCR only pages with raster coverage above the configured trigger, unusable embedded text, or dense vector drawings without usable text. Keep short valid selectable text, and do not invoke OCR for image-free blank pages.
 
 ### 4.2 Page-number and header/footer detection
 
@@ -123,13 +123,15 @@ In auto mode, OCR only pages with raster coverage above the configured trigger o
 - Distinguish headers containing chapter titles from a heading appearing once within the content body.
 - Remove pagination artifacts at block/span level, not by blindly deleting all numeric-only lines.
 - Preserve legitimate standalone numbers, ordered lists, captions, poetry, footnotes and quoted content.
-- Remove a numeral only when it is in an outer margin band, nearer the page edge than the closest body line, and sequential with physical page order and any explicit PDF page labels. If multiple numeral sequences qualify on the same pages, retain them and warn for review.
+- Remove a single qualifying sequence in the outermost margin band when it is consistent with physical page order. Use edge distance only to break ties between competing sequences; when tied, keep both and warn. Explicit PDF page labels are positive evidence, while disagreement warns once without disabling removal.
+- A poem or section-number sequence placed in the only margin band is indistinguishable from folios and can be removed; disable page-number removal with `pdf.remove_page_numbers = false` when needed.
 - Maintain reason/confidence for every removal; low-confidence candidates remain in text and are surfaced for review.
 - Default removal of running headers, footers and page numbers; all individually toggleable.
 
 ### 4.3 Text restoration and special material
 
 - Reflow paragraphs and line breaks using geometry, indentation and punctuation. Do not merge section headings into body text.
+- Classify headings before list items. Treat numbered/lettered lines as list items only within a run of at least two sequential markers; preserve initials such as `J. Smith` and years such as `1990)` as prose. Join a wrapped list continuation to its list item.
 - Join a line-end hyphen only when it follows a letter and the next line begins with a lowercase letter. Remove the hyphen only when the unhyphenated word appears elsewhere in the document; otherwise preserve the compound spelling. Never join a spaced hyphen or an en/em dash.
 - Preserve quotations, scene breaks, emphasis cues, lists and paragraph boundaries. Treat footnotes/endnotes via configurable policy: omit, inline at anchor, or end of chapter; default to warn/omit ancillary material only when explicitly classified.
 - For tables, figures, formulas, sidebars and diagrams, default to a warning and conservative narration, not invented descriptions. A future vision-capable provider may describe these under explicit opt-in.
@@ -146,7 +148,7 @@ Order of evidence:
 
 Support books without a TOC, front matter, prologue/epilogue and mid-page transitions. Normalize chapter spans as ordered, nonoverlapping half-open intervals. Detect holes, overlapping chapters, duplicate text and empty chapters; produce a coverage report. Never silently treat the entire book as one chapter when detection fails. Require user review or explicit --allow-single-chapter.
 
-Provide a confidence value and evidence list for each proposed boundary. A manual chapter manifest is authoritative after validation; reanalysis must not clobber manual edits.
+Provide a confidence value and evidence list for each proposed boundary. Schema v3 chapters retain the generated title, start/end boundaries and voice as field-level baselines. Reanalysis protects only fields whose current values differ from those baselines, even under `--force` or `--no-resume`; a boundary edit moves the adjacent boundary of its neighboring chapter. Reject impossible overlaps with a content-free error naming the chapter numbers. Recompute warnings and review reason codes after reanalysis. A manual chapter manifest is authoritative after validation; reanalysis must not clobber manual edits.
 
 At analysis time, compute speakable text for each chapter after accepted cleanup. A chapter with no narration receives a per-chapter warning and appears in the coverage report; synthesis must wait for explicit chapter approval.
 
@@ -320,7 +322,7 @@ audiobooks/
       warnings.json
 ```
 
-Cache extraction, OCR, LLM decisions, approved chapters, text chunks, and generated audio separately. Store schema versions and stage input fingerprints. TTS model identity includes local model content (Piper model/config digests) or the resolved Kitten model ID plus installed `kittenml` version. The chapter audio fingerprint is `mp3-v5`; its upgrade invalidates older chapter MP3 cache entries. A changed voice reuses PDF/OCR/LLM results but invalidates TTS/audio; changed OCR parameters invalidate downstream analysis; an edited chapter boundary invalidates affected chapters only. Write manifest/audio via temporary files plus atomic rename; resume must ignore partial/corrupt artifacts and never destroy completed valid chapters. --force requests explicit recomputation; --no-resume skips cache reuse.
+Cache extraction, OCR, LLM decisions, approved chapters, text chunks, and generated audio separately. Store schema versions and stage input fingerprints. TTS model identity includes local model content (Piper model/config digests) or the resolved Kitten model ID plus installed `kittenml` version. The chapter audio fingerprint is `mp3-v6` with sidecar version 2 and chapter-text SHA-256 checks; its upgrade invalidates older chapter MP3 cache entries. A changed voice reuses PDF/OCR/LLM results but invalidates TTS/audio; changed OCR parameters invalidate downstream analysis; an edited chapter boundary invalidates affected chapters only. Write manifest/audio via temporary files plus atomic rename; resume must ignore partial/corrupt artifacts and never destroy completed valid chapters. --force requests explicit recomputation; --no-resume skips cache reuse.
 
 ## 10. Testing and quality gates
 

@@ -117,6 +117,76 @@ def test_unknown_ids_and_invented_text_are_rejected():
     assert all("Invented" not in decision.model_dump_json() for decision in decisions)
 
 
+def test_out_of_window_boundary_is_rejected_and_recorded():
+    decisions = []
+
+    class FirstWindowStub:
+        calls = 0
+
+        def complete_json(self, *, instructions, document_text):
+            self.calls += 1
+            if self.calls == 1:
+                return {
+                    "entries": [],
+                    "boundaries": [
+                        {
+                            "block_id": "paragraph",
+                            "title": "A real chapter starts here.",
+                            "confidence": 0.99,
+                        }
+                    ],
+                }
+            return {"entries": [], "boundaries": []}
+
+    ids, _ = propose_llm_contents_boundaries(
+        source_blocks(),
+        FirstWindowStub(),
+        window_size=1,
+        decisions=decisions,
+    )
+    assert ids == set()
+    assert any(item.reason_code == "unknown_or_duplicate_boundary_block" for item in decisions)
+
+
+def test_context_only_lookback_and_sentence_proposals_are_rejected():
+    calls = 0
+
+    class LookbackStub:
+        def complete_json(self, *, instructions, document_text):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                return {
+                    "entries": [],
+                    "boundaries": [
+                        {"block_id": "contents", "title": "Contents", "confidence": 0.99}
+                    ],
+                }
+            return {"entries": [], "boundaries": []}
+
+    decisions = []
+    ids, _ = propose_llm_contents_boundaries(
+        source_blocks(), LookbackStub(), window_size=1, decisions=decisions
+    )
+    assert ids == set()
+    assert any(item.reason_code == "unknown_or_duplicate_boundary_block" for item in decisions)
+
+    decisions = []
+    prose = DocumentBlock(id="prose", page_index=0, text="This sentence looks like a heading.")
+    ids, _ = propose_llm_contents_boundaries(
+        [prose],
+        Stub(
+            {
+                "entries": [],
+                "boundaries": [{"block_id": "prose", "title": prose.text, "confidence": 0.99}],
+            }
+        ),
+        decisions=decisions,
+    )
+    assert ids == set()
+    assert decisions[-1].reason_code == "boundary_not_heading_like"
+
+
 def test_contents_task_runs_independently_and_writes_report(tmp_path, monkeypatch):
     class ContentsOnlyStub:
         calls = 0

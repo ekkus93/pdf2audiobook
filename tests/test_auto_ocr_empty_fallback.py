@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import fitz
@@ -68,3 +69,43 @@ def test_auto_ocr_empty_on_scanned_page_still_reports_no_text(
     assert not result.spans
     assert any("OCR produced no text" in warning for warning in result.warnings)
     assert not any("retained unverified embedded text" in warning for warning in result.warnings)
+
+
+def test_dense_vector_drawing_page_triggers_auto_ocr():
+    from pdf2audiobook.pdf import _page_ocr_strategy
+
+    with fitz.open() as document:
+        page = document.new_page(width=600, height=800)
+        for row in range(12):
+            for column in range(10):
+                x, y = 30 + column * 50, 30 + row * 60
+                page.draw_rect(fitz.Rect(x, y, x + 24, y + 28), color=(0, 0, 0))
+        usable, _issue, should_ocr, warnings = _page_ocr_strategy(page, [], Pdf(ocr="auto"), 1)
+    assert not usable
+    assert should_ocr
+    assert warnings
+
+
+@pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract is not installed")
+def test_dense_vector_page_reaches_the_ocr_engine(monkeypatch, tmp_path):
+    from pdf2audiobook import pdf
+
+    source = tmp_path / "vector-outline.pdf"
+    with fitz.open() as document:
+        page = document.new_page(width=600, height=800)
+        for row in range(12):
+            for column in range(10):
+                x, y = 30 + column * 50, 30 + row * 60
+                page.draw_rect(fitz.Rect(x, y, x + 24, y + 28), color=(0, 0, 0))
+        document.save(source)
+    original = pdf._cached_ocr_lines
+    called = []
+
+    def track_ocr(*args, **kwargs):
+        called.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(pdf, "_cached_ocr_lines", track_ocr)
+    result = pdf.extract_pdf(source, Pdf(ocr="auto"))
+    assert called
+    assert any("OCR" in warning for warning in result.warnings)

@@ -1,6 +1,6 @@
 # PDF2Audiobook — Implementation TODO
 
-**Status:** Core implementation and explicit speaker markers are in place; external acceptance pending
+**Status:** Original reopened items have been requalified against FX8; exact-head CI and Piper-specific speaker validation remain deferred/tracked in docs/PDF2AUDIOBOOK_REVIEW_FIXES_TODO.md
 **Date:** 2026-10-24
 **Specification:** docs/PDF2AUDIOBOOK_SPEC.md  
 **Target:** Python CLI, chapter MP3s, Kitten TTS, optional OpenAI/Ollama/llama-server intelligence.
@@ -27,7 +27,7 @@
   - [x] P0.03a Implement lookup of per-user config directory; --config and --no-config (review-fixes FX5.02).
   - [x] P0.03b Implement precedence CLI > PDF2AUDIOBOOK_* env > TOML > built-ins, including explicit boolean false (review-fixes FX5.03, FX5.05).
   - [x] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options (review-fixes FX5.06).
-  - [x] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples.
+  - [x] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples (requalified by review-fixes FX8.03).
   - [x] P0.03e Unit-test overlay precedence, parsing, missing/unknown keys and path resolution (review-fixes FX5.01–FX5.03).
 - [x] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation (review-fixes FX7.01).
 - [x] P0.05 Implement atomic output workspace/manifest schema, input hash, stable IDs and versioned per-stage caching.
@@ -47,12 +47,12 @@
   - [x] P1.02c Avoid duplicate text from embedded and OCR layers; cache OCR by source page and settings (review-fixes FX2.04–FX2.05).
   - [x] P1.02d Detect suspicious OCR/extraction text and possible side-by-side reading-order cases; emit explicit review warnings (heuristics, not engine confidence).
 - [x] P1.03 Reconstruct reading order and paragraphs, handling one- and two-column layout.
-  - [x] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation (review-fixes FX2.07).
+  - [x] P1.03a Recover paragraph soft wraps and safe end-of-line hyphenation (requalified by review-fixes FX8.04).
   - [x] P1.03b Preserve dialogue, section breaks, legitimate line breaks and special content markers (review-fixes FX2.07).
 - [x] P1.04 Detect repeated headers, footers, Arabic/Roman page numbers and alternate-page layouts.
   - [x] P1.04a Remove only confidently identified pagination noise, with source-linked CleanupEdit records.
   - [x] P1.04b Add toggles to retain/remove headers/footers/page numbers independently.
-  - [x] P1.04c Never remove numbered lists, quoted standalone numbers or substantive body text (review-fixes FX2.03; ambiguous candidates remain conservative and reviewable).
+  - [x] P1.04c Never remove numbered lists, quoted standalone numbers or substantive body text (requalified by review-fixes FX8.05; ambiguous candidates remain conservative and reviewable).
 - [x] P1.05 Implement footnote/table/image/math handling policies, conservative warnings and audit.
 - [x] P1.06 Add synthetic PDF fixtures for text, scans, mixed pages, two-column, Roman numbering, repeated headers, numbered lists and difficult OCR.
   - [x] P1.06a Unit and integration tests verify correct extraction/coverage without network dependency.
@@ -68,7 +68,7 @@
   - [x] P2.02a Reject overlapping/missing chapter spans and source holes; emit a coverage report with chapters left empty by accepted cleanup.
   - [x] P2.02b Require review for low-confidence/no-chapter books; allow explicit --allow-single-chapter.
 - [x] P2.03 Persist editable chapter manifest plus per-chapter UTF-8 text files and inspection report.
-  - [x] P2.03a Implement manifest override validation and preserve generated-fingerprint-detected chapter edits across reanalysis.
+  - [x] P2.03a Implement manifest override validation and preserve generated-fingerprint-detected chapter edits across reanalysis (requalified by review-fixes FX8.12).
   - [x] P2.03b Support inspect, analyze, --dry-run, --json, --chapter and --chapter-range.
 - [x] P2.04 Test bookmark, no-TOC, TOC-offset, prose heading and chapter-mid-page fixtures.
 
@@ -82,7 +82,7 @@
   - [x] P3.01c Implement llama-server adapter with configurable local base URL/model and optional auth.
   - [x] P3.01d Probe or adapt capabilities for JSON/schema response and provider-specific unsupported parameters (review-fixes FX4.05).
 - [x] P3.02 Implement bounded prompt/context splitting with stable block references and schema versioning.
-  - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries; TOC task is independently toggleable and verifier-anchored (review-fixes FX4.07).
+  - [x] P3.02a Structure classification: proposed headings, TOC and anchored boundaries; TOC task is independently toggleable and verifier-anchored (requalified by review-fixes FX8.10).
   - [x] P3.02b Cleanup proposals: anchored exact-match OCR corrections and pagination classification.
   - [x] P3.02c Narration-preparation suggestions: pronunciation/speech normalization with source text unchanged.
 - [x] P3.03 Implement deterministic verifier: reject unknown IDs, unmatched originals, unanchored boundaries, invented text and excessive deletion.
@@ -94,7 +94,7 @@
   - [x] P3.05b Treat PDF text as untrusted and never let embedded instructions control model/tool behavior.
   - [x] P3.05c Ensure logs, crash reports and config show redact credentials and full text.
   - [x] P3.05d Warn separately for page images and whole-book text windows, naming the provider, model and image page cap.
-- [x] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting (review-fixes FX4.01–FX4.04, FX4.08).
+- [x] P3.06 Add content-addressed LLM cache, provider/model/prompt fingerprints and cost/token budget reporting (requalified by review-fixes FX8.08–FX8.09).
 - [x] P3.07 Create stubbed contract tests for all three providers (success, invalid JSON, truncation, API errors, timeouts, schema incompatibility).
 - [x] P3.08 Add opt-in real backend smoke checks for local Ollama/llama-server and explicitly consented OpenAI.
 
@@ -105,17 +105,17 @@
 - [x] P4.01 Define TTSProvider protocol (models, voices, synthesis, sample rate, chunk bounds and health) with lazy loading.
   - [x] P4.01a Implement Kitten TTS adapter, selectable model and voice; test valid voice/model resolution.
   - [x] P4.01b Expose --tts-provider, --tts-model, --voice, --speed, --sample-rate, --bitrate (review-fixes FX5.06).
-- [x] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking (review-fixes FX6.03–FX6.05).
+- [x] P4.02 Build narration normalization with preservation policy and stable sentence-aware chunking (requalified by review-fixes FX8.13 and FX8.15).
   - [x] P4.02a Keep punctuation/paragraph pauses and preserve source-to-audio chunk mapping.
   - [x] P4.02b Handle oversized sentences and TTS failures without silently dropping text.
 - [x] P4.03 Generate validated PCM/WAV chunks; normalize channels/rate, join at PCM level and encode once per chapter via FFmpeg.
   - [x] P4.03a Produce playable, deterministic, zero-padded chapter MP3 filenames.
   - [x] P4.03b Apply configurable inter-chunk pauses, suitable default bitrate and correct chapter order (review-fixes FX6.03, FX6.09).
-  - [x] P4.03c Add ID3 book/author/chapter title/track tags, optional cover artwork (review-fixes FX6.08).
+  - [x] P4.03c Add ID3 book/author/chapter title/track tags, optional cover artwork (requalified by review-fixes FX8.11).
 - [x] P4.04 Track per-chunk progress, checksums, cache keys and completion; persist atomically.
   - [x] P4.04a Implement --resume/--no-resume and --force with precise cache invalidation (review-fixes FX6.02, FX6.11).
   - [x] P4.04b Restart interrupted conversion without regenerating validated completed audio chunks.
-  - [x] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts (review-fixes FX6.09).
+  - [x] P4.04c Detect corrupt/incomplete intermediate audio and regenerate only affected artifacts (review-fixes FX0.02c).
 - [x] P4.05 Add mocked TTS tests using synthetic sine/audio fixtures; optional actual Kitten model integration test (review-fixes FX6.10; real smoke remains opt-in).
 - [x] P4.06 Decode all generated MP3 fixtures with FFmpeg and inspect expected tags/durations.
 
@@ -148,9 +148,9 @@
 - [ ] F.01 Additional pluggable TTS engines (Piper, Kokoro, others): added an optional Piper CLI adapter selectable through configuration and the CLI; no heavyweight engine or voice is added to default dependencies.
 - [x] F.02 Optional vision LLM for figures, diagrams, equations and complicated page order: opt-in rendered-page review covers image/vector content and likely two-column layouts, validates bounded review-only responses, caches by image digest, and never alters source text.
 - [x] F.03 Directory/batch conversion and per-book voice profiles: sorted PDF discovery, opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence (review-fixes FX5.07; exact-head CI evidence in the review-fixes ledger).
-- [x] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from current, fingerprint-verified chapter MP3s. See review-fixes ledger FX3.04.
+- [x] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from current, text-verified chapter MP3s. See review-fixes ledger FX3.04 and FX8.11.
 - [x] F.05 Optional GUI and user-assisted chapter editor: loopback review UI enforces the bound Host authority and Origin checks, validates ranges/coverage, and marks saved chapters manually approved.
-- [x] F.06 Multi-speaker narration and pronunciation dictionaries (review-fixes FX6.05–FX6.06).
+- [x] F.06 Multi-speaker narration and pronunciation dictionaries (review-fixes FX6.05–FX6.06; Piper-specific speaker-count validation deferred under FX8.14c).
   - [x] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges (review-fixes FX6.05).
   - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity and survives review saves, including omitted fields in partial clients.
   - [x] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval (review-fixes FX6.06).
@@ -435,3 +435,5 @@
 | 2026-10-24 | worktree after 1664fdd645cebb204c882cbf5b2b3a81ff9b2a16 | F.06 partial: added case-insensitive, single-token pronunciation replacements applied only to speakable chunks while preserving original source ranges; review UI now assigns a TTS voice per chapter and voice changes invalidate audio. F.01–F.05 implementation additions and synthetic review coverage are recorded above. | Exact local checks passed: Ruff, formatting, mypy (21 modules), `uv lock --check`, CLI doctor/help, wheel/sdist build, and 1011 pytest tests. | Within-chapter speaker attribution needs user preference on explicit markers vs reviewed LLM assignments; live llama-server/OpenAI and real Piper/Kitten listening acceptance remain unavailable. |
 | 2026-10-24 | 9bd8fc12b0a71dca04a01313e66d0d91d833df2b | P5.10 validation before within-chapter voice-marker addition; implementation passed CI across Python 3.11/3.12/3.13. | GitHub Actions run 40160316883 passed: Ruff, format, mypy/schema, full unit suite, CLI smoke and built wheel/sdist smoke; local pytest passed 1011 tests. | Run exact-head CI after speaker-marker implementation is committed. |
 | 2026-10-24 | d9a0c4c72ab908bca91f6815c7fe0a8c6b0df74 | F.06 complete; P5.05 mock coverage for OpenAI/Ollama/llama-server plus live Ollama smoke; P5.10 exact-head release validation passed across Python 3.11/3.12/3.13. | Local Ruff, format, mypy and full pytest passed (1013 tests). GitHub Actions run 40160505083 passed all CI steps on all three versions. | Per user instruction, live llama-server and OpenAI checks are deferred. Actual Piper/Kitten voice listening remains unavailable. |
+| 2026-10-25 | 2904f1975ef131f11ed340264b0b8151e85101a9 | Reopened P0.03d, P1.03a, P1.04c, P2.03a, P3.02a, P3.06, P4.02, P4.03c, F.04 and F.06 after the second review; corrected P4.04c traceability | Second review R46–R63; baseline tight-folio regression restored and reproduced failing under FX8.02a | Requalification and implementation tracked in docs/PDF2AUDIOBOOK_REVIEW_FIXES_TODO.md |
+| 2026-10-25 | working tree after FX8 implementation | Requalified reopened P0.03d, P1.03a, P1.04c, P2.03a, P3.02a, P3.06, P4.02, P4.03c, F.04 and F.06 against FX8.03–FX8.13 evidence | 1240 passed, 1 optional Kitten smoke skipped; Ruff, formatting, mypy, uv lock check and wheel/sdist build passed | Exact-head CI pending; Piper-specific marker speaker-count validation is explicitly deferred by user |

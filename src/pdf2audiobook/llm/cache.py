@@ -138,10 +138,36 @@ class CachedLLMProvider:
                 "estimated_cost_usd": self._reported_cost_usd(),
                 "usage_verified": self.usage_verified,
                 "provider_reported_tokens": safe_usage,
+                "resolved_model": self._resolved_model or getattr(self.provider, "model", None),
                 "scope": "current_analysis_run",
                 "book_totals": self.ledger.totals() if self.ledger is not None else None,
             },
         )
+
+    def _load_unsupported_parameters(self) -> set[str]:
+        path = (
+            self.cache_dir
+            / "provider-capabilities"
+            / (fingerprint("unsupported-parameters-v1", self.identity) + ".json")
+        )
+        data = load_bounded_json(path, max_bytes=4096, max_depth=4)
+        values = data.get("unsupported", []) if isinstance(data, dict) else []
+        if not isinstance(values, list):
+            return set()
+        allowed = {"max_tokens", "temperature"}
+        return {value for value in values if isinstance(value, str) and value in allowed}
+
+    def _save_unsupported_parameters(self) -> None:
+        values = getattr(self.provider, "_unsupported_parameters", None)
+        if not isinstance(values, set):
+            return
+        allowed = sorted(value for value in values if value in {"max_tokens", "temperature"})
+        path = (
+            self.cache_dir
+            / "provider-capabilities"
+            / (fingerprint("unsupported-parameters-v1", self.identity) + ".json")
+        )
+        write_json(path, {"schema_version": 1, "unsupported": allowed})
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
         return self._complete_json_call(
@@ -209,6 +235,30 @@ class CachedLLMProvider:
                 self._write_usage()
                 return entry["response"]
         self.misses += 1
+        prompt_bound = len(instructions.encode("utf-8")) + len(document_text.encode("utf-8")) + 128
+        if image_data is not None:
+            prompt_bound += len(image_data)
+        output_bound = getattr(self.provider, "max_output_tokens", None)
+        if (self.max_reported_tokens is not None or self.max_estimated_cost_usd is not None) and (
+            not isinstance(output_bound, int)
+            or output_bound < 1
+            or getattr(self.provider, "max_context_tokens", None) is None
+        ):
+            raise LLMError("A bounded output token cap is required under an LLM budget")
+        upper_bound_tokens = prompt_bound + (output_bound or 0)
+        upper_bound_usd = None
+        if (
+            self.input_cost_usd_per_million_tokens is not None
+            and self.output_cost_usd_per_million_tokens is not None
+        ):
+            upper_bound_usd = str(
+                (
+                    Decimal(prompt_bound) * Decimal(str(self.input_cost_usd_per_million_tokens))
+                    + Decimal(output_bound or 0)
+                    * Decimal(str(self.output_cost_usd_per_million_tokens))
+                )
+                / Decimal(1_000_000)
+            )
         # Server-side limits need the server, so check them only on a miss:
         # a fully cached rerun must not require a running provider.
         served = getattr(self.provider, "validate_served_capacity", None)
@@ -228,6 +278,20 @@ class CachedLLMProvider:
             if self.max_requests is not None and self.requests_started >= self.max_requests:
                 self._write_usage()
                 raise LLMError("LLM request budget exhausted; increase llm.max_requests")
+            usage = getattr(self.provider, "total_usage", {})
+            reported = usage.get("total_tokens", 0) if isinstance(usage, dict) else 0
+            if self.max_reported_tokens is not None and reported + upper_bound_tokens > (
+                self.max_reported_tokens
+            ):
+                raise LLMError("Per-book LLM token budget cannot cover the next request")
+            if self.max_estimated_cost_usd is not None:
+                if upper_bound_usd is None:
+                    raise LLMError("A bounded output token cap is required under an LLM budget")
+                current_cost = self._reported_cost_usd() or 0.0
+                if Decimal(str(current_cost)) + Decimal(upper_bound_usd) > Decimal(
+                    str(self.max_estimated_cost_usd)
+                ):
+                    raise LLMError("Per-book LLM cost budget cannot cover the next request")
         else:
             set_accounting = getattr(self.provider, "set_attempt_accounting", None)
             if callable(set_accounting):
@@ -241,6 +305,8 @@ class CachedLLMProvider:
                         max_requests=self.max_requests,
                         max_tokens=self.max_reported_tokens,
                         max_usd=self.max_estimated_cost_usd,
+                        upper_bound_tokens=upper_bound_tokens,
+                        upper_bound_usd=upper_bound_usd,
                     )
                     self.requests_started += 1
                     self._write_usage()
@@ -267,10 +333,15 @@ class CachedLLMProvider:
                     max_requests=self.max_requests,
                     max_tokens=self.max_reported_tokens,
                     max_usd=self.max_estimated_cost_usd,
+                    upper_bound_tokens=upper_bound_tokens,
+                    upper_bound_usd=upper_bound_usd,
                 )
         # A failed response can still incur charges. Never reuse stale usage.
         if hasattr(self.provider, "last_usage"):
             self.provider.last_usage = {}
+        unsupported = getattr(self.provider, "_unsupported_parameters", None)
+        if isinstance(unsupported, set):
+            unsupported.update(self._load_unsupported_parameters())
         if not attempt_accounting:
             self.requests_started += 1
         self._write_usage()
@@ -291,6 +362,7 @@ class CachedLLMProvider:
             request_error = exc
             raise
         finally:
+            self._save_unsupported_parameters()
             last = getattr(self.provider, "last_usage", None)
             # A total-token counter alone cannot prove a request's cost.
             # Require complete, internally consistent signed counters before

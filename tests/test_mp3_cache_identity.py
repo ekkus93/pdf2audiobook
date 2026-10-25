@@ -8,7 +8,7 @@ from pdf2audiobook.pipeline import chapter_audio_fingerprint
 def _fixture():
     settings = Settings()
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="a" * 64,
         title="Book",
         author="Author",

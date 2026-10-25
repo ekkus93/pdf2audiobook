@@ -234,21 +234,26 @@ The analysis directory is
 Inspect `manifest.json`, `coverage.json`, warnings and chapter text against
 the original PDF before listening or distributing. The schema currently
 **rejects** unsupported versions; it does not auto-migrate manifests.
-Manifest schema v2 is required after the review-fixes release. Existing v1
-workspaces are intentionally rejected; re-run `analyze` with a fresh output
-directory to create a v2 workspace.
-Extraction/analysis fingerprint v19 invalidates prior analysis after safer OCR,
-pagination, heading and line-wrap classification. Existing v2 workspaces are
+Manifest schema v3 is required after the second-review fixes. Existing v1 and
+v2 workspaces are intentionally rejected; re-run `analyze` with a fresh output
+directory to create a v3 workspace.
+Extraction/analysis fingerprint v20 invalidates prior analysis after safer OCR,
+pagination, heading and line-wrap classification. Existing v3 workspaces are
 re-analyzed on resume; manually approved workspaces remain protected, so use a
 fresh output directory when intentionally replacing approved analysis.
-The per-book LLM budget ledger schema v2 adds an `unbilled` state and reads v1
-ledgers in place; ambiguous sent requests remain unresolved until reviewed with
-the `budget` command.
+Printed poem or section numbers in the only qualifying margin sequence can be
+mistaken for folios. Set `pdf.remove_page_numbers = false` when a book uses
+those numbers and confirm the retained text in the review workspace.
+The per-book LLM budget ledger schema v3 adds per-attempt token/USD upper
+bounds and a `rejected` state. Unknown and pending sent requests remain charged
+at their upper bounds; `budget resolve` validates and settles them in one
+transaction.
 LLM decision auditing writes `reports/llm_decisions.json`; the cleanup audit is
-schema v2 and stores only sanitized IDs, hashes and fixed summaries/reason codes.
+schema v3 and stores only sanitized IDs, hashes and fixed summaries/reason codes.
 LLM cache identity v4 includes resolved provider/model and current request/task
 semantics; existing LLM cache entries become misses and are regenerated on use.
-Chapter audio identity `mp3-v5` invalidates prior MP3 cache entries after
+Chapter audio identity `mp3-v6` and sidecar version 2 add current chapter-text
+hashes for packaging checks and invalidate prior MP3 cache entries after
 including the active TTS model identity, narration-normalization version and
 cover-image digest. Piper identity hashes its ONNX model and adjacent JSON
 configuration; Kitten identity includes the resolved model ID and installed
@@ -267,6 +272,15 @@ must be JPEG or PNG and at most 5 MiB. `tts.max_retries` defaults to 2 and is
 available as `PDF2AUDIOBOOK_TTS_MAX_RETRIES`; chapters still failing after
 retries are reported individually and conversion exits 7 after processing
 remaining chapters. Voice markers are honored only in approved chapters.
+Failed chapter details stay in `reports/conversion_status.json` and are shown
+by `inspect`; transient provider errors alone are retried. A reviewed manifest
+reason can be acknowledged with `convert --accept-review damaged_source`.
+`pack-m4b --cover` applies artwork to the M4B output; freshness checks use the
+chapter text hash, independently of conversion voice, speed or cover settings.
+Unknown and pending LLM requests count against their recorded worst-case token
+and cost bounds. A provider 4xx rejection without usage is recorded as
+`rejected`; inspect accounting with `budget show` before resolving ambiguous
+requests.
 The opt-in real Kitten smoke test requires both the `kitten` extra and
 `PDF2AUDIOBOOK_KITTEN_SMOKE=1`; it is intentionally excluded from CI.
 

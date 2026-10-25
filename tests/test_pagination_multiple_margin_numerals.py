@@ -16,7 +16,7 @@ def _block(page: int, number: int, text: str, y: float, x: float = 280) -> Docum
     )
 
 
-def test_multiple_margin_numerals_per_page_are_not_assumed_to_be_page_numbers():
+def test_outermost_of_competing_margin_sequences_is_removed():
     blocks = [
         _block(0, 0, "This is substantive chapter text.", 200, 50),
         _block(0, 1, "1", 755),
@@ -29,7 +29,7 @@ def test_multiple_margin_numerals_per_page_are_not_assumed_to_be_page_numbers():
         _block(2, 2, "4", 782),
     ]
     edits = pagination_cleanup(blocks, [(595, 842)] * 3, Pdf())
-    assert edits == []
+    assert {edit.block_id for edit in edits} == {"p0-n2", "p1-n2", "p2-n2"}
 
 
 def test_unambiguous_sequential_folios_remain_removable():

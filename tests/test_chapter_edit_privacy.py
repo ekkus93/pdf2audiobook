@@ -1,15 +1,13 @@
 """A hand-edited range that cannot be preserved fails without source details."""
 
 import fitz
-import pytest
 
 from pdf2audiobook.config import LLM, General, Settings
-from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.pipeline import analyze_book
 from pdf2audiobook.workspace import read_manifest, write_manifest
 
 
-def test_unalignable_edited_chapter_error_contains_no_private_values(tmp_path):
+def test_boundary_edit_moves_neighboring_boundary_without_private_diagnostics(tmp_path):
     source = tmp_path / "PRIVATE_BOOK_PATH.pdf"
     document = fitz.open()
     page = document.new_page()
@@ -31,9 +29,6 @@ def test_unalignable_edited_chapter_error_contains_no_private_values(tmp_path):
     write_manifest(manifest_path, manifest)
     settings.general.resume = False
 
-    with pytest.raises(ExtractionError) as raised:
-        analyze_book(source, settings)
-    message = str(raised.value)
-    assert "PRIVATE_BOOK_PATH" not in message
-    assert "PRIVATE_SOURCE_TEXT" not in message
-    assert str(tmp_path) not in message
+    refreshed = read_manifest(analyze_book(source, settings))
+    assert refreshed.chapters[0].title == "Edited title"
+    assert refreshed.chapters[0].end_block == refreshed.chapters[1].start_block

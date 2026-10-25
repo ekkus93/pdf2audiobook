@@ -11,7 +11,7 @@ def manifest_with_spans(block_refs, *, span_count=None):
     if span_count is None:
         span_count = len(block_refs)
     return BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="a" * 64,
         title="Synthetic source",
         source_path="synthetic.pdf",

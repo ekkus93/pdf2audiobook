@@ -86,7 +86,7 @@ def test_fragmented_pdf_lines_become_one_block_with_every_span(tmp_path):
         "here.",
     ]
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="0" * 64,
         title="t",
         source_path="fragments.pdf",
@@ -116,7 +116,7 @@ def _scan_pdf(path, pages, *, offsets=None, citation_page=None):
             )
         if index == citation_page:
             page.insert_text((156 + shift, 461), "(Source 1-4)", fontsize=7)
-        page.insert_text((149 + shift, 500), str(index + 1), fontsize=8)
+        page.insert_text((149 + shift, 474), str(index + 1), fontsize=8)
     doc.save(path)
     doc.close()
 
@@ -133,8 +133,8 @@ def _removed(path):
 def test_tight_centered_folios_are_removed_even_when_listed_in_contents(tmp_path):
     source = tmp_path / "scan.pdf"
     _scan_pdf(source, 5)
-    # Folios 1..5 sit closer to the paper edge than the body and also appear
-    # as references on the contents page, which itself must stay intact.
+    # Folios 1..5 sit ~4pt under full-width body text and also appear on page
+    # references on the contents page, which itself must stay intact.
     assert _removed(source) == [(page, str(page)) for page in range(1, 6)]
 
 
@@ -172,8 +172,21 @@ def test_extraction_classifies_numbered_items_as_lists(tmp_path):
         page = document.new_page()
         page.insert_text((72, 80), "1. First item")
         page.insert_text((72, 100), "2) Second item")
+        page.insert_text((72, 120), "3. Wrapped list item")
+        page.insert_text((72, 140), "continuation line")
         document.save(source)
 
     extracted = extract_pdf(source, Pdf(ocr="never"))
-    assert [block.kind for block in extracted.blocks] == ["list", "list"]
+    assert [block.kind for block in extracted.blocks] == ["list", "list", "list", "unknown"]
+    assert "Wrapped list item continuation line" in reflow_narration_lines(extracted.blocks)
     assert is_list_line("a) first")
+
+
+def test_prose_number_and_initials_are_not_list_items():
+    assert not is_list_line("J. Smith of the Times said")
+    assert not is_list_line("in 1990) was the first year")
+
+
+def test_heading_classification_precedes_numbered_lists():
+    assert is_heading_line("Chapter I. The Storm")
+    assert is_heading_line("I. THE STORM")

@@ -23,13 +23,14 @@ def run_failed_request(tmp_path, exception):
         allow_remote=False,
         transport=httpx.MockTransport(respond),
         max_retries=0,
+        max_context_tokens=4096,
     ) as provider:
         worker = CachedLLMProvider(
             provider,
             cache_dir=tmp_path / "cache",
             identity="local-model",
             ledger_path=ledger_path,
-            max_reported_tokens=100,
+            max_reported_tokens=3000,
         )
         with pytest.raises(LLMError):
             worker.complete_json(instructions="private instructions", document_text="private book")
@@ -46,7 +47,7 @@ def test_connect_failure_is_unbilled_and_does_not_block_budget(tmp_path):
         request_hash="another-request",
         provider_hash="local-model",
         max_requests=1,
-        max_tokens=100,
+        max_tokens=3000,
         max_usd=None,
     )
 
@@ -55,14 +56,15 @@ def test_read_timeout_remains_unknown_and_blocks_token_budget(tmp_path):
     ledger = run_failed_request(tmp_path, httpx.ReadTimeout)
     assert ledger.rows()[0]["status"] == "unknown"
     assert ledger.totals()["unresolved_requests"] == 1
-    with pytest.raises(LLMError, match="unresolved"):
-        ledger.reserve(
-            request_hash="another-request",
-            provider_hash="local-model",
-            max_requests=None,
-            max_tokens=100,
-            max_usd=None,
-        )
+    assert ledger.totals()["reported_tokens"] > 0
+    ledger.reserve(
+        request_hash="another-request",
+        provider_hash="local-model",
+        max_requests=None,
+        max_tokens=3000,
+        max_usd=None,
+        upper_bound_tokens=10,
+    )
 
 
 def test_budget_cli_resolve_and_show_are_content_free(tmp_path):

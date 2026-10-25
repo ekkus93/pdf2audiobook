@@ -99,10 +99,12 @@ def test_json_mode_rejection_falls_back_once(name):
 @pytest.mark.parametrize("name", PROVIDERS)
 def test_rejected_generation_parameter_is_removed_and_remembered(parameter, name):
     seen = []
+    caps = []
 
     def handler(request):
         payload = json.loads(request.content)
         seen.append(parameter in payload)
+        caps.append(("max_tokens" in payload, "max_completion_tokens" in payload))
         if parameter in payload:
             return httpx.Response(
                 400,
@@ -113,7 +115,11 @@ def test_rejected_generation_parameter_is_removed_and_remembered(parameter, name
     with _provider(name, handler, context=4096) as provider:
         assert provider.complete_json(instructions="x", document_text="y") == {}
         assert provider.complete_json(instructions="x", document_text="z") == {}
-    assert seen == [True, False, False]
+    if parameter == "max_tokens":
+        assert seen == [True, False, False]
+        assert caps == [(True, False), (False, True), (False, True)]
+    else:
+        assert seen == [True, False, False]
 
 
 @pytest.mark.parametrize("name", PROVIDERS)

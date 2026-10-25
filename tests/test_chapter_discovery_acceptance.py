@@ -58,6 +58,22 @@ def test_no_toc_prose_heading_uses_strong_typographic_evidence():
     validate_chapter_coverage(blocks, chapters)
 
 
+@pytest.mark.parametrize(
+    "titles",
+    [
+        ["1. The Storm", "2. The Calm", "3. The Return"],
+        ["I. THE STORM", "II. THE CALM", "III. THE RETURN"],
+    ],
+)
+def test_numbered_and_roman_display_headings_open_chapters(titles):
+    items = []
+    for title in titles:
+        items.extend([(0, title, 20), (0, "The chapter begins with ordinary body text.", 11)])
+    blocks = sample(items)
+    chapters, _ = propose_chapters(blocks, set(), [], Chapters())
+    assert [chapter.title for chapter in chapters] == titles
+
+
 def test_midpage_heading_keeps_prior_page_prose_once():
     blocks = sample(
         [

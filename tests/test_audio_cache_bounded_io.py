@@ -82,7 +82,8 @@ def test_deeply_nested_wav_metadata_is_a_miss_and_regenerates(tmp_path):
     voice = StubVoice()
     _synthesize(tmp_path, voice)
     metadata = next(tmp_path.glob("*.meta.json"))
-    metadata.write_bytes(b"[" * 100_000)
+    metadata.write_bytes(b"[" * 8 + b"0" + b"]" * 8)
+    assert metadata.stat().st_size < 1024
     _synthesize(tmp_path, voice)
     assert voice.calls == 2
 

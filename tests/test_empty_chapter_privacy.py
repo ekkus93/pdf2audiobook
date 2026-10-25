@@ -65,3 +65,29 @@ def test_analyze_reports_empty_chapter_and_convert_refuses_privately(tmp_path):
     assert "PRIVATE_BOOK_TITLE" not in message
     assert "PRIVATE_OMITTED_NOTE" not in message
     assert str(tmp_path) not in message
+
+
+def test_approved_empty_chapter_is_skipped_without_partial_failure(tmp_path):
+    import json
+
+    from pdf2audiobook.workspace import write_manifest
+
+    source = tmp_path / "approved-empty.pdf"
+    with fitz.open() as document:
+        document.new_page()
+        document.save(source)
+    settings = Settings(
+        general=General(output_dir=str(tmp_path / "output")),
+        pdf=Pdf(footnotes="omit"),
+        llm=LLM(enabled=False),
+        chapters={"allow_single_chapter": True},
+    )
+    extractor = FootnoteOnlyExtractor()
+    manifest_path = analyze_book(source, settings, extractor=extractor)
+    manifest = read_manifest(manifest_path)
+    manifest.chapters[0].manually_approved = True
+    write_manifest(manifest_path, manifest)
+    assert convert_book(source, settings, extractor=extractor) == []
+    status = json.loads((manifest_path.parent / "reports" / "conversion_status.json").read_text())
+    assert status["chapters"][0]["status"] == "skipped"
+    assert status["chapters"][0]["reason_code"] == "empty_chapter"

@@ -11,10 +11,10 @@ from pdf2audiobook.workspace import atomic_write, fingerprint, read_manifest, wr
 def test_manifest_schema_version_is_rejected(tmp_path: Path):
     path = tmp_path / "manifest.json"
     manifest = BookManifest(
-        schema_version=2, input_sha256="a" * 64, title="Test", source_path="input.pdf"
+        schema_version=3, input_sha256="a" * 64, title="Test", source_path="input.pdf"
     )
     write_manifest(path, manifest)
-    assert read_manifest(path).schema_version == 2
+    assert read_manifest(path).schema_version == 3
     data = json.loads(path.read_text())
     data["schema_version"] = 999
     path.write_text(json.dumps(data))
@@ -24,10 +24,10 @@ def test_manifest_schema_version_is_rejected(tmp_path: Path):
     assert path.read_text(encoding="utf-8") == json.dumps(data)
 
 
-def test_schema_v2_round_trips_chapter_warnings_and_generated_fingerprint(tmp_path: Path):
+def test_schema_v3_round_trips_chapter_warnings_and_generated_fingerprint(tmp_path: Path):
     path = tmp_path / "manifest.json"
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="b" * 64,
         title="Test",
         source_path="input.pdf",

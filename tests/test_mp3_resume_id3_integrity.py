@@ -47,7 +47,7 @@ def test_mp3_resume_checks_actual_chapter_id3_tags(
         confidence=1.0,
     )
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="synthetic-sha",
         title="Example Book",
         author="Example Author",

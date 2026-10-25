@@ -10,8 +10,12 @@ import pytest
 
 from pdf2audiobook.config import Settings
 from pdf2audiobook.pipeline import analyze_book
-from pdf2audiobook.review_ui import create_review_server, save_chapter_updates
-from pdf2audiobook.workspace import read_manifest
+from pdf2audiobook.review_ui import (
+    _expected_authorities,
+    create_review_server,
+    save_chapter_updates,
+)
+from pdf2audiobook.workspace import read_manifest, write_manifest
 
 
 def _manifest(tmp_path):
@@ -33,8 +37,30 @@ def _manifest(tmp_path):
     return analyze_book(source, settings)
 
 
+def _page_save_body(chapters):
+    """Mirror the page's JSON.stringify({chapters}) field builder."""
+    return json.dumps(
+        {
+            "chapters": [
+                {
+                    "id": chapter["id"],
+                    "title": chapter["title"],
+                    "start_block": chapter["start_block"],
+                    "end_block": chapter["end_block"],
+                    "voice_id": chapter["voice_id"],
+                }
+                for chapter in chapters
+            ]
+        }
+    ).encode()
+
+
 def test_review_server_authenticates_api_and_saves_validated_boundaries(tmp_path):
     manifest_path = _manifest(tmp_path)
+    manifest = read_manifest(manifest_path)
+    manifest.chapters[0].voice_id = "Jasper"
+    manifest.chapters[1].voice_id = "Bella"
+    write_manifest(manifest_path, manifest)
     server = create_review_server(manifest_path, port=0)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -45,6 +71,7 @@ def test_review_server_authenticates_api_and_saves_validated_boundaries(tmp_path
             page = response.read().decode()
             assert "Chapter review" in page
             assert "voice_id:card.querySelector('[name=voice_id]').value" in page
+            assert "start_block:Number(card.querySelector('[name=start]').value)" in page
         try:
             urllib.request.urlopen(url + "/api/manifest", timeout=3)
         except urllib.error.HTTPError as error:
@@ -67,15 +94,31 @@ def test_review_server_authenticates_api_and_saves_validated_boundaries(tmp_path
             for chapter in request_payload["chapters"]
         ]
         assert len(chapters) == 2
+        save_request = urllib.request.Request(
+            url + "/api/chapters",
+            data=_page_save_body(chapters),
+            method="POST",
+            headers={
+                **headers,
+                "Origin": url,
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(save_request, timeout=3) as response:
+            assert json.loads(response.read()) == {"ok": True}
+        assert [chapter.voice_id for chapter in read_manifest(manifest_path).chapters] == [
+            "Jasper",
+            "Bella",
+        ]
+
         chapters[0]["title"] = "Reviewed First Chapter"
         chapters[0]["voice_id"] = "Jasper"
         chapters[1]["voice_id"] = "Bella"
         chapters[0]["end_block"] += 1
         chapters[1]["start_block"] += 1
-        body = json.dumps({"chapters": chapters}).encode()
         save_request = urllib.request.Request(
             url + "/api/chapters",
-            data=body,
+            data=_page_save_body(chapters),
             method="POST",
             headers={
                 **headers,
@@ -123,6 +166,12 @@ def test_review_server_rejects_invalid_ranges_and_non_loopback_bind(tmp_path):
         thread.join(timeout=3)
     with pytest.raises(ValueError, match="loopback"):
         create_review_server(manifest_path, host="0.0.0.0", port=0)
+    with pytest.raises(ValueError, match="IPv6"):
+        create_review_server(manifest_path, host="::1", port=0)
+
+
+def test_review_server_accepts_implicit_port_80_authority():
+    assert _expected_authorities("127.0.0.1", 80) == {"127.0.0.1", "127.0.0.1:80"}
 
 
 def test_review_server_rejects_mismatched_post_origin(tmp_path):
@@ -225,6 +274,22 @@ def test_review_server_rejects_non_ascii_auth_and_oversized_body(tmp_path, monke
         assert "First chapter prose" not in response.read().decode()
         connection.close()
 
+        connection = http.client.HTTPConnection(host, port, timeout=3)
+        connection.request(
+            "POST",
+            "/api/chapters",
+            body=b'{"chapters":[]}',
+            headers={
+                "Authorization": "Bearer \xff",
+                "Origin": url,
+                "Content-Type": "application/json",
+            },
+        )
+        response = connection.getresponse()
+        assert response.status == 401
+        assert "First chapter prose" not in response.read().decode()
+        connection.close()
+
         monkeypatch.setattr("pdf2audiobook.review_ui._MAX_REQUEST_BYTES", 4)
         request = urllib.request.Request(
             url + "/api/chapters",
@@ -249,8 +314,6 @@ def test_missing_voice_id_is_unchanged_and_empty_clears(tmp_path):
     manifest_path = _manifest(tmp_path)
     manifest = read_manifest(manifest_path)
     manifest.chapters[0].voice_id = "Jasper"
-    from pdf2audiobook.workspace import write_manifest
-
     write_manifest(manifest_path, manifest)
     updates = [
         {

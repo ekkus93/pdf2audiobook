@@ -10,6 +10,9 @@ from pdf2audiobook.llm.cache import CachedLLMProvider
 
 
 class Metered:
+    max_context_tokens = 4096
+    max_output_tokens = 10
+
     def __init__(self):
         self.calls = 0
         self.total_usage = {
@@ -37,20 +40,18 @@ def test_reported_token_limit_blocks_future_requests_and_fails_overshoot(tmp_pat
         provider,
         cache_dir=tmp_path / "cache",
         identity="model",
-        max_reported_tokens=70,
+        max_reported_tokens=200,
         usage_report=tmp_path / "usage.json",
     )
     worker.complete_json(instructions="task", document_text="Private source A")
     with pytest.raises(LLMError, match="token budget"):
         worker.complete_json(instructions="task", document_text="Private source B")
-    with pytest.raises(LLMError, match="token budget"):
-        worker.complete_json(instructions="task", document_text="Private source C")
-    assert provider.calls == 2
+    assert provider.calls == 1
     assert len(list((tmp_path / "cache").glob("*.json"))) == 1
     report = json.loads((tmp_path / "usage.json").read_text())
-    assert report["provider_reported_tokens"]["total_tokens"] == 100
-    assert report["requests_started"] == 2
-    assert report["max_reported_tokens"] == 70
+    assert report["provider_reported_tokens"]["total_tokens"] == 50
+    assert report["requests_started"] == 1
+    assert report["max_reported_tokens"] == 200
     assert "Private source" not in str(report)
 
 
@@ -60,7 +61,7 @@ def test_priced_cost_limit_uses_reported_usage_and_explicit_rates(tmp_path):
         provider,
         cache_dir=tmp_path / "cache",
         identity="model",
-        max_estimated_cost_usd=0.00009,
+        max_estimated_cost_usd=0.00035,
         input_cost_usd_per_million_tokens=2,
         output_cost_usd_per_million_tokens=1,
         usage_report=tmp_path / "usage.json",
@@ -79,6 +80,9 @@ def test_priced_cost_limit_uses_reported_usage_and_explicit_rates(tmp_path):
 
 def test_missing_telemetry_fails_closed_when_token_limit_is_enabled(tmp_path):
     class Silent:
+        max_context_tokens = 4096
+        max_output_tokens = 10
+
         def __init__(self):
             self.calls = 0
 
@@ -91,7 +95,7 @@ def test_missing_telemetry_fails_closed_when_token_limit_is_enabled(tmp_path):
         provider,
         cache_dir=tmp_path,
         identity="model",
-        max_reported_tokens=100,
+        max_reported_tokens=200,
     )
     with pytest.raises(LLMError, match="requires provider-reported usage"):
         worker.complete_json(instructions="task", document_text="source")

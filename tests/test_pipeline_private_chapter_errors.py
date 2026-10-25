@@ -23,7 +23,7 @@ def test_missing_or_undecodable_chapter_text_is_private(tmp_path, monkeypatch, f
         confidence=1.0,
     )
     manifest = BookManifest(
-        schema_version=2,
+        schema_version=3,
         input_sha256="synthetic-input",
         title="Synthetic book",
         source_path=str(source),

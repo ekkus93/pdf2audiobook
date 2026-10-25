@@ -20,7 +20,9 @@ class FlakyProvider:
     def generate(self, text, *, voice, speed):
         self.calls += 1
         if self.calls <= self.failures:
-            raise RuntimeError("private narration must not appear")
+            error = RuntimeError("private narration must not appear")
+            error.transient = True
+            raise error
         return np.ones(24, dtype=np.float32)
 
 
@@ -57,3 +59,17 @@ def test_persistent_tts_failure_stops_after_configured_retries(monkeypatch, tmp_
     progress = json.loads((tmp_path / "progress.json").read_text())
     assert progress["status"] == "failed"
     assert progress["chunks"][0]["status"] == "failed"
+
+
+def test_nontransient_tts_failure_is_not_retried(monkeypatch, tmp_path):
+    monkeypatch.setattr(audio.time, "sleep", lambda _seconds: None)
+
+    class InvalidProvider(FlakyProvider):
+        def generate(self, text, *, voice, speed):
+            self.calls += 1
+            raise RuntimeError("private validation detail")
+
+    provider = InvalidProvider(failures=1)
+    with pytest.raises(AudioError, match="TTS synthesis failed"):
+        _synthesize(provider, tmp_path)
+    assert provider.calls == 1

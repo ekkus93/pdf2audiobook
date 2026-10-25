@@ -52,7 +52,7 @@ def test_interior_repeated_text_and_unaligned_numbers_are_not_deleted():
     assert pagination_cleanup(blocks, [(600, 800)] * 3, Pdf()) == []
 
 
-def test_multiple_margin_numbers_are_ambiguous_not_folios():
+def test_outermost_of_multiple_margin_number_sequences_wins():
     blocks = []
     for page in range(3):
         blocks.extend(
@@ -62,7 +62,8 @@ def test_multiple_margin_numbers_are_ambiguous_not_folios():
                 _block(page, "body", "Ordinary prose", 70, 160),
             ]
         )
-    assert pagination_cleanup(blocks, [(600, 800)] * 3, Pdf()) == []
+    edits = pagination_cleanup(blocks, [(600, 800)] * 3, Pdf())
+    assert {edit.block_id for edit in edits} == {f"p{page}-reference" for page in range(3)}
 
 
 def test_three_page_roman_folio_sequence_requires_corroboration():
