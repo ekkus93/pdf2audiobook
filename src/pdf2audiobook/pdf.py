@@ -9,7 +9,7 @@ import shutil
 import statistics
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
@@ -46,6 +46,7 @@ class ExtractedDocument:
     blocks: list[DocumentBlock]
     warnings: list[str]
     page_sizes: list[tuple[float, float]]
+    page_labels: list[str | None] = field(default_factory=list)
 
 
 @runtime_checkable
@@ -802,9 +803,16 @@ def extract_pdf(
     blocks: list[DocumentBlock] = []
     warnings: list[str] = []
     sizes: list[tuple[float, float]] = []
+    page_labels: list[str | None] = []
     with _open(source, settings.password_env) as document:
         if len(document) == 0:
             raise ExtractionError("Book has no extractable pages")
+        try:
+            repaired = bool(getattr(document, "is_repaired", False))
+        except Exception:
+            repaired = True
+        if repaired:
+            warnings.append("source PDF was damaged and repaired; verify page coverage")
         if bool(getattr(document, "is_reflowable", False)):
             warnings.append(
                 "EPUB pages use generated reflowable layout; page numbers can vary by renderer"
@@ -819,7 +827,21 @@ def extract_pdf(
         except Exception:
             # PyMuPDF parser failures can include embedded text or file paths.
             raise ExtractionError("Failed to read PDF outline or metadata") from None
-        for page_index, page in enumerate(document):
+        try:
+            explicit_page_labels = bool(document.get_page_labels())
+        except Exception:
+            explicit_page_labels = False
+        for page_index in range(len(document)):
+            page_labels.append(None)
+            load_page = getattr(document, "load_page", None)
+            if callable(load_page):
+                try:
+                    page = load_page(page_index)
+                except Exception:
+                    warnings.append(f"Page {page_index + 1}: could not be loaded; verify coverage")
+                    continue
+            else:
+                page = next(islice(iter(document), page_index, page_index + 1))
             # page.get_text() coordinates are unrotated, unlike page.rect.
             # Margin cleanup must use the same coordinate system as spans.
             try:
@@ -982,6 +1004,8 @@ def extract_pdf(
                 )
             try:
                 page_label = page.get_label() or str(page_index + 1)
+                if explicit_page_labels:
+                    page_labels[page_index] = page_label
             except Exception:
                 # Page labels are advisory; keep the transcript and provenance.
                 page_label = str(page_index + 1)
@@ -1042,6 +1066,7 @@ def extract_pdf(
             blocks=blocks,
             warnings=warnings,
             page_sizes=sizes,
+            page_labels=page_labels,
         )
 
 

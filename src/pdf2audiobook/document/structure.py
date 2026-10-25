@@ -359,6 +359,9 @@ def pagination_cleanup(
     blocks: list[DocumentBlock],
     sizes: list[tuple[float, float]],
     settings: PdfSettings,
+    *,
+    page_labels: list[str | None] | None = None,
+    warnings: list[str] | None = None,
 ) -> list[CleanupEdit]:
     """Remove only corroborated pagination patterns confined to margin bands."""
     candidates: dict[str, tuple[DocumentBlock, str]] = {}
@@ -401,6 +404,36 @@ def pagination_cleanup(
         if right - left >= 0.4 * sizes[block.page_index][0]:
             return paper, (center - left) / (right - left)
         return paper, paper
+
+    def nearer_edge_than_body(block: DocumentBlock, height: float) -> bool:
+        """Require a folio to sit closer to the paper edge than body text."""
+        assert block.bbox is not None
+        edge_distance = min(block.bbox[1], height - block.bbox[3])
+        body_lines = [
+            other
+            for other in blocks_by_page[block.page_index]
+            if other.id != block.id
+            and other.bbox is not None
+            and _valid_bbox(other.bbox)
+            and other.bbox[1] >= height * 0.12
+            and other.bbox[3] <= height * 0.88
+        ]
+        if body_lines:
+            gaps = []
+            for other in body_lines:
+                assert other.bbox is not None
+                gaps.append(max(other.bbox[1] - block.bbox[3], block.bbox[1] - other.bbox[3], 0.0))
+            gap = min(gaps)
+            return edge_distance < gap
+        # With no extracted body line, require the numeral to be deep in the
+        # outer margin; uncertainty leaves the printed number intact.
+        return edge_distance < height * 0.05
+
+    def page_label_matches(page: int, value: int, notation: str) -> bool:
+        if page_labels is None or page >= len(page_labels) or page_labels[page] is None:
+            return True
+        parsed = _number_value(str(page_labels[page]).strip())
+        return parsed is None or parsed == (value, notation)
 
     # Titles repeated in a margin band on three or more pages are running
     # heads, whether or not a folio shares their line.
@@ -546,11 +579,13 @@ def pagination_cleanup(
                 continue
         # A lone numeric line at ordinary body indentation is not sufficient
         # evidence of pagination, even if another page starts with "2".
-        if PAGE_NUMBER.fullmatch(raw) and not beside_title:
-            if not any(
+        if PAGE_NUMBER.fullmatch(raw):
+            if not beside_title and not any(
                 position <= 0.09 or position >= 0.91 or 0.38 <= position <= 0.62
                 for position in positions(block)
             ):
+                continue
+            if not nearer_edge_than_body(block, height):
                 continue
         candidates[block.id] = (block, band)
         width = sizes[block.page_index][0]
@@ -586,7 +621,10 @@ def pagination_cleanup(
         if band and _number_value(block.text.strip()) is not None:
             numeric_counts[(band, block.page_index)] += 1
     ambiguous_numeric_bands = {key for key, count in numeric_counts.items() if count > 1}
+    if ambiguous_numeric_bands and warnings is not None:
+        warnings.append("Multiple margin numerals retained; verify page-number candidates")
     sequential_pages: dict[str, set[int]] = defaultdict(set)
+    qualifying_sequences: dict[tuple[str, int, str], set[int]] = defaultdict(set)
     for band, entries in numbered.items():
         entries = [entry for entry in entries if (band, entry[0]) not in ambiguous_numeric_bands]
         by_key: dict[tuple[int, int, str], list[tuple[float, float] | None]] = defaultdict(list)
@@ -597,13 +635,31 @@ def pagination_cleanup(
             for next_position in successors:
                 if not _aligned_folios(position, next_position):
                     continue
+                if not page_label_matches(page, folio_number, notation) or not page_label_matches(
+                    page + 1, folio_number + 1, notation
+                ):
+                    continue
                 if notation == "arabic":
                     sequential_pages[band].update((page, page + 1))
+                    qualifying_sequences[(band, folio_number - page, notation)].update(
+                        (page, page + 1)
+                    )
                 else:
                     # Two-page Roman sequences may be section markers.
                     final_positions = by_key.get((page + 2, folio_number + 2, notation), [])
                     if any(_aligned_folios(next_position, final) for final in final_positions):
                         sequential_pages[band].update((page, page + 1, page + 2))
+                        if page_label_matches(page + 2, folio_number + 2, notation):
+                            qualifying_sequences[(band, folio_number - page, notation)].update(
+                                (page, page + 1, page + 2)
+                            )
+    series_at_page: dict[int, set[tuple[str, int, str]]] = defaultdict(set)
+    for series, pages in qualifying_sequences.items():
+        for page in pages:
+            series_at_page[page].add(series)
+    ambiguous_sequence_pages = {page for page, series in series_at_page.items() if len(series) > 1}
+    if ambiguous_sequence_pages and warnings is not None:
+        warnings.append("Multiple page-number sequences retained; verify pagination")
     edits = []
     for block, band in candidates.values():
         bbox = block.bbox
@@ -614,6 +670,7 @@ def pagination_cleanup(
         confirmed_number = (
             is_number
             and (band, block.page_index) not in ambiguous_numeric_bands
+            and block.page_index not in ambiguous_sequence_pages
             and block.page_index in sequential_pages[band]
         )
         # Repetition alone is insufficient: separate margin prose may recur

@@ -112,7 +112,7 @@ def analyze_book(
         settings.llm.model_dump(exclude={"openai", "ollama", "llama_server"}),
         chosen_provider.model,
         chosen_provider.base_url,
-        "analysis-v18",
+        "analysis-v19",
         # A replacement backend must never reuse the default extractor's analysis.
         *(() if extractor is None else ("extractor", extractor.name)),
     )
@@ -147,7 +147,14 @@ def analyze_book(
         extracted = extractor.extract(
             source, settings.pdf, ocr_cache_dir=ocr_cache_dir, source_sha256=book_hash
         )
-    edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, settings.pdf)
+    pagination_warnings: list[str] = []
+    edits = pagination_cleanup(
+        extracted.blocks,
+        extracted.page_sizes,
+        settings.pdf,
+        page_labels=getattr(extracted, "page_labels", None),
+        warnings=pagination_warnings,
+    )
     # Only explicitly selected omit mode can remove a high-confidence note.
     # Source spans/blocks remain intact and every exclusion is audited.
     footnotes = [block for block in extracted.blocks if block.kind == "footnote"]
@@ -175,7 +182,7 @@ def analyze_book(
 
     llm_ids: set[str] = set()
     llm_decisions: list[CleanupDecision] = []
-    warnings: list[str] = []
+    warnings: list[str] = pagination_warnings
     if footnotes and settings.pdf.footnotes == "omit":
         warnings.append(
             f"Excluded {len(footnotes)} conservatively classified footnote "
@@ -386,6 +393,21 @@ def select_chapters(
     if not chosen:
         raise AudioError(f"Chapter {chapter} does not exist")
     for item in chosen:
+        if (
+            any(
+                warning == "source PDF was damaged and repaired; verify page coverage"
+                or (
+                    warning.startswith("Page ")
+                    and "could not be loaded; verify coverage" in warning
+                )
+                for warning in manifest.warnings
+            )
+            and not item.manually_approved
+        ):
+            raise AudioError(
+                f"Chapter {item.number} comes from a damaged source; "
+                "review and approve it before synthesis"
+            )
         if item.confidence < settings.chapters.min_boundary_confidence and not (
             item.manually_approved or settings.chapters.allow_single_chapter
         ):

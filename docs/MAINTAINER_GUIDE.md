@@ -220,6 +220,10 @@ the original PDF before listening or distributing. The schema currently
 Manifest schema v2 is required after the review-fixes release. Existing v1
 workspaces are intentionally rejected; re-run `analyze` with a fresh output
 directory to create a v2 workspace.
+Extraction/analysis fingerprint v19 invalidates prior analysis after safer OCR,
+pagination, heading and line-wrap classification. Existing v2 workspaces are
+re-analyzed on resume; manually approved workspaces remain protected, so use a
+fresh output directory when intentionally replacing approved analysis.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can

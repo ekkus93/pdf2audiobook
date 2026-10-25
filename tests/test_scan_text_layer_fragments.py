@@ -12,6 +12,7 @@ from pdf2audiobook.document.structure import (
     is_heading_line,
     is_list_line,
     pagination_cleanup,
+    reflow_narration_lines,
 )
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.pdf import extract_pdf
@@ -115,14 +116,16 @@ def _scan_pdf(path, pages, *, offsets=None, citation_page=None):
             )
         if index == citation_page:
             page.insert_text((156 + shift, 461), "(Source 1-4)", fontsize=7)
-        page.insert_text((149 + shift, 474), str(index + 1), fontsize=8)
+        page.insert_text((149 + shift, 500), str(index + 1), fontsize=8)
     doc.save(path)
     doc.close()
 
 
 def _removed(path):
     extracted = extract_pdf(path, Pdf(ocr="never"))
-    edits = pagination_cleanup(extracted.blocks, extracted.page_sizes, Pdf())
+    edits = pagination_cleanup(
+        extracted.blocks, extracted.page_sizes, Pdf(), page_labels=extracted.page_labels
+    )
     by_id = {block.id: block for block in extracted.blocks}
     return [(by_id[edit.block_id].page_index, edit.original) for edit in edits if edit.accepted]
 
@@ -130,8 +133,8 @@ def _removed(path):
 def test_tight_centered_folios_are_removed_even_when_listed_in_contents(tmp_path):
     source = tmp_path / "scan.pdf"
     _scan_pdf(source, 5)
-    # Folios 1..5 sit ~4pt under full-width body text and also appear as page
-    # references on the contents page, which itself must stay intact.
+    # Folios 1..5 sit closer to the paper edge than the body and also appear
+    # as references on the contents page, which itself must stay intact.
     assert _removed(source) == [(page, str(page)) for page in range(1, 6)]
 
 
@@ -141,13 +144,25 @@ def test_folios_on_sideways_drifting_scans_and_under_citations(tmp_path):
     assert _removed(source) == [(page, str(page)) for page in range(1, 6)]
 
 
-def test_prose_starting_with_a_chapter_reference_is_not_a_heading():
+def test_prose_starting_with_a_chapter_reference_is_not_a_heading(tmp_path):
     assert is_heading_line("CHAPTER IV RHYME")
     assert is_heading_line("Chapter 3: The Return")
     assert is_heading_line("PREFACE")
     assert not is_heading_line("Chapter IV regarding the change in Shakespeare's blank")
     assert not is_heading_line(
         "Introduction of the new rules took many years and was opposed by nearly everyone"
+    )
+
+    source = tmp_path / "intro-prose.pdf"
+    with pymupdf.open() as document:
+        page = document.new_page()
+        page.insert_text((72, 80), "Introduction of the new tax was delayed until")
+        page.insert_text((72, 100), "the next session.")
+        document.save(source)
+    extracted = extract_pdf(source, Pdf(ocr="never"))
+    assert [block.kind for block in extracted.blocks] == ["unknown", "unknown"]
+    assert reflow_narration_lines(extracted.blocks) == (
+        "Introduction of the new tax was delayed until the next session.\n"
     )
 
 

@@ -76,7 +76,7 @@
 - [x] FX2.06 Flag damaged and repaired PDFs (R7).
   - [x] FX2.06a When the document reports repair or a page fails to load, add a content-free manifest warning, mark the manifest review-required, and include only page numbers in per-page warnings.
   - [x] FX2.06b Tests: a truncated fixture triggers the warning and the review gate; add `tests/test_damaged_pdf_privacy.py`.
-- [ ] FX2.07 Bump the extraction/analysis fingerprint version (spec §3), add the MAINTAINER_GUIDE upgrade note, and merge the spec §6 amendments for §4.1, §4.2 and §4.3.
+- [x] FX2.07 Bump the extraction/analysis fingerprint version (spec §3), add the MAINTAINER_GUIDE upgrade note, and merge the spec §6 amendments for §4.1, §4.2 and §4.3.
 
 **FX2 gate:** acceptance #3 in the parent spec holds on the sonnet fixture; text PDFs never need Tesseract; damaged sources can't pass silently.
 
@@ -201,3 +201,4 @@
 | 2026-10-25 | 826a5cbb69284351e4d797a015c67ea42aaf85cb | FX0.02–FX0.03 (bounded cache JSON; manifest v2) | CI run [40173850676](https://github.com/ekkus93/pdf2audiobook/actions/runs/40173850676), success | None |
 | 2026-10-25 | 9ab2c88034a1f85f1f4ac32d02a2029b7f3464a0 | FX1.01–FX1.06 (review UI security, voice saves, CLI privacy, config redaction) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1038 tests; CI run [40174161319](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174161319) passed | None |
 | 2026-10-25 | 5ee08690ab2f0577175551b088b6cd31ceaa4f82 | FX2.01a, FX2.01c, FX2.02, FX2.04–FX2.05 (shared heading/list classification, OCR selection, hyphen joining) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1041 tests; CI run [40174435021](https://github.com/ekkus93/pdf2audiobook/actions/runs/40174435021) passed | FX2 continues |
+| 2026-10-25 | pending | FX2.03, FX2.06–FX2.07 (safe folio detection; damaged-source review gate; extraction fingerprint v19) | Local `/verify`: Ruff, formatting, mypy (22 modules), 1045 tests; exact-head CI pending | FX2 extraction refactor FX2.01b and final phase gate remain |

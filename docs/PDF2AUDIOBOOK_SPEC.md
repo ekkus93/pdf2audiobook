@@ -111,6 +111,7 @@ Canonical raw text and intermediate files must remain independently inspectable.
 4. For missing/bad regions, rasterize at configured DPI and OCR with installed Tesseract language packs. Avoid OCR duplication when embedded text is adequate; do not mix duplicates into the transcript.
 5. Cache page extraction/OCR keyed by PDF bytes, page index, crop/rotation, DPI, languages and extractor/OCR version. Keep per-page confidence/diagnostics.
 6. For encrypted/password-protected files, allow a password input without logging it; fail if password is unavailable. Do not bypass DRM.
+7. If the parser reports repair or a page cannot be loaded, retain a content-free warning with affected page numbers where known and require chapter review before synthesis.
 
 OCR modes: **auto** (default), **always**, **never**. OCR languages default to eng; user can override. Orientation correction, deskew and preprocessing may be added as needed; keep all rasterizations ephemeral or cached locally.
 
@@ -122,6 +123,7 @@ In auto mode, OCR only pages with raster coverage above the configured trigger o
 - Distinguish headers containing chapter titles from a heading appearing once within the content body.
 - Remove pagination artifacts at block/span level, not by blindly deleting all numeric-only lines.
 - Preserve legitimate standalone numbers, ordered lists, captions, poetry, footnotes and quoted content.
+- Remove a numeral only when it is in an outer margin band, nearer the page edge than the closest body line, and sequential with physical page order and any explicit PDF page labels. If multiple numeral sequences qualify on the same pages, retain them and warn for review.
 - Maintain reason/confidence for every removal; low-confidence candidates remain in text and are surfaced for review.
 - Default removal of running headers, footers and page numbers; all individually toggleable.
 
