@@ -96,7 +96,15 @@ def test_verbose_analyze_emits_stage_started_event(tmp_path):
 
     result = runner.invoke(
         app,
-        ["--verbose", "analyze", str(source), "--no-config", "--output", str(tmp_path / "out")],
+        [
+            "--verbose",
+            "analyze",
+            str(source),
+            "--no-config",
+            "--no-llm",
+            "--output",
+            str(tmp_path / "out"),
+        ],
     )
 
     assert result.exit_code == 0, result.stderr

@@ -140,13 +140,27 @@ def test_review_server_authenticates_api_and_saves_validated_boundaries(tmp_path
         thread.join(timeout=3)
 
 
-def test_review_server_accepts_host_without_port_on_port_80(tmp_path):
+def test_review_server_accepts_host_without_port_on_port_80(tmp_path, monkeypatch):
+    from pdf2audiobook import review_ui
+
     manifest_path = _manifest(tmp_path)
-    server = create_review_server(manifest_path, port=80)
+
+    class Port80AuthorityServer(review_ui.ThreadingHTTPServer):
+        def __init__(self, address, handler):
+            super().__init__((address[0], 0), handler)
+            self.actual_port = self.server_address[1]
+            # The test runner may not have permission to bind a privileged port.
+            # Preserve the configured port for Host-authority validation.
+            self.server_address = (address[0], 80)
+
+    monkeypatch.setattr(review_ui, "ThreadingHTTPServer", Port80AuthorityServer)
+    server = review_ui.create_review_server(manifest_path, port=80)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        request = urllib.request.Request("http://127.0.0.1/", headers={"Host": "127.0.0.1"})
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{server.actual_port}/", headers={"Host": "127.0.0.1"}
+        )
         with urllib.request.urlopen(request, timeout=3) as response:
             assert response.status == 200
             assert b"Chapter review" in response.read()
