@@ -70,6 +70,96 @@ def test_chapter_mp3_and_m4b_embed_cover(data: bytes, tmp_path: Path):
     assert bytes(MP4(m4b).tags["covr"][0]) == data
 
 
+def test_cover_is_read_and_hashed_once_per_conversion_run(tmp_path: Path, monkeypatch):
+    source = tmp_path / "book.pdf"
+    manifest_path = tmp_path / "out" / "manifest.json"
+    chapters = [
+        Chapter(
+            id=f"c{number}",
+            number=number,
+            title=f"Chapter {number}",
+            start_block=number - 1,
+            end_block=number,
+            confidence=1,
+        )
+        for number in (1, 2)
+    ]
+    manifest = BookManifest(
+        schema_version=3,
+        input_sha256="a" * 64,
+        title="Book",
+        source_path="book.pdf",
+        chapters=chapters,
+    )
+    settings = Settings()
+    settings.general.output_dir = str(tmp_path / "out")
+    settings.llm.enabled = False
+    cover = tmp_path / "cover.jpg"
+    cover.write_bytes(JPEG)
+    settings.audio.cover_image = str(cover)
+
+    def render(_manifest, folder, *_args):
+        for chapter in chapters:
+            text_path = folder / "chapters" / f"{chapter.number:03d}.txt"
+            text_path.parent.mkdir(parents=True, exist_ok=True)
+            text_path.write_text(f"Sentence for chapter {chapter.number}.", encoding="utf-8")
+
+    embedded_covers = []
+
+    def encode(_samples, _rate, output, **kwargs):
+        embedded_covers.append(kwargs["cover_image"])
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"fake-mp3")
+
+    def synthesize(*_args, **_kwargs):
+        cover.write_bytes(b"\xff\xd8\xffchanged-after-fingerprint")
+        return np.ones(100)
+
+    from pdf2audiobook import pipeline
+
+    read_calls = []
+    hash_calls = []
+    original_read = pipeline.read_cover_image
+    original_digest = pipeline.digest_bytes
+
+    def counted_read(path):
+        read_calls.append(path)
+        return original_read(path)
+
+    def counted_digest(data):
+        if data == JPEG:
+            hash_calls.append(data)
+        return original_digest(data)
+
+    monkeypatch.setattr(pipeline, "read_cover_image", counted_read)
+    monkeypatch.setattr(pipeline, "digest_bytes", counted_digest)
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *_a, **_k: manifest_path)
+    monkeypatch.setattr(pipeline, "read_manifest", lambda _p: manifest)
+    monkeypatch.setattr(pipeline, "render_chapter_texts", render)
+    monkeypatch.setattr(
+        pipeline, "KittenProvider", lambda _model: SimpleNamespace(sample_rate=24000)
+    )
+    monkeypatch.setattr(pipeline, "synthesize_chunks", synthesize)
+    monkeypatch.setattr(pipeline, "encode_mp3", encode)
+    monkeypatch.setattr(
+        "mutagen.mp3.MP3",
+        lambda _path, ID3=None: SimpleNamespace(
+            info=SimpleNamespace(length=1),
+            tags={
+                "title": ["Chapter"],
+                "album": ["Book"],
+                "tracknumber": ["1"],
+                "artist": ["Author"],
+            },
+        ),
+    )
+
+    convert_book(source, settings)
+    assert read_calls == [str(cover)]
+    assert hash_calls == [JPEG]
+    assert embedded_covers == [(JPEG, "image/jpeg"), (JPEG, "image/jpeg")]
+
+
 def test_cover_bytes_change_fingerprint_and_regenerate_mp3(tmp_path: Path, monkeypatch):
     source = tmp_path / "book.pdf"
     manifest_path = tmp_path / "out" / "manifest.json"

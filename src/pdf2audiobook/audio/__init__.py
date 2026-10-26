@@ -15,7 +15,7 @@ import unicodedata
 import wave
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator, Mapping, NotRequired, Protocol, TypedDict, runtime_checkable
+from typing import Iterator, Mapping, NotRequired, Protocol, TypedDict, cast, runtime_checkable
 
 import numpy as np
 from mutagen.easyid3 import EasyID3
@@ -28,8 +28,8 @@ from pdf2audiobook.logging import log_event
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.narration import (
     _DASHES,
-    NARRATION_NORMALIZATION_VERSION,
     NARRATION_TRANSLATION,
+    TTS_CHUNK_TEXT_NORMALIZATION_VERSION,
     normalize_narration_text,
 )
 from pdf2audiobook.tts import TTSProvider
@@ -218,26 +218,41 @@ def read_synthesis_progress(path: Path) -> dict[str, object] | None:
     return header
 
 
-def _open_streaming_wav(path: Path, sample_rate: int) -> wave.Wave_write:
+class _BoundedWavWriter:
+    """Track RIFF payload bytes without depending on wave.Wave_write internals."""
+
+    def __init__(self, writer: wave.Wave_write):
+        self.writer = writer
+        self.bytes_written = 0
+
+    def writeframesraw(self, frames: bytes) -> None:
+        self.writer.writeframesraw(frames)
+        self.bytes_written += len(frames)
+
+    def close(self) -> None:
+        self.writer.close()
+
+
+def _open_streaming_wav(path: Path, sample_rate: int) -> _BoundedWavWriter:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         writer = wave.open(str(path), "wb")
         writer.setnchannels(1)
         writer.setsampwidth(2)
         writer.setframerate(sample_rate)
-        return writer
+        return _BoundedWavWriter(writer)
     except (OSError, wave.Error):
         raise AudioError("Could not create temporary chapter WAV") from None
 
 
-def _write_pcm_chunk(writer: wave.Wave_write, samples: np.ndarray) -> None:
+def _write_pcm_chunk(writer: _BoundedWavWriter, samples: np.ndarray) -> None:
     try:
         audio = np.asarray(samples, dtype=np.float32)
     except Exception:
         raise AudioError("TTS returned invalid audio sample data") from None
     if audio.ndim != 1 or audio.size == 0 or not np.isfinite(audio).all():
         raise AudioError("TTS returned invalid mono audio samples")
-    if getattr(writer, "_datawritten", 0) + audio.size * 2 > 0xFFFFFFFF - 36:
+    if writer.bytes_written + audio.size * 2 > 0xFFFFFFFF - 36:
         raise AudioError("Chapter audio exceeds the WAV RIFF size limit")
     for offset in range(0, audio.size, 65536):
         part = audio[offset : offset + 65536]
@@ -245,8 +260,8 @@ def _write_pcm_chunk(writer: wave.Wave_write, samples: np.ndarray) -> None:
         writer.writeframesraw(pcm.tobytes())
 
 
-def _write_silence(writer: wave.Wave_write, sample_count: int) -> None:
-    if getattr(writer, "_datawritten", 0) + sample_count * 2 > 0xFFFFFFFF - 36:
+def _write_silence(writer: _BoundedWavWriter, sample_count: int) -> None:
+    if writer.bytes_written + sample_count * 2 > 0xFFFFFFFF - 36:
         raise AudioError("Chapter audio exceeds the WAV RIFF size limit")
     block = b"\0" * (65536 * 2)
     remaining = sample_count
@@ -262,7 +277,6 @@ _PARAGRAPH_BREAK = re.compile(r"(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)+")
 _VOICE_MARKER = re.compile(
     r"(?m)^\[\[voice:([A-Za-z0-9][A-Za-z0-9_.-]{0,127})\]\][ \t]*(?:\r?\n|$)"
 )
-_SCENE_BREAK = re.compile(r"^\s*(?:\*\s*){3,}$")
 _PRONUNCIATION_EDGE = {'"', "'", "(", ")", "[", "]", "{", "}", "<", ">"}
 _PRONUNCIATION_TRAILING = {",", ";", ":", "!", "?", "…"}
 
@@ -681,7 +695,7 @@ def synthesize_chunks(
     identities = [
         fingerprint(
             "tts-wav-v3",
-            NARRATION_NORMALIZATION_VERSION,
+            TTS_CHUNK_TEXT_NORMALIZATION_VERSION,
             engine,
             text,
             model,
@@ -897,9 +911,7 @@ def synthesize_chunks(
         except OSError:
             raise AudioError("Could not write TTS progress") from None
     if writer is not None:
-        if output_wav is None:
-            raise AudioError("Temporary chapter WAV path is missing")
-        return output_wav
+        return cast(Path, output_wav)
     return np.concatenate(samples)
 
 

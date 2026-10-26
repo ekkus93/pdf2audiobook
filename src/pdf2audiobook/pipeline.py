@@ -309,13 +309,33 @@ def settings_for_book_tts(
     return selected
 
 
+def tts_selection(
+    settings: Settings,
+    chapter: Chapter | None = None,
+    *,
+    provider: str | None = None,
+) -> tuple[str, str, float]:
+    """Select the effective provider, voice and speed for one chapter or CLI request."""
+    provider_name = provider or settings.tts.provider
+    provider_settings = getattr(settings.tts, provider_name)
+    voice = (
+        chapter.voice_id
+        if chapter is not None and chapter.voice_id is not None
+        else provider_settings.voice
+    )
+    return provider_name, voice, provider_settings.speed
+
+
 def chapter_voice(settings: Settings, chapter: Chapter) -> str:
     """Resolve an explicit per-chapter voice before the configured default."""
-    if chapter.voice_id is not None:
-        return chapter.voice_id
-    return (
-        settings.tts.piper.voice if settings.tts.provider == "piper" else settings.tts.kitten.voice
-    )
+    return tts_selection(settings, chapter)[1]
+
+
+def create_tts_provider(settings: Settings) -> TTSProvider:
+    """Construct the selected TTS adapter in one place."""
+    if settings.tts.provider == "piper":
+        return PiperProvider(settings.tts.piper.model_path)
+    return KittenProvider(settings.tts.kitten.model)
 
 
 def _match_edited_chapter(
@@ -1061,7 +1081,7 @@ def prepare_chapter_selection(
 # Bump when spoken text changes for unchanged chapter text (alignment, dashes,
 # invisible characters, pronunciation punctuation) so chapter MP3s regenerate.
 # Chunk WAV keys carry the spoken chunk text itself and need no bump.
-CHAPTER_AUDIO_NARRATION_VERSION = "narration-normalization-v2"
+CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION = "narration-normalization-v2"
 
 
 def chapter_audio_fingerprint(
@@ -1070,6 +1090,9 @@ def chapter_audio_fingerprint(
     manifest: BookManifest,
     chapter: Chapter,
     adapters: tuple[str, ...] = (),
+    *,
+    cover_image: tuple[bytes, str] | None = None,
+    cover_identity: str | None = None,
 ) -> str:
     """Key the final MP3 by audible content, encoding, and its ID3 metadata.
 
@@ -1077,12 +1100,11 @@ def chapter_audio_fingerprint(
     shares an identity with the default Kitten/FFmpeg artifacts.
     """
     model = _tts_model_identity(settings)
-    voice = chapter_voice(settings, chapter)
-    speed = (
-        settings.tts.piper.speed if settings.tts.provider == "piper" else settings.tts.kitten.speed
-    )
-    cover = read_cover_image(settings.audio.cover_image)
-    cover_identity = digest_bytes(cover[0]) if cover is not None else None
+    _provider_name, voice, speed = tts_selection(settings, chapter)
+    if cover_identity is None:
+        if cover_image is None and settings.audio.cover_image is not None:
+            cover_image = read_cover_image(settings.audio.cover_image)
+        cover_identity = digest_bytes(cover_image[0]) if cover_image is not None else None
     return fingerprint(
         text,
         settings.tts.provider,
@@ -1094,7 +1116,7 @@ def chapter_audio_fingerprint(
         settings.tts.bitrate,
         settings.tts.sample_rate,
         cover_identity,
-        CHAPTER_AUDIO_NARRATION_VERSION,
+        CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION,
         manifest.title,
         manifest.author,
         chapter.title,
@@ -1127,12 +1149,14 @@ def convert_book(
         folder = manifest_path.parent
     with workspace_lock(folder):
         cover_image = read_cover_image(settings.audio.cover_image)
+        cover_identity = digest_bytes(cover_image[0]) if cover_image is not None else None
         if manifest_path is None:
             manifest_path = analyze_book(source, settings, extractor=extractor)
         return _convert_analyzed_book(
             manifest_path,
             settings,
             cover_image,
+            cover_identity,
             chapter=chapter,
             chapter_range=chapter_range,
             force=force,
@@ -1146,6 +1170,7 @@ def _convert_analyzed_book(
     manifest_path: Path,
     settings: Settings,
     cover_image: tuple[bytes, str] | None,
+    cover_identity: str | None,
     *,
     chapter: int | None,
     chapter_range: tuple[int, int] | None,
@@ -1206,11 +1231,7 @@ def _convert_analyzed_book(
     if all_marker_ids:
         try:
             if provider is None:
-                provider = (
-                    PiperProvider(settings.tts.piper.model_path)
-                    if settings.tts.provider == "piper"
-                    else KittenProvider(settings.tts.kitten.model)
-                )
+                provider = create_tts_provider(settings)
             supports_voice_listing = getattr(provider, "supports_voice_listing", True) is not False
             if supports_voice_listing:
                 voice_list = provider.list_voices()
@@ -1270,7 +1291,15 @@ def _convert_analyzed_book(
         except (OSError, UnicodeError):
             # PDF-derived filenames and source text must not escape in errors.
             raise AudioError("Cannot read approved chapter text; check workspace files") from None
-        identity = chapter_audio_fingerprint(text, settings, manifest, item, adapters)
+        identity = chapter_audio_fingerprint(
+            text,
+            settings,
+            manifest,
+            item,
+            adapters,
+            cover_image=cover_image,
+            cover_identity=cover_identity,
+        )
         record = output.with_suffix(".cache.json")
         cached = False
         if settings.general.resume and not force:
@@ -1339,14 +1368,22 @@ def _convert_analyzed_book(
             raise AudioError("Cannot read approved chapter text; check workspace files") from None
         # Detect edits between the cache-check and synthesis passes. Never
         # publish audio with a fingerprint computed from different prose.
-        if chapter_audio_fingerprint(text, settings, manifest, item, adapters) != identity:
+        if (
+            chapter_audio_fingerprint(
+                text,
+                settings,
+                manifest,
+                item,
+                adapters,
+                cover_image=cover_image,
+                cover_identity=cover_identity,
+            )
+            != identity
+        ):
             raise AudioError("Approved chapter text changed during conversion; retry")
         if provider is None:
             try:
-                if settings.tts.provider == "piper":
-                    provider = PiperProvider(settings.tts.piper.model_path)
-                else:
-                    provider = KittenProvider(settings.tts.kitten.model)
+                provider = create_tts_provider(settings)
             except AudioError:
                 failed_chapters.add(item.number)
                 conversion_status[item.id] = {
@@ -1356,12 +1393,7 @@ def _convert_analyzed_book(
                 }
                 continue
         selected_model = _tts_model_identity(settings)
-        selected_voice = chapter_voice(settings, item)
-        selected_speed = (
-            settings.tts.piper.speed
-            if settings.tts.provider == "piper"
-            else settings.tts.kitten.speed
-        )
+        _provider_name, selected_voice, selected_speed = tts_selection(settings, item)
         streamed_wav: Path | None = None
         try:
             synth_kwargs = {}

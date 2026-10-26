@@ -3,14 +3,14 @@
 from pdf2audiobook.config import Settings
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.pipeline import (
-    CHAPTER_AUDIO_NARRATION_VERSION,
+    CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION,
     _analysis_stage_fingerprints,
     chapter_audio_fingerprint,
 )
 
 
 def test_chapter_audio_identity_carries_the_fx9_narration_version():
-    assert CHAPTER_AUDIO_NARRATION_VERSION == "narration-normalization-v2"
+    assert CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION == "narration-normalization-v2"
     manifest = BookManifest(
         schema_version=3, input_sha256="x", title="Book", source_path="book.pdf"
     )

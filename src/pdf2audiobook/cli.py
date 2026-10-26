@@ -559,7 +559,11 @@ def convert(
             selected = provider.replace("-", "_")
             if selected != "ollama" and llm_provider is None:
                 overrides["llm"][selected] = overrides["llm"].pop("ollama")
-        effective_tts_provider = tts_provider or preliminary.tts.provider
+        from pdf2audiobook.pipeline import tts_selection
+
+        effective_tts_provider, _effective_voice, _effective_speed = tts_selection(
+            preliminary, provider=tts_provider
+        )
         tts_values = overrides.setdefault("tts", {})
         if tts_provider is not None:
             tts_values["provider"] = tts_provider
@@ -721,7 +725,7 @@ def batch(
         from pdf2audiobook.audio import read_cover_image
 
         read_cover_image(settings.audio.cover_image)
-        from pdf2audiobook.pipeline import convert_book, settings_for_book_tts
+        from pdf2audiobook.pipeline import convert_book, settings_for_book_tts, tts_selection
 
         results: list[dict[str, Any]] = []
         failures = 0
@@ -739,7 +743,7 @@ def batch(
             )
             book_settings = settings_for_book_tts(settings, source.stem, explicit=explicit)
             validated = book_settings.model_dump()
-            selected_provider = book_settings.tts.provider
+            selected_provider, _selected_voice, _selected_speed = tts_selection(book_settings)
             if tts_model is not None:
                 section = "piper" if selected_provider == "piper" else "kitten"
                 key = "model_path" if section == "piper" else "model"

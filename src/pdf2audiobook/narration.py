@@ -2,7 +2,7 @@
 
 import re
 
-NARRATION_NORMALIZATION_VERSION = "narration-normalization-v1"
+TTS_CHUNK_TEXT_NORMALIZATION_VERSION = "narration-normalization-v1"
 NARRATION_TRANSLATION = str.maketrans(
     {
         "‘": "'",

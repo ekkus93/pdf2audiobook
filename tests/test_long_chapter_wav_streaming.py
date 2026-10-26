@@ -117,7 +117,7 @@ def test_chapter_wav_streaming_rejects_nonfinite_samples(tmp_path, bad):
 
 def test_streaming_wav_checks_riff_limit_before_writing(monkeypatch):
     class NearLimitWriter:
-        _datawritten = 0xFFFFFFFF - 37
+        bytes_written = 0xFFFFFFFF - 37
 
         def writeframesraw(self, _data):
             raise AssertionError("oversized PCM must not be written")
