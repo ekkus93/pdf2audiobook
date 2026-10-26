@@ -226,3 +226,39 @@ def test_http_failure_settlement_uses_usage_when_reported(
     row = BookLLMBudgetLedger(ledger_path).rows()[0]
     assert row["status"] == expected_status
     assert row["total_tokens"] == (6 if expected_status == "complete" else None)
+
+
+def test_context_length_error_mentioning_max_tokens_does_not_remove_or_persist_cap(tmp_path):
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(
+            400,
+            json={
+                "error": {
+                    "message": "Invalid request: input exceeds the model context length; max_tokens is too large",
+                    "param": "max_tokens",
+                }
+            },
+        )
+
+    transport = httpx.MockTransport(respond)
+    cache_dir = tmp_path / "cache"
+    with OpenAICompatibleProvider(
+        provider="stub",
+        model="local",
+        base_url="http://127.0.0.1:11434/v1",
+        allow_remote=False,
+        transport=transport,
+        max_context_tokens=4096,
+    ) as provider:
+        worker = CachedLLMProvider(provider, cache_dir=cache_dir, identity="local-model")
+        with pytest.raises(LLMError):
+            worker.complete_json(instructions="task", document_text="book")
+        assert provider._unsupported_parameters == set()
+
+    assert len(requests) == 1
+    assert requests[0]["max_tokens"] == 1024
+    capability_files = list(cache_dir.rglob("*.json"))
+    assert not any("provider-capabilities" in path.parts for path in capability_files)

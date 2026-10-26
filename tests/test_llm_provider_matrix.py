@@ -146,3 +146,27 @@ def test_schema_incompatibility_rejected_by_structure_verifier(name):
         )
     assert not accepted
     assert any("rejected" in warning for warning in warnings)
+
+
+def test_auto_model_with_two_served_models_fails_through_real_resolver():
+    requests = []
+
+    def handler(request):
+        requests.append(request.url.path)
+        if request.url.path.endswith("/models"):
+            return httpx.Response(
+                200,
+                json={"data": [{"id": "served-a"}, {"id": "served-b"}]},
+            )
+        pytest.fail("ambiguous auto model must fail before chat completion")
+
+    with OpenAICompatibleProvider(
+        provider="stub",
+        base_url="http://127.0.0.1:11434/v1",
+        model="auto",
+        allow_remote=False,
+        transport=httpx.MockTransport(handler),
+    ) as provider:
+        with pytest.raises(LLMError, match="exactly one served model"):
+            provider.complete_json(instructions="x", document_text="y")
+    assert requests == ["/v1/models"]

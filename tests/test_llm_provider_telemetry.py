@@ -46,7 +46,7 @@ def test_model_discovery_health_and_token_telemetry_without_document_leak():
             },
         )
 
-    with make_provider(respond) as provider:
+    with make_provider(respond, model="small-model") as provider:
         assert provider.health()
         assert provider.list_models() == ["small-model", "larger-model"]
         assert provider.complete_json(

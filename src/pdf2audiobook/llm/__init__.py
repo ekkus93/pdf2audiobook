@@ -237,12 +237,7 @@ class OpenAICompatibleProvider:
             return False
 
     def _model(self) -> str:
-        if self.model != "auto":
-            return self.model
-        models = self.list_models()
-        if not models:
-            raise LLMError("No models are served at configured endpoint")
-        return models[0]
+        return self.resolve_model()
 
     def resolve_model(self) -> str:
         """Resolve an automatic served-model alias before cache or budget identity."""
@@ -291,11 +286,20 @@ class OpenAICompatibleProvider:
         except (ValueError, TypeError):
             return False
         explanation = message.casefold()
-        rejected = any(
-            term in explanation
-            for term in ("not support", "unsupported", "unrecognized", "unknown", "invalid")
+        if any(
+            term in explanation for term in ("context length", "context window", "too many tokens")
+        ):
+            return False
+        escaped = re.escape(parameter.casefold())
+        unsupported_pattern = (
+            rf"(?:unsupported|not supported|does not support|doesn't support|"
+            rf"unrecognized|not recognized|unknown|invalid)\s+(?:parameter\s*[:=]?\s*)?{escaped}\b"
+            rf"|(?:parameter\s*[:=]?\s*)?\b{escaped}\b\s+(?:is\s+)?(?:unsupported|not supported|"
+            rf"not recognized|unrecognized)"
         )
-        return rejected and (param == parameter or parameter in explanation)
+        return bool(re.search(unsupported_pattern, explanation)) and (
+            param == parameter or parameter in explanation
+        )
 
     def validate_request_capacity(self, *, instructions: str, document_text: str) -> None:
         """Check capacity before cache/ledger reservations or any book-text upload."""
