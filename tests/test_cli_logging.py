@@ -2,6 +2,7 @@
 
 import json
 
+import pymupdf
 from typer.testing import CliRunner
 
 from pdf2audiobook.cli import app
@@ -80,6 +81,34 @@ def test_verbose_failed_analyze_emits_stage_and_failure_events(tmp_path):
     names = [event["event"] for event in events]
     assert "command_failed" in names
     assert any(event.get("level") == "error" for event in events)
+
+
+def test_verbose_analyze_emits_stage_started_event(tmp_path):
+    source = tmp_path / "book.pdf"
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text((72, 80), "Chapter One")
+    page.insert_text((72, 130), "Enough ordinary readable prose for this chapter.")
+    page.insert_text((72, 180), "Chapter Two")
+    page.insert_text((72, 230), "Enough ordinary readable prose for the next chapter.")
+    document.save(source)
+    document.close()
+
+    result = runner.invoke(
+        app,
+        ["--verbose", "analyze", str(source), "--no-config", "--output", str(tmp_path / "out")],
+    )
+
+    assert result.exit_code == 0, result.stderr
+    events = [
+        json.loads(line)
+        for line in result.stderr.splitlines()
+        if line.startswith("{") and '"event"' in line
+    ]
+    assert any(
+        event["event"] == "stage_started" and event["fields"].get("stage") == "analysis"
+        for event in events
+    )
 
 
 def test_explicit_log_level_enables_progress_and_failure_events(tmp_path):

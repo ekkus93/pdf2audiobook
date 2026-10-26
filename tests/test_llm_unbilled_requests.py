@@ -140,3 +140,39 @@ def test_budget_cli_resolves_unknown_usage_from_confirmed_counts(tmp_path):
         max_usd=None,
         upper_bound_tokens=10,
     )
+
+
+def test_budget_cli_resolves_a_pending_reservation_with_confirmation(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger_path = workspace / "reports" / "llm_budget.sqlite3"
+    ledger = BookLLMBudgetLedger(ledger_path)
+    call_id = ledger.reserve(
+        request_hash="pending-request",
+        provider_hash="provider-hash",
+        max_requests=None,
+        max_tokens=None,
+        max_usd=None,
+        upper_bound_tokens=10,
+    )
+    assert ledger.rows()[0]["status"] == "pending"
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "budget",
+            "resolve",
+            str(call_id),
+            "--output",
+            str(workspace),
+            "--tokens",
+            "3:4",
+            "--confirm",
+            "--no-config",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stderr
+    resolved = BookLLMBudgetLedger(ledger_path).rows()[0]
+    assert resolved["status"] == "complete"
+    assert resolved["total_tokens"] == 7

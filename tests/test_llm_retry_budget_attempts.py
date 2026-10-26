@@ -4,7 +4,9 @@ import json
 
 import httpx
 import pytest
+from typer.testing import CliRunner
 
+from pdf2audiobook.cli import app
 from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm import OpenAICompatibleProvider
 from pdf2audiobook.llm.budget import BookLLMBudgetLedger
@@ -46,6 +48,73 @@ def test_request_budget_stops_retry_after_first_sent_timeout(tmp_path):
     assert BookLLMBudgetLedger(ledger_path).totals()["requests_started"] == 1
     assert "PRIVATE READ FAILURE" not in str(error.value)
     assert "private book" not in str(error.value)
+
+
+def test_resolving_unknown_attempt_unblocks_the_next_budgeted_request(tmp_path):
+    attempts = []
+
+    def respond(request):
+        attempts.append(request)
+        if len(attempts) == 1:
+            raise httpx.ReadTimeout("temporary private detail", request=request)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"headings":[]}'}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            },
+        )
+
+    workspace = tmp_path / "workspace"
+    ledger_path = workspace / "reports" / "llm_budget.sqlite3"
+    transport = httpx.MockTransport(respond)
+    with OpenAICompatibleProvider(
+        provider="stub",
+        model="local",
+        base_url="http://127.0.0.1:11434/v1",
+        allow_remote=False,
+        transport=transport,
+        max_retries=0,
+        max_context_tokens=4096,
+    ) as provider:
+        worker = CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="local-model",
+            ledger_path=ledger_path,
+            max_requests=1,
+            max_reported_tokens=3000,
+        )
+        with pytest.raises(LLMError, match="transport failure"):
+            worker.complete_json(instructions="task", document_text="source")
+        assert BookLLMBudgetLedger(ledger_path).rows()[0]["status"] == "unknown"
+        with pytest.raises(LLMError, match="request budget"):
+            worker.complete_json(instructions="task", document_text="different source")
+
+        request_id = BookLLMBudgetLedger(ledger_path).rows()[0]["id"]
+        resolved = CliRunner().invoke(
+            app,
+            [
+                "budget",
+                "resolve",
+                str(request_id),
+                "--output",
+                str(workspace),
+                "--unbilled",
+                "--confirm",
+                "--no-config",
+            ],
+        )
+        assert resolved.exit_code == 0, resolved.stderr
+        assert worker.complete_json(instructions="task", document_text="different source") == {
+            "headings": []
+        }
+
+    assert len(attempts) == 2
+    assert [row["status"] for row in BookLLMBudgetLedger(ledger_path).rows()] == [
+        "unbilled",
+        "complete",
+    ]
 
 
 def test_unknown_attempt_is_charged_at_bound_and_retry_can_succeed(tmp_path):
@@ -130,6 +199,59 @@ def test_rejected_max_tokens_is_zero_cost_and_fallback_stays_capped(tmp_path):
         "rejected",
         "complete",
     ]
+
+
+@pytest.mark.parametrize(("limit", "expected_requests"), [(460, 2), (459, 0)])
+def test_retry_is_allowed_at_exact_worst_case_budget_only(tmp_path, limit, expected_requests):
+    requests = []
+
+    def respond(request):
+        payload = json.loads(request.content)
+        requests.append(payload)
+        if "max_tokens" in payload:
+            return httpx.Response(
+                400,
+                json={"error": {"message": "max_tokens unsupported", "param": "max_tokens"}},
+            )
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": '{"headings":[]}'}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            },
+        )
+
+    ledger_path = tmp_path / f"retry-{limit}.sqlite3"
+    with OpenAICompatibleProvider(
+        provider="stub",
+        model="local",
+        base_url="http://127.0.0.1:11434/v1",
+        allow_remote=False,
+        transport=httpx.MockTransport(respond),
+        max_context_tokens=1024,
+        max_output_tokens=128,
+    ) as provider:
+        worker = CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / f"cache-{limit}",
+            identity="local",
+            ledger_path=ledger_path,
+            max_reported_tokens=limit,
+        )
+        if limit == 460:
+            assert worker.complete_json(instructions="i" * 76, document_text="d" * 128) == {
+                "headings": []
+            }
+        else:
+            with pytest.raises(LLMError, match="token budget"):
+                worker.complete_json(instructions="i" * 76, document_text="d" * 128)
+
+    assert len(requests) == expected_requests
+    if limit == 460:
+        assert [row["status"] for row in BookLLMBudgetLedger(ledger_path).rows()] == [
+            "rejected",
+            "complete",
+        ]
 
 
 def test_json_mode_rejection_is_rejected_and_capability_persists_between_providers(tmp_path):

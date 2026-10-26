@@ -124,3 +124,53 @@ def test_streaming_wav_checks_riff_limit_before_writing(monkeypatch):
 
     with pytest.raises(AudioError, match="RIFF size limit"):
         audio_module._write_pcm_chunk(NearLimitWriter(), np.ones(1, dtype=np.float32))
+
+
+def test_oserror_while_writing_chapter_wav_leaves_no_temporary_wav(monkeypatch, tmp_path):
+    monkeypatch.setattr(audio_module.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(
+        audio_module.wave,
+        "open",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("private path detail")),
+    )
+
+    with pytest.raises(AudioError, match="Could not write chapter PCM WAV"):
+        encode_mp3(
+            np.ones(10, dtype=np.float32),
+            24000,
+            tmp_path / "chapter.mp3",
+            bitrate="128k",
+            target_rate=24000,
+            title="Chapter",
+            artist=None,
+            album="Book",
+            track=1,
+        )
+
+    assert not (tmp_path / "chapter.mp3").exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_chapter_size_limit_leaves_no_temporary_wav(monkeypatch, tmp_path):
+    class HugeSamples:
+        ndim = 1
+        size = (0xFFFFFFFF - 36) // 2 + 1
+
+    monkeypatch.setattr(audio_module.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
+    monkeypatch.setattr(audio_module.np, "asarray", lambda *_args, **_kwargs: HugeSamples())
+
+    with pytest.raises(AudioError, match="RIFF size limit"):
+        encode_mp3(
+            object(),
+            24000,
+            tmp_path / "chapter.mp3",
+            bitrate="128k",
+            target_rate=24000,
+            title="Chapter",
+            artist=None,
+            album="Book",
+            track=1,
+        )
+
+    assert not (tmp_path / "chapter.mp3").exists()
+    assert list(tmp_path.iterdir()) == []

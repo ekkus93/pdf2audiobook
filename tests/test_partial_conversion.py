@@ -1,6 +1,7 @@
 """Failed chapter synthesis is isolated and resumes without rebuilding good MP3s."""
 
 import json
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -71,6 +72,12 @@ def test_one_failed_chapter_continues_and_resume_only_regenerates_it(tmp_path, m
     monkeypatch.setattr(pipeline, "read_manifest", lambda _path: manifest)
     monkeypatch.setattr(pipeline, "render_chapter_texts", render)
     monkeypatch.setattr(pipeline, "encode_mp3", encode)
+    logged_events = []
+    monkeypatch.setattr(
+        pipeline,
+        "log_event",
+        lambda event, **fields: logged_events.append((event, fields)),
+    )
 
     def fake_mp3(path, ID3=None):
         title = Path(path).stem.split(" - ", 1)[1]
@@ -92,6 +99,10 @@ def test_one_failed_chapter_continues_and_resume_only_regenerates_it(tmp_path, m
     assert ["Chapter 1" in path.name or "Chapter 3" in path.name for path in files] == [True, True]
     status = json.loads((tmp_path / "out/reports/conversion_status.json").read_text())
     assert [row["status"] for row in status["chapters"]] == ["complete", "failed", "complete"]
+    assert any(
+        event == "degraded_output" and fields.get("level") == logging.WARNING
+        for event, fields in logged_events
+    )
 
     provider.fail_chapter_two = False
     outputs = pipeline.convert_book(source, settings, tts_provider=provider)

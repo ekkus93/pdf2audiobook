@@ -212,6 +212,24 @@ def test_unset_cache_directory_does_not_warn():
     assert "cache_directory_ignored" not in result.stderr
 
 
+def test_unused_cache_warning_is_emitted_once_across_two_config_loads(tmp_path, monkeypatch):
+    from pdf2audiobook import logging as app_logging
+
+    monkeypatch.setattr(app_logging, "_CACHE_DIRECTORY_WARNING_EMITTED", False)
+    config = tmp_path / "settings.toml"
+    config.write_text('[cache]\ndirectory = "private-cache"\n', encoding="utf-8")
+    payloads = []
+    for _ in range(2):
+        result = runner.invoke(app, ["config", "show", "--config", str(config), "--json"])
+        assert result.exit_code == 0, result.stderr
+        payloads.append(json.loads(result.stdout))
+
+    assert (
+        sum(payload.get("warnings", []).count("cache_directory_ignored") for payload in payloads)
+        == 1
+    )
+
+
 @pytest.mark.parametrize("source", ["cli", "env", "toml"])
 def test_invalid_sample_rate_fails_before_synthesis(tmp_path: Path, monkeypatch, source: str):
     config = tmp_path / "settings.toml"

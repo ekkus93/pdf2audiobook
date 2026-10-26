@@ -3,7 +3,7 @@
 import pytest
 
 from pdf2audiobook.config import Chapters
-from pdf2audiobook.document.structure import is_heading_line, propose_chapters
+from pdf2audiobook.document.structure import _ROMAN_TITLE, is_heading_line, propose_chapters
 from pdf2audiobook.models import DocumentBlock
 
 
@@ -23,9 +23,11 @@ BODY = "The story goes on for a while with ordinary prose about the weather."
 
 
 @pytest.mark.parametrize(
-    "attribution", ["C. DICKENS", "M. LEBLANC", "D. H. LAWRENCE", "L. FRANK BAUM", "X. GREY"]
+    "attribution", ["C. DICKENS", "M. LEBLANC", "D. H LAWRENCE", "L. FRANK BAUM", "X. GREY"]
 )
 def test_epigraph_attribution_is_not_a_heading(attribution):
+    if attribution == "D. H LAWRENCE":
+        assert _ROMAN_TITLE.fullmatch(attribution)
     assert not is_heading_line(attribution)
     texts = ["I. THE STORM", BODY, attribution, BODY, "II. THE CALM", BODY, "III. THE END", BODY]
     assert _chapter_count(*texts) == 3
@@ -46,3 +48,12 @@ def test_v_between_iv_and_vi_keeps_its_heading():
 def test_ambiguous_attribution_beside_numbered_chapters_stays_body_text():
     texts = ["IV. THE FIELD", BODY, "C. DICKENS", BODY, "VI. THE RIVER", BODY]
     assert _chapter_count(*texts) == 2
+
+
+def test_whitespace_isolated_one_letter_numeral_is_not_a_heading():
+    assert not is_heading_line("I")
+    chapters, _ = propose_chapters(
+        _blocks("I", BODY), set(), [], Chapters(allow_single_chapter=True)
+    )
+    assert len(chapters) == 1
+    assert chapters[0].title == "Full Book"

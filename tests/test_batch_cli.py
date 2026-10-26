@@ -112,3 +112,20 @@ def test_batch_cli_tts_options_override_per_book_profile(tmp_path, monkeypatch):
     assert settings.tts.piper.speed == 1.5
     assert settings.tts.sample_rate == 22050
     assert settings.tts.bitrate == "96k"
+
+
+def test_invalid_batch_profile_exits_before_converting_any_book(tmp_path, monkeypatch):
+    books = tmp_path / "books"
+    books.mkdir()
+    (books / "Story.pdf").write_bytes(b"fixture")
+    config = tmp_path / "settings.toml"
+    config.write_text("[tts.profiles.Story]\nspeed = 99.0\n", encoding="utf-8")
+    called = []
+    monkeypatch.setattr(
+        "pdf2audiobook.pipeline.convert_book", lambda *_args, **_kwargs: called.append(True)
+    )
+
+    result = CliRunner().invoke(app, ["batch", str(books), "--config", str(config), "--json"])
+
+    assert result.exit_code == 2
+    assert called == []

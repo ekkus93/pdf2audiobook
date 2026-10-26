@@ -140,6 +140,22 @@ def test_review_server_authenticates_api_and_saves_validated_boundaries(tmp_path
         thread.join(timeout=3)
 
 
+def test_review_server_accepts_host_without_port_on_port_80(tmp_path):
+    manifest_path = _manifest(tmp_path)
+    server = create_review_server(manifest_path, port=80)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        request = urllib.request.Request("http://127.0.0.1/", headers={"Host": "127.0.0.1"})
+        with urllib.request.urlopen(request, timeout=3) as response:
+            assert response.status == 200
+            assert b"Chapter review" in response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+
 def test_review_server_rejects_invalid_ranges_and_non_loopback_bind(tmp_path):
     manifest_path = _manifest(tmp_path)
     server = create_review_server(manifest_path, port=0)

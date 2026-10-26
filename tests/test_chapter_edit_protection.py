@@ -58,6 +58,36 @@ def test_user_edited_chapter_survives_reanalysis_while_others_recompute(tmp_path
     assert "My private edited title" not in " ".join(refreshed.warnings)
 
 
+def test_reanalysis_keeps_one_title_edit_and_recomputes_unedited_chapter(tmp_path, monkeypatch):
+    source = tmp_path / "book.pdf"
+    _source(source)
+    settings = Settings(
+        general=General(output_dir=str(tmp_path / "out")),
+        llm=LLM(enabled=False),
+    )
+    manifest_path = pipeline.analyze_book(source, settings)
+    manifest = read_manifest(manifest_path)
+    manifest.chapters[0].title = "My reviewed title"
+    write_manifest(manifest_path, manifest)
+
+    original_propose = pipeline.propose_chapters
+
+    def changed_proposal(*args, **kwargs):
+        chapters, warnings = original_propose(*args, **kwargs)
+        chapters[1].title = "Fresh generated title"
+        return chapters, warnings
+
+    monkeypatch.setattr(pipeline, "propose_chapters", changed_proposal)
+    settings.general.resume = False
+    refreshed = read_manifest(pipeline.analyze_book(source, settings))
+    assert [chapter.title for chapter in refreshed.chapters] == [
+        "My reviewed title",
+        "Fresh generated title",
+    ]
+    assert refreshed.chapters[0].start_block == 0
+    assert refreshed.chapters[0].end_block == refreshed.chapters[1].start_block
+
+
 def test_impossible_boundary_merge_names_chapter_without_source_text(tmp_path):
     source = tmp_path / "private-book.pdf"
     _source(source)

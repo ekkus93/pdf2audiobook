@@ -113,6 +113,24 @@ def test_request_budget_counts_misses_but_allows_cache_hits(tmp_path):
     assert "classify" not in report.read_text(encoding="utf-8")
 
 
+def test_usage_report_records_the_resolved_model(tmp_path):
+    class ResolvedStub(Stub):
+        model = "auto"
+
+        def resolve_model(self):
+            return "served-model-7b"
+
+    report = tmp_path / "reports" / "llm_usage.json"
+    worker = CachedLLMProvider(
+        ResolvedStub(),
+        cache_dir=tmp_path / "cache",
+        identity="auto-model",
+        usage_report=report,
+    )
+    worker.complete_json(instructions="task", document_text="source")
+    assert json.loads(report.read_text(encoding="utf-8"))["resolved_model"] == "served-model-7b"
+
+
 def test_request_budget_counts_failed_provider_attempts(tmp_path):
     from pdf2audiobook.errors import LLMError
 

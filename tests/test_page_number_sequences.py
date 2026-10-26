@@ -85,3 +85,18 @@ def test_label_disagreement_warns_but_does_not_disable_folio_removal():
     )
     assert {edit.block_id for edit in edits} == {f"folio-{page}" for page in range(4)}
     assert warnings == ["Printed page numbers disagree with PDF page labels"]
+
+
+def test_sequential_folios_within_twelve_points_of_full_width_body_are_removed():
+    blocks = []
+    for page in range(4):
+        blocks.extend(
+            [
+                _block(page, f"body-{page}", "A body line near the footer.", (70, 680, 500, 700)),
+                _block(page, f"folio-{page}", str(page + 1), (295, 710, 305, 720)),
+            ]
+        )
+
+    edits = pagination_cleanup(blocks, SIZES, Pdf())
+
+    assert {edit.block_id for edit in edits} == {f"folio-{page}" for page in range(4)}

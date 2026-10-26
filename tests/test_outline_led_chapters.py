@@ -72,6 +72,19 @@ def test_without_outline_typography_still_finds_headings():
     assert all(c.generated_fingerprint for c in chapters)
 
 
+def test_only_low_confidence_chapter_gets_boundary_warning():
+    blocks = [
+        block(0, 0, "Chapter 1"),
+        *body(1, 0),
+        block(5, 1, "A Quiet Interlude", 18),
+        *body(6, 1),
+    ]
+    chapters, _ = propose_chapters(blocks, set(), [], Chapters())
+    assert [chapter.confidence for chapter in chapters] == [0.9, 0.82]
+    assert chapters[0].warnings == []
+    assert chapters[1].warnings == ["Chapter boundary has low confidence; verify manually"]
+
+
 def test_wrapped_large_font_lines_are_not_typographic_headings():
     blocks = [
         block(0, 0, "Chapter 1"),

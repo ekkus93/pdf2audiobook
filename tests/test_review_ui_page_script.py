@@ -18,7 +18,7 @@ NODE = shutil.which("node")
 
 HARNESS = r"""
 const fs = require('fs');
-const [scriptPath, payloadPath, ackChecked] = process.argv.slice(2);
+const [scriptPath, payloadPath, ackChecked, editedVoice] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
 class El {
   constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.value = '';
@@ -46,6 +46,10 @@ global.fetch = async (url, opts = {}) => { calls.push({ url, opts });
 eval(fs.readFileSync(scriptPath, 'utf8'));
 (async () => {
   await new Promise(r => setTimeout(r, 20));
+  if (editedVoice) {
+    const article = ids['#chapters'].children.find(c => c.tag === 'article');
+    article.querySelector('[name=voice_id]').value = editedVoice;
+  }
   if (ackChecked === 'true') {
     const control = ids['#review-acknowledgements'].find(c => c.dataset.reviewReason);
     if (control) control.checked = true;
@@ -85,7 +89,7 @@ def _manifest(**kwargs):
     )
 
 
-def _run_page(tmp_path, manifest, *, acknowledged=False):
+def _run_page(tmp_path, manifest, *, acknowledged=False, edited_voice=None):
     script = (
         _HTML.split("<script>", 1)[1]
         .split("</script>", 1)[0]
@@ -102,6 +106,7 @@ def _run_page(tmp_path, manifest, *, acknowledged=False):
             str(tmp_path / "page.js"),
             str(tmp_path / "payload.json"),
             str(acknowledged).lower(),
+            edited_voice or "",
         ],
         capture_output=True,
         text=True,
@@ -122,6 +127,14 @@ def test_unchanged_save_posts_the_loaded_voice_and_no_acknowledgement(tmp_path):
     posted = _run_page(tmp_path, _manifest())["body"]
     assert [row["voice_id"] for row in posted["chapters"]] == ["Jasper", ""]
     assert posted["acknowledge"] == []
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
+def test_page_script_posts_kept_and_edited_voices_to_server(tmp_path):
+    manifest = _manifest()
+    manifest.chapters[1].voice_id = "Jasper"
+    posted = _run_page(tmp_path, manifest, edited_voice="Bella")["body"]
+    assert [row["voice_id"] for row in posted["chapters"]] == ["Bella", "Jasper"]
 
 
 @pytest.mark.skipif(NODE is None, reason="Node.js is not installed")

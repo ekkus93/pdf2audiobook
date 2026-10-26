@@ -1,6 +1,7 @@
 """The review gate follows the manifest as it is now, and only the user clears damage (R73)."""
 
 import json
+import logging
 
 import pytest
 from typer.testing import CliRunner
@@ -137,13 +138,21 @@ def test_changed_damaged_source_warning_wording_keeps_structured_gate(tmp_path, 
         page_sizes=[(600, 800)],
         review_reasons=["damaged_source"],
     )
+    events = []
     monkeypatch.setattr(pipeline, "extract_pdf", lambda *_a, **_k: extracted)
+    monkeypatch.setattr(
+        pipeline, "log_event", lambda event, **fields: events.append((event, fields))
+    )
     settings = Settings()
     settings.general.output_dir = str(tmp_path / "output")
     settings.llm.enabled = False
     settings.chapters.allow_single_chapter = True
     manifest_path = pipeline.analyze_book(source, settings)
     assert "damaged_source" in read_manifest(manifest_path).review_required
+    assert any(
+        event == "review_warning" and fields.get("level") == logging.WARNING
+        for event, fields in events
+    )
 
 
 def test_accept_empty_chapter_exits_2_without_workspace_changes(tmp_path, monkeypatch):
@@ -245,6 +254,8 @@ def test_title_only_review_save_does_not_waive_book_wide_reason(tmp_path, reason
 def test_explicit_review_ui_acknowledgement_unblocks_book_wide_reason(tmp_path, reason):
     manifest = _manifest(review_required=[reason])
     path = _workspace(tmp_path, manifest)
+    with pytest.raises(AudioError, match="damaged source|ambiguous page-number"):
+        select_chapters(read_manifest(path), Settings())
     save_chapter_updates(path, _updates(manifest), [reason])
     saved = read_manifest(path)
     assert saved.review_required == []
