@@ -25,10 +25,10 @@
   - [x] FX0.02a Add `src/pdf2audiobook/jsonio.py` with bounded byte reads, non-recursive nesting checks, nonfinite-number rejection and malformed-cache misses; add it to mypy.
   - [x] FX0.02b Use it in LLM, OCR and MP3 caches and add bounded JSON metadata for WAV chunks; move the in-memory depth check into jsonio.
   - [x] FX0.02c Deeply nested entries in all four caches miss and regenerate without `RecursionError`.
-- [ ] FX0.03 Add manifest schema v2 (R12; this is the manifest bump in spec §3).
+- [x] FX0.03 Add manifest schema v2 (R12; this is the manifest bump in spec §3).
   - [x] FX0.03a Require `schema_version=2`; add `Chapter.generated_fingerprint` and `Chapter.warnings`.
   - [x] FX0.03b Analysis fingerprints generated chapter title/ranges/voice and stores low-confidence boundary warnings on the affected chapter.
-  - [ ] FX0.03c Missing/v1 manifests fail content-free; per-chapter warnings round-trip and structure tests verify boundary warnings are attached.
+  - [x] FX0.03c Missing/v1 manifests fail content-free; per-chapter warnings round-trip and structure tests verify boundary warnings are attached.
   - [x] FX0.03d Add the MAINTAINER_GUIDE upgrade note: v1 workspaces require re-analysis in a fresh output directory.
 
 **FX0 gate:** the original TODO shows its true status; every JSON cache read goes through the bounded loader; the v2 manifest is in place.
@@ -39,18 +39,18 @@
   - [x] FX1.01a Check `Host` against the bound loopback authority on every request, and respond 421 or 403 with a generic body before rendering the token or reading the manifest.
   - [x] FX1.01b Reject an `Origin` header that doesn't match the server on `/api/*` GET requests.
   - [x] FX1.01c Tests: a wrong Host on `/`, `/api/manifest` and POST is rejected without the token or book text in the response; the correct Host works; a mismatched Origin on GET is rejected.
-- [ ] FX1.02 Stop the review UI from wiping voices on save (R10).
+- [x] FX1.02 Stop the review UI from wiping voices on save (R10).
   - [x] FX1.02a Make the page's script send `voice_id`. On the server, a missing key means unchanged and an empty string or `null` means clear.
-  - [ ] FX1.02b Test with the exact request body the page's script builds (extract the builder or mirror it in a fixture): existing voices are kept and edited voices are saved.
+  - [x] FX1.02b Test with the exact request body the page's script builds (extract the builder or mirror it in a fixture): existing voices are kept and edited voices are saved.
 - [x] FX1.03 Harden the review UI (R15).
   - [x] FX1.03a Compare tokens as bytes. A non-ASCII or malformed `Authorization` header gets 401 instead of crashing the handler.
   - [x] FX1.03b Tests: mismatched POST Origin (403), oversized body (413), non-ASCII auth (401).
-- [ ] FX1.04 Make CLI diagnostics content-free (R2).
+- [x] FX1.04 Make CLI diagnostics content-free (R2).
   - [x] FX1.04a Change `fail()` to print exception text only for `AudiobookError`. Every other exception gets a fixed message for its exception family, which may include the class name.
-  - [ ] FX1.04b Wrap filesystem operations on output paths so they raise typed errors with fixed, context-specific messages and the right exit codes.
+  - [x] FX1.04b Wrap filesystem operations on output paths so they raise typed errors with fixed, context-specific messages and the right exit codes.
   - [x] FX1.04c Rewrite `tests/test_cli_json_errors.py` so it asserts no path or errno text appears. Add `tests/test_cli_error_privacy.py` covering `analyze --output <file>/sub` in text and JSON modes.
-- [ ] FX1.05 Redact secrets in `config show` (R26).
-  - [ ] FX1.05a Redact URL userinfo, query and fragment plus explicitly secret config fields; preserve numeric limits, pronunciation keys and user-defined dictionary keys (FX8.03b).
+- [x] FX1.05 Redact secrets in `config show` (R26).
+  - [x] FX1.05a Redact URL userinfo, query and fragment plus explicitly secret config fields; preserve numeric limits, pronunciation keys and user-defined dictionary keys (FX8.03b).
   - [x] FX1.05b Tests: a credential-bearing URL set through env and through TOML never appears in `config show` or `config show --sources`.
 - [x] FX1.06 Merge the review-UI part of the spec §6 §8 amendment (the 421 on Host mismatch) into the parent spec.
 
@@ -58,17 +58,17 @@
 
 ## Phase FX2 — Text integrity (extraction)
 
-- [ ] FX2.01 Refactor first, with no behaviour change (R44).
+- [x] FX2.01 Refactor first, with no behaviour change (R44).
   - [x] FX2.01a Move to one heading classifier in the structure layer, used by pdf.py, and remove pdf.py's import of structure internals.
-  - [ ] FX2.01b Split `extract_pdf` into page-strategy, block-builder and block-kind steps.
+  - [x] FX2.01b Split `extract_pdf` into page-strategy, block-builder and block-kind steps.
   - [x] FX2.01c Emit `kind="list"` for numbered lists or delete the dead list guards (structure.py:423, 1233).
   - [x] FX2.01d The full test suite passes unchanged.
 - [x] FX2.02 Stop classifying prose as headings (R6). Test: "introduction of the new tax was delayed until" stays body text and forces no paragraph breaks.
 - [x] FX2.03 Never remove real numerals as page numbers (R3).
   - [x] FX2.03a Remove one qualifying sequence; use edge distance to break ties, page labels as positive evidence and warn when labels disagree (FX8.05a).
   - [x] FX2.03b Add a sonnet fixture (`12`–`15` above poems, `40`–`43` folios): the poem numbers are kept and the folios removed. Add an ambiguous-sequence fixture: nothing removed and a warning emitted. The existing pagination tests still pass.
-- [ ] FX2.04 Send pages to auto OCR only when they need it (R4).
-  - [ ] FX2.04a Trigger OCR only for raster coverage or unusable embedded text. Keep short valid text, and never OCR image-free blank pages.
+- [x] FX2.04 Send pages to auto OCR only when they need it (R4).
+  - [x] FX2.04a Trigger OCR only for raster coverage or unusable embedded text. Keep short valid text, and never OCR image-free blank pages.
   - [x] FX2.04b Test with Tesseract made unavailable: a born-digital PDF with a blank page and a "Part One" page analyzes, and every block has origin `embedded`.
 - [x] FX2.05 Fix hyphen joining (R5).
   - [x] FX2.05a Join only a hyphen preceded by a letter and followed by a lowercase continuation. Drop the hyphen only when the unhyphenated word appears elsewhere in the document. Never join after a spaced dash or an en/em dash.
@@ -82,18 +82,18 @@
 
 ## Phase FX3 — Manifest, review and resume
 
-- [ ] FX3.01 Protect hand-edited chapters (R11).
-  - [ ] FX3.01a Treat a chapter whose current values don't match `generated_fingerprint` as user-edited, and protect it like `manually_approved` under `--no-resume` and `--force`. Warn with the chapter numbers only.
-  - [ ] FX3.01b Test: an unapproved title edit survives a settings change and reanalysis, while unedited chapters are still recomputed.
-- [ ] FX3.02 Narrow the analysis fingerprint (R13).
-  - [ ] FX3.02a Leave budgets, request limits, timeouts, retries, `allow_single_chapter` and consent flags out of the fingerprint. When it really does change, name the changed stage without giving values.
+- [x] FX3.01 Protect hand-edited chapters (R11).
+  - [x] FX3.01a Treat a chapter whose current values don't match `generated_fingerprint` as user-edited, and protect it like `manually_approved` under `--no-resume` and `--force`. Warn with the chapter numbers only.
+  - [x] FX3.01b Test: an unapproved title edit survives a settings change and reanalysis, while unedited chapters are still recomputed.
+- [x] FX3.02 Narrow the analysis fingerprint (R13).
+  - [x] FX3.02a Leave budgets, request limits, timeouts, retries, `allow_single_chapter` and consent flags out of the fingerprint. When it really does change, name the changed stage without giving values.
   - [x] FX3.02b Tests: after approval, changing `max_requests` or `allow_single_chapter` is accepted; changing the OCR language gives the stage-naming error; the confirmed case "approve in the review UI, then analyze with `allow_single_chapter=True`" now works.
 - [x] FX3.03 Catch chapters with nothing to speak at analysis (R9).
   - [x] FX3.03a Compute each chapter's speakable text at analysis time. For an empty chapter, add a per-chapter warning and a coverage-report entry, and have `convert` refuse it before synthesis unless it is approved.
   - [x] FX3.03b Test: a chapter made entirely of omitted material is reported by `analyze`.
-- [ ] FX3.04 Make `pack-m4b` safe and clean up old MP3s (R14).
+- [x] FX3.04 Make `pack-m4b` safe and clean up old MP3s (R14).
   - [x] FX3.04a Have `pack-m4b` verify each sidecar integrity, chapter ID and current chapter-text hash; refuse with exit 6 and stale chapter numbers (FX8.11).
-  - [ ] FX3.04b After publishing a chapter, delete any older MP3 and sidecar that carry the same chapter ID in a valid sidecar. Never touch files without our sidecar.
+  - [x] FX3.04b After publishing a chapter, delete any older MP3 and sidecar that carry the same chapter ID in a valid sidecar. Never touch files without our sidecar.
   - [x] FX3.04c Tests: a `pack-m4b` CLI happy path (FFmpeg-gated); stale refusal; rename cleanup; an unrelated file in `audio/` survives.
 - [x] FX3.05 Merge the spec §6 §5 amendment into the parent spec; §5 warnings, empty-chapter approval, and manual-edit preservation are present.
 
@@ -101,11 +101,11 @@
 
 ## Phase FX4 — LLM budget, caching and providers
 
-- [ ] FX4.01 Stop failed connections from permanently blocking budgeted runs (R16).
+- [x] FX4.01 Stop failed connections from permanently blocking budgeted runs (R16).
   - [x] FX4.01a Add the `unbilled` ledger status for attempts that never sent the request (connect errors, DNS and connect timeouts, TLS handshake failure). Everything else stays `unknown`.
   - [x] FX4.01b Move model discovery before reservation so it never reserves budget.
-  - [ ] FX4.01c Add `pdf2audiobook budget show --output DIR` and `budget resolve … (--tokens P:C | --unbilled) --confirm`.
-  - [ ] FX4.01d Tests: a connect error leaves no blocking row; a read timeout leaves `unknown`; `resolve` unblocks the run; a `budget` CLI privacy test.
+  - [x] FX4.01c Add `pdf2audiobook budget show --output DIR` and `budget resolve … (--tokens P:C | --unbilled) --confirm`.
+  - [x] FX4.01d Tests: a connect error leaves no blocking row; a read timeout leaves `unknown`; `resolve` unblocks the run; a `budget` CLI privacy test.
 - [x] FX4.02 Count every retry against the budget (R17).
   - [x] FX4.02a Make each HTTP attempt reserve and settle its own ledger row and count toward `max_requests`, and stop retrying when the budget runs out.
   - [x] FX4.02b Test: with `max_requests=1`, a timeout is not retried, and the ledger matches the attempts made.
@@ -130,24 +130,24 @@
 
 ## Phase FX5 — Configuration and CLI
 
-- [ ] FX5.01 Reject config sections that aren't tables (R27). Parametrized CLI tests cover every top-level section and assert exit 2 with content-free diagnostics.
+- [x] FX5.01 Reject config sections that aren't tables (R27). Parametrized CLI tests cover every top-level section and assert exit 2 with content-free diagnostics.
 - [x] FX5.02 Fix the config directory lookup and path resolution (R28).
   - [x] FX5.02a Ignore an empty or relative `XDG_CONFIG_HOME`.
   - [x] FX5.02b Tests: `user_config_path` under unset, empty, relative and absolute values; relative `output_dir` from CLI, env and explicit TOML.
 - [x] FX5.03 Parse env values by field type (R29). Regression covers every declared environment variable, including numeric-looking model and output-directory strings.
 - [x] FX5.04 Accept only MP3-compatible sample rates (R30). CLI, env and TOML values of 96000 fail with exit 2 before synthesis.
-- [ ] FX5.05 Give every boolean switch both forms (R24).
-  - [ ] FX5.05a Add paired `--llm`, remote-consent, vision and single-chapter options with unset defaults; audit recursion and resume for paired forms.
+- [x] FX5.05 Give every boolean switch both forms (R24).
+  - [x] FX5.05a Add paired `--llm`, remote-consent, vision and single-chapter options with unset defaults; audit recursion and resume for paired forms.
   - [x] FX5.05b CLI tests prove negative flags override TOML `true`, including revoking remote consent.
 - [ ] FX5.06 Apply TTS options to the provider in use (R25).
   - [ ] FX5.06a Resolve the effective provider first; provider-specific environment values override generic ones, and CLI options override both. Piper marker speaker-ID validation is deferred under FX8.14c.
   - [x] FX5.06b CLI tests cover Kitten and Piper selected by TOML, environment and CLI.
 - [x] FX5.07 Add TTS options to `batch` (R34). CLI options override per-book profile values while non-overridden profile values still apply.
-- [ ] FX5.08 Fix logging levels (R31).
-  - [ ] FX5.08a Failures are ERROR, warnings WARNING, command starts DEBUG; `--quiet` selects ERROR, `--verbose` DEBUG, and `general.log_level` applies otherwise.
+- [x] FX5.08 Fix logging levels (R31).
+  - [x] FX5.08a Failures are ERROR, warnings WARNING, command starts DEBUG; `--quiet` selects ERROR, `--verbose` DEBUG, and `general.log_level` applies otherwise.
   - [x] FX5.08b Tests cover configured levels, quiet warnings and visible default CLI failures.
 - [x] FX5.09 Warn about the unused `cache.directory` (R32). Explicit settings warn once, `config show` labels it unused, and examples no longer recommend it.
-- [ ] FX5.10 Merge the configuration/environment/path amendments into parent spec §7 and the paired-flag/CLI amendment into §8; §6 requirements remain merged from FX4.
+- [x] FX5.10 Merge the configuration/environment/path amendments into parent spec §7 and the paired-flag/CLI amendment into §8; §6 requirements remain merged from FX4.
 
 **FX5 gate:** acceptance #6 in the parent spec passes at the CLI level for every switch; every TTS option reaches the provider that is actually used.
 
@@ -157,7 +157,7 @@
 - [x] FX6.02 Identify TTS models by content (R35).
   - [x] FX6.02a For Piper, hash the `.onnx` and `.onnx.json` files, memoized by path, size and mtime. For Kitten, use the resolved model ID plus the `kittenml` version. Use this in both the WAV and MP3 keys.
   - [x] FX6.02b Tests: replacing the model bytes at the same path invalidates the audio; changing the working directory with an equivalent absolute path does not.
-- [ ] FX6.03 Turn unspeakable paragraphs into pauses (R37). Test: a `* * *` paragraph makes a pause entry and no TTS call, and coverage still passes.
+- [x] FX6.03 Turn unspeakable paragraphs into pauses (R37). Test: a `* * *` paragraph makes a pause entry and no TTS call, and coverage still passes.
 - [x] FX6.04 Add narration normalization (R38).
   - [x] FX6.04a Add a deterministic table for spoken text only (quotes, dashes, ellipses, ligatures, soft and zero-width characters, NBSP), and put its version in the audio fingerprint.
   - [x] FX6.04b Tests for each table entry, plus a check that the source text is unchanged.
@@ -183,12 +183,12 @@
 
 ## Phase FX7 — Documentation and closure
 
-- [ ] FX7.01 Add a `--help` usage example to every command, including `budget` and `--cover` (R33). Test: each command's `--help` contains "Example".
-- [ ] FX7.02 Update the docs (R45).
-  - [ ] FX7.02a README.md:3: remove the stale "Planned features…" sentence and document the new flags and commands.
+- [x] FX7.01 Add a `--help` usage example to every command, including `budget` and `--cover` (R33). Test: each command's `--help` contains "Example".
+- [x] FX7.02 Update the docs (R45).
+  - [x] FX7.02a README.md:3: remove the stale "Planned features…" sentence and document the new flags and commands.
   - [x] FX7.02b MAINTAINER_GUIDE.md: paired flags, the `budget` command, cover art, TTS retries, the `ollama_context` test marker, and all spec §3 upgrade notes.
-  - [ ] FX7.02c Confirm that every spec §6 amendment has been merged into docs/PDF2AUDIOBOOK_SPEC.md.
-- [ ] FX7.03 Re-check the original TODO items that spec §5 maps to each fixed requirement, citing this TODO's ledger evidence.
+  - [x] FX7.02c Confirm that every spec §6 amendment has been merged into docs/PDF2AUDIOBOOK_SPEC.md.
+- [x] FX7.03 Re-check the original TODO items that spec §5 maps to each fixed requirement, citing this TODO's ledger evidence.
 - [x] FX7.04 Final gate: `/verify` is green on Python 3.11–3.13 for mypy; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; record the SHA and run ID below.
 
 **FX7 gate:** every R1–R45 is implemented with passing tests; the original TODO has no item checked without evidence; exact-head CI is green.
@@ -204,33 +204,33 @@ The second review of `7eb4d25..2904f19` found regressions, an existing test whos
   - [x] FX8.01a Uncheck the FX items the second review found wrong: FX1.05a, FX2.01c, FX2.01d, FX2.03a, FX3.04a, FX4.07a, FX6.08a.
   - [x] FX8.01b Uncheck the FX items it found partial: FX0.02c, FX1.02b, FX1.03a, FX1.04a, FX1.05b, FX2.03b, FX2.04a, FX2.06a, FX2.06b, FX3.01a, FX3.02a, FX3.03a, FX3.04b, FX3.04c, FX3.05, FX4.01c, FX4.02a, FX4.04a, FX4.05a, FX4.05b, FX4.07b, FX5.05b, FX5.06a, FX5.07, FX5.08a, FX6.01, FX6.03, FX6.04a, FX6.05a, FX6.06a, FX6.07a, FX6.08b, FX6.09a, FX7.03. Also uncheck every parent of an unchecked item.
   - [x] FX8.01c In docs/PDF2AUDIOBOOK_TODO.md, uncheck P0.03d, P1.03a, P1.04c, P2.03a, P3.02a, P3.06, P4.02, P4.03c, F.04 and F.06, and correct P4.04c's citation (it cites FX6.09, which is unrelated). Update both TODOs' status lines, and add a ledger row in each that cites the second review.
-- [ ] FX8.02 Restore test integrity *before* changing code, so the regressions show as failures (R63, R47).
+- [x] FX8.02 Restore test integrity *before* changing code, so the regressions show as failures (R63, R47).
   - [x] FX8.02a Restore the folio geometry (y=474) and the original comment in `tests/test_scan_text_layer_fragments.py`'s `_scan_pdf`, and check that the tight-folio test now fails.
   - [x] FX8.02b Audit every changed assertion or fixture input under `tests/` between 7eb4d25 and 2904f19 (`git diff 7eb4d25 2904f19 -- tests/` on files that existed at 7eb4d25). Revert each one, or record a one-line reason in the ledger row.
-  - [ ] FX8.02c Add failing regression tests for R46 (numbered and Roman headings, wrapped list items, "J. Smith", "1990)"), R47 (footer, footnote-above and header folios; label mismatch), R52 (convert with `--voice`/`--speed`/`--cover`, then pack), R54 (`RuntimeError` text never shown) and R57 (BOM, U+200B and soft-hyphen tokens).
-- [ ] FX8.03 Close the privacy gaps first (R54, R55).
-  - [ ] FX8.03a Create the Typer app with `pretty_exceptions_enable=False` and route every `Exception` to `fail()` ("Unexpected internal error", exit 1). `KeyboardInterrupt` exits 130 with a fixed message.
+  - [x] FX8.02c Add failing regression tests for R46 (numbered and Roman headings, wrapped list items, "J. Smith", "1990)"), R47 (footer, footnote-above and header folios; label mismatch), R52 (convert with `--voice`/`--speed`/`--cover`, then pack), R54 (`RuntimeError` text never shown) and R57 (BOM, U+200B and soft-hyphen tokens).
+- [x] FX8.03 Close the privacy gaps first (R54, R55).
+  - [x] FX8.03a Create the Typer app with `pretty_exceptions_enable=False` and route every `Exception` to `fail()` ("Unexpected internal error", exit 1). `KeyboardInterrupt` exits 130 with a fixed message.
   - [x] FX8.03b Redact `config show` by an explicit allowlist of secret fields: URL userinfo, query and fragment, plus fields marked secret in the config model. Never mask by name, and never mask user-chosen dict keys.
   - [x] FX8.03c Tests: the R54 cases for `analyze`, `convert` and `config show`, in text and `--json` modes; numeric `*_tokens` fields, cost rates and pronunciation keys are shown unmasked; userinfo, query and fragment secrets are masked, with and without `--sources`.
-- [ ] FX8.04 Fix list and heading classification (R46).
-  - [ ] FX8.04a Classify headings before lists. A line is a list item only when it is part of a run of at least two sequential markers. Reject single capitals followed by a name, and bare years or numbers followed by `)`. Join a list item's wrapped continuation lines.
-  - [ ] FX8.04b The FX8.02c R46 tests pass, and so does every existing test unchanged.
+- [x] FX8.04 Fix list and heading classification (R46).
+  - [x] FX8.04a Classify headings before lists. A line is a list item only when it is part of a run of at least two sequential markers. Reject single capitals followed by a name, and bare years or numbers followed by `)`. Join a list item's wrapped continuation lines.
+  - [x] FX8.04b The FX8.02c R46 tests pass, and so does every existing test unchanged.
 - [x] FX8.05 Revise page-number removal (R47).
   - [x] FX8.05a Remove a single qualifying sequence exactly as the 7eb4d25 baseline did. Use edge distance only to break ties between competing sequences. Treat page labels as positive evidence, and when they disagree with the printed numbers warn once instead of turning removal off.
   - [x] FX8.05b Tests: the restored folio test, the FX8.02c R47 tests and the sonnet fixture all pass. Document the known limitation for poem or section numbers in MAINTAINER_GUIDE.md and parent spec §4.2.
-- [ ] FX8.06 Finish damaged-source handling (R48). This is the manifest v3 bump.
+- [x] FX8.06 Finish damaged-source handling (R48). This is the manifest v3 bump.
   - [x] FX8.06a Keep page sizes index-aligned when a page fails to load, using a placeholder size and excluding that page from geometry cleanup.
-  - [ ] FX8.06b Add `review_required` reason codes to the manifest (schema v3; reject v2) and make every gate check codes, not warning strings. Add `convert --accept-review REASON` and have review-UI approval clear `damaged_source`.
-  - [ ] FX8.06c In `--ocr auto`, OCR image-free pages whose vector drawings are dense and that have no usable text.
-  - [ ] FX8.06d Tests: page sizes after a page-load failure; blocked, then unblocked by `--accept-review` and by approval; a vector-outlined page is OCRed (Tesseract-gated); a v2 manifest is rejected; a privacy test.
+  - [x] FX8.06b Add `review_required` reason codes to the manifest (schema v3; reject v2) and make every gate check codes, not warning strings. Add `convert --accept-review REASON` and have review-UI approval clear `damaged_source`.
+  - [x] FX8.06c In `--ocr auto`, OCR image-free pages whose vector drawings are dense and that have no usable text.
+  - [x] FX8.06d Tests: page sizes after a page-load failure; blocked, then unblocked by `--accept-review` and by approval; a vector-outlined page is OCRed (Tesseract-gated); a v2 manifest is rejected; a privacy test.
 - [x] FX8.07 Bump the extraction/analysis fingerprint once for R46, R47, R48, R53 and R62 (spec §8.8 table). Add the MAINTAINER_GUIDE upgrade note and merge the parent spec §4.1–§4.3 updates.
-- [ ] FX8.08 Add worst-case budget accounting (R49).
+- [x] FX8.08 Add worst-case budget accounting (R49).
   - [x] FX8.08a Record each attempt's upper bound (prompt bound plus output cap) and charge `unknown` and `pending` rows at that bound, instead of blocking. Add the `rejected` status for 4xx responses other than 408 that report no usage.
   - [x] FX8.08b Substitute `max_completion_tokens` when `max_tokens` is rejected. Refuse uncapped requests under a token or USD budget. Remember rejected parameters per provider identity in the LLM cache directory.
-  - [ ] FX8.08c Tests: under `max_reported_tokens`, 500 then success completes; a 400 for an unsupported parameter becomes `rejected` and the fallback succeeds; retries stop exactly at the worst-case limit; `max_completion_tokens` is substituted; an uncapped request under a budget is refused; the ledger shows every attempt.
-- [ ] FX8.09 Fix the `budget` CLI (R50).
-  - [ ] FX8.09a Validate fields and cumulative totals before writing, use one transaction, and report the status actually stored (a rejected value exits 2 and changes nothing). Accept `pending` rows with `--confirm`. Open the ledger read-only, and exit 2 if it doesn't exist.
-  - [ ] FX8.09b Add the resolved model to the usage report.
+  - [x] FX8.08c Tests: under `max_reported_tokens`, 500 then success completes; a 400 for an unsupported parameter becomes `rejected` and the fallback succeeds; retries stop exactly at the worst-case limit; `max_completion_tokens` is substituted; an uncapped request under a budget is refused; the ledger shows every attempt.
+- [x] FX8.09 Fix the `budget` CLI (R50).
+  - [x] FX8.09a Validate fields and cumulative totals before writing, use one transaction, and report the status actually stored (a rejected value exits 2 and changes nothing). Accept `pending` rows with `--confirm`. Open the ledger read-only, and exit 2 if it doesn't exist.
+  - [x] FX8.09b Add the resolved model to the usage report.
   - [x] FX8.09c Tests for each item, including an overflow attempt, a mistyped `--output` that creates no file, and a privacy test.
 - [x] FX8.10 Anchor contents and boundary proposals (R51).
   - [x] FX8.10a Accept only primary-window block IDs, an exact title match, and blocks that pass the heading classifier or the short-line rule. Rejections produce `LLMDecision` records.
@@ -238,32 +238,32 @@ The second review of `7eb4d25..2904f19` found regressions, an existing test whos
 - [x] FX8.11 Base `pack-m4b` freshness on chapter text (R52). This is the audio sidecar bump.
   - [x] FX8.11a Record `chapter_id` and `text_sha256` in each MP3 sidecar. `pack-m4b` checks sidecar integrity, `chapter_id` and `text_sha256` only, and its `--cover` applies to the M4B only.
   - [x] FX8.11b The FX8.02c R52 tests pass, and editing a boundary after convert gives exit 6 naming the chapter (the freshness rejection occurs before FFmpeg).
-- [ ] FX8.12 Make hand-edit protection robust (R53).
-  - [ ] FX8.12a Protect each edited field separately. A boundary edit moves the neighbouring chapter's adjacent boundary. An impossible merge gives a content-free error naming the chapter numbers.
-  - [ ] FX8.12b Always recompute warnings and review reasons. Use one emptiness check for `coverage.json` and the gate. Skip an approved empty chapter with a report entry. Compare files for cleanup with `samefile` or the inode.
-  - [ ] FX8.12c Tests: a title-only edit followed by a neighbour boundary change; a boundary edit moving its neighbour; an impossible merge; an edited chapter that becomes empty; an approved empty chapter; a case-only rename.
+- [x] FX8.12 Make hand-edit protection robust (R53).
+  - [x] FX8.12a Protect each edited field separately. A boundary edit moves the neighbouring chapter's adjacent boundary. An impossible merge gives a content-free error naming the chapter numbers.
+  - [x] FX8.12b Always recompute warnings and review reasons. Use one emptiness check for `coverage.json` and the gate. Skip an approved empty chapter with a report entry. Compare files for cleanup with `samefile` or the inode.
+  - [x] FX8.12c Tests: a title-only edit followed by a neighbour boundary change; a boundary edit moving its neighbour; an impossible merge; an edited chapter that becomes empty; an approved empty chapter; a case-only rename.
   - [x] FX8.12d Merge the parent spec §5 text describing `generated_fingerprint` detection and per-field protection.
 - [x] FX8.13 Fix speech and alignment (R57, R58).
   - [x] FX8.13a Remove zero-width and soft-hyphen characters before tokenizing, on both sides of the alignment.
   - [x] FX8.13b Fix the pronunciation period handling, alphabetic-only case transfer, `...` stripping, and the dash rules.
   - [x] FX8.13c Tests: the FX8.02c R57 tests pass; one test per R58 rule.
 - [ ] FX8.14 Fix TTS robustness (R56, R59, R60, R61).
-  - [ ] FX8.14a Build batch per-book settings through model validation, so invalid values exit 2 before synthesis.
+  - [x] FX8.14a Build batch per-book settings through model validation, so invalid values exit 2 before synthesis.
   - [x] FX8.14b Remove the temporary chapter WAV in `finally`, sweep stale temporary WAVs at the start of `convert`, and fail a chapter before it crosses the WAV size limit.
   - [ ] FX8.14c Check Piper marker IDs against `num_speakers`. A failure to list voices is an error. A bad marker fails only its own chapter (exit 7, reason `invalid_voice_marker`). **Deferred at the user's request to skip Piper.** Generic marker preflight and failing-chapter status handling are implemented.
   - [x] FX8.14d Retry only transient TTS errors. `inspect` and `inspect --json` show failed chapters from `reports/conversion_status.json`. Amend R36's text in the parent spec.
-  - [ ] FX8.14e Tests for each item, including an injected `KeyboardInterrupt` that leaves no temporary WAV.
-- [ ] FX8.15 Small fixes (R62).
-  - [ ] FX8.15a Review UI: non-ASCII auth on POST returns 401; a Host without a port is accepted on port 80; IPv6 is either served correctly or rejected.
-  - [ ] FX8.15b Logging: INFO events for stage progress, WARNING events for review warnings and degraded output, and `command_failed` always logged at ERROR.
-  - [ ] FX8.15c Pause chunks recorded in the mapping as `kind="pause"` and counted in the conversion report.
+  - [x] FX8.14e Tests for each item, including an injected `KeyboardInterrupt` that leaves no temporary WAV.
+- [x] FX8.15 Small fixes (R62).
+  - [x] FX8.15a Review UI: non-ASCII auth on POST returns 401; a Host without a port is accepted on port 80; IPv6 is either served correctly or rejected.
+  - [x] FX8.15b Logging: INFO events for stage progress, WARNING events for review warnings and degraded output, and `command_failed` always logged at ERROR.
+  - [x] FX8.15c Pause chunks recorded in the mapping as `kind="pause"` and counted in the conversion report.
   - [x] FX8.15d Tests for each item.
-- [ ] FX8.16 Strengthen tests (R63).
+- [x] FX8.16 Strengthen tests (R63).
   - [x] FX8.16a The MP3-sidecar and WAV-metadata depth tests use payloads that fit within each cache's size cap.
-  - [ ] FX8.16b The R10 test posts the body the page's own JavaScript builds, and shows that an unchanged save keeps the voice.
+  - [x] FX8.16b The R10 test posts the body the page's own JavaScript builds, and shows that an unchanged save keeps the voice.
   - [x] FX8.16c Add negative-flag CLI tests for `convert` and `batch` as well as `analyze` (FX5.05b).
 - [x] FX8.17 Bump the audio fingerprint and sidecar format once for R52, R57 and R58 (spec §8.8 table), and add the MAINTAINER_GUIDE upgrade note.
-- [ ] FX8.18 Superseded by FX9.18.
+- [x] FX8.18 Superseded by FX9.18.
 - [x] FX8.19 Closure.
   - [x] FX8.19a Re-check each FX item unchecked in FX8.01, citing the FX8 task and its evidence. Re-check the original TODO items from FX8.01c only when every FX item they depend on is checked.
   - [x] FX8.19b Merge every remaining §8 parent-spec amendment, and update README.md and MAINTAINER_GUIDE.md for `--accept-review`, the `rejected` budget status, the `pack-m4b` cover behaviour and the page-number limitation.
@@ -297,63 +297,63 @@ Every fix task below has the same three parts unless it says otherwise: (a) add 
 - [x] FX9.01 Make speech rewrites keep alignment (R64). **High.**
   - [x] FX9.01a Regression tests: "Read 10–20 pages today.", "In 1990–91 it rained.", "pp. 3–4.", "wait—then" spoken as "wait, then", "wait — then", plus a property-style test running every R58 rule through `chunk_source_ranges`.
   - [x] FX9.01b Align on source token spans (or apply token-count-changing rewrites after source ranges are computed). Em dashes and non-digit en dashes become ", " with one following space.
-- [ ] FX9.02 Make budget accounting fail closed (R70). **High.**
+- [x] FX9.02 Make budget accounting fail closed (R70). **High.**
   - [x] FX9.02a Regression tests: both cap parameters rejected under a budget is refused and settled `rejected`; a legacy `unknown` row with a NULL bound blocks under a token budget; a 429 after the last retry stays `unknown`; a small PNG of a large image gets a pixel-based bound.
   - [x] FX9.02b Never send an uncapped request under a token or USD budget. Remove the `upper_bound_tokens=0` default from `reserve`. Treat NULL-bound open rows as blocking. Restrict `rejected` to 4xx other than 408 and 429. Settle with a typed outcome instead of `usage["rejected"]`. Compute the image bound from pixel dimensions.
-  - [ ] FX9.02c Restore `tests/test_llm_budget_integer_bounds.py` and `tests/test_llm_budget_settlement_types.py` (done), and make every `…_blocks_…` test assert a block (done). Decision: `test_overspent_token_budget_still_fails_closed` and the exact-exhaustion test keep their FX8 text, because R49 refuses a request whose worst-case bound exceeds the limit before it is sent; the post-flight overspend case has its own test (commit 18e2f09, audit §C).
+  - [x] FX9.02c Restore `tests/test_llm_budget_integer_bounds.py` and `tests/test_llm_budget_settlement_types.py` (done), and make every `…_blocks_…` test assert a block (done). Decision: `test_overspent_token_budget_still_fails_closed` and the exact-exhaustion test keep their FX8 text, because R49 refuses a request whose worst-case bound exceeds the limit before it is sent; the post-flight overspend case has its own test (commit 18e2f09, audit §C).
 - [x] FX9.03 Stop Roman-letter attributions becoming headings (R66). **High.**
   - [x] FX9.03a Regression tests: "C. DICKENS", "M. LEBLANC", "D. H. LAWRENCE" and "L. FRANK BAUM" stay body text; "I./II./III." gives 3 chapters; "IV./V./VI." keeps "V." as a heading.
   - [x] FX9.03b Accept a single-letter numeral only within a sequence of at least two consecutive Roman headings, or when the block passes the font-size or whitespace heading test.
 - [x] FX9.04 Hash manifest-rendered text in `pack-m4b` (R76). **High.**
   - [x] FX9.04a Regression test: edit a boundary in `manifest.json` only, without calling `render_chapter_texts`; `pack-m4b` exits 6 naming the chapter.
   - [x] FX9.04b Render narration text in memory from the current manifest, with the function `convert` uses, and stop reading `chapters/*.txt` in `pack-m4b`.
-- [ ] FX9.05 OCR vector-outlined text (R69). **High.**
-  - [ ] FX9.05a Add a real outlined-glyph fixture with drawing coverage below 0.15 (Ghostscript `-dNoOutputFonts`, or drawn glyph paths, committed as a small binary). Regression test: it is OCRed in `--ocr auto` (Tesseract-gated; confirm in CI's `-ra` summary that it ran). A page with one horizontal rule isn't OCRed.
-  - [ ] FX9.05b Detect glyph-like drawings (a named minimum count of small filled paths, or a lower coverage threshold). Remove the "OCR not needed" wording, and warn with the real reason when a page isn't OCRed. Document the constants in MAINTAINER_GUIDE.md.
+- [x] FX9.05 OCR vector-outlined text (R69). **High.**
+  - [x] FX9.05a Add a real outlined-glyph fixture with drawing coverage below 0.15 (Ghostscript `-dNoOutputFonts`, or drawn glyph paths, committed as a small binary). Regression test: it is OCRed in `--ocr auto` (Tesseract-gated; confirm in CI's `-ra` summary that it ran). A page with one horizontal rule isn't OCRed.
+  - [x] FX9.05b Detect glyph-like drawings (a named minimum count of small filled paths, or a lower coverage threshold). Remove the "OCR not needed" wording, and warn with the real reason when a page isn't OCRed. Document the constants in MAINTAINER_GUIDE.md.
 - [x] FX9.06 Strip isolated invisible characters (R65).
   - [x] FX9.06a Regression tests: a leading BOM then a space; isolated U+200B, U+2060 and U+00AD; a chapter of one such token plus one word.
   - [x] FX9.06b Remove the characters before tokenizing on both sides; drop a token that becomes empty from both sides together.
-- [ ] FX9.07 Keep stderr clean (R72).
+- [x] FX9.07 Keep stderr clean (R72).
   - [x] FX9.07a Restore the 2904f19 assertions in `tests/test_cli_json_errors.py` (`json.loads(captured.err)`, `json.loads(result.stderr)`, `not result.stderr.lstrip().startswith("{")`).
-  - [ ] FX9.07b Render log events as human-readable lines in human mode. In `--json` mode emit only the error object unless `--verbose`. Emit structured events only with `--verbose` or an explicitly configured `general.log_level`.
-  - [ ] FX9.07c New test: `--verbose` emits `stage_started` and `command_failed`.
+  - [x] FX9.07b Render log events as human-readable lines in human mode. In `--json` mode emit only the error object unless `--verbose`. Emit structured events only with `--verbose` or an explicitly configured `general.log_level`.
+  - [x] FX9.07c New test: `--verbose` emits `stage_started` and `command_failed`.
 - [x] FX9.08 Stop `budget resolve` overflowing the ledger (R71).
   - [x] FX9.08a Regression test: with another open row present, resolving a value that would overflow exits 2, leaves the row unchanged, and `budget show` still works.
   - [x] FX9.08b Include every other row's usage and open bound in the cumulative check, and check the 64-bit and `Decimal` limits before writing.
-- [ ] FX9.09 Make the review gate use current state (R73).
-  - [ ] FX9.09a Regression tests: a chapter emptied by hand after analysis is gated at convert; a title-only review-UI save keeps `damaged_source`.
-  - [ ] FX9.09b Recompute review reasons in `convert` from the current manifest with the shared emptiness function. Add an explicit acknowledgement control to the review UI and clear `damaged_source` only through it.
-- [ ] FX9.10 Fix `--accept-review` (R74).
-  - [ ] FX9.10a Regression tests: an unknown reason exits 2 with no workspace changes; a `review_acknowledged` event is logged; `--dry-run` reports the acknowledgement.
-  - [ ] FX9.10b Validate reasons at option parsing, log the event, and apply the flag in dry-run.
-- [ ] FX9.11 Match hand edits by chapter identity (R75).
+- [x] FX9.09 Make the review gate use current state (R73).
+  - [x] FX9.09a Regression tests: a chapter emptied by hand after analysis is gated at convert; a title-only review-UI save keeps `damaged_source`.
+  - [x] FX9.09b Recompute review reasons in `convert` from the current manifest with the shared emptiness function. Add an explicit acknowledgement control to the review UI and clear `damaged_source` only through it.
+- [x] FX9.10 Fix `--accept-review` (R74).
+  - [x] FX9.10a Regression tests: an unknown reason exits 2 with no workspace changes; a `review_acknowledged` event is logged; `--dry-run` reports the acknowledgement.
+  - [x] FX9.10b Validate reasons at option parsing, log the event, and apply the flag in dry-run.
+- [x] FX9.11 Match hand edits by chapter identity (R75).
   - [x] FX9.11a Regression tests: reanalysis inserting a chapter before an edited one keeps the edit on the right chapter; a removed edited chapter raises a content-free conflict.
-  - [ ] FX9.11b Match by `id` and `generated_fingerprint`, never by number.
+  - [x] FX9.11b Match by `id` and `generated_fingerprint`, never by number.
 - [ ] FX9.12 Scope WAV cleanup and fix TTS robustness (R77).
-  - [ ] FX9.12a Regression tests: a second concurrent `convert` is refused and the first run's WAV survives; a fake provider's transient error is retried; a misplaced voice marker fails only its chapter (exit 7, `invalid_voice_marker`); a resumed run reports the same `pause_count`.
-  - [ ] FX9.12b Take an exclusive workspace lock in `convert` and sweep only while holding it. Map each provider's transient failures, and list providers with none in MAINTAINER_GUIDE.md. Fail only the marker's chapter. Count pauses from the chunk mapping.
+  - [x] FX9.12a Regression tests: a second concurrent `convert` is refused and the first run's WAV survives; a fake provider's transient error is retried; a misplaced voice marker fails only its chapter (exit 7, `invalid_voice_marker`); a resumed run reports the same `pause_count`.
+  - [x] FX9.12b Take an exclusive workspace lock in `convert` and sweep only while holding it. Map each provider's transient failures, and list providers with none in MAINTAINER_GUIDE.md. Fail only the marker's chapter. Count pauses from the chunk mapping.
   - [ ] FX9.12c Piper speaker-count validation stays deferred with FX8.14c (user request: skip Piper).
 - [x] FX9.13 Finish the speech rules (R68).
   - [x] FX9.13a Regression tests: "Dr. Watson arrived.", "the U.S. army", "the U.S.", "Hermione...", "Hermione…".
   - [x] FX9.13b Implement R58's period rule, and strip and restore `...` and `…` identically.
-- [ ] FX9.14 Fix wrapped lines and list ends (R67).
-  - [ ] FX9.14a Regression tests: "J. Smith of the Times." and "1990) was…" wrapped lines join; a list followed by a body paragraph keeps the paragraph separate.
-  - [ ] FX9.14b Use the sequential-marker rule in the join check, and end a list at a blank line, font change or unindented line.
-- [ ] FX9.15 CLI error mapping and small fixes (R78).
+- [x] FX9.14 Fix wrapped lines and list ends (R67).
+  - [x] FX9.14a Regression tests: "J. Smith of the Times." and "1990) was…" wrapped lines join; a list followed by a body paragraph keeps the paragraph separate.
+  - [x] FX9.14b Use the sequential-marker rule in the join check, and end a list at a blank line, font change or unindented line.
+- [x] FX9.15 CLI error mapping and small fixes (R78).
   - [x] FX9.15a Restore the 2904f19 error-mapping parametrization in `tests/test_cli_json_errors.py`; add tests for `review` with the port in use and for Ctrl+C on `review` (exit 0).
   - [x] FX9.15b Keep content-free messages for known `OSError` cases. Make Ctrl+C on `review` a normal shutdown.
-  - [ ] FX9.15c Mark secret fields on the config model and derive `_SECRET_CONFIG_PATHS` from it; add a test that every listed path exists.
+  - [x] FX9.15c Mark secret fields on the config model and derive `_SECRET_CONFIG_PATHS` from it; add a test that every listed path exists.
   - [x] FX9.15d Restore the folio-test comment to "appear as page" exactly.
-- [ ] FX9.16 Make the regression tests discriminate (R79).
-  - [ ] FX9.16a Replace FX8's R46 chapter test, R47 folio test and R57 test with versions that fail at 2904f19, and record the failing IDs.
+- [x] FX9.16 Make the regression tests discriminate (R79).
+  - [x] FX9.16a Replace FX8's R46 chapter test, R47 folio test and R57 test with versions that fail at 2904f19, and record the failing IDs.
   - [x] FX9.16b Make the MP3-sidecar and WAV-metadata depth tests use nested dicts, and show each fails with its depth check disabled.
   - [x] FX9.16c Make the R10 test run the page's own JavaScript (Node-gated) and add a static check that the request builder in `_HTML` sends `voice_id`.
   - [x] FX9.16d Re-audit every changed assertion or fixture input under `tests/` between 2904f19 and 0c19845, one ledger line per change (file, test, old → new, reason). Restore any not covered by another FX9 task.
 - [x] FX9.17 Bump fingerprints once (spec §9.9): the extraction/analysis fingerprint for R66, R67 and R69, and the audio fingerprint for R64, R65 and R68. Add the MAINTAINER_GUIDE upgrade notes.
 - [x] FX9.18 Pin uv in `ci.yml`, regenerate `uv.lock` with that version, and record the version, the resulting `revision` and the reason in the ledger (R78). `uv lock --check` passes locally and in CI.
 - [ ] FX9.19 Closure.
-  - [ ] FX9.19a Re-check each FX8 item unchecked in FX9.00 only when the FX9 task that covers it is checked, citing its commit SHA. Re-check FX0–FX7 and original-TODO items the same way.
-  - [ ] FX9.19b Merge the §9 parent-spec amendments and update README.md and MAINTAINER_GUIDE.md (`--accept-review` validation, review-UI acknowledgement, stderr behaviour, workspace lock, OCR constants, uv pin).
+  - [x] FX9.19a Re-check each FX8 item unchecked in FX9.00 only when the FX9 task that covers it is checked, citing its commit SHA. Re-check FX0–FX7 and original-TODO items the same way.
+  - [x] FX9.19b Merge the §9 parent-spec amendments and update README.md and MAINTAINER_GUIDE.md (`--accept-review` validation, review-UI acknowledgement, stderr behaviour, workspace lock, OCR constants, uv pin).
   - [ ] FX9.19c Final gate: `/verify` is green, with mypy on Python 3.11, 3.12 and 3.13; the wheel/sdist smoke passes; exact-head Python CI passes on all three versions; the `-ra` skip summary shows the Tesseract and FFmpeg tests ran in CI. Record the SHA and run ID below.
 
 **FX9 gate:**

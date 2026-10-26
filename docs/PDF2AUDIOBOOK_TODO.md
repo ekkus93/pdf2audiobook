@@ -1,6 +1,6 @@
 # PDF2Audiobook — Implementation TODO
 
-**Status:** P5.05, F.01 and F.06 remain open; fourth-review reopenings are tracked in docs/PDF2AUDIOBOOK_FOURTH_REVIEW_TODO.md (FX10).
+**Status:** P4.01b, P5.05 and F.01 remain open; fourth-review reopenings are tracked in docs/PDF2AUDIOBOOK_FOURTH_REVIEW_TODO.md (FX10).
 **Date:** 2026-10-25
 **Specification:** docs/PDF2AUDIOBOOK_SPEC.md  
 **Target:** Python CLI, chapter MP3s, Kitten TTS, optional OpenAI/Ollama/llama-server intelligence.
@@ -23,10 +23,10 @@
 - [x] P0.02 Establish src/pdf2audiobook/{cli,config,pdf,document,llm,tts,audio,pipeline} and public adapter protocols.
   - [x] P0.02a Define model and provider error types, exit codes and consistent JSON diagnostics; CLI errors are content-free for non-domain exceptions.
   - [x] P0.02b Add structured logging with text/key redaction and --verbose/--quiet controls (review-fixes FX5.08; exact-head CI evidence in the review-fixes ledger).
-- [ ] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
+- [x] P0.03 Implement typed TOML configuration models with built-in defaults, validation and provenance.
   - [x] P0.03a Implement lookup of per-user config directory; --config and --no-config (review-fixes FX5.02).
   - [x] P0.03b Implement precedence CLI > PDF2AUDIOBOOK_* env > TOML > built-ins, including explicit boolean false (review-fixes FX5.03, FX5.05).
-  - [ ] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options (review-fixes FX5.06).
+  - [x] P0.03c Support named OpenAI/Ollama/llama-server and TTS sections, model URLs, OCR and chapter/output options (review-fixes FX5.06).
   - [x] P0.03d Implement config show --sources with secret masking; no secrets in TOML examples (requalified by review-fixes FX8.03).
   - [x] P0.03e Unit-test overlay precedence, parsing, missing/unknown keys and path resolution (review-fixes FX5.01–FX5.03).
 - [x] P0.04 Implement CLI skeleton for inspect, analyze, convert, doctor and config show, with --help examples and validation (review-fixes FX7.01).
@@ -150,10 +150,10 @@
 - [x] F.03 Directory/batch conversion and per-book voice profiles: sorted PDF discovery, opt-in recursion, per-book failure reporting, and exact filename-stem TTS profiles with CLI precedence (review-fixes FX5.07; exact-head CI evidence in the review-fixes ledger).
 - [x] F.04 EPUB ingestion and an additional audiobook container: PyMuPDF accepts EPUB through the same source-span/chapter analysis path, and `pack-m4b` produces AAC with book/author tags and chapter navigation from current, text-verified chapter MP3s. See review-fixes ledger FX3.04 and FX8.11.
 - [x] F.05 Optional GUI and user-assisted chapter editor: loopback review UI enforces the bound Host authority and Origin checks, validates ranges/coverage, and marks saved chapters manually approved.
-- [ ] F.06 Multi-speaker narration and pronunciation dictionaries (review-fixes FX6.05–FX6.06; Piper-specific speaker-count validation deferred under FX8.14c).
+- [x] F.06 Multi-speaker narration and pronunciation dictionaries (review-fixes FX6.05–FX6.06; Piper-specific speaker-count validation deferred under FX8.14c).
   - [x] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges (review-fixes FX6.05).
   - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity and survives review saves, including omitted fields in partial clients.
-  - [ ] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval (review-fixes FX6.06).
+  - [x] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval (review-fixes FX6.06).
 
 ## Progress ledger
 
