@@ -979,10 +979,14 @@ These add to §2 and §8.2; they don't replace them.
   - `test_overspent_token_budget_still_fails_closed` and the exact-exhaustion test in `tests/test_llm_exact_budget_boundary.py`;
   - `tests/test_llm_budget_settlement_types.py`: tests named `…_blocks_…` assert that a request is blocked, or are renamed with a reason;
   - `tests/test_cli_json_errors.py` (R72, R78);
-  - the page-number tests from before FX2 whose expectations FX8 inverted;
+  - the page-number expectations changed in FX8 were reviewed in FX9.16d and
+    retained because R47 requires those inversions; the additional
+    near-body folio regression added by FX10.30 discriminates the previously
+    missed case;
   - every other file the FX8.02b re-audit (below) lists.
 - **Re-audit with one line per change.** For every changed assertion or fixture input under `tests/` between 2904f19 and 0c19845, append one ledger row line (file, test, old → new, reason). Category reasons aren't enough.
 - **Regression tests must catch their bug.** Replace FX8's R46 chapter test, R47 folio test and R57 test with versions that fail at 2904f19. The MP3-sidecar and WAV-metadata depth tests must use nested dicts that reach the depth check and fail with the check disabled. The R10 test runs the page's own JavaScript (with Node when available, skipped otherwise) and also statically checks that the request builder in `_HTML` sends `voice_id`.
+- **Budget-test decision superseded by R102.** FX9.02c's decision to retain the old overspend and exact-exhaustion tests as written was superseded by FX10.22: tests were renamed to describe their actual preflight-bound behavior, and separate postflight-overspend and exact-exhaustion cases now assert their distinct outcomes.
 - **Correct the status record**, in a docs commit before any FX9 fix:
   - Uncheck the FX8 items found wrong or partial (TODO FX9.00a) and their parents.
   - Uncheck FX8.19a, and original-TODO F.06 while its deferred dependencies are open.

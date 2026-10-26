@@ -119,10 +119,12 @@ reported as "drawings without readable text" and sets the `damaged_source`
 review reason; a lone rule or border is treated as blank. The Tesseract test in
 `tests/test_vector_outlined_text.py` runs in CI, whose job installs Tesseract.
 
-`convert` holds an exclusive lock on `<workspace>/.convert.lock` (POSIX
-`flock`) for the whole run, so a second `convert` of the same book exits with
-"Another conversion is already running" and the stale temporary WAV sweep can
-never delete a running conversion's file. `tts.max_retries` retries only errors a
+`analyze`, `convert`, each `batch` book, and review saves share the exclusive
+`<workspace>/.convert.lock` (POSIX `flock`). Analysis and conversion hold it
+before analysis or workspace writes for the whole operation; review saves
+acquire it without blocking and return HTTP 409 when busy. The conversion lock
+also protects the temporary-WAV sweep from deleting another run's files.
+`tts.max_retries` retries only errors a
 provider marks transient (`exc.transient = True` or `provider.is_transient_error`).
 The Piper adapter marks its subprocess timeout; the Kitten adapter runs
 in-process and has no documented transient failure, so it never retries.
@@ -255,10 +257,6 @@ the original PDF before listening or distributing. The schema currently
 Manifest schema v3 is required after the second-review fixes. Existing v1 and
 v2 workspaces are intentionally rejected; re-run `analyze` with a fresh output
 directory to create a v3 workspace.
-Extraction/analysis fingerprint v20 invalidates prior analysis after safer OCR,
-pagination, heading and line-wrap classification. Existing v3 workspaces are
-re-analyzed on resume; manually approved workspaces remain protected, so use a
-fresh output directory when intentionally replacing approved analysis.
 Printed poem or section numbers in the only qualifying margin sequence can be
 mistaken for folios. Set `pdf.remove_page_numbers = false` when a book uses
 those numbers and confirm the retained text in the review workspace.
@@ -280,6 +278,14 @@ lockfile currently resolves 0.9.6. Re-encoding is automatic when a chapter is
 next converted; no manifest migration is needed. Chapter synthesis now streams
 PCM to a temporary WAV, so interrupted temporary audio is disposable.
 
+Historical upgrade notes (superseded): analysis fingerprint `analysis-v19`
+was introduced for safer folio detection and the damaged-source review gate;
+it invalidated earlier analysis caches. Chapter audio identity `mp3-v5`
+invalidated prior MP3 caches after adding the active TTS model identity,
+narration-normalization version and cover-image digest. These versions are
+retained here to explain older workspaces; the current versions are recorded
+in the later upgrade notes below.
+
 `ci.yml` pins uv 0.12.9 (`astral-sh/setup-uv` `version:`), the release that wrote
 `uv.lock` (`revision = 3`; `uv lock` with 0.12.9 leaves the file unchanged). To move to a
 newer uv, change the pin and the lockfile in the same commit and say so in the ledger.
@@ -299,6 +305,14 @@ approved workspaces remain protected. Chapter audio uses `mp3-v7` and
 `narration-normalization-v3`; its sidecar v3 records rendering inputs, including
 the footnote policy. Existing MP3 audio regenerates on the next `convert`, and
 `pack-m4b` treats v2 sidecars as stale. Chunk WAV keys remain unchanged.
+When reanalysis applies a hand edit, match chapters by generated start block,
+or by the unique new generated range containing the old generated start; never
+by chapter number. An unmatched or ambiguous edited chapter is a content-free
+conflict. The page-number candidate tie tolerance is 2pt: closer edge distances
+are considered tied and both sequences remain for review. CI runs
+`pytest -q -ra`; check the skip summary to confirm environment-gated tests ran.
+The workflow installs FFmpeg and Tesseract and sets up Node.js 22, so tests
+gated on those tools should appear as passed rather than skipped.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can

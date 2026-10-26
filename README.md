@@ -165,10 +165,17 @@ identity. Cache hits still pass the same deterministic source/ID verification
 as fresh provider responses. Malformed or mismatched records are not trusted.
 `--no-resume` disables cache reuse; turning off the cache in configuration
 does likewise. Cache files can contain model-generated text derived from the
-book and should be protected like the original PDF. Optional per-book request, provider-reported token and estimated dollar limits
-are enforced through the persistent budget ledger described below.
+book and should be protected like the original PDF. Optional per-book request,
+provider-reported token and estimated dollar limits are enforced through the
+persistent budget ledger described below.
 
 ## Optional LLM token and dollar limits
+
+Boolean CLI overrides accept either direction and default to unset, so
+configuration still applies unless you pass a flag. The paired forms include
+`--llm/--no-llm`, `--allow-remote-content/--no-allow-remote-content`,
+`--vision/--no-vision`, `--allow-single-chapter/--no-allow-single-chapter`,
+`--resume/--no-resume` and (for `batch`) `--recursive/--no-recursive`.
 
 Set the following in your TOML config under `[llm]`:
 
@@ -196,14 +203,28 @@ do not create new ledger charges. `reports/llm_usage.json` includes both
 current-run counters and persistent book totals; neither report stores book
 text, prompts, responses, or credentials.
 
-If a request crashes or returns no trustworthy usage, the ledger records an
-unresolved request. A token or dollar budget then fails closed on subsequent
-requests until the unknown charge is reviewed. Enabling a dollar limit after
-earlier unpriced calls also fails closed rather than treating them as free.
-Back up the ledger and reconcile provider billing before manually resetting
-any such entries. Changing the configured prices does not retroactively
-reprice historical calls; each request records the operator-supplied rates
-in effect at that time.
+Every HTTP attempt, including retries and compatibility fallbacks, has its own
+ledger row and counts toward `max_requests`. Sent or ambiguous requests without
+trustworthy usage are recorded as `unknown`; their recorded worst-case token
+and cost bounds count against configured budgets. A token or dollar budget
+fails closed if an older open row has no recorded bound. `budget show` displays
+request IDs, statuses and accounting without prompts or book text. After
+checking provider billing evidence, settle an unknown request with its actual
+usage or confirm that it was unbilled:
+
+~~~sh
+uv run pdf2audiobook budget resolve REQUEST_ID --output ./audiobooks/BOOK \
+  --tokens PROMPT:COMPLETION --confirm
+uv run pdf2audiobook budget resolve REQUEST_ID --output ./audiobooks/BOOK \
+  --unbilled --confirm
+~~~
+
+Changing configured prices does not retroactively reprice earlier calls;
+each row retains the operator-supplied rates in effect at that time. A
+rejected provider request still counts toward `max_requests`, but does not
+consume token or cost budget when it reports no usage. Only connection
+failures proven to happen before the request was sent are automatically
+settled as unbilled.
 
 **Important:** a single completion can exceed its budget before usage is
 reported; that response is rejected but may still be billed. Internal HTTP
