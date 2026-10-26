@@ -184,7 +184,7 @@ def _analysis_stage_fingerprints(
         )
     return {
         "extraction": fingerprint(
-            "analysis-v21",
+            "analysis-v22",
             book_hash,
             settings.pdf.model_dump(),
             *(() if extractor is None else ("extractor", extractor.name)),
@@ -264,10 +264,21 @@ def valid_mp3_sidecar(audio_path: Path) -> dict[str, object] | None:
     data = load_bounded_json(record, max_bytes=4096, max_depth=8)
     if not isinstance(data, dict):
         return None
+    rendering_inputs = data.get("rendering_inputs")
+    footnote_policy = (
+        rendering_inputs.get("footnotes") if isinstance(rendering_inputs, dict) else None
+    )
+    if not isinstance(footnote_policy, str) or footnote_policy not in {
+        "warn",
+        "inline",
+        "end",
+        "omit",
+    }:
+        return None
     try:
         valid = (
             isinstance(data.get("chapter_id"), str)
-            and data.get("sidecar_version") == 2
+            and data.get("sidecar_version") == 3
             and isinstance(data.get("text_sha256"), str)
             and isinstance(data.get("fingerprint"), str)
             and isinstance(data.get("bytes"), int)
@@ -1081,7 +1092,7 @@ def prepare_chapter_selection(
 # Bump when spoken text changes for unchanged chapter text (alignment, dashes,
 # invisible characters, pronunciation punctuation) so chapter MP3s regenerate.
 # Chunk WAV keys carry the spoken chunk text itself and need no bump.
-CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION = "narration-normalization-v2"
+CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION = "narration-normalization-v3"
 
 
 def chapter_audio_fingerprint(
@@ -1121,7 +1132,7 @@ def chapter_audio_fingerprint(
         manifest.author,
         chapter.title,
         chapter.number,
-        "mp3-v6",
+        "mp3-v7",
         *adapters,
     )
 
@@ -1319,15 +1330,12 @@ def _convert_analyzed_book(
                 from mutagen.easyid3 import EasyID3
                 from mutagen.mp3 import MP3
 
-                # A cache sidecar is tiny (three scalar fields). Never parse
-                # an unbounded or non-object JSON document from disk.
-                metadata = load_bounded_json(record, max_bytes=4096, max_depth=8)
+                metadata = valid_mp3_sidecar(output)
                 cached = (
                     isinstance(metadata, dict)
                     and metadata.get("fingerprint") == identity
                     and metadata.get("chapter_id", item.id) == item.id
-                    and metadata.get("bytes") == output.stat().st_size
-                    and metadata.get("sha256") == digest_file(output)
+                    and metadata.get("rendering_inputs") == {"footnotes": settings.pdf.footnotes}
                 )
                 if cached:
                     mp3 = MP3(output, ID3=EasyID3)
@@ -1468,7 +1476,8 @@ def _convert_analyzed_book(
             record,
             {
                 "chapter_id": item.id,
-                "sidecar_version": 2,
+                "sidecar_version": 3,
+                "rendering_inputs": {"footnotes": settings.pdf.footnotes},
                 "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 "fingerprint": identity,
                 "sha256": digest_file(output),

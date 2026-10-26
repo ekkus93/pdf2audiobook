@@ -11,7 +11,7 @@ from pdf2audiobook.pipeline import (
 
 
 def test_chapter_audio_identity_carries_the_fx9_narration_version():
-    assert CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION == "narration-normalization-v2"
+    assert CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION == "narration-normalization-v3"
     manifest = BookManifest(
         schema_version=3, input_sha256="x", title="Book", source_path="book.pdf"
     )
@@ -40,5 +40,5 @@ def test_extraction_fingerprint_is_the_fx9_generation():
     from pdf2audiobook.workspace import fingerprint
 
     assert stages["extraction"] == fingerprint(
-        "analysis-v21", "a" * 64, Settings().pdf.model_dump()
+        "analysis-v22", "a" * 64, Settings().pdf.model_dump()
     )

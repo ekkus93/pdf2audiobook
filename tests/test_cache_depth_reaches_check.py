@@ -60,7 +60,8 @@ def _owned_audio(tmp_path, **extra):
     audio.write_bytes(b"synthetic mp3 bytes")
     sidecar = {
         "chapter_id": "c1",
-        "sidecar_version": 2,
+        "sidecar_version": 3,
+        "rendering_inputs": {"footnotes": "warn"},
         "text_sha256": "0" * 64,
         "fingerprint": "f",
         "bytes": audio.stat().st_size,

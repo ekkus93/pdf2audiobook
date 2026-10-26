@@ -13,7 +13,7 @@ from pdf2audiobook.cli import app
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import render_chapter_narration, render_chapter_texts
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
-from pdf2audiobook.pipeline import chapter_audio_fingerprint
+from pdf2audiobook.pipeline import chapter_audio_fingerprint, convert_book
 from pdf2audiobook.workspace import digest_bytes, write_manifest
 
 
@@ -59,7 +59,8 @@ def add_sidecar(manifest, chapter, root, settings, *, fingerprint=None):
         json.dumps(
             {
                 "chapter_id": chapter.id,
-                "sidecar_version": 2,
+                "sidecar_version": 3,
+                "rendering_inputs": {"footnotes": settings.pdf.footnotes},
                 "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 "fingerprint": identity if fingerprint is None else fingerprint,
                 "bytes": len(payload),
@@ -149,6 +150,71 @@ def test_pack_m4b_ignores_conversion_settings_fingerprint(tmp_path, monkeypatch)
         ["pack-m4b", str(manifest_path), "--output", str(tmp_path / "book.m4b"), "--no-config"],
     )
     assert result.exit_code == 0, result.stderr
+
+
+def test_convert_omit_footnotes_then_pack_without_config_uses_sidecar_inputs(tmp_path, monkeypatch):
+    import pdf2audiobook.pipeline as pipeline
+
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"synthetic")
+    manifest, manifest_path = make_book(tmp_path)
+    manifest.blocks[0].kind = "unknown"
+    manifest.blocks.append(
+        DocumentBlock(id="note", text="Footnote.", page_index=0, kind="footnote")
+    )
+    manifest.chapters[0].end_block = 2
+    write_manifest(manifest_path, manifest)
+    settings = Settings()
+    settings.general.output_dir = str(tmp_path)
+    settings.pdf.footnotes = "omit"
+
+    class StubProvider:
+        sample_rate = 24000
+
+    def synthesize(*_args, **_kwargs):
+        return np.ones(100, dtype=np.float32)
+
+    def encode(_samples, _rate, output, **_kwargs):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"converted audio")
+
+    monkeypatch.setattr(pipeline, "analyze_book", lambda *_args, **_kwargs: manifest_path)
+    monkeypatch.setattr(pipeline, "synthesize_chunks", synthesize)
+    monkeypatch.setattr(
+        "pdf2audiobook.audio.encode_m4b", lambda *_args, **_kwargs: tmp_path / "book.m4b"
+    )
+
+    outputs = convert_book(source, settings, tts_provider=StubProvider(), encoder=encode)
+    assert len(outputs) == 1
+    sidecar = json.loads(outputs[0].with_suffix(".cache.json").read_text(encoding="utf-8"))
+    assert sidecar["rendering_inputs"] == {"footnotes": "omit"}
+    result = CliRunner().invoke(
+        app,
+        ["pack-m4b", str(manifest_path), "--output", str(tmp_path / "book.m4b"), "--no-config"],
+    )
+    assert result.exit_code == 0, result.stderr
+
+
+def test_pack_m4b_treats_v2_sidecar_as_stale(tmp_path, monkeypatch):
+    manifest, manifest_path = make_book(tmp_path)
+    output = audio_output_path(manifest, manifest.chapters[0], tmp_path)
+    add_sidecar(manifest, manifest.chapters[0], tmp_path, Settings())
+    record = output.with_suffix(".cache.json")
+    sidecar = json.loads(record.read_text(encoding="utf-8"))
+    sidecar["sidecar_version"] = 2
+    sidecar.pop("rendering_inputs")
+    record.write_text(json.dumps(sidecar), encoding="utf-8")
+    monkeypatch.setattr(
+        "pdf2audiobook.audio.encode_m4b", lambda *_args, **_kwargs: tmp_path / "x.m4b"
+    )
+
+    result = CliRunner().invoke(
+        app,
+        ["pack-m4b", str(manifest_path), "--output", str(tmp_path / "book.m4b"), "--no-config"],
+    )
+
+    assert result.exit_code == 6
+    assert "chapter(s): 1" in result.stderr
 
 
 def test_pack_omits_approved_empty_chapter_and_reports_its_number(tmp_path, monkeypatch):

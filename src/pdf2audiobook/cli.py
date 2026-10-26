@@ -831,20 +831,30 @@ def pack_m4b(
             if chapter.id in skipped_ids:
                 continue
             path = audio_output_path(manifest, chapter, manifest_path.parent)
+            metadata = valid_mp3_sidecar(path)
+            rendering_inputs = metadata.get("rendering_inputs") if metadata is not None else None
+            footnotes = (
+                rendering_inputs.get("footnotes") if isinstance(rendering_inputs, dict) else None
+            )
+            if (
+                metadata is None
+                or metadata.get("chapter_id") != chapter.id
+                or not isinstance(footnotes, str)
+            ):
+                stale_chapters.append(chapter.number)
+                continue
             try:
                 # convert reads this text back from disk with universal newlines.
                 text = (
-                    render_chapter_narration(manifest, chapter, settings.pdf.footnotes)
+                    render_chapter_narration(manifest, chapter, footnotes)
                     .replace("\r\n", "\n")
                     .replace("\r", "\n")
                 )
             except ExtractionError:
                 stale_chapters.append(chapter.number)
                 continue
-            metadata = valid_mp3_sidecar(path)
             if (
                 metadata is None
-                or metadata.get("chapter_id") != chapter.id
                 or metadata.get("text_sha256") != hashlib.sha256(text.encode("utf-8")).hexdigest()
             ):
                 stale_chapters.append(chapter.number)

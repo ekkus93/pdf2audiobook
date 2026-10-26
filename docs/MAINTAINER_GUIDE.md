@@ -292,6 +292,13 @@ dash and invisible-character handling, pronunciation punctuation), so chapter MP
 regenerate on the next `convert`. Chunk WAV keys contain the spoken chunk text and are not
 bumped: unchanged chunks stay cached. No manifest schema change; `budget` ledger rows
 without a recorded bound block token and USD budgets until `budget resolve` settles them.
+
+Upgrade note (FX10.31): analysis uses `analysis-v22` after the outline/list,
+page-number and OCR-selection corrections, so workspaces re-run analysis while
+approved workspaces remain protected. Chapter audio uses `mp3-v7` and
+`narration-normalization-v3`; its sidecar v3 records rendering inputs, including
+the footnote policy. Existing MP3 audio regenerates on the next `convert`, and
+`pack-m4b` treats v2 sidecars as stale. Chunk WAV keys remain unchanged.
 `BookManifest.approved` and `Chapter.manually_approved` prevent accidental
 destructive reanalysis. Only explicitly accepted, source-anchored
 `CleanupEdit` entries affect derived text. OCR and pagination heuristics can

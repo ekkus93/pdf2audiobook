@@ -1,5 +1,6 @@
 """Resume must verify ID3 chapter identity even with a matching sidecar checksum."""
 
+import hashlib
 import json
 import shutil
 
@@ -91,6 +92,10 @@ def test_mp3_resume_checks_actual_chapter_id3_tags(
     sidecar.write_text(
         json.dumps(
             {
+                "chapter_id": chapter.id,
+                "sidecar_version": 3,
+                "rendering_inputs": {"footnotes": settings.pdf.footnotes},
+                "text_sha256": hashlib.sha256(chapter_text.encode("utf-8")).hexdigest(),
                 "fingerprint": pipeline.chapter_audio_fingerprint(
                     chapter_text,
                     settings,

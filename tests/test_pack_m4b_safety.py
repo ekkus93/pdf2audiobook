@@ -51,7 +51,8 @@ def add_sidecar(path, manifest, chapter, settings, *, fingerprint=None):
         json.dumps(
             {
                 "chapter_id": chapter.id,
-                "sidecar_version": 2,
+                "sidecar_version": 3,
+                "rendering_inputs": {"footnotes": settings.pdf.footnotes},
                 "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 "fingerprint": identity if fingerprint is None else fingerprint,
                 "bytes": len(payload),
