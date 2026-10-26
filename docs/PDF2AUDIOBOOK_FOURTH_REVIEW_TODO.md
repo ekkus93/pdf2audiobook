@@ -1,7 +1,7 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.21 complete; FX10.22 is next.
-**Date:** 2026-10-25
+**Status:** FX10.00–FX10.22 complete; FX10.23 is next.
+**Date:** 2026-10-26
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
 **Previous review TODO:** docs/PDF2AUDIOBOOK_REVIEW_FIXES_TODO.md (FX0–FX9)
@@ -187,10 +187,10 @@
 - [x] FX10.21 Reject cumulative overflow at settlement (R101).
   - [x] FX10.21a Regression test: two 2^62-token responses leave `budget show` working, with the second row `unknown` and resolvable.
   - [x] FX10.21b Check cumulative totals inside the settlement transaction; settle with validated usage only.
-- [ ] FX10.22 Make `reserve` fail closed without a bound under any budget (R102).
-  - [ ] FX10.22a Regression test: an unbounded `reserve` under a token budget is refused.
-  - [ ] FX10.22b Refuse unbounded reservations under a token or USD budget. Amend the R70 decision text.
-  - [ ] FX10.22c Add truthfully named tests for the conditions the mis-named `…_blocks_…`, overspend and exact-exhaustion tests describe. Rename the existing tests to what they assert, with a reason in the commit message.
+- [x] FX10.22 Make `reserve` fail closed without a bound under any budget (R102).
+  - [x] FX10.22a Regression test: an unbounded `reserve` under a token budget is refused.
+  - [x] FX10.22b Refuse unbounded reservations under a token or USD budget. Amend the R70 decision text.
+  - [x] FX10.22c Add truthfully named tests for the conditions the mis-named `…_blocks_…`, overspend and exact-exhaustion tests describe. Rename the existing tests to what they assert, with a reason in the commit message.
 - [ ] FX10.23 Parameter detection and model resolution (R103).
   - [ ] FX10.23a Test: a context-length 400 mentioning `max_tokens`. If it shows the misfire, require an explicit unsupported-parameter phrase and never persist a capability from a context-length error. Otherwise record "not reproducible" in the ledger.
   - [ ] FX10.23b Make `_model()` use the pipeline resolver. Test `auto` with two served models through the real `resolve_model`.
@@ -297,3 +297,4 @@
 | 2026-10-25 | ec618d407dee62cbaaaffa988ec5c2025664e2b9 | FX10.19a–b (R104): named settlement paths use a `Literal` outcome; shared token and complete-usage validation serves provider, cache and ledger; capability paths are centralized and unchanged files are not rewritten; direct budgeted wrappers use per-attempt ledger accounting. | No behavior-specific tests added per R104; full local `/verify` passed unchanged: lock check, Ruff, format, mypy (24 source files), 1455 passed, 1 optional Kitten skip. Exact-head CI [40246671206](https://github.com/ekkus93/pdf2audiobook/actions/runs/40246671206) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-25 | c3c91eaf96ed0f0e209bfe2e0c3ae980a0c75439 | FX10.20a–b (R100): JSON-mode rejection without usage settles as `rejected`; provider capability files remember the unsupported JSON mode, so later provider instances omit `response_format`. | At parent 1b4cf1a, `tests/test_llm_retry_budget_attempts.py::test_json_mode_rejection_is_rejected_and_capability_persists_between_providers` failed because `response_format` was retried across each provider and rejected rows were not settled `rejected`. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1456 passed, 1 optional Kitten skip. Exact-head CI [40246884881](https://github.com/ekkus93/pdf2audiobook/actions/runs/40246884881) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
 | 2026-10-26 | dca814c26131a9faacf06a5e0586ec4dbc6b7d66 | FX10.21a–b (R101): token-usage settlement validates the candidate ledger totals inside a savepoint in the settlement transaction; overflowing or unrepresentable candidates remain `unknown` with their bound; provider settlement uses the same capped counters as in-memory totals. | At parent 0f20082, `tests/test_llm_cumulative_usage_settlement.py::test_cumulative_usage_overflow_is_unknown_and_resolvable` failed: `budget show` returned exit 5 with cumulative token overflow. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1457 passed, 1 optional Kitten skip. Exact-head CI [40247192998](https://github.com/ekkus93/pdf2audiobook/actions/runs/40247192998) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract were installed. | None |
+| 2026-10-26 | e39e3d16b27dc3f2cf017176f86feb87990a145f | FX10.22a–c (R102): `reserve` requires token and/or USD bounds whenever the matching book budget is active; updated R70 policy and corrected misleading budget tests, with explicit postflight overspend and exact-exhaustion coverage. | At parent ca9e384, `tests/test_llm_budget_fail_closed.py::test_reserve_requires_a_bound_for_each_active_budget[100-None-None-None]` failed as expected. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1466 passed, 1 optional Kitten skip. Exact-head CI [40247580412](https://github.com/ekkus93/pdf2audiobook/actions/runs/40247580412) passed on Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.23 parameter detection and model resolution |
