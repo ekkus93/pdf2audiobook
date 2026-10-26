@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.25 complete; FX10.26 is next.
+**Status:** FX10.00–FX10.26 complete; FX10.27 is next.
 **Date:** 2026-10-26
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -201,15 +201,15 @@
 - [x] FX10.25 Turn every unspeakable paragraph into a pause (R105).
   - [x] FX10.25a Regression tests: `# # #`, `~~~`, `• • •`, `———` and `⁂` each make one pause entry and no TTS call, and coverage passes.
   - [x] FX10.25b Detect pauses from the spoken form (no letters or digits). Count them in `pause_count`.
-- [ ] FX10.26 Narration rules, remaining cases (R106).
-  - [ ] FX10.26a Regression tests:
+- [x] FX10.26 Narration rules, remaining cases (R106).
+  - [x] FX10.26a Regression tests:
     - `said—Hermione` applies the `hermione` key;
     - `O’Brien said.` applies an `o’brien` key;
     - `Dr.?` reads "Doctor?";
     - `1–<U+200B>2` reads "1 to 2";
     - `"—"` and `(—)` become pauses;
     - a punctuation-only key is rejected at load.
-  - [ ] FX10.26b Implement each rule. Extend the alignment property test to include pronunciations and chunk sizes from 20 to the default.
+  - [x] FX10.26b Implement each rule. Extend the alignment property test to include pronunciations and chunk sizes from 20 to the default.
 - [ ] FX10.27 Bound progress bookkeeping (R107).
   - [ ] FX10.27a Regression tests:
     - a 500k-character chapter with a no-op TTS keeps the correct `pause_count` within a time budget;
@@ -301,3 +301,4 @@
 | 2026-10-26 | 20a8d28b5ea1bfa040414d1160139cb2aba58ed4 | FX10.23a–b (R103): capability fallback now requires explicit unsupported-parameter wording and excludes context-length errors; `_model()` delegates to `resolve_model()` so ambiguous auto selection fails before chat. | At parent 5fb7c2b, `tests/test_llm_retry_budget_attempts.py::test_context_length_error_mentioning_max_tokens_does_not_remove_or_persist_cap` showed a context error marked `max_tokens` unsupported, and `tests/test_llm_provider_matrix.py::test_auto_model_with_two_served_models_fails_through_real_resolver` sent a chat request instead of raising. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1468 passed, 1 optional Kitten skip. Exact-head CI [40247879838](https://github.com/ekkus93/pdf2audiobook/actions/runs/40247879838) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.24 merged §6.3 budget amendment and clarified the parent budget spec |
 | 2026-10-26 | 20a8d28b5ea1bfa040414d1160139cb2aba58ed4 | FX10.24: merged the §11 §6.3 budget amendment and corrected the parent §6.3 text: unresolved sent/ambiguous attempts count against budgets at their recorded bound and are resolvable; only legacy open rows without bounds block budgets pending resolution. | `git diff --check` passed; documentation-only change. | FX10.25 unspeakable paragraphs become pauses |
 | 2026-10-26 | df5b10ed74b88e3046e79c307d0d49ab11c8a882 | FX10.25a–b (R105): every nonempty paragraph whose normalized spoken form has no letters or digits produces one pause mapping and increments `pause_count`; pause-only chapters render silence without a TTS call. Pipeline pause counts use the same range helper. | At parent fa9e475, all five required punctuation-only paragraph cases raised `Chapter has no speakable text` instead of recording pauses. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1473 passed, 1 optional Kitten skip. Exact-head CI [40248126997](https://github.com/ekkus93/pdf2audiobook/actions/runs/40248126997) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.26 narration rules, remaining cases |
+| 2026-10-26 | 76a559e6240d420e400f0e597a931bc743c9eb72 | FX10.26a–b (R106): narration normalization is shared by pronunciation keys and spoken tokens; internal dash-joined words use pronunciation lookups; invisible characters are stripped before numeric-range rewrites; `Dr.?` preserves only `?`; punctuation-only keys are refused; quoted/bracketed bare dashes become pauses. Alignment coverage spans chunk sizes 20–350 with pronunciations. | At parent 2b2e312, tests reproduced missed dash-joined and typographic-apostrophe lookups, `Doctor.?`, `1, 2` for the invisible numeric-range case, and acceptance of `...` as a pronunciation key. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1481 passed, 1 optional Kitten skip. Exact-head CI [40248376352](https://github.com/ekkus93/pdf2audiobook/actions/runs/40248376352) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.27 bounded progress bookkeeping |
