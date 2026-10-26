@@ -7,7 +7,7 @@ import httpx
 import numpy as np
 import pytest
 
-from pdf2audiobook.audio import split_sentences, synthesize_chunks
+from pdf2audiobook.audio import read_synthesis_progress, split_sentences, synthesize_chunks
 from pdf2audiobook.config import LLM, General, Pdf, Settings
 from pdf2audiobook.errors import AudioError, InputError
 from pdf2audiobook.llm import OpenAICompatibleProvider
@@ -87,7 +87,7 @@ def test_many_chunk_interruption_resumes_only_valid_checkpoints(tmp_path):
     failed = InterruptibleVoice(fail_at=7)
     with pytest.raises(AudioError, match="TTS synthesis failed"):
         synthesize_chunks(narration, failed, **args)
-    state = json.loads(args["progress_file"].read_text())
+    state = read_synthesis_progress(args["progress_file"])
     assert state["completed_chunks"] == 6
     assert state["status"] == "failed"
     assert len(state["chunks"]) == chunk_count
@@ -96,7 +96,7 @@ def test_many_chunk_interruption_resumes_only_valid_checkpoints(tmp_path):
     audio = synthesize_chunks(narration, restarted, **args)
     assert audio.size > 0
     assert restarted.calls == chunk_count - 6
-    assert json.loads(args["progress_file"].read_text())["status"] == "completed"
+    assert read_synthesis_progress(args["progress_file"])["status"] == "completed"
     # Even a new process/provider does not re-synthesize completed, valid WAVs.
     third = InterruptibleVoice()
     synthesize_chunks(narration, third, **args)

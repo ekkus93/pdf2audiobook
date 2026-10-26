@@ -1,11 +1,10 @@
 """TTS transient failures use bounded retries and failed progress status."""
 
-import json
-
 import numpy as np
 import pytest
 
 import pdf2audiobook.audio as audio
+from pdf2audiobook.audio import read_synthesis_progress
 from pdf2audiobook.errors import AudioError
 
 
@@ -46,7 +45,7 @@ def test_transient_tts_failure_retries_and_completes(monkeypatch, tmp_path):
     result = _synthesize(provider, tmp_path)
     assert provider.calls == 2
     assert result.size == 24
-    assert json.loads((tmp_path / "progress.json").read_text())["status"] == "completed"
+    assert read_synthesis_progress(tmp_path / "progress.json")["status"] == "completed"
 
 
 def test_persistent_tts_failure_stops_after_configured_retries(monkeypatch, tmp_path):
@@ -56,7 +55,7 @@ def test_persistent_tts_failure_stops_after_configured_retries(monkeypatch, tmp_
         _synthesize(provider, tmp_path, max_retries=2)
     assert provider.calls == 3
     assert "private narration" not in str(raised.value)
-    progress = json.loads((tmp_path / "progress.json").read_text())
+    progress = read_synthesis_progress(tmp_path / "progress.json")
     assert progress["status"] == "failed"
     assert progress["chunks"][0]["status"] == "failed"
 

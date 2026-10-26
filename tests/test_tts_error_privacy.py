@@ -1,12 +1,11 @@
 """TTS numeric conversion and provider failures must not echo narration."""
 
-import json
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from pdf2audiobook.audio import synthesize_chunks, wav_bytes
+from pdf2audiobook.audio import read_synthesis_progress, synthesize_chunks, wav_bytes
 from pdf2audiobook.errors import AudioError
 
 PRIVATE = "SYNTHETIC_BOOK_TEXT_SENTINEL_9021"
@@ -57,7 +56,7 @@ def test_provider_error_does_not_echo_narration_and_marks_progress_failed(tmp_pa
     assert str(raised.value) == "TTS synthesis failed; verify model and voice"
     assert PRIVATE not in str(raised.value)
     assert raised.value.__cause__ is None
-    record = json.loads(progress.read_text(encoding="utf-8"))
+    record = read_synthesis_progress(progress)
     assert record["status"] == "failed"
     assert record["chunks"][0]["status"] == "failed"
     assert not list((tmp_path / "cache").glob("*.wav"))

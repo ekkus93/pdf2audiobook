@@ -1,7 +1,5 @@
 """Spoken-text normalization and scene-break handling preserve source spans."""
 
-import json
-
 import numpy as np
 import pytest
 
@@ -9,6 +7,7 @@ from pdf2audiobook.audio import (
     _NARRATION_TRANSLATION,
     chunk_source_ranges,
     normalize_narration_text,
+    read_synthesis_progress,
     split_sentences,
     synthesize_chunks,
 )
@@ -62,7 +61,7 @@ def test_scene_break_creates_pause_without_tts_call(tmp_path):
         cache=tmp_path / "cache",
         progress_file=progress_path,
     )
-    progress = json.loads(progress_path.read_text())
+    progress = read_synthesis_progress(progress_path)
     assert provider.calls == ["Before sentence.", "After sentence."]
     assert progress["chunks"][1]["paragraph_boundary_before"] is True
     assert progress["pause_count"] == 1
@@ -85,7 +84,7 @@ def test_unspeakable_paragraph_becomes_one_pause_without_tts(paragraph, tmp_path
         progress_file=progress_path,
     )
 
-    progress = json.loads(progress_path.read_text())
+    progress = read_synthesis_progress(progress_path)
     assert provider.calls == []
     assert progress["pause_count"] == 1
     assert [item["kind"] for item in progress["mapping"]] == ["pause"]
@@ -132,7 +131,7 @@ def test_bare_dash_inside_quotes_or_brackets_becomes_pause(paragraph, tmp_path):
         cache=tmp_path / "cache",
         progress_file=progress_path,
     )
-    progress = json.loads(progress_path.read_text())
+    progress = read_synthesis_progress(progress_path)
     assert provider.calls == []
     assert progress["pause_count"] == 1
     assert [item["kind"] for item in progress["mapping"]] == ["pause"]

@@ -1,11 +1,14 @@
 """TTS engines with smaller text windows receive bounded, source-aligned chunks."""
 
-import json
-
 import numpy as np
 import pytest
 
-from pdf2audiobook.audio import chunk_source_ranges, split_sentences, synthesize_chunks
+from pdf2audiobook.audio import (
+    chunk_source_ranges,
+    read_synthesis_progress,
+    split_sentences,
+    synthesize_chunks,
+)
 from pdf2audiobook.errors import AudioError
 
 
@@ -51,7 +54,7 @@ def test_provider_limit_controls_all_audio_chunks_and_source_offsets(tmp_path):
     assert [source[start:end].split() for start, end, _ in offsets] == [
         chunk.split() for chunk in expected
     ]
-    ledger = json.loads(opts["progress_file"].read_text(encoding="utf-8"))
+    ledger = read_synthesis_progress(opts["progress_file"])
     assert ledger["total_chunks"] == len(expected)
     assert ledger["completed_chunks"] == len(expected)
     assert all(chunk["status"] == "completed" for chunk in ledger["chunks"])

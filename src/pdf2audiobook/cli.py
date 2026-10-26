@@ -26,6 +26,7 @@ from pdf2audiobook.errors import (
     AudioError,
     ConfigError,
     ExtractionError,
+    InputError,
     LLMError,
     PartialConversionError,
     WorkspaceError,
@@ -342,8 +343,14 @@ def inspect(
             }
             from pdf2audiobook.jsonio import load_bounded_json
 
+            status_path = source.parent / "reports" / "conversion_status.json"
+            try:
+                if status_path.stat().st_size > 1024 * 1024:
+                    raise InputError("Conversion status file exceeds safe size limit")
+            except FileNotFoundError:
+                pass
             conversion_status = load_bounded_json(
-                source.parent / "reports" / "conversion_status.json",
+                status_path,
                 max_bytes=1024 * 1024,
                 max_depth=16,
             )

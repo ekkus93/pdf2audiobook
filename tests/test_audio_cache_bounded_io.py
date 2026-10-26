@@ -7,7 +7,7 @@ import wave
 import numpy as np
 import pytest
 
-from pdf2audiobook.audio import read_wav, synthesize_chunks
+from pdf2audiobook.audio import read_synthesis_progress, read_wav, synthesize_chunks
 from pdf2audiobook.errors import AudioError
 
 
@@ -105,7 +105,10 @@ def test_generated_chunk_exceeding_cache_bound_fails_with_progress(monkeypatch, 
         )
     assert voice.calls == 1
     assert not list(tmp_path.glob("*.wav"))
-    assert '"status": "failed"' in progress.read_text(encoding="utf-8")
+    state = read_synthesis_progress(progress)
+    assert state is not None
+    assert state["status"] == "failed"
+    assert state["chunks"][0]["status"] == "failed"
 
 
 def test_wave_parser_error_does_not_chain_untrusted_diagnostics(monkeypatch):

@@ -1,11 +1,15 @@
 """Source-aligned speech chunks and paragraph pause behavior."""
 
 import hashlib
-import json
 
 import numpy as np
 
-from pdf2audiobook.audio import chunk_source_ranges, split_sentences, synthesize_chunks
+from pdf2audiobook.audio import (
+    chunk_source_ranges,
+    read_synthesis_progress,
+    split_sentences,
+    synthesize_chunks,
+)
 
 
 class FakeVoice:
@@ -41,9 +45,8 @@ def test_chunk_mapping_preserves_source_offsets_and_punctuation(tmp_path):
         progress_file=ledger_path,
     )
     assert audio.size == 2400 * 2 + 4800  # Doubled paragraph pause.
-    import json
 
-    ledger = json.loads(ledger_path.read_text())
+    ledger = read_synthesis_progress(ledger_path)
     assert ledger["status"] == "completed"
     for entry, (a, b, boundary) in zip(ledger["chunks"], spans, strict=True):
         assert (entry["source_start"], entry["source_end"]) == (a, b)
@@ -77,7 +80,7 @@ def test_pronunciation_dictionary_changes_speech_but_preserves_exact_source_rang
         pronunciations=dictionary,
         progress_file=tmp_path / "wav" / "progress" / "test.json",
     )
-    progress = json.loads(next((tmp_path / "wav" / "progress").glob("*.json")).read_text())
+    progress = read_synthesis_progress(next((tmp_path / "wav" / "progress").glob("*.json")))
     assert progress["chunks"][0]["source_start"] == 0
     assert progress["chunks"][0]["source_end"] == len(text)
     assert progress["chunks"][0]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()
@@ -103,7 +106,7 @@ def test_paragraph_voice_markers_assign_subsequent_narration_and_preserve_source
         ("Narrator paragraph.", "DefaultVoice"),
         ("Dialogue starts here.", "OtherVoice"),
     ]
-    ledger = json.loads(ledger_path.read_text())
+    ledger = read_synthesis_progress(ledger_path)
     dialogue_range = ledger["chunks"][1]
     start = text.index("Dialogue starts here.")
     assert (dialogue_range["source_start"], dialogue_range["source_end"]) == (

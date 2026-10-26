@@ -1,11 +1,9 @@
 """Atomic TTS chunk progress ledgers and interruption recovery."""
 
-import json
-
 import numpy as np
 import pytest
 
-from pdf2audiobook.audio import split_sentences, synthesize_chunks
+from pdf2audiobook.audio import read_synthesis_progress, split_sentences, synthesize_chunks
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.workspace import digest_file
 
@@ -39,7 +37,7 @@ def options(tmp_path):
 
 
 def read_progress(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    return read_synthesis_progress(path)
 
 
 def test_interrupted_ledger_persists_and_resume_verifies_cache(tmp_path):
@@ -98,3 +96,50 @@ def test_progress_fingerprint_invalidation_and_no_resume(tmp_path):
     assert read_progress(opts["progress_file"])["fingerprint"] != old_fingerprint
     synthesize_chunks(TEXT, provider, **dict(opts, use_cache=False))
     assert provider.calls == 6
+
+
+def test_half_million_character_chapter_keeps_pause_count_with_linear_progress(tmp_path):
+    import time
+
+    class NoOpProvider:
+        sample_rate = 24000
+        max_chars_per_chunk = 1000
+
+        def generate(self, _text, *, voice, speed):
+            return np.zeros(1, dtype=np.float32)
+
+    source = "word " * 100_000 + "\n\n# # #"
+    assert len(source) >= 500_000
+    progress_file = tmp_path / "progress" / "large.jsonl"
+    started = time.monotonic()
+    synthesize_chunks(
+        source,
+        NoOpProvider(),
+        model="noop",
+        voice="voice",
+        speed=1,
+        pause_ms=0,
+        cache=tmp_path / "cache",
+        use_cache=False,
+        progress_file=progress_file,
+    )
+    elapsed = time.monotonic() - started
+
+    progress = read_progress(progress_file)
+    assert progress["pause_count"] == 1
+    assert progress["completed_chunks"] == progress["total_chunks"]
+    assert progress["status"] == "completed"
+    assert elapsed < 15
+
+
+def test_oversized_progress_record_warns_and_is_unavailable(tmp_path, caplog):
+    from pdf2audiobook.audio import _MAX_PROGRESS_RECORD_BYTES
+
+    path = tmp_path / "oversized.jsonl"
+    path.write_bytes(b"x" * (_MAX_PROGRESS_RECORD_BYTES + 100) + b"\n")
+    with caplog.at_level("WARNING", logger="pdf2audiobook"):
+        assert read_progress(path) is None
+    assert any(
+        isinstance(record.msg, dict) and record.msg.get("event") == "progress_unavailable"
+        for record in caplog.records
+    )

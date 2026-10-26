@@ -17,6 +17,7 @@ from pdf2audiobook.audio import (
     audio_output_path,
     encode_mp3,
     read_cover_image,
+    read_synthesis_progress,
     synthesize_chunks,
     unspeakable_pause_ranges,
     voice_marker_ids,
@@ -244,6 +245,17 @@ def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]
         if not isinstance(prior_stages.get(name), str) or prior_stages[name] != value
     )
     return changed or ["analysis"]
+
+
+def _progress_report_fields(
+    progress: dict[str, object] | None,
+) -> tuple[int | None, list[object] | None]:
+    """Return report values, preserving unavailable progress as null fields."""
+    mapping = progress.get("mapping") if progress is not None else None
+    if not isinstance(mapping, list):
+        return None, None
+    pauses = [row for row in mapping if isinstance(row, dict) and row.get("kind") == "pause"]
+    return len(pauses), mapping
 
 
 def valid_mp3_sidecar(audio_path: Path) -> dict[str, object] | None:
@@ -1393,12 +1405,9 @@ def _convert_analyzed_book(
                 track=item.number,
                 cover_image=cover_image,
             )
-            progress = load_bounded_json(progress_path, max_bytes=1024 * 1024, max_depth=16)
-            mapping = progress.get("mapping", []) if isinstance(progress, dict) else []
-            pauses = [
-                row for row in mapping if isinstance(row, dict) and row.get("kind") == "pause"
-            ]
-            conversion_status[item.id]["pause_count"] = len(pauses)
+            progress = read_synthesis_progress(progress_path)
+            pause_count, mapping = _progress_report_fields(progress)
+            conversion_status[item.id]["pause_count"] = pause_count
             conversion_status[item.id]["chunk_mapping"] = mapping
         except AudioError:
             failed_chapters.add(item.number)
@@ -1452,15 +1461,21 @@ def _convert_analyzed_book(
                     level=logging.WARNING,
                     reason="candidate_uninspectable",
                 )
+    pause_counts = [row.get("pause_count") for row in conversion_status.values()]
+    total_pause_count = (
+        sum(
+            value
+            for value in pause_counts
+            if isinstance(value, int) and not isinstance(value, bool)
+        )
+        if all(isinstance(value, int) and not isinstance(value, bool) for value in pause_counts)
+        else None
+    )
     write_json(
         manifest_path.parent / "reports" / "conversion_status.json",
         {
             "schema_version": 1,
-            "pause_count": sum(
-                row["pause_count"]
-                for row in conversion_status.values()
-                if isinstance(row.get("pause_count"), int)
-            ),
+            "pause_count": total_pause_count,
             "chapters": sorted(
                 conversion_status.values(),
                 key=lambda value: value["number"] if isinstance(value.get("number"), int) else 0,
