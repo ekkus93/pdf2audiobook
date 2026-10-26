@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.30 complete; FX10.31 is next.
+**Status:** FX10.00–FX10.31 complete; FX10.32 is next.
 **Date:** 2026-10-26
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -231,16 +231,16 @@
   - [x] FX10.30b Budget gaps: FX4.01d, FX8.08c, FX8.09a, FX8.09b.
   - [x] FX10.30c Extraction gaps: FX8.02c/FX9.16a (folio near body text, failing at 2904f19), FX9.03 (replace "D. H. LAWRENCE"; whitespace one-letter numeral).
   - [x] FX10.30d Audio gaps: FX8.14a (batch validation), FX8.14e (`OSError` injection, chapter size limit), FX9.17 (version constant reaches the fingerprint).
-- [ ] FX10.31 Bump the fingerprints once (spec §10).
-  - [ ] FX10.31a Bump the extraction/analysis fingerprint to `analysis-v22` for R82, R96, R97 and R98.
-  - [ ] FX10.31b In one commit, make the R84 second step together with the chapter audio fingerprint bump for R105 and R106, so users regenerate audio only once:
+- [x] FX10.31 Bump the fingerprints once (spec §10).
+  - [x] FX10.31a Bump the extraction/analysis fingerprint to `analysis-v22` for R82, R96, R97 and R98.
+  - [x] FX10.31b In one commit, make the R84 second step together with the chapter audio fingerprint bump for R105 and R106, so users regenerate audio only once:
     - record the rendering inputs (at least the footnote policy) in each MP3 sidecar and set `sidecar_version = 3`;
     - render with the recorded inputs in `pack-m4b`.
 
     Regression tests:
     - convert with `pdf.footnotes = "omit"`, then `pack-m4b --no-config`, verifies freshness;
     - a v2 sidecar is stale.
-  - [ ] FX10.31c Add the MAINTAINER_GUIDE upgrade notes, keeping the earlier notes as history. Merge the spec §11 §9 amendment (sidecars record rendering inputs).
+  - [x] FX10.31c Add the MAINTAINER_GUIDE upgrade notes, keeping the earlier notes as history. Merge the spec §11 §9 amendment (sidecars record rendering inputs).
 - [ ] FX10.32 Update the docs (R112).
   - [ ] FX10.32a README.md: rewrite the budget section; document the paired `--no-*` forms and the `budget resolve` syntax.
   - [ ] FX10.32b Parent spec: R31/R90 logging in §7, R75/R81 matching in §5; confirm every spec §11 amendment is merged.
@@ -306,3 +306,4 @@
 | 2026-10-26 | 5a3f7ca095905e1c23c087694a37be4093b1601d | FX10.28a–b (R108): Kitten voice discovery raises sanitized `TTSError` on failure; supported providers must supply a string list; providers such as Piper explicitly declare no voice list; marker validation failures record `voice_list_unavailable` and exit 7. | Local `/verify`: 1487 passed, 1 optional Kitten skip; final exit-7 assertion passed in the focused test. Exact-head CI [40249223933](https://github.com/ekkus93/pdf2audiobook/actions/runs/40249223933) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.29 small audio fixes and code health |
 | 2026-10-26 | cc1a83e6a2f3b9ea68485c880bad993a03fd8532 | FX10.29a–b (R109): cover bytes/hash are shared across the run, WAV writes use an owned byte counter, narration version constants are clearer, dead code is removed, and TTS provider/voice/speed selection is shared. | Local `/verify`: lock check, Ruff, format, mypy (24 files), 1488 passed, 1 optional Kitten skip. Exact-head CI [40249587505](https://github.com/ekkus93/pdf2audiobook/actions/runs/40249587505) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.30 remaining regression tests |
 | 2026-10-26 | a815144543e59fc77de5779eeb10dfe44de1c172 | FX10.30a–d (R110): added the missing manifest, review UI, budget, extraction and audio regressions; refined the existing warning and stage-event assertions. Folio-near-body removal fails at 2904f19 as required. | At 6eedfa4, the ambiguous-page acknowledgement, structured damaged-source warning, and warning-count tests failed. Local `/verify`: lock check, Ruff, format, mypy (24 files), 1505 passed, 1 optional Kitten skip. Initial exact-head CI [40250323860](https://github.com/ekkus93/pdf2audiobook/actions/runs/40250323860) found an enabled-Ollama test fixture and privileged-port test assumption; follow-up [40250510077](https://github.com/ekkus93/pdf2audiobook/actions/runs/40250510077) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.31 coordinated analysis/audio fingerprint and sidecar bump |
+| 2026-10-26 | ba51e8fcd6cb460602651acefeafe47d5b9a5fc5 | FX10.31a–c: bumped analysis/audio identities, recorded narration inputs in v3 MP3 sidecars and made `pack-m4b` render with those recorded inputs; merged the §9 amendment and added the upgrade note. | Local `/verify`: lock check, Ruff, format, mypy (24 files), 1507 passed, 1 optional Kitten skip. Exact-head CI [40250700211](https://github.com/ekkus93/pdf2audiobook/actions/runs/40250700211) passed Python 3.11–3.13; each reported 1507 passed, 1 optional Kitten skip, and wheel/sdist smoke passed. FFmpeg, Tesseract and Node.js 22 were installed, so their gated tests ran. | FX10.32 documentation and closure |
