@@ -49,6 +49,7 @@ def test_connect_failure_is_unbilled_and_does_not_block_budget(tmp_path):
         max_requests=1,
         max_tokens=3000,
         max_usd=None,
+        upper_bound_tokens=10,
     )
 
 
@@ -137,4 +138,5 @@ def test_budget_cli_resolves_unknown_usage_from_confirmed_counts(tmp_path):
         max_requests=None,
         max_tokens=100,
         max_usd=None,
+        upper_bound_tokens=10,
     )

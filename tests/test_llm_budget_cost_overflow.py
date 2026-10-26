@@ -26,6 +26,7 @@ def test_finite_but_unrepresentable_cost_fails_closed(tmp_path, cost):
             max_requests=None,
             max_tokens=None,
             max_usd=1.0,
+            upper_bound_usd="0",
         ),
         lambda: ledger.check_spend(max_tokens=None, max_usd=1.0),
     ]

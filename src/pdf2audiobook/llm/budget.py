@@ -263,8 +263,11 @@ class BookLLMBudgetLedger:
         upper_bound_tokens: int | None = None,
         upper_bound_usd: str | None = None,
     ) -> int:
-        """Reserve one attempt. A missing bound is stored as unbounded and blocks later budgeted
-        requests until the row is resolved."""
+        """Reserve one attempt; active token or USD budgets require their matching bound."""
+        if max_tokens is not None and upper_bound_tokens is None:
+            raise LLMError("Per-book token budget requires a bounded request")
+        if max_usd is not None and upper_bound_usd is None:
+            raise LLMError("Per-book cost budget requires a bounded request cost")
         try:
             with self._connect() as connection:
                 connection.execute("BEGIN IMMEDIATE")
@@ -282,8 +285,7 @@ class BookLLMBudgetLedger:
                 ):
                     raise LLMError("Per-book LLM token budget cannot cover the next request")
                 if max_usd is not None:
-                    if upper_bound_usd is None:
-                        raise LLMError("Per-book cost budget requires a bounded request cost")
+                    assert upper_bound_usd is not None
                     if Decimal(stats["_exact_cost_usd"]) + Decimal(upper_bound_usd) > Decimal(
                         str(max_usd)
                     ):

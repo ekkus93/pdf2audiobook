@@ -44,6 +44,7 @@ def test_corrupt_complete_counter_blocks_reporting_and_reservation(
             max_requests=10,
             max_tokens=100,
             max_usd=None,
+            upper_bound_tokens=1,
         )
     with pytest.raises(LLMError, match="Invalid per-book LLM budget ledger entries"):
         ledger.check_spend(max_tokens=100, max_usd=None)

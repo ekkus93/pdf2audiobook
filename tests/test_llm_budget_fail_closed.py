@@ -84,6 +84,44 @@ def test_legacy_open_row_without_a_bound_blocks_a_token_budget(tmp_path):
     )
 
 
+@pytest.mark.parametrize(
+    ("max_tokens", "max_usd", "upper_bound_tokens", "upper_bound_usd"),
+    [
+        (100, None, None, None),
+        (None, 1.0, None, None),
+    ],
+)
+def test_reserve_requires_a_bound_for_each_active_budget(
+    tmp_path, max_tokens, max_usd, upper_bound_tokens, upper_bound_usd
+):
+    ledger = BookLLMBudgetLedger(tmp_path / "unbounded.sqlite3")
+
+    with pytest.raises(LLMError, match="requires a bounded request"):
+        ledger.reserve(
+            request_hash="unbounded",
+            provider_hash="provider",
+            max_requests=None,
+            max_tokens=max_tokens,
+            max_usd=max_usd,
+            upper_bound_tokens=upper_bound_tokens,
+            upper_bound_usd=upper_bound_usd,
+        )
+
+    assert ledger.totals()["requests_started"] == 0
+
+
+def test_reserve_without_token_or_cost_budget_allows_missing_bounds(tmp_path):
+    ledger = BookLLMBudgetLedger(tmp_path / "unbounded.sqlite3")
+    call_id = ledger.reserve(
+        request_hash="unbounded",
+        provider_hash="provider",
+        max_requests=None,
+        max_tokens=None,
+        max_usd=None,
+    )
+    assert call_id == 1
+
+
 def _provider(respond, **kwargs):
     return OpenAICompatibleProvider(
         provider="stub",

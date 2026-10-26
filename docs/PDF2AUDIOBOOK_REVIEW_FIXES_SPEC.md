@@ -894,7 +894,7 @@ These add to §2 and §8.2; they don't replace them.
 - The image part of the upper bound is based on compressed PNG bytes, which isn't conservative.
 *Required:*
 - Under a token or USD budget, never send a request without an output cap. When both cap parameters are rejected, settle the attempt `rejected` and fail with a content-free error saying the provider doesn't accept an output cap.
-- `reserve` has no zero default. Decision recorded in FX9.02: its bound parameter is `None` by default, which stores the row as unbounded; existing tests reserve without a bound, so the parameter is not made mandatory. Production callers (`cache.py`) always pass a bound. An `unknown` or `pending` row without a bound blocks new requests under a token or USD budget, as before R49, with a message pointing to `budget resolve`.
+- `reserve` has no zero default. Its optional bound parameters remain `None` for callers without a token or USD budget. When either budget is active, the matching bound is required; otherwise reservation is refused. An `unknown` or `pending` row without a bound, including a legacy row, blocks later budgeted requests with a message pointing to `budget resolve`.
 - `rejected` applies only to 4xx responses other than 408 and 429. A 429 after the last retry stays `unknown`.
 - Settlement takes a typed outcome (`completed`, `unknown`, `rejected`) separate from usage.
 - The image bound comes from decoded pixel dimensions using the most expensive tile rule among supported providers, and is never less than the encoded request's UTF-8 byte length.
