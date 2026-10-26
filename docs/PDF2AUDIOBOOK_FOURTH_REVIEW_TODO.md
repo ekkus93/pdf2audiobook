@@ -1,6 +1,6 @@
 # PDF2Audiobook — Fourth Review Fixes TODO
 
-**Status:** FX10.00–FX10.26 complete; FX10.27 is next.
+**Status:** FX10.00–FX10.27 complete; FX10.28 is next.
 **Date:** 2026-10-26
 **Baseline:** master at 6eedfa4 (`docs: record fx9 completion and ci evidence`)
 **Specification:** docs/PDF2AUDIOBOOK_FOURTH_REVIEW_SPEC.md (requirement IDs R80–R112)
@@ -210,11 +210,11 @@
     - `"—"` and `(—)` become pauses;
     - a punctuation-only key is rejected at load.
   - [x] FX10.26b Implement each rule. Extend the alignment property test to include pronunciations and chunk sizes from 20 to the default.
-- [ ] FX10.27 Bound progress bookkeeping (R107).
-  - [ ] FX10.27a Regression tests:
+- [x] FX10.27 Bound progress bookkeeping (R107).
+  - [x] FX10.27a Regression tests:
     - a 500k-character chapter with a no-op TTS keeps the correct `pause_count` within a time budget;
     - an oversized status file makes `inspect` print the fixed "too large" message.
-  - [ ] FX10.27b Make progress writes linear (append-only records). Warn and mark fields unavailable when a bounded read hits its cap.
+  - [x] FX10.27b Make progress writes linear (append-only records). Warn and mark fields unavailable when a bounded read hits its cap.
 - [ ] FX10.28 Make voice-listing failures errors (R108).
   - [ ] FX10.28a Regression test: a Kitten stub whose voice listing raises fails the marker chapter with `voice_list_unavailable`, exit 7.
   - [ ] FX10.28b Raise `TTSError` from `list_voices`; skip validation only for providers that declare no voice list.
@@ -302,3 +302,4 @@
 | 2026-10-26 | 20a8d28b5ea1bfa040414d1160139cb2aba58ed4 | FX10.24: merged the §11 §6.3 budget amendment and corrected the parent §6.3 text: unresolved sent/ambiguous attempts count against budgets at their recorded bound and are resolvable; only legacy open rows without bounds block budgets pending resolution. | `git diff --check` passed; documentation-only change. | FX10.25 unspeakable paragraphs become pauses |
 | 2026-10-26 | df5b10ed74b88e3046e79c307d0d49ab11c8a882 | FX10.25a–b (R105): every nonempty paragraph whose normalized spoken form has no letters or digits produces one pause mapping and increments `pause_count`; pause-only chapters render silence without a TTS call. Pipeline pause counts use the same range helper. | At parent fa9e475, all five required punctuation-only paragraph cases raised `Chapter has no speakable text` instead of recording pauses. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1473 passed, 1 optional Kitten skip. Exact-head CI [40248126997](https://github.com/ekkus93/pdf2audiobook/actions/runs/40248126997) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.26 narration rules, remaining cases |
 | 2026-10-26 | 76a559e6240d420e400f0e597a931bc743c9eb72 | FX10.26a–b (R106): narration normalization is shared by pronunciation keys and spoken tokens; internal dash-joined words use pronunciation lookups; invisible characters are stripped before numeric-range rewrites; `Dr.?` preserves only `?`; punctuation-only keys are refused; quoted/bracketed bare dashes become pauses. Alignment coverage spans chunk sizes 20–350 with pronunciations. | At parent 2b2e312, tests reproduced missed dash-joined and typographic-apostrophe lookups, `Doctor.?`, `1, 2` for the invisible numeric-range case, and acceptance of `...` as a pronunciation key. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1481 passed, 1 optional Kitten skip. Exact-head CI [40248376352](https://github.com/ekkus93/pdf2audiobook/actions/runs/40248376352) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.27 bounded progress bookkeeping |
+| 2026-10-26 | f0a7ab6945d02e3102ac51d1093b9a55a58d4636 | FX10.27a–b (R107): synthesis progress is append-only JSONL with per-record and total-file read bounds; unavailable/corrupt progress warns and reports null pause/mapping fields, preserving null in the aggregate; `inspect` reports an oversized conversion status file with a fixed message. | Added a 500k-character no-op-TTS test that verifies the pause count and completes within 15 seconds (3.5 seconds locally); tested oversized progress records and oversized status files, including warning and unavailable report fields. Local `/verify`: lock check, Ruff, format, mypy (24 source files), 1485 passed, 1 optional Kitten skip. Exact-head CI [40248915463](https://github.com/ekkus93/pdf2audiobook/actions/runs/40248915463) passed Python 3.11–3.13 with unit, CLI and wheel/sdist smoke; FFmpeg and Tesseract installed. | FX10.28 voice-listing failures are errors |
