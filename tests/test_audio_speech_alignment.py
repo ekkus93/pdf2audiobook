@@ -103,3 +103,16 @@ def test_chapter_of_one_invisible_token_and_one_word_aligns():
 
 def test_invisible_only_chapter_has_nothing_to_speak():
     assert split_sentences("﻿ ​") == []
+
+
+def test_pronunciations_align_across_chunk_sizes_from_twenty_to_default():
+    source = ("said—Hermione and O’Brien; 1–\u200b2 beside the old road. ") * 7 + (
+        "said—Hermione and O’Brien; 1–\u200b2 beside the old road."
+    )
+    pronunciations = {"hermione": "her-my-own", "o’Brien": "oh-brien"}
+    for chunk_size in range(20, 351, 10):
+        chunks, ranges = _align(source, max_chars=chunk_size, pronunciations=pronunciations)
+        assert chunks
+        assert ranges
+        assert ranges[0][0] == 0
+        assert ranges[-1][1] == len(source)

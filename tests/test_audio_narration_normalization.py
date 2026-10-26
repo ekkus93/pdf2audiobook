@@ -90,3 +90,56 @@ def test_unspeakable_paragraph_becomes_one_pause_without_tts(paragraph, tmp_path
     assert progress["pause_count"] == 1
     assert [item["kind"] for item in progress["mapping"]] == ["pause"]
     assert samples.size == 24000 // 4
+
+
+def test_em_dash_joined_word_applies_pronunciation_key():
+    from pdf2audiobook.audio import split_sentences
+
+    assert split_sentences("said—Hermione", pronunciations={"hermione": "her-my-own"}) == [
+        "said, Her-my-own"
+    ]
+
+
+def test_typographic_apostrophe_pronunciation_key_matches_normalized_token():
+    from pdf2audiobook.audio import split_sentences
+    from pdf2audiobook.config import TTS
+
+    pronunciations = TTS(pronunciations={"o’Brien": "oh-brien"}).pronunciations
+    assert split_sentences("O’Brien said.", pronunciations=pronunciations) == ["oh-brien said."]
+
+
+def test_question_mark_replaces_pronunciation_key_terminal_period():
+    from pdf2audiobook.audio import split_sentences
+
+    assert split_sentences("Dr.?", pronunciations={"dr.": "doctor"}) == ["Doctor?"]
+
+
+def test_invisible_characters_are_removed_before_numeric_dash_rewrite():
+    assert normalize_narration_text("1–\u200b2") == "1 to 2"
+
+
+@pytest.mark.parametrize("paragraph", ['"—"', "(—)"])
+def test_bare_dash_inside_quotes_or_brackets_becomes_pause(paragraph, tmp_path):
+    provider = RecordingProvider()
+    progress_path = tmp_path / "progress.json"
+    synthesize_chunks(
+        paragraph,
+        provider,
+        model="stub",
+        voice="voice",
+        speed=1,
+        pause_ms=250,
+        cache=tmp_path / "cache",
+        progress_file=progress_path,
+    )
+    progress = json.loads(progress_path.read_text())
+    assert provider.calls == []
+    assert progress["pause_count"] == 1
+    assert [item["kind"] for item in progress["mapping"]] == ["pause"]
+
+
+def test_punctuation_only_pronunciation_key_is_rejected():
+    from pdf2audiobook.config import TTS
+
+    with pytest.raises(ValueError, match="pronunciation keys"):
+        TTS(pronunciations={"...": "pause"})

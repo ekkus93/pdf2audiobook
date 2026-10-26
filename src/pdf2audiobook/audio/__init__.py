@@ -23,8 +23,16 @@ from mutagen.mp4 import MP4
 from pdf2audiobook.errors import AudioError, ConfigError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import BookManifest, Chapter
+from pdf2audiobook.narration import (
+    _DASHES,
+    NARRATION_NORMALIZATION_VERSION,
+    NARRATION_TRANSLATION,
+    normalize_narration_text,
+)
 from pdf2audiobook.tts import TTSProvider
 from pdf2audiobook.workspace import atomic_write, digest_bytes, fingerprint, write_json
+
+_NARRATION_TRANSLATION = NARRATION_TRANSLATION
 
 
 class _ChunkProgress(TypedDict):
@@ -94,51 +102,9 @@ _PARAGRAPH_BREAK = re.compile(r"(?>\r\n|\r|\n)[ \t]*(?>\r\n|\r|\n)+")
 _VOICE_MARKER = re.compile(
     r"(?m)^\[\[voice:([A-Za-z0-9][A-Za-z0-9_.-]{0,127})\]\][ \t]*(?:\r?\n|$)"
 )
-NARRATION_NORMALIZATION_VERSION = "narration-normalization-v1"
-_NARRATION_TRANSLATION = str.maketrans(
-    {
-        "‘": "'",
-        "’": "'",
-        "‚": "'",
-        "‛": "'",
-        "“": '"',
-        "”": '"',
-        "„": '"',
-        "‟": '"',
-        "‐": "-",
-        "‑": "-",
-        "‒": "-",
-        "…": "...",
-        "ﬁ": "fi",
-        "ﬂ": "fl",
-        "ﬀ": "ff",
-        "ﬃ": "ffi",
-        "ﬄ": "ffl",
-        "ﬅ": "st",
-        "ﬆ": "st",
-        "\u00a0": " ",
-        "\u00ad": "",
-        "\u200b": "",
-        "\u200c": "",
-        "\u200d": "",
-        "\u2060": "",
-        "\ufeff": "",
-    }
-)
 _SCENE_BREAK = re.compile(r"^\s*(?:\*\s*){3,}$")
 _PRONUNCIATION_EDGE = {'"', "'", "(", ")", "[", "]", "{", "}", "<", ">"}
 _PRONUNCIATION_TRAILING = {",", ";", ":", "!", "?", "…"}
-
-
-_DASHES = "–—―"
-_DASH_RUN = re.compile(rf"\s*[{_DASHES}]+\s*")
-
-
-def normalize_narration_text(text: str) -> str:
-    """Apply the documented TTS-only character table without changing source data."""
-    text = re.sub(r"(?<=\d)–(?=\d)", " to ", text)
-    text = _DASH_RUN.sub(", ", text)
-    return text.translate(_NARRATION_TRANSLATION)
 
 
 _INVISIBLE = re.compile("[\u00ad\u200b\u200c\u200d\u2060\ufeff]")
@@ -238,6 +204,14 @@ def _spoken_token(
     normalized = normalize_narration_text(token)
     if not pronunciations:
         return normalized
+    if any(dash in token for dash in "–—―") and ", " in normalized:
+        pieces = re.split(r"(,\s*)", normalized)
+        return "".join(
+            piece
+            if index % 2
+            else _spoken_token(piece, pronunciations, ends_paragraph=ends_paragraph)
+            for index, piece in enumerate(pieces)
+        )
     start = 0
     end = len(normalized)
     while start < end and (
@@ -274,7 +248,7 @@ def _spoken_token(
     if ellipsis:
         suffix = ellipsis
     elif terminal_period and (ends_paragraph or not period_owned_by_key):
-        suffix = "."
+        suffix = "" if normalized[end:].startswith(("?", "!")) else "."
     else:
         suffix = ""
     return f"{normalized[:start]}{spoken}{suffix}{normalized[end:]}"
@@ -312,8 +286,8 @@ def split_sentences(
     pronunciations: Mapping[str, str] | None = None,
 ) -> list[str]:
     """Split at sentence/word boundaries without crossing source paragraphs."""
-    if max_chars < 40:
-        raise ValueError("max_chars must be at least 40")
+    if max_chars < 20:
+        raise ValueError("max_chars must be at least 20")
     chunks: list[str] = []
     # Blank lines are semantic paragraph boundaries, including PDF-derived
     # CR-only line endings; a single soft wrap is not a paragraph break.

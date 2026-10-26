@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from pdf2audiobook.errors import ConfigError
+from pdf2audiobook.narration import normalize_narration_text
 
 
 class ConfigModel(BaseModel):
@@ -155,9 +156,11 @@ class TTS(ConfigModel):
         edge = "\"'()[]{}<>“”‘’"
         for source, spoken in value.items():
             source_key = source if isinstance(source, str) else ""
-            key = source_key.strip(edge).rstrip(",;:!?…").casefold()
+            normalized_key = normalize_narration_text(source_key)
+            key = normalized_key.strip(edge).rstrip(",;:!?…").casefold()
             if (
                 not key
+                or not any(char.isalnum() for char in key)
                 or len(source_key) > 64
                 or any(char.isspace() for char in source_key)
                 or "[[" in source_key
