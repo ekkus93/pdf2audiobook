@@ -68,3 +68,25 @@ def test_scene_break_creates_pause_without_tts_call(tmp_path):
     assert progress["pause_count"] == 1
     assert [item["kind"] for item in progress["mapping"]].count("pause") == 1
     assert samples.size == 2 * 24 + 2 * (24000 // 4)
+
+
+@pytest.mark.parametrize("paragraph", ["# # #", "~~~", "• • •", "———", "⁂"])
+def test_unspeakable_paragraph_becomes_one_pause_without_tts(paragraph, tmp_path):
+    provider = RecordingProvider()
+    progress_path = tmp_path / "progress.json"
+    samples = synthesize_chunks(
+        paragraph,
+        provider,
+        model="stub",
+        voice="voice",
+        speed=1,
+        pause_ms=250,
+        cache=tmp_path / "cache",
+        progress_file=progress_path,
+    )
+
+    progress = json.loads(progress_path.read_text())
+    assert provider.calls == []
+    assert progress["pause_count"] == 1
+    assert [item["kind"] for item in progress["mapping"]] == ["pause"]
+    assert samples.size == 24000 // 4

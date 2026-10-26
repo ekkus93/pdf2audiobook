@@ -184,32 +184,26 @@ def _unspeakable_ranges(text: str) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
     cursor = 0
     for match in _PARAGRAPH_BREAK.finditer(text):
-        if not has_speakable_narration(text[cursor : match.start()]):
+        paragraph = text[cursor : match.start()]
+        if paragraph.strip() and not has_speakable_narration(paragraph):
             ranges.append((cursor, match.start()))
         cursor = match.end()
-    if not has_speakable_narration(text[cursor:]):
+    paragraph = text[cursor:]
+    if paragraph.strip() and not has_speakable_narration(paragraph):
         ranges.append((cursor, len(text)))
     return ranges
 
 
-def scene_break_pause_ranges(chapter_text: str) -> list[tuple[int, int]]:
-    """Source ranges of decorative scene breaks, which are spoken as pauses."""
+def unspeakable_pause_ranges(chapter_text: str) -> list[tuple[int, int]]:
+    """Source ranges of nonempty paragraphs without spoken letters or digits."""
     masked = _voice_markers(chapter_text, "")[0]
-    return [
-        (start, end)
-        for start, end in _unspeakable_ranges(masked)
-        if _SCENE_BREAK.fullmatch(masked[start:end].strip())
-    ]
+    return _unspeakable_ranges(masked)
 
 
 def has_speakable_narration(text: str) -> bool:
-    """Return false for whitespace and decorative scene-break-only text."""
-    return any(
-        paragraph.strip()
-        and not _SCENE_BREAK.fullmatch(paragraph)
-        and any(char.isalnum() for char in paragraph)
-        for paragraph in _PARAGRAPH_BREAK.split(text)
-    )
+    """Return whether the normalized spoken form contains a letter or digit."""
+    normalized = normalize_narration_text(text)
+    return any(char.isalnum() for char in normalized)
 
 
 # Short TTS chunks must never require a 128 MiB WAV cache entry.
@@ -531,13 +525,13 @@ def synthesize_chunks(
         raise AudioError("TTS provider max_chars_per_chunk must be an integer >= 40")
     spoken_source, voice_changes = _voice_markers(chapter_text, voice)
     chunks = split_sentences(spoken_source, max_chars=chunk_limit, pronunciations=pronunciations)
-    if not chunks:
+    pause_ranges = unspeakable_pause_ranges(chapter_text)
+    if not chunks and not pause_ranges:
         raise AudioError("Chapter has no speakable text")
     # Use one validated snapshot of the engine rate throughout the request.
     pause = np.zeros(int(rate * pause_ms / 1000), dtype=np.float32)
     paragraph_pause = np.zeros(2 * len(pause), dtype=np.float32)
     ranges = chunk_source_ranges(spoken_source, chunks, pronunciations=pronunciations)
-    pause_ranges = scene_break_pause_ranges(chapter_text)
     chunk_voices: list[str] = []
     change_index = 0
     active_voice = voice
@@ -615,6 +609,12 @@ def synthesize_chunks(
         write_json(progress_file, progress)
     writer = _open_streaming_wav(output_wav, rate) if output_wav is not None else None
     try:
+        if not ranges and pause_ranges:
+            for _ in pause_ranges:
+                if writer is not None:
+                    _write_silence(writer, len(pause))
+                else:
+                    samples.append(pause)
         for idx, (text, identity, chunk_voice) in enumerate(
             zip(chunks, identities, chunk_voices, strict=True)
         ):

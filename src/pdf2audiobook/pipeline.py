@@ -17,8 +17,8 @@ from pdf2audiobook.audio import (
     audio_output_path,
     encode_mp3,
     read_cover_image,
-    scene_break_pause_ranges,
     synthesize_chunks,
+    unspeakable_pause_ranges,
     voice_marker_ids,
 )
 from pdf2audiobook.config import Settings
@@ -1305,7 +1305,7 @@ def _convert_analyzed_book(
             conversion_status[item.id]["status"] = "complete"
             # A resumed chapter keeps the pause count its synthesized run reported.
             try:
-                conversion_status[item.id]["pause_count"] = len(scene_break_pause_ranges(text))
+                conversion_status[item.id]["pause_count"] = len(unspeakable_pause_ranges(text))
             except AudioError:
                 conversion_status[item.id]["pause_count"] = 0
         del text
