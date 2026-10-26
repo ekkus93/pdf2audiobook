@@ -131,12 +131,12 @@ def test_conversion_report_records_scene_break_pause_mapping(tmp_path, monkeypat
 
 
 def test_voice_listing_failure_fails_only_marked_chapter_privately(tmp_path, monkeypatch):
-    class BrokenVoiceProvider(VoiceProvider):
+    class BrokenKittenStub(VoiceProvider):
         def list_voices(self):
             raise RuntimeError("PRIVATE PROVIDER DETAIL")
 
-    provider = BrokenVoiceProvider(["Jasper"])
-    with pytest.raises(PartialConversionError, match=r"chapter\(s\): 1"):
+    provider = BrokenKittenStub(["Jasper"])
+    with pytest.raises(PartialConversionError, match=r"chapter\(s\): 1") as raised:
         _run(
             tmp_path,
             monkeypatch,
@@ -144,6 +144,7 @@ def test_voice_listing_failure_fails_only_marked_chapter_privately(tmp_path, mon
             ["Before.\n\n[[voice:Known]]\n\nAfter.", "Ordinary prose."],
             provider,
         )
+    assert raised.value.exit_code == 7
     assert [voice for _text, voice in provider.calls] == ["Jasper"]
     status = json.loads((tmp_path / "out/reports/conversion_status.json").read_text())
     assert status["chapters"][0]["reason_code"] == "voice_list_unavailable"
