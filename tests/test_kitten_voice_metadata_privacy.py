@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from pdf2audiobook.errors import AudioError
+from pdf2audiobook.errors import AudioError, TTSError
 from pdf2audiobook.tts import KittenProvider
 
 PRIVATE = "SYNTHETIC_PRIVATE_KITTEN_BACKEND_275"
@@ -43,7 +43,10 @@ def test_voice_metadata_property_exception_is_sanitized_and_discovery_is_safe():
             return np.ones(100, dtype=np.float32)
 
     provider = provider_with_model(Backend())
-    assert provider.list_voices() == []
+    with pytest.raises(TTSError, match="Could not list Kitten TTS voices") as listing_error:
+        provider.list_voices()
+    assert PRIVATE not in str(listing_error.value)
+    assert listing_error.value.__cause__ is None
     assert provider.health()
     with pytest.raises(AudioError, match="Could not validate Kitten voice") as raised:
         provider.generate("Synthetic sample.", voice="Jasper", speed=1.0)

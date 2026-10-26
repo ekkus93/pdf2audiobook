@@ -34,6 +34,10 @@ class AudioError(AudiobookError):
     exit_code = 6
 
 
+class TTSError(AudioError):
+    """Text-to-speech provider metadata or synthesis operation failed."""
+
+
 class WorkspaceLockedError(AudioError):
     """A workspace is currently owned by another analysis or conversion."""
 

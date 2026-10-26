@@ -1211,14 +1211,23 @@ def _convert_analyzed_book(
                     if settings.tts.provider == "piper"
                     else KittenProvider(settings.tts.kitten.model)
                 )
-            available_voices = provider.list_voices()
+            supports_voice_listing = getattr(provider, "supports_voice_listing", True) is not False
+            if supports_voice_listing:
+                voice_list = provider.list_voices()
+                if not isinstance(voice_list, list) or any(
+                    not isinstance(voice, str) for voice in voice_list
+                ):
+                    raise AudioError("Voice list is unavailable")
+                available_voices = voice_list
+            else:
+                available_voices = None
         except Exception:
             available_voices = None
             for item in chosen:
                 if approved_marker_chapters.get(item.number):
                     preflight_failed[item.number] = AudioError.exit_code
-                    preflight_reasons[item.number] = "voice_validation_failed"
-        if available_voices:
+                    preflight_reasons[item.number] = "voice_list_unavailable"
+        if available_voices is not None:
             for item in chosen:
                 marker_ids = approved_marker_chapters.get(item.number, [])
                 if any(marker not in available_voices for marker in marker_ids):

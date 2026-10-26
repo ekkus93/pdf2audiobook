@@ -15,6 +15,7 @@ from pdf2audiobook.models import BookManifest, Chapter
 class VoiceProvider:
     sample_rate = 24000
     max_chars_per_chunk = 350
+    supports_voice_listing = True
 
     def __init__(self, voices):
         self.voices = voices
@@ -145,5 +146,43 @@ def test_voice_listing_failure_fails_only_marked_chapter_privately(tmp_path, mon
         )
     assert [voice for _text, voice in provider.calls] == ["Jasper"]
     status = json.loads((tmp_path / "out/reports/conversion_status.json").read_text())
-    assert status["chapters"][0]["reason_code"] == "voice_validation_failed"
+    assert status["chapters"][0]["reason_code"] == "voice_list_unavailable"
     assert status["chapters"][1]["status"] == "complete"
+
+
+def test_provider_declaring_no_voice_list_skips_voice_validation(tmp_path, monkeypatch):
+    class NoVoiceListProvider(VoiceProvider):
+        supports_voice_listing = False
+
+        def list_voices(self):
+            raise AssertionError("providers without voice lists must not be queried")
+
+    provider = NoVoiceListProvider([])
+    result, _ = _run(
+        tmp_path,
+        monkeypatch,
+        [_chapter(1, approved=True)],
+        ["Before.\n\n[[voice:NamedVoice]]\n\nAfter."],
+        provider,
+    )
+    assert len(result) == 1
+    assert [voice for _text, voice in provider.calls] == ["Jasper", "NamedVoice"]
+
+
+def test_supported_voice_listing_must_return_a_string_list(tmp_path, monkeypatch):
+    class InvalidVoiceListProvider(VoiceProvider):
+        def list_voices(self):
+            return None
+
+    provider = InvalidVoiceListProvider([])
+    with pytest.raises(PartialConversionError):
+        _run(
+            tmp_path,
+            monkeypatch,
+            [_chapter(1, approved=True)],
+            ["Before.\n\n[[voice:Known]]\n\nAfter."],
+            provider,
+        )
+    status = json.loads((tmp_path / "out/reports/conversion_status.json").read_text())
+    assert status["chapters"][0]["reason_code"] == "voice_list_unavailable"
+    assert provider.calls == []

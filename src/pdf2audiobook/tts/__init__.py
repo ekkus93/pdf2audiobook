@@ -15,7 +15,7 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-from pdf2audiobook.errors import AudioError
+from pdf2audiobook.errors import AudioError, TTSError
 
 KITTEN_MODEL_ALIASES = {
     "mini": "KittenML/kitten-tts-mini-0.8",
@@ -33,7 +33,7 @@ class TTSProvider(Protocol):
         """Return available model identifiers without downloading models."""
 
     def list_voices(self) -> list[str]:
-        """Return discoverable voice IDs, or [] if the engine cannot enumerate."""
+        """Return voice IDs; raise TTSError if a supported listing cannot be read."""
 
     def health(self) -> bool:
         """Report whether the loaded engine is callable, without synthesizing."""
@@ -51,6 +51,7 @@ def _quiet_stdout() -> contextlib.redirect_stdout[io.StringIO]:
 class KittenProvider:
     """Lazy initialization avoids model downloads during CLI import and tests."""
 
+    supports_voice_listing = True
     sample_rate = 24000
     max_chars_per_chunk = 350
 
@@ -78,13 +79,13 @@ class KittenProvider:
 
     def list_voices(self) -> list[str]:
         try:
-            voices = getattr(self.model, "available_voices", None)
-            if isinstance(voices, (list, tuple, dict)):
-                return [name for name in voices if isinstance(name, str)]
+            voices = getattr(self.model, "available_voices")
+            if not isinstance(voices, (list, tuple, dict)):
+                raise TypeError("invalid voice metadata type")
+            return [name for name in voices if isinstance(name, str)]
         except Exception:
             # A backend property may raise with local paths or model details.
-            pass
-        return []
+            raise TTSError("Could not list Kitten TTS voices") from None
 
     def health(self) -> bool:
         try:

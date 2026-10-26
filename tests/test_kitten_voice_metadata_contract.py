@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from pdf2audiobook.errors import AudioError
+from pdf2audiobook.errors import AudioError, TTSError
 from pdf2audiobook.tts import KittenProvider
 
 
@@ -35,7 +35,8 @@ def test_invalid_voice_is_rejected_before_model_invocation(voice):
 @pytest.mark.parametrize("voices", ["alice-and-bob", 42, True])
 def test_invalid_voice_collection_fails_closed(voices):
     provider = provider_with_voices(voices)
-    assert provider.list_voices() == []
+    with pytest.raises(TTSError, match="Could not list Kitten TTS voices"):
+        provider.list_voices()
     with pytest.raises(AudioError, match="Could not validate Kitten voice") as raised:
         provider.generate("synthetic narration", voice="alice", speed=1.0)
     assert raised.value.__cause__ is None
