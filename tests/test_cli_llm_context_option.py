@@ -46,3 +46,36 @@ def test_too_small_a_window_is_rejected_before_any_work(
     result = _run(tmp_path, "--llm-context-tokens", value)
     assert result.exit_code == 2
     assert captured == []
+
+
+@pytest.fixture
+def captured_output(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[int]:
+    seen: list[int] = []
+
+    def fake_analyze(_source, settings, **_kwargs):
+        seen.append(settings.llm.max_output_tokens)
+        return tmp_path / "manifest.json"
+
+    monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", fake_analyze)
+    return seen
+
+
+def test_output_option_sets_the_output_cap(tmp_path: Path, captured_output: list[int]) -> None:
+    result = _run(tmp_path, "--llm-context-tokens", "262144", "--llm-output-tokens", "32768")
+    assert result.exit_code == 0, result.stderr
+    assert captured_output == [32768]
+
+
+def test_output_default_is_unchanged(tmp_path: Path, captured_output: list[int]) -> None:
+    assert _run(tmp_path).exit_code == 0
+    assert captured_output == [1024]
+
+
+@pytest.mark.parametrize("value", ["0", "16384"])
+def test_an_unusable_output_cap_is_rejected(
+    tmp_path: Path, captured_output: list[int], value: str
+) -> None:
+    # 16384 leaves no room in the default 16384-token context.
+    result = _run(tmp_path, "--llm-output-tokens", value)
+    assert result.exit_code == 2
+    assert captured_output == []

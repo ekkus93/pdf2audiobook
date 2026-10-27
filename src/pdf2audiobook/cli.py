@@ -478,6 +478,12 @@ def analyze(
         min=512,
         help="Context window to budget for, e.g. 262144 for a 256k model.",
     ),
+    llm_output_tokens: int | None = typer.Option(
+        None,
+        "--llm-output-tokens",
+        min=1,
+        help="Cap on tokens the model may write per request, e.g. 32768 for reasoning models.",
+    ),
     allow_remote_content: bool | None = typer.Option(
         None, "--allow-remote-content/--no-allow-remote-content"
     ),
@@ -521,6 +527,8 @@ def analyze(
             overrides.setdefault("llm", {})["enabled"] = True
         if llm_context_tokens is not None:
             overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
+        if llm_output_tokens is not None:
+            overrides.setdefault("llm", {})["max_output_tokens"] = llm_output_tokens
         if vision is not None:
             overrides.setdefault("llm", {})["vision"] = vision
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
@@ -574,6 +582,12 @@ def convert(
         "--llm-context-tokens",
         min=512,
         help="Context window to budget for, e.g. 262144 for a 256k model.",
+    ),
+    llm_output_tokens: int | None = typer.Option(
+        None,
+        "--llm-output-tokens",
+        min=1,
+        help="Cap on tokens the model may write per request, e.g. 32768 for reasoning models.",
     ),
     allow_remote_content: bool | None = typer.Option(
         None, "--allow-remote-content/--no-allow-remote-content"
@@ -650,6 +664,8 @@ def convert(
             overrides.setdefault("llm", {})["enabled"] = True
         if llm_context_tokens is not None:
             overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
+        if llm_output_tokens is not None:
+            overrides.setdefault("llm", {})["max_output_tokens"] = llm_output_tokens
         if vision is not None:
             overrides.setdefault("llm", {})["vision"] = vision
         if speed is not None:

@@ -290,7 +290,8 @@ max_output_tokens = 1024
 `convert` (for example `--llm-context-tokens 262144` for a 256k model); it must stay above
 `chunk_tokens` plus the output reserve.
 
-`max_output_tokens` can also be set with
+`max_output_tokens` can also be set for one run with `--llm-output-tokens N` on `analyze` and
+`convert` (reasoning models may need 32768 or more), and with
 `PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS`. The adapter sends this value as
 `max_tokens` and fails closed if a server rejects the parameter; it must
 not retry without the cap. Existing JSON-mode fallback preserves the cap.
