@@ -95,8 +95,8 @@
 
 ## 5. No-op publication (R7)
 
-- [ ] 5.1 Return early from `commit_artifacts` when every planned digest matches the current one and there are no deletes. Guards still run first.
-- [ ] 5.2 Tests: an up-to-date analysis resume makes zero `atomic_write` calls, leaves modification times unchanged and creates no journal; a concurrent change is still detected.
+- [x] 5.1 Return early from `commit_artifacts` when every planned digest matches the current one and there are no deletes. Guards still run first.
+- [x] 5.2 Tests: an up-to-date analysis resume makes zero `atomic_write` calls, leaves modification times unchanged and creates no journal; a concurrent change is still detected.
 
 ## 6. Missing acceptance coverage (R8)
 

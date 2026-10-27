@@ -246,6 +246,8 @@ def commit_artifacts(
     for name, expected in plan.observed.items():
         if _read_digest(_target(folder, f"chapters/{name}")) != expected:
             raise ExtractionError("Chapter text changed during review; retry")
+    if all(entry["old"] == entry["new"] for entry in entries):
+        return  # nothing changes: no journal, no writes, no new timestamps
     record = {"version": 1, "entries": entries}
     journal = folder / JOURNAL
     encoded = _json_bytes(record)
