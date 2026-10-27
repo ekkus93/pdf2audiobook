@@ -1,6 +1,6 @@
 # PDF2Audiobook Follow-up Fixes and Progress TODO
 
-**Status:** In progress
+**Status:** Complete; unresolved limitations are listed below
 **Date:** 2026-10-27
 **Baseline:** master at 5a4f96e plus the uncommitted module split in the working tree
 **Specification:** `docs/PDF2AUDIOBOOK_FOLLOWUP_FIXES_SPEC.md` (R1–R11)
@@ -144,10 +144,30 @@
 ## 9. Finish
 
 - [x] 9.1 Merge the superseding text into `docs/PDF2AUDIOBOOK_REVIEW_FOLLOWUP_SPEC.md` and `docs/PDF2AUDIOBOOK_SPEC.md`: the read-only access rule, outcome codes, regeneration and recovery commands, policy resolution, timeout and progress.
-- [ ] 9.2 Run `/verify`, plus `mypy --python-version 3.12` and `3.13`. Record pass and skip counts and any skipped external-tool checks.
-- [ ] 9.3 Review the final diff against every acceptance criterion in R1–R11. Record unresolved limitations without checking incomplete items.
+- [x] 9.2 Run `/verify`, plus `mypy --python-version 3.12` and `3.13`. Record pass and skip counts and any skipped external-tool checks.
+- [x] 9.3 Review the final diff against every acceptance criterion in R1–R11. Record unresolved limitations without checking incomplete items.
+
+## Unresolved limitations
+
+- Progress: vision requests advance the analysis counter but are not pre-announced, so that total grows when they run. Speech synthesis and MP3 encoding share one per-chapter bar (only `pack-m4b` has a separate encoding stage). The estimate is tqdm's smoothed rate; its accuracy on a real long book was not measured, only the display on a pseudo-terminal with a fake TTS engine. Cached advances adjust tqdm's public counters (`n`, `initial`, `last_print_n`), so the `tqdm<5` pin matters.
+- Legacy footnote policy inference is deliberately conservative: when the unedited chapter files do not pin one policy, the user must run `analyze` with the original setting or pass `regenerate-chapter --footnotes`.
+- No live Ollama, OpenAI or llama-server run exercised the new timeout; it is covered with mock transports only. The opt-in Kitten smoke was not run in this environment.
+- Windows was not tested: POSIX locking and directory fsync remain unavailable there, as documented.
+- Section 3, 4 and 8 tests were written together with their implementation, because the symbols did not exist at the parent commit; the ledger lists which tests failed at the parent for the other sections.
 
 ## Progress ledger
 
 | Date | Master SHA | Completed tasks | Tests/CI | Blockers |
 | --- | --- | --- | --- | --- |
+| 2026-10-27 | 9a968ba61fd33d66c1050899c9b8b48759bfea2c | 0.1 (refactor): committed the module split with `narration.py` added to the mypy list; docs/CLAUDE.md commits `d3f2250` and `d96ced2` were pushed with it. | Full suite unchanged apart from monkeypatch targets. Run [645](https://github.com/ekkus93/pdf2audiobook/actions/runs/40533275832) passed on 3.11, 3.12, 3.13. | None |
+| 2026-10-27 | 4da2215a68c8ac2e49908a6cb2ff622919d98dee | 0.2: reconciled the review follow-up TODO. | Docs only. Run [646](https://github.com/ekkus93/pdf2audiobook/actions/runs/40533325335) passed. | None |
+| 2026-10-27 | 66c9cf065336ae0482e424ca3d23c50d767601f3 | 1.1–1.4 (R1): lock-free `read_manifest`, `workspace_lock(create=, recover=)`, `PendingRecoveryError`. | Failing at parent: `test_manifest_read_is_lock_free` (read_manifest succeeds while locked; review endpoint succeeds while locked; missing workspace creates nothing; no lock file; pending journal blocks read; endpoint reports pending) and `test_pending_recovery_privacy`. Changed existing tests: 8 reads in `test_review_followup_regressions.py` (including the fresh-process one-liner) now go through `workspace_lock`, because recovery moved to lock holders by R1; 11 tests depended on it and their expected results are unchanged. Run [647](https://github.com/ekkus93/pdf2audiobook/actions/runs/40533988368) passed. | None |
+| 2026-10-27 | df0cbacd27fa69aa5d9a31d394570bc2c2d495f0 | 2.1–2.5 (R2, R3): `not_saved_pending_recovery`, `committed_needs_recovery`, 422 `not_saved_conflict`, browser messages. | Failing at parent: `test_review_save_outcomes` (blocked earlier transaction direct and HTTP; own post-commit failure; chapter conflict HTTP; conflict error carries the number). Browser-script tests were written after the implementation. Changed existing test: `test_recovery_refuses_to_overwrite_an_edit_after_commit` expects `PendingRecoveryError` for lock-time recovery failure. Run [648](https://github.com/ekkus93/pdf2audiobook/actions/runs/40534789530) passed. | None |
+| 2026-10-27 | 4094be714fcf1d5fb8ede3599c4d358cc216dbe3 | 3.1–3.6 (R4, R5): `backup_file`, labelled recovery errors, `recover`, `regenerate-chapter`. | New commands, so no parent run was possible; 19 new tests (18 passed first run; the selector-validation test exposed `BadParameter` being swallowed, fixed). Run [649](https://github.com/ekkus93/pdf2audiobook/actions/runs/40535944201) passed. | None |
+| 2026-10-27 | 5745660c0e9e8f2c5f9b80aa22b3b6400f0fc5e2 | 4.1–4.3 (R6): `resolve_footnote_policy`, `FootnotePolicyUnknownError`, `regenerate-chapter --footnotes`; spec R6 amended (omit edits, anchor edits, recognizable files). | New symbols, so no parent run was possible; warn and omit legacy cases failed on first run and drove the amended rules. Run [650](https://github.com/ekkus93/pdf2audiobook/actions/runs/40536784884) passed. | None |
+| 2026-10-27 | 79c6cdc694de2864e20133cd755f32a98161a7f4 | 5.1–5.2 (R7): no-op publication writes no journal. | Failing at parent: `test_rendering_an_up_to_date_workspace_writes_nothing`. Run [651](https://github.com/ekkus93/pdf2audiobook/actions/runs/40536999764) passed. | None |
+| 2026-10-27 | 3c086f516b4b69ef854d3512210ea21f02b7dcf9 | 6.1–6.3 (R8): dry-run, legacy end-to-end, no-mixed-consumption acceptance tests. | Coverage only: the behavior already existed, all 5 passed on first run. Run [652](https://github.com/ekkus93/pdf2audiobook/actions/runs/40537395775) passed. | None |
+| 2026-10-27 | 05c126dd0042c66e41415b0585fcc647cda152fd | 7.1–7.5 (R10): `timeout_seconds` per provider (Ollama 300), env override, `/api/ps` 10 s, timeout message, `config show`/`doctor`. | Failing at parent: defaults; config file; env override; factory timeout; context lookup timeout; read-timeout message; fingerprint and cache identity; config show and doctor. Extended `test_environment_mapping_covers_every_declared_variable` with the new variable. Timeout failures keep the "transport failure" wording that `test_llm_provider_matrix` and `test_llm_retry_budget_attempts` match. Run [653](https://github.com/ekkus93/pdf2audiobook/actions/runs/40538097122) passed. | None |
+| 2026-10-27 | f451b74211c87a2135ca6fd4a16ff9469fe70371 | 8.1–8.7 (R11): `tqdm` dependency, `progress_display.py`, `--progress/--no-progress`, `general.progress`, stage wiring, summaries. | Feature tests written with the implementation (34 new tests). Extended the env coverage test for `PDF2AUDIOBOOK_PROGRESS`. Pty run with a fake TTS showed bars; a zero-size pty drew nothing until explicit dimensions were passed. Clean-venv wheel install smoke passed locally. Run [654](https://github.com/ekkus93/pdf2audiobook/actions/runs/40540922857) passed. | None |
+| 2026-10-27 | 8fca90eba4a8df1a0b9b93beaaa17a50623e9915 | 9.1: merged the follow-up amendments into the review follow-up spec and the main spec; marked the follow-up fixes spec Implemented. | Docs only. Run [655](https://github.com/ekkus93/pdf2audiobook/actions/runs/40541112320) passed on 3.11, 3.12, 3.13. | None |
+| 2026-10-27 | 8fca90eba4a8df1a0b9b93beaaa17a50623e9915 | 9.2 final gate: `uv lock --check`, Ruff, format, mypy (43 files) on 3.11, 3.12 and 3.13, `pytest -q -ra`, CLI smoke (`--help`, `config show --json`, `doctor --json`). | 1652 passed, 1 skipped (optional Kitten smoke: the extra is not installed locally). ffmpeg, tesseract and node were available, so their tests ran. | None |
