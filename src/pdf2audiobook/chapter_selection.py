@@ -154,14 +154,23 @@ def prepare_chapter_selection(
     previous_review_required = list(manifest.review_required)
     previous_acknowledged = list(manifest.review_acknowledged)
     from pdf2audiobook.audio import has_speakable_chapter_narration
-    from pdf2audiobook.chapter_artifacts import load_artifact_state, plan_chapter_artifacts
+    from pdf2audiobook.chapter_artifacts import (
+        load_artifact_state,
+        plan_chapter_artifacts,
+        resolve_footnote_policy,
+    )
 
     state = load_artifact_state(manifest_path.parent)
     speakability: dict[str, bool] | None = None
     if state is not None or (
         manifest_path.is_file() and manifest.blocks and (manifest_path.parent / "chapters").is_dir()
     ):
-        policy = footnotes if footnotes is not None else settings.pdf.footnotes
+        if footnotes is not None:
+            policy = footnotes
+        elif state is not None:
+            policy = settings.pdf.footnotes
+        else:
+            policy = resolve_footnote_policy(manifest, manifest_path.parent)
         plan = plan_chapter_artifacts(manifest, manifest_path.parent, policy)
         speakability = {}
         for item in manifest.chapters:

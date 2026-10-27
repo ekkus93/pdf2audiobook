@@ -935,16 +935,25 @@ def regenerate_chapter(
     all_conflicts: bool = typer.Option(
         False, "--all-conflicts", help="Regenerate every chapter that currently blocks planning."
     ),
+    footnotes: str | None = typer.Option(
+        None,
+        "--footnotes",
+        help="warn, inline, end or omit: policy for a legacy workspace that cannot be inferred.",
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """Replace a chapter file with generated text, keeping a backup of any differing file."""
     if bool(chapter) == all_conflicts:
         raise typer.BadParameter("Use either --chapter (repeatable) or --all-conflicts")
+    if footnotes is not None and footnotes not in {"warn", "inline", "end", "omit"}:
+        raise typer.BadParameter("--footnotes must be warn, inline, end or omit")
     set_output_mode(json_output)
     try:
         from pdf2audiobook.chapter_recovery import regenerate_chapters
 
-        result = regenerate_chapters(manifest_path, chapter or [], all_conflicts=all_conflicts)
+        result = regenerate_chapters(
+            manifest_path, chapter or [], all_conflicts=all_conflicts, footnotes=footnotes
+        )
         payload: dict[str, Any] = {
             "regenerated": list(result.regenerated),
             "backed_up": list(result.backed_up),

@@ -104,19 +104,25 @@ This command does not change approvals, review reasons or the manifest. The plan
 
 A review save with no `chapter-artifacts.json` uses `warn`. A workspace analyzed with `inline`, `end` or `omit` is then refused with a chapter-conflict message that tells the user to back up files they never edited.
 
-When no artifact state exists, resolve the policy as follows:
+When no artifact state exists, resolve the policy as follows (`chapter_artifacts.resolve_footnote_policy`; it writes nothing):
 
-- Let *candidates* be the policies whose rendering matches every existing chapter file exactly, with missing files ignored.
-- If the manifest contains no block that the footnote policy affects (all policies render identically), use `warn`.
-- Otherwise, if exactly one candidate exists, establish it.
-- Otherwise refuse with a content-free `FootnotePolicyUnknownError`: "This workspace has no recorded footnote policy; run analyze with the original pdf.footnotes setting". Write nothing.
+- If the manifest holds the deterministic footnote-omit edits, the policy is `omit`. That policy is applied through its accepted edits, so rendering cannot distinguish it.
+- Otherwise the candidates are `warn`, `inline` and `end`. If the manifest holds footnote-anchor edits (created only by `inline`, `end` or `omit`), `warn` is removed.
+- A chapter file is *recognizable* when it matches the rendering of at least one candidate. Hand-edited or foreign files are never recognizable and never decide the policy; the planner still protects them.
+- If no candidate policy renders any chapter differently (the footnote policy does not affect the text), or no chapter file exists, and `warn` is still a candidate, use `warn`.
+- Otherwise, if at least one file is recognizable and exactly one candidate matches all recognizable files, establish it.
+- Otherwise refuse with a content-free `FootnotePolicyUnknownError`: "This workspace has no recorded footnote policy that can be determined from its chapter files; run analyze with the original pdf.footnotes setting, or pass --footnotes to regenerate-chapter". Write nothing.
+
+`regenerate-chapter` takes an optional `--footnotes {warn,inline,end,omit}` for the refused case, so a legacy workspace whose only affected chapter file was edited is not left without a way out. It may not contradict a recorded policy ("A footnote policy is already recorded for this workspace; change it by running analyze with the new pdf.footnotes setting"). Review save, chapter selection (including `pack-m4b`) and `regenerate-chapter` all use this resolver; conversion and analysis keep using the configured policy and record it.
 
 Analysis keeps its current behavior and records the configured policy. Document the resolution in the README upgrade notes.
 
 **Acceptance:**
 - A legacy workspace rendered with each of `inline`, `end` and `omit` saves a review and records that policy.
-- A workspace with ambiguous candidates is refused with the new message and files unchanged.
+- A workspace with ambiguous candidates, or whose only policy-affected file was edited, is refused with the new message and files unchanged.
 - A footnote-free workspace adopts `warn`.
+- An edited policy-neutral file does not prevent the policy from being resolved from another chapter.
+- `regenerate-chapter --footnotes` resolves the refused case and cannot contradict a recorded policy.
 
 ### R7: Skip publication when nothing changes
 

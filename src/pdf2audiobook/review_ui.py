@@ -203,10 +203,9 @@ def _save_chapter_updates_locked(
             code for code in manifest.review_required if code not in set(acknowledge)
         ]
     chapter_coverage_report(manifest)
-    from pdf2audiobook.chapter_artifacts import load_artifact_state, plan_chapter_artifacts
+    from pdf2audiobook.chapter_artifacts import plan_chapter_artifacts, resolve_footnote_policy
 
-    state = load_artifact_state(manifest_path.parent)
-    policy = state["footnotes"] if state is not None else "warn"
+    policy = resolve_footnote_policy(manifest, manifest_path.parent)
     plan = plan_chapter_artifacts(manifest, manifest_path.parent, policy)
     commit_review(manifest_path, manifest, plan, expected_manifest=expected_manifest)
 

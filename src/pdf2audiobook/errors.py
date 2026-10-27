@@ -42,6 +42,17 @@ class ChapterConflictError(ExtractionError):
         self.chapter = chapter
 
 
+class FootnotePolicyUnknownError(ExtractionError):
+    """A workspace has no recorded footnote policy and none can be safely inferred."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This workspace has no recorded footnote policy that can be determined from its "
+            "chapter files; run analyze with the original pdf.footnotes setting, or pass "
+            "--footnotes to regenerate-chapter"
+        )
+
+
 class LLMError(AudiobookError):
     exit_code = 5
 

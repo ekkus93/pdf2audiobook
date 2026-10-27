@@ -85,9 +85,9 @@
 
 ## 4. Legacy policy resolution (R6)
 
-- [ ] 4.1 Implement candidate-policy resolution when no artifact state exists: if footnotes don't affect the rendering, use `warn`; if exactly one policy matches every existing file, use it; otherwise raise `FootnotePolicyUnknownError`.
-- [ ] 4.2 Use the resolver in review save, selection and `pack-m4b`. Analysis keeps recording its configured policy.
-- [ ] 4.3 Tests:
+- [x] 4.1 Implement policy resolution when no artifact state exists, per spec R6 (omit edits, anchor edits, recognizable files); otherwise raise `FootnotePolicyUnknownError`. Add `regenerate-chapter --footnotes` for the refused case.
+- [x] 4.2 Use the resolver in review save, selection and `pack-m4b`. Analysis keeps recording its configured policy.
+- [x] 4.3 Tests:
   - legacy `inline`, `end` and `omit` workspaces save a review and record the policy;
   - ambiguous candidates are refused with files unchanged;
   - a footnote-free workspace adopts `warn`;

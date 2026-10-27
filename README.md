@@ -87,6 +87,12 @@ same command restores it. Do not delete `chapter-artifacts.json`; that is unsupp
 workspace with no generation record adopts a chapter file only when it matches current generated
 text, and `regenerate-chapter` resolves a differing legacy file the same way.
 
+A workspace created before footnote policies were recorded has no stored policy. Review,
+packaging and `regenerate-chapter` infer it from the manifest's footnote edits and the unedited
+chapter files, and record it only when exactly one policy fits; nothing is guessed. Otherwise
+they stop and ask you to run `analyze` with the original `pdf.footnotes` setting, or to pass
+`--footnotes warn|inline|end|omit` to `regenerate-chapter`.
+
 Review and chapter regeneration record a workspace transaction before publishing files. If an
 update reports that recovery is needed, or a later command says a previous update needs recovery,
 run:

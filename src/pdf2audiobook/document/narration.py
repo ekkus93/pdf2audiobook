@@ -82,6 +82,9 @@ def footnote_anchor_edits(blocks: list[DocumentBlock], edited: set[str]) -> list
     return edits
 
 
+FOOTNOTE_OMIT_REASON = "explicit footnotes=omit policy (conservative classification)"
+
+
 def footnote_omit_edits(blocks: list[DocumentBlock]) -> list[CleanupEdit]:
     """Create audited exclusions for blocks classified as footnotes."""
     return [
@@ -89,7 +92,7 @@ def footnote_omit_edits(blocks: list[DocumentBlock]) -> list[CleanupEdit]:
             block_id=block.id,
             original=block.text,
             replacement="",
-            reason="explicit footnotes=omit policy (conservative classification)",
+            reason=FOOTNOTE_OMIT_REASON,
             confidence=0.9,
             accepted=True,
         )

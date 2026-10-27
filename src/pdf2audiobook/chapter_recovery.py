@@ -10,6 +10,7 @@ from pdf2audiobook.chapter_artifacts import (
     find_chapter_conflicts,
     load_artifact_state,
     plan_chapter_artifacts,
+    resolve_footnote_policy,
 )
 from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.review_transaction import commit_artifacts
@@ -24,19 +25,35 @@ class RegenerationResult:
 
 
 def regenerate_chapters(
-    manifest_path: Path, numbers: Sequence[int], *, all_conflicts: bool
+    manifest_path: Path,
+    numbers: Sequence[int],
+    *,
+    all_conflicts: bool,
+    footnotes: str | None = None,
 ) -> RegenerationResult:
     """Replace chapter files with generated text, backing up any differing file first.
 
     Runs under the workspace lock, which first completes or refuses any pending
     transaction. Approvals, review reasons and the manifest are never changed.
+    ``footnotes`` supplies the policy for a legacy workspace that has none recorded
+    and whose files do not reveal it; it may not contradict a recorded policy.
     """
     folder = manifest_path.parent
     chapter_dir = folder / "chapters"
     with workspace_lock(folder):
         manifest = read_manifest(manifest_path)
         state = load_artifact_state(folder)
-        policy = state["footnotes"] if state is not None else "warn"
+        if state is not None:
+            policy = state["footnotes"]
+            if footnotes is not None and footnotes != policy:
+                raise ExtractionError(
+                    "A footnote policy is already recorded for this workspace; "
+                    "change it by running analyze with the new pdf.footnotes setting"
+                )
+        else:
+            policy = (
+                footnotes if footnotes is not None else resolve_footnote_policy(manifest, folder)
+            )
         if all_conflicts:
             selected = find_chapter_conflicts(manifest, folder, policy)
         else:

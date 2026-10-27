@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from pdf2audiobook.document.narration import FOOTNOTE_OMIT_REASON
 from pdf2audiobook.document.structure import chapter_coverage_report, render_chapter_narration
-from pdf2audiobook.errors import ChapterConflictError, ExtractionError
+from pdf2audiobook.errors import ChapterConflictError, ExtractionError, FootnotePolicyUnknownError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.workspace import digest_bytes, fingerprint
@@ -102,6 +103,52 @@ def load_artifact_state(folder: Path) -> dict[str, Any] | None:
             raise ExtractionError("Chapter artifact metadata is invalid; restore it from a backup")
         numbers.add(record["number"])
     return raw
+
+
+def resolve_footnote_policy(manifest: BookManifest, folder: Path) -> str:
+    """Return the recorded policy, or safely infer one for a legacy workspace.
+
+    Without a record, the manifest's policy-owned cleanup edits and the existing
+    chapter files must point to exactly one policy; hand-edited files never decide
+    it. Nothing is written.
+    """
+    state = load_artifact_state(folder)
+    if state is not None:
+        return str(state["footnotes"])
+    edits = [edit for edit in manifest.edits if edit.provider == "deterministic"]
+    if any(edit.reason == FOOTNOTE_OMIT_REASON for edit in edits):
+        return "omit"  # omit is applied through its accepted edits, not by rendering
+    candidates = {"warn", "inline", "end"}
+    if any(
+        edit.reason.startswith("footnote anchor marker ")
+        and edit.reason.endswith(" (note handled)")
+        for edit in edits
+    ):
+        candidates.discard("warn")  # only inline, end or omit create anchor edits
+    chapter_dir = folder / "chapters"
+    affected = False
+    any_file = False
+    recognized = False
+    for chapter in manifest.chapters:
+        digests = {
+            policy: digest_bytes(render_chapter_narration(manifest, chapter, policy).encode())
+            for policy in sorted(candidates)
+        }
+        if len(set(digests.values())) > 1:
+            affected = True
+        actual = _read_digest(chapter_dir / f"{chapter.number:03d}.txt")
+        if actual is None:
+            continue
+        any_file = True
+        matching = {policy for policy, digest in digests.items() if digest == actual}
+        if matching:
+            recognized = True
+            candidates &= matching
+    if (not affected or not any_file) and "warn" in candidates:
+        return "warn"
+    if affected and any_file and recognized and len(candidates) == 1:
+        return next(iter(candidates))
+    raise FootnotePolicyUnknownError()
 
 
 def _flag(conflicts: list[int] | None, number: int) -> None:
