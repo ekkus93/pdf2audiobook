@@ -456,6 +456,12 @@ def analyze(
     llm_provider: str | None = typer.Option(None, "--llm-provider"),
     llm_model: str | None = typer.Option(None, "--llm-model"),
     llm_url: str | None = typer.Option(None, "--llm-url"),
+    llm_context_tokens: int | None = typer.Option(
+        None,
+        "--llm-context-tokens",
+        min=512,
+        help="Context window to budget for, e.g. 262144 for a 256k model.",
+    ),
     allow_remote_content: bool | None = typer.Option(
         None, "--allow-remote-content/--no-allow-remote-content"
     ),
@@ -497,6 +503,8 @@ def analyze(
             overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
         if llm is True:
             overrides.setdefault("llm", {})["enabled"] = True
+        if llm_context_tokens is not None:
+            overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
         if vision is not None:
             overrides.setdefault("llm", {})["vision"] = vision
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
@@ -544,6 +552,12 @@ def convert(
     llm_provider: str | None = typer.Option(None, "--llm-provider"),
     llm_model: str | None = typer.Option(None, "--llm-model"),
     llm_url: str | None = typer.Option(None, "--llm-url"),
+    llm_context_tokens: int | None = typer.Option(
+        None,
+        "--llm-context-tokens",
+        min=512,
+        help="Context window to budget for, e.g. 262144 for a 256k model.",
+    ),
     allow_remote_content: bool | None = typer.Option(
         None, "--allow-remote-content/--no-allow-remote-content"
     ),
@@ -617,6 +631,8 @@ def convert(
             overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
         if llm is True:
             overrides.setdefault("llm", {})["enabled"] = True
+        if llm_context_tokens is not None:
+            overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
         if vision is not None:
             overrides.setdefault("llm", {})["vision"] = vision
         if speed is not None:

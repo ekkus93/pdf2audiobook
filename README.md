@@ -286,6 +286,10 @@ chunk_tokens = 4000
 max_output_tokens = 1024
 ~~~
 
+`max_context_tokens` can also be set for one run with `--llm-context-tokens N` on `analyze` and
+`convert` (for example `--llm-context-tokens 262144` for a 256k model); it must stay above
+`chunk_tokens` plus the output reserve.
+
 `max_output_tokens` can also be set with
 `PDF2AUDIOBOOK_LLM_MAX_OUTPUT_TOKENS`. The adapter sends this value as
 `max_tokens` and fails closed if a server rejects the parameter; it must
