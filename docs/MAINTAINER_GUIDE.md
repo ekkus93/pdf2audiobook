@@ -513,6 +513,13 @@ extraction pages (`pdf.extract_pdf(progress=)`), LLM requests (`CachedLLMProvide
 with each stage announcing its window count through `llm.advisory_common.planned_windows`),
 synthesis characters (`audio.synthesize_chunks(on_chunk=)`, cached and resumed work counted as
 `initial`/`cached=True` so it does not distort the estimate) and `pack-m4b` chapters/encode.
+The CLI wraps the chosen reporter in `StatusReporter`, installs it with `use_reporter` (a context
+variable read by `current_reporter()`, so no new argument is threaded through the pipeline or its
+test doubles) and `bind_workspace` tells it where `reports/run_status.json` lives. A daemon thread
+refreshes that file and prints the optional heartbeat; `summary()` marks the run `completed` and a
+bare `close()` marks it `stopped`. `CachedLLMProvider._observe` emits `llm_request`,
+`llm_request_failed` and `llm_slow_request` using per-stage baselines; `LLMError.reason` carries a
+stable tag such as `output_cap`.
 Bar text may contain only stage names, counts and chapter numbers. Log lines go through
 `progress_display.write_stderr` so they do not corrupt an open bar. When the terminal size is
 unknown (a pseudo-terminal reporting 0x0), explicit dimensions are passed because tqdm would

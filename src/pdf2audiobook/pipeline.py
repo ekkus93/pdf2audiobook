@@ -74,7 +74,12 @@ from pdf2audiobook.models import (
     generated_chapter_fingerprint,
 )
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
-from pdf2audiobook.progress_display import ProgressHandle, ProgressReporter
+from pdf2audiobook.progress_display import (
+    ProgressHandle,
+    ProgressReporter,
+    bind_workspace,
+    current_reporter,
+)
 from pdf2audiobook.review_reasons import (
     REVIEW_REASON_CODES,
 )
@@ -227,9 +232,11 @@ def analyze_book(
 ) -> Path:
     """Analyze one book while holding its workspace lock for every write."""
     folder = _analysis_workspace_folder(source, settings)
+    reporter = progress if progress is not None else current_reporter()
+    bind_workspace(reporter, folder)
     try:
         with workspace_lock(folder, create=True):
-            return _analyze_book_locked(source, settings, extractor=extractor, progress=progress)
+            return _analyze_book_locked(source, settings, extractor=extractor, progress=reporter)
     except WorkspaceLockedError as exc:
         if str(exc) == "Could not lock the book workspace":
             raise ExtractionError("Could not create or update the output workspace") from None
@@ -873,6 +880,7 @@ def convert_book(
         # injected analysis adapters used by offline callers and tests.
         manifest_path = analyze_book(source, settings, extractor=extractor, **analysis_extra)
         folder = manifest_path.parent
+    bind_workspace(progress if progress is not None else current_reporter(), folder)
     with workspace_lock(folder, create=True):
         cover_image = read_cover_image(settings.audio.cover_image)
         cover_identity = digest_bytes(cover_image[0]) if cover_image is not None else None
@@ -889,7 +897,7 @@ def convert_book(
             accept_review=accept_review,
             tts_provider=tts_provider,
             encoder=encoder,
-            progress=progress,
+            progress=progress if progress is not None else current_reporter(),
         )
 
 

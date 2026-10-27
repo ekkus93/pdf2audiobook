@@ -548,14 +548,16 @@ class OpenAICompatibleProvider:
                 if truncated and not (isinstance(message, str) and message.strip()):
                     raise LLMError(
                         "LLM output cap reached before any answer; raise "
-                        "llm.max_output_tokens or disable model reasoning"
+                        "llm.max_output_tokens or disable model reasoning",
+                        reason="output_cap",
                     )
                 try:
                     decoded = json.loads(message)
                 except ValueError:
                     if truncated:
                         raise LLMError(
-                            "LLM answer was cut off at the output cap; raise llm.max_output_tokens"
+                            "LLM answer was cut off at the output cap; raise llm.max_output_tokens",
+                            reason="output_cap",
                         ) from None
                     raise
                 if not isinstance(decoded, dict):

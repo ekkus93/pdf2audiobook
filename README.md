@@ -317,6 +317,26 @@ pdf2audiobook --progress convert ./book.pdf     # force bars on
 pdf2audiobook --no-progress convert ./book.pdf  # force bars off
 ~~~
 
+### Watching a long run
+
+Every `analyze` and `convert` keeps `reports/run_status.json` in the book's workspace, even with
+`--json`: the command, `state` (`running`, `completed` or `stopped`), elapsed time, the current stage
+with its count, total and estimated seconds remaining, and the stages already finished. It is
+refreshed every few seconds, including while a single slow LLM request is in flight, so
+`watch -n5 cat reports/run_status.json` works from another terminal. It contains only stage names,
+counts and times.
+
+`--heartbeat N` (or `general.heartbeat_seconds`, `PDF2AUDIOBOOK_HEARTBEAT_SECONDS`) also prints one
+line to stderr every N seconds, such as
+`[12:49:58] Analyzing with the LLM, cleanup: 712/940 request, 52m 00s elapsed, about 11m 20s left`.
+It is off by default so that stderr stays empty on success, and is ignored under `--quiet`.
+
+With `--verbose`, each LLM request logs one `llm_request` event (stage, seconds, prompt and output
+tokens) and a failed one logs `llm_request_failed` with a reason such as `output_cap`. A request
+that is far slower or produces far more output than its stage's recent average raises a single
+`llm_slow_request` warning per stage, which usually means the model is rambling or the output cap
+is too generous.
+
 By default (`general.progress = "auto"`, or `PDF2AUDIOBOOK_PROGRESS=auto|always|never`) bars
 appear only when stderr is a terminal. `--json` and `--quiet` always turn them off, so machine
 output stays parseable; bars never go to stdout and never include book text, titles or paths.

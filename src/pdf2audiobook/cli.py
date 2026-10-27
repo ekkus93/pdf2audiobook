@@ -44,8 +44,11 @@ from pdf2audiobook.logging import (
 from pdf2audiobook.progress_display import (
     NullReporter,
     ProgressReporter,
+    StatusReporter,
+    bind_workspace,
     format_elapsed,
     make_reporter,
+    use_reporter,
 )
 
 app = typer.Typer(
@@ -119,16 +122,22 @@ def fail_interrupted(*, json_output: bool = False) -> None:
     raise typer.Exit(code=130)
 
 
-def _progress_reporter(settings: Settings, json_output: bool) -> ProgressReporter:
-    """Resolve --progress/--no-progress, ``general.progress``, --json and --quiet."""
+def _progress_reporter(settings: Settings, json_output: bool, command: str) -> ProgressReporter:
+    """Resolve --progress/--no-progress, --heartbeat, ``general.*``, --json and --quiet.
+
+    The result always keeps ``reports/run_status.json``; it draws bars and prints
+    heartbeats only where the options allow.
+    """
     forced = _ROOT_OPTIONS.get("progress")
     mode = "always" if forced is True else "never" if forced is False else settings.general.progress
-    return make_reporter(mode, json_output=json_output, quiet=bool(_ROOT_OPTIONS.get("quiet")))
-
-
-def _progress_kwargs(reporter: ProgressReporter) -> dict[str, Any]:
-    """Pass a reporter only when one is shown; injected adapters need not accept it."""
-    return {"progress": reporter} if reporter.enabled else {}
+    inner = make_reporter(mode, json_output=json_output, quiet=bool(_ROOT_OPTIONS.get("quiet")))
+    beat = _ROOT_OPTIONS.get("heartbeat")
+    heartbeat = float(beat) if beat is not None else settings.general.heartbeat_seconds
+    return StatusReporter(
+        inner,
+        command=command,
+        heartbeat_seconds=0.0 if _ROOT_OPTIONS.get("quiet") else heartbeat,
+    )
 
 
 def emit(payload: dict[str, Any], json_output: bool) -> None:
@@ -165,6 +174,13 @@ def entry(
         False, "--verbose", help="Emit privacy-safe debug events to stderr."
     ),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress non-error log events."),
+    heartbeat: float | None = typer.Option(
+        None,
+        "--heartbeat",
+        min=0,
+        max=3600,
+        help="Print one status line to stderr every N seconds (0 turns it off).",
+    ),
     progress: bool | None = typer.Option(
         None,
         "--progress/--no-progress",
@@ -173,7 +189,7 @@ def entry(
 ) -> None:
     if verbose and quiet:
         raise typer.BadParameter("--verbose and --quiet cannot be combined")
-    ctx.obj = {"verbose": verbose, "quiet": quiet, "progress": progress}
+    ctx.obj = {"verbose": verbose, "quiet": quiet, "progress": progress, "heartbeat": heartbeat}
     _ROOT_OPTIONS.clear()
     _ROOT_OPTIONS.update(ctx.obj)
     configure_logging(verbose=verbose, quiet=quiet)
@@ -511,10 +527,11 @@ def analyze(
         configure_effective_logging(settings, origins)
         from pdf2audiobook.pipeline import analyze_book
 
-        reporter = _progress_reporter(settings, json_output)
+        reporter = _progress_reporter(settings, json_output, "analyze")
         started = time.monotonic()
         try:
-            manifest_path = analyze_book(source, settings, **_progress_kwargs(reporter))
+            with use_reporter(reporter):
+                manifest_path = analyze_book(source, settings)
         except OSError:
             raise WorkspaceError("Cannot create the output workspace") from None
         finally:
@@ -666,11 +683,12 @@ def convert(
         from pdf2audiobook.workspace import read_manifest, workspace_lock
 
         read_cover_image(settings.audio.cover_image)
-        reporter = _progress_reporter(settings, json_output)
+        reporter = _progress_reporter(settings, json_output, "convert")
         started = time.monotonic()
         if dry_run:
             try:
-                manifest_path = analyze_book(source, settings, **_progress_kwargs(reporter))
+                with use_reporter(reporter):
+                    manifest_path = analyze_book(source, settings)
             finally:
                 reporter.close()
             with workspace_lock(manifest_path.parent):
@@ -701,15 +719,15 @@ def convert(
                 )
         else:
             try:
-                outputs = convert_book(
-                    source,
-                    settings,
-                    chapter=chapter,
-                    chapter_range=selected_range,
-                    force=force,
-                    accept_review=tuple(accept_review),
-                    **_progress_kwargs(reporter),
-                )
+                with use_reporter(reporter):
+                    outputs = convert_book(
+                        source,
+                        settings,
+                        chapter=chapter,
+                        chapter_range=selected_range,
+                        force=force,
+                        accept_review=tuple(accept_review),
+                    )
             except OSError:
                 raise WorkspaceError("Cannot create the output workspace") from None
             finally:
@@ -910,7 +928,8 @@ def pack_m4b(
             skipped_ids = {chapter.id for chapter in selection.skipped}
             chapter_files = []
             stale_chapters = []
-            reporter = _progress_reporter(settings, json_output)
+            reporter = _progress_reporter(settings, json_output, "pack-m4b")
+            bind_workspace(reporter, manifest_path.parent)
             started = time.monotonic()
             checking = reporter.stage(
                 "Checking chapter audio",

@@ -34,6 +34,7 @@ class General(ConfigModel):
     resume: bool = True
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     progress: Literal["auto", "always", "never"] = "auto"
+    heartbeat_seconds: float = Field(default=0.0, ge=0, le=3600)
 
 
 class Pdf(ConfigModel):
@@ -206,6 +207,7 @@ class Settings(ConfigModel):
 ENV_KEYS = {
     "PDF2AUDIOBOOK_OUTPUT_DIR": ("general", "output_dir"),
     "PDF2AUDIOBOOK_PROGRESS": ("general", "progress"),
+    "PDF2AUDIOBOOK_HEARTBEAT_SECONDS": ("general", "heartbeat_seconds"),
     "PDF2AUDIOBOOK_RESUME": ("general", "resume"),
     "PDF2AUDIOBOOK_OCR": ("pdf", "ocr"),
     "PDF2AUDIOBOOK_OCR_LANGUAGE": ("pdf", "ocr_language"),

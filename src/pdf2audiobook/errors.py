@@ -56,8 +56,10 @@ class FootnotePolicyUnknownError(ExtractionError):
 class LLMError(AudiobookError):
     exit_code = 5
 
-    def __init__(self, message: str, *, unbilled: bool = False):
+    def __init__(self, message: str, *, unbilled: bool = False, reason: str | None = None):
         super().__init__(message)
+        # Stable, content-free tag for logs, e.g. "output_cap".
+        self.reason = reason
         # Only transport failures that prove the request was never sent set this.
         self.unbilled = unbilled
 

@@ -142,6 +142,7 @@ def _dispatch(event: str, level: int, fields: dict[str, object]) -> None:
                     "An audio cleanup candidate could not be inspected and was left untouched"
                 ),
                 "degraded_output": "Some chapters produced degraded output",
+                "llm_slow_request": "An LLM request was much slower or longer than usual",
             }.get(event, event.replace("_", " "))
             write_stderr(f"Warning: {description}.\n")
         return
