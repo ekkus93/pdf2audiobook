@@ -1,6 +1,6 @@
 # PDF2Audiobook Review Follow-up TODO
 
-**Status:** Complete; optional Kitten synthesis smoke test passed
+**Status:** Complete, with follow-up fixes tracked in `docs/PDF2AUDIOBOOK_FOLLOWUP_FIXES_TODO.md`; optional Kitten synthesis smoke test passed
 **Date:** 2026-10-27
 **Specification:** `docs/PDF2AUDIOBOOK_REVIEW_FOLLOWUP_SPEC.md`
 
@@ -14,7 +14,7 @@ Work in dependency order. Check an item only after its implementation and accept
 
 ## 2. Protect edited narration
 
-Progress: the renderer plans guarded chapter updates and publishes them through the transaction journal. Review uses the recorded policy. Selection and packaging inspect effective chapter text. An offline fake-provider test covers a correction and voice marker through conversion and packaging, including stale audio after another edit. More conflict, recovery and policy acceptance cases remain open.
+Progress: the renderer plans guarded chapter updates and publishes them through the transaction journal. Review uses the recorded policy. Selection and packaging inspect effective chapter text. An offline fake-provider test covers a correction and voice marker through conversion and packaging, including stale audio after another edit. The dry-run, legacy end-to-end and no-mixed-consumption acceptance cases were found missing in the 2026-10-27 review and are tracked by `docs/PDF2AUDIOBOOK_FOLLOWUP_FIXES_TODO.md` §6.
 
 The older streamed-resume and packaging tests were updated to exercise preservation and to create a known generated baseline; an additional packaging test now asserts edited text invalidates older audio. The full `uv run pytest -q -ra` run passed 1546 tests and skipped the optional Kitten smoke test (extra unavailable). After the final directory-sync adjustment, 43 focused recovery, artifact and locking tests passed, including failure while syncing the committed transaction record.
 
@@ -45,7 +45,7 @@ Evidence: review and artifact publication record a committed transaction contain
 
 - [x] Document the responsibilities and dependency map of the pipeline, document structure, audio and LLM modules (R4). Evidence: the companion spec's current artifact and dependency map.
 - [x] Extract cohesive chapter artifact and review transaction components, then split other responsibilities where the map supports it. Preserve interfaces or update and document callers deliberately. Evidence: `chapter_artifacts.py`, `review_transaction.py`, and `audio/freshness.py`; the pipeline retains the sidecar validator import.
-- [x] Add new runtime modules to mypy configuration and run existing and new tests after each behavior-preserving extraction. Evidence: mypy passed 27 modules; `uv run pytest -q tests/test_cache_depth_reaches_check.py tests/test_mp3_resume_id3_integrity.py tests/test_pack_m4b_safety.py tests/test_pack_m4b_manifest_text.py` passed 21 tests after moving sidecar validation, followed by the full suite.
+- [x] Add new runtime modules to mypy configuration and run existing and new tests after each behavior-preserving extraction. Evidence: mypy passed 27 modules at that commit (41 after the later module split and the addition of `narration.py`, tracked in `docs/PDF2AUDIOBOOK_FOLLOWUP_FIXES_TODO.md` §0); `uv run pytest -q tests/test_cache_depth_reaches_check.py tests/test_mp3_resume_id3_integrity.py tests/test_pack_m4b_safety.py tests/test_pack_m4b_manifest_text.py` passed 21 tests after moving sidecar validation, followed by the full suite.
 
 ## 6. Finish and verify
 

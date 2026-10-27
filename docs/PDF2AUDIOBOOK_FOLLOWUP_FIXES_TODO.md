@@ -1,6 +1,6 @@
 # PDF2Audiobook Follow-up Fixes and Progress TODO
 
-**Status:** Not started
+**Status:** In progress
 **Date:** 2026-10-27
 **Baseline:** master at 5a4f96e plus the uncommitted module split in the working tree
 **Specification:** `docs/PDF2AUDIOBOOK_FOLLOWUP_FIXES_SPEC.md` (R1–R11)
@@ -24,11 +24,11 @@
 
 ## 0. Baseline
 
-- [ ] 0.1 **refactor** Commit the working-tree module split (R9). Split it into one commit per cohesive extraction where practical.
-  - [ ] 0.1a Confirm `[tool.mypy].files` lists every new module, and add `src/pdf2audiobook/narration.py`.
-  - [ ] 0.1b Full suite passes; the only test changes are monkeypatch targets (`tests/test_audio_error_privacy.py`, `tests/test_review_gate_current_state.py`).
-  - [ ] 0.1c Update `docs/MAINTAINER_GUIDE.md` with the module responsibilities and re-export facades.
-- [ ] 0.2 **docs** Fix `docs/PDF2AUDIOBOOK_REVIEW_FOLLOWUP_TODO.md` (R9): remove the stale §2 "Progress" paragraph, correct §5's mypy evidence, and point to this TODO.
+- [x] 0.1 **refactor** Commit the working-tree module split (R9). Split it into one commit per cohesive extraction where practical.
+  - [x] 0.1a Confirm `[tool.mypy].files` lists every new module, and add `src/pdf2audiobook/narration.py`.
+  - [x] 0.1b Full suite passes; the only test changes are monkeypatch targets (`tests/test_audio_error_privacy.py`, `tests/test_review_gate_current_state.py`).
+  - [x] 0.1c Update `docs/MAINTAINER_GUIDE.md` with the module responsibilities and re-export facades.
+- [x] 0.2 **docs** Fix `docs/PDF2AUDIOBOOK_REVIEW_FOLLOWUP_TODO.md` (R9): remove the stale §2 "Progress" paragraph, correct §5's mypy evidence, and point to this TODO.
 
 ## 1. Lock-free reads (R1)
 
