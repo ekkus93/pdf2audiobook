@@ -182,7 +182,7 @@ def render_chapter_texts(
     from pdf2audiobook.review_transaction import commit_artifacts
     from pdf2audiobook.workspace import workspace_lock
 
-    with workspace_lock(folder):
+    with workspace_lock(folder, create=True):
         plan = plan_chapter_artifacts(manifest, folder, footnotes)
         commit_artifacts(folder, plan, manifest=manifest if commit_manifest else None)
 

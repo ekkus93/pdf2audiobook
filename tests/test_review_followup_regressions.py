@@ -13,7 +13,13 @@ from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
 from pdf2audiobook.pipeline import analyze_book, convert_book
 from pdf2audiobook.review_transaction import JOURNAL, ReviewRecoveryRequired
 from pdf2audiobook.review_ui import save_chapter_updates
-from pdf2audiobook.workspace import read_manifest, write_manifest
+from pdf2audiobook.workspace import read_manifest, workspace_lock, write_manifest
+
+
+def _recovered_manifest(path: Path) -> BookManifest:
+    """Read through a writer lock, which completes any committed transaction first."""
+    with workspace_lock(path.parent):
+        return read_manifest(path)
 
 
 def _updates(manifest: BookManifest) -> list[dict[str, object]]:
@@ -133,7 +139,7 @@ def test_committed_review_recovers_after_interrupted_publication(
         with pytest.raises(ReviewRecoveryRequired, match="committed"):
             save_chapter_updates(path, updates)
         assert (tmp_path / JOURNAL).exists()
-    assert read_manifest(path).chapters[0].title == "After"
+    assert _recovered_manifest(path).chapters[0].title == "After"
     assert not (tmp_path / JOURNAL).exists()
     assert read_manifest(path).chapters[0].title == "After"
 
@@ -268,7 +274,7 @@ def test_interrupted_review_recovers_each_artifact(tmp_path: Path, monkeypatch, 
             save_chapter_updates(path, updates)
         assert "private" not in str(exc.value)
         assert (tmp_path / JOURNAL).exists()
-    recovered = read_manifest(path)
+    recovered = _recovered_manifest(path)
     assert recovered.chapters[0].end_block == 2
     assert recovered.chapters[1].start_block == 2
     assert "Body 1" in (tmp_path / "chapters" / "001.txt").read_text()
@@ -312,11 +318,11 @@ def test_recovery_refuses_to_overwrite_an_edit_after_commit(tmp_path: Path, monk
             save_chapter_updates(path, updates)
     target.write_text("User changed this during recovery.", encoding="utf-8")
     with pytest.raises(ReviewRecoveryRequired):
-        read_manifest(path)
+        _recovered_manifest(path)
     assert target.read_text() == "User changed this during recovery."
     assert (tmp_path / JOURNAL).exists()
     target.write_bytes(original_text)
-    assert read_manifest(path).chapters[0].end_block == 2
+    assert _recovered_manifest(path).chapters[0].end_block == 2
     assert not (tmp_path / JOURNAL).exists()
 
 
@@ -374,7 +380,7 @@ def test_review_http_reports_committed_recovery(tmp_path: Path, monkeypatch):
             response = json.loads(exc.value.read())
             assert "committed" in response["error"]
             assert "private" not in response["error"]
-        assert read_manifest(path).chapters[0].title == "After"
+        assert _recovered_manifest(path).chapters[0].title == "After"
     finally:
         server.shutdown()
         server.server_close()
@@ -441,7 +447,7 @@ def test_cleanup_failure_leaves_transaction_for_idempotent_recovery(tmp_path: Pa
         with pytest.raises(ReviewRecoveryRequired):
             save_chapter_updates(path, updates)
         assert (tmp_path / JOURNAL).exists()
-    assert read_manifest(path).chapters[0].title == "After"
+    assert _recovered_manifest(path).chapters[0].title == "After"
     assert read_manifest(path).chapters[0].title == "After"
     assert not (tmp_path / JOURNAL).exists()
 
@@ -482,7 +488,7 @@ def test_committed_transaction_recovers_in_fresh_process(tmp_path: Path, monkeyp
         [
             sys.executable,
             "-c",
-            "from pathlib import Path; from pdf2audiobook.workspace import read_manifest; import sys; print(read_manifest(Path(sys.argv[1])).chapters[0].title)",
+            "from pathlib import Path; from pdf2audiobook.workspace import read_manifest, workspace_lock; import sys; path = Path(sys.argv[1]); lock = workspace_lock(path.parent); lock.__enter__(); print(read_manifest(path).chapters[0].title)",
             str(path),
         ],
         capture_output=True,
@@ -695,4 +701,4 @@ def test_commit_record_sync_failure_is_reported_as_committed(tmp_path: Path, mon
         with pytest.raises(ReviewRecoveryRequired, match="committed"):
             save_chapter_updates(path, updates)
         assert (tmp_path / JOURNAL).exists()
-    assert read_manifest(path).chapters[0].title == "After"
+    assert _recovered_manifest(path).chapters[0].title == "After"

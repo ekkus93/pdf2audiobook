@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from pdf2audiobook.document.structure import chapter_coverage_report
-from pdf2audiobook.errors import ExtractionError, WorkspaceLockedError
+from pdf2audiobook.errors import ExtractionError, PendingRecoveryError, WorkspaceLockedError
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
 from pdf2audiobook.review_transaction import ReviewRecoveryRequired, commit_review
@@ -133,7 +133,7 @@ def save_chapter_updates(manifest_path: Path, updates: Any, acknowledge: Any = N
 
     A review reason is acknowledged only when the user names it explicitly.
     """
-    with workspace_lock(manifest_path.parent, blocking=False):
+    with workspace_lock(manifest_path.parent, blocking=False, create=True):
         _save_chapter_updates_locked(manifest_path, updates, acknowledge)
 
 
@@ -284,6 +284,8 @@ def create_review_server(
             elif route == "/api/manifest" and self._authorized():
                 try:
                     self._json(200, _review_payload(read_manifest(resolved_manifest)))
+                except PendingRecoveryError as exc:
+                    self._json(503, {"error": str(exc)})
                 except Exception:
                     self._json(400, {"error": "Could not read the chapter manifest"})
             elif route.startswith("/api/") and not self._authorized():

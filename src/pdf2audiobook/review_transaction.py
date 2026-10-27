@@ -14,9 +14,9 @@ from pdf2audiobook.chapter_artifacts import STATE_NAME, ArtifactPlan, _read_dige
 from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import BookManifest
-from pdf2audiobook.workspace import atomic_write, digest_bytes
+from pdf2audiobook.workspace import REVIEW_JOURNAL, atomic_write, digest_bytes
 
-JOURNAL = ".review-transaction.json"
+JOURNAL = REVIEW_JOURNAL
 _TARGET = re.compile(
     r"(?:manifest\.json|coverage\.json|chapter-artifacts\.json|chapters/[0-9]{3,}\.txt)\Z"
 )

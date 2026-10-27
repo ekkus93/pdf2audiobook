@@ -10,15 +10,28 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from pdf2audiobook.errors import ExtractionError, WorkspaceError, WorkspaceLockedError
+from pdf2audiobook.errors import (
+    ExtractionError,
+    PendingRecoveryError,
+    WorkspaceError,
+    WorkspaceLockedError,
+)
 from pdf2audiobook.models import BookManifest
 
 _workspace_locks = threading.local()
+REVIEW_JOURNAL = ".review-transaction.json"
+_MANIFEST_UNREADABLE = (
+    "Cannot read or validate audiobook manifest; re-run analyze with a new output directory"
+)
 
 
 @contextmanager
-def workspace_lock(folder: Path, *, blocking: bool = False) -> Iterator[None]:
-    """Hold the per-book lock used by analysis, conversion and review writes."""
+def workspace_lock(folder: Path, *, blocking: bool = False, create: bool = False) -> Iterator[None]:
+    """Hold the per-book lock used by analysis, conversion and review writes.
+
+    Only writers that may start a new workspace pass ``create=True``; every other
+    caller fails closed on a missing workspace instead of creating directories.
+    """
     lock_key = folder.resolve()
     held: set[Path] = getattr(_workspace_locks, "held", set())
     if lock_key in held:
@@ -32,8 +45,11 @@ def workspace_lock(folder: Path, *, blocking: bool = False) -> Iterator[None]:
         recover_review_transaction(folder)
         yield
         return
+    if not create and not folder.is_dir():
+        raise ExtractionError(_MANIFEST_UNREADABLE)
     try:
-        folder.mkdir(parents=True, exist_ok=True)
+        if create:
+            folder.mkdir(parents=True, exist_ok=True)
         handle = (folder / ".convert.lock").open("a+")
     except OSError:
         raise WorkspaceError("Cannot create the output workspace") from None
@@ -102,18 +118,31 @@ def write_json(path: Path, obj: Any) -> None:
     )
 
 
+def _refuse_pending_update(folder: Path) -> None:
+    journal = folder / REVIEW_JOURNAL
+    if journal.exists() or journal.is_symlink():
+        raise PendingRecoveryError(
+            "A workspace update is pending recovery; run a writing command such as convert "
+            "to complete it"
+        )
+
+
 def read_manifest(path: Path) -> BookManifest:
-    """Fail closed without disclosing user book content or private file paths."""
+    """Read without locking, creating files or recovering; refuse pending updates.
+
+    Writers that need recovery take ``workspace_lock`` first, which completes any
+    committed transaction before this read.
+    """
     try:
-        with workspace_lock(path.parent):
-            return BookManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        _refuse_pending_update(path.parent)
+        manifest = BookManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        _refuse_pending_update(path.parent)
+        return manifest
     except (OSError, ValueError):
         # Pydantic diagnostics can include untrusted field values and input
         # fragments; filesystem exceptions may contain private workspace paths.
         # Preserve the existing manifest for user recovery on read failures.
-        raise ExtractionError(
-            "Cannot read or validate audiobook manifest; re-run analyze with a new output directory"
-        ) from None
+        raise ExtractionError(_MANIFEST_UNREADABLE) from None
 
 
 def write_manifest(path: Path, manifest: BookManifest) -> None:

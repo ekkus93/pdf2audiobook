@@ -21,6 +21,10 @@ class WorkspaceError(ExtractionError):
     """The application could not create or update an output workspace."""
 
 
+class PendingRecoveryError(WorkspaceError):
+    """A committed workspace update is pending and must be recovered first."""
+
+
 class LLMError(AudiobookError):
     exit_code = 5
 

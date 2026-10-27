@@ -32,10 +32,10 @@
 
 ## 1. Lock-free reads (R1)
 
-- [ ] 1.1 Add `PendingRecoveryError` to `errors.py`, with a content-free message and the workspace exit code.
-- [ ] 1.2 Add `create: bool` to `workspace_lock`. Only writer entry points pass `create=True`.
-- [ ] 1.3 Make `read_manifest` lock-free, with the journal check before and after the read. Move every locked caller's read under its existing lock (conversion, dry-run, `pack-m4b`, review save).
-- [ ] 1.4 Tests:
+- [x] 1.1 Add `PendingRecoveryError` to `errors.py`, with a content-free message and the workspace exit code.
+- [x] 1.2 Add `create: bool` to `workspace_lock`. Only writer entry points pass `create=True`.
+- [x] 1.3 Make `read_manifest` lock-free, with the journal check before and after the read. Move every locked caller's read under its existing lock (conversion, dry-run, `pack-m4b`, review save).
+- [x] 1.4 Tests:
   - `read_manifest` and `GET /api/manifest` succeed while another process holds the lock;
   - a nonexistent path creates nothing;
   - a pending journal raises `PendingRecoveryError` with no file changes;

@@ -222,7 +222,7 @@ def analyze_book(
     """Analyze one book while holding its workspace lock for every write."""
     folder = _analysis_workspace_folder(source, settings)
     try:
-        with workspace_lock(folder):
+        with workspace_lock(folder, create=True):
             return _analyze_book_locked(source, settings, extractor=extractor)
     except WorkspaceLockedError as exc:
         if str(exc) == "Could not lock the book workspace":
@@ -850,7 +850,7 @@ def convert_book(
         # injected analysis adapters used by offline callers and tests.
         manifest_path = analyze_book(source, settings, extractor=extractor)
         folder = manifest_path.parent
-    with workspace_lock(folder):
+    with workspace_lock(folder, create=True):
         cover_image = read_cover_image(settings.audio.cover_image)
         cover_identity = digest_bytes(cover_image[0]) if cover_image is not None else None
         if manifest_path is None:
