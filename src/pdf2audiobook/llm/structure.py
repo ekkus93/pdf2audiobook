@@ -15,6 +15,7 @@ from pdf2audiobook.llm.advisory_common import (
     _bounded_block_windows,
     _diagnostic_block_id,
     _record_decision,
+    planned_windows,
 )
 from pdf2audiobook.models import DocumentBlock
 
@@ -31,15 +32,19 @@ def detect_llm_headings(
     approved: set[str] = set()
     warnings = []
     known_ids = {block.id for block in blocks}
-    for start, window, snippet in _bounded_block_windows(
-        blocks,
-        window_size=window_size,
-        max_json_bytes=chunk_tokens,
-        record=lambda item: {
-            "id": item.id,
-            "page": item.page_index + 1,
-            "text": item.text,
-        },
+    for start, window, snippet in planned_windows(
+        provider,
+        "structure",
+        _bounded_block_windows(
+            blocks,
+            window_size=window_size,
+            max_json_bytes=chunk_tokens,
+            record=lambda item: {
+                "id": item.id,
+                "page": item.page_index + 1,
+                "text": item.text,
+            },
+        ),
     ):
         if not window:
             warnings.append(f"LLM heading skipped oversized block at index {start}")
@@ -164,16 +169,20 @@ def propose_llm_contents_boundaries(
         title = match.group("title").rstrip(" .…·")
         return (title, match.group("page")) if title.strip() else None
 
-    for start, window, snippet in _bounded_block_windows(
-        blocks,
-        window_size=window_size,
-        max_json_bytes=chunk_tokens,
-        record=lambda block: {
-            "id": block.id,
-            "page": block.page_index + 1,
-            "kind": block.kind,
-            "text": block.text,
-        },
+    for start, window, snippet in planned_windows(
+        provider,
+        "contents",
+        _bounded_block_windows(
+            blocks,
+            window_size=window_size,
+            max_json_bytes=chunk_tokens,
+            record=lambda block: {
+                "id": block.id,
+                "page": block.page_index + 1,
+                "kind": block.kind,
+                "text": block.text,
+            },
+        ),
     ):
         primary_ids = {block.id for block in window}
         if not window:

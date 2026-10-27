@@ -168,6 +168,7 @@ def test_generic_tts_environment_uses_effective_provider_and_specific_wins():
 def test_environment_mapping_covers_every_declared_variable():
     environ = {
         "PDF2AUDIOBOOK_OUTPUT_DIR": "2024",
+        "PDF2AUDIOBOOK_PROGRESS": "never",
         "PDF2AUDIOBOOK_RESUME": "yes",
         "PDF2AUDIOBOOK_OCR": "never",
         "PDF2AUDIOBOOK_OCR_LANGUAGE": "eng",
@@ -204,6 +205,7 @@ def test_environment_mapping_covers_every_declared_variable():
     assert settings.llm.max_estimated_cost_usd == 2.0
     assert settings.llm.ollama.model == "7"
     assert settings.llm.ollama.timeout_seconds == 420
+    assert settings.general.progress == "never"
     assert settings.tts.kitten.model == "7"
     assert settings.tts.kitten.speed == 1.25
     assert settings.tts.piper.speed == 1.5

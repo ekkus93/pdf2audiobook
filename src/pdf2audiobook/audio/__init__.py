@@ -12,7 +12,7 @@ import time
 import unicodedata
 import wave
 from pathlib import Path
-from typing import Mapping, cast
+from typing import Callable, Mapping, cast
 
 import numpy as np
 
@@ -483,8 +483,12 @@ def synthesize_chunks(
     pronunciations: Mapping[str, str] | None = None,
     max_retries: int = 2,
     output_wav: Path | None = None,
+    on_chunk: Callable[[int, bool], None] | None = None,
 ) -> np.ndarray | Path:
-    """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress."""
+    """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress.
+
+    ``on_chunk(characters, cached)`` reports each finished chunk for progress display.
+    """
     samples: list[np.ndarray] = []
     # Public synthesis is callable without Pydantic or the Kitten adapter.
     # Invalid speed must never reach a third-party engine or cache identity.
@@ -623,6 +627,7 @@ def synthesize_chunks(
             audio = None
             checksum = None
             encoded_size = None
+            cached_chunk = False
             if (
                 use_cache
                 and chunk_path.is_file()
@@ -657,6 +662,7 @@ def synthesize_chunks(
                         audio = read_wav(cached_bytes, rate)
                         checksum = candidate
                         encoded_size = len(cached_bytes)
+                        cached_chunk = True
                 except (AudioError, OSError, UnicodeError):
                     pass
             if audio is None:
@@ -732,6 +738,8 @@ def synthesize_chunks(
                 }
             )
             progress["completed_chunks"] += 1
+            if on_chunk is not None:
+                on_chunk(len(text), cached_chunk)
             _append_progress_update(
                 progress_stream,
                 number=idx + 1,

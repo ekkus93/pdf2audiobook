@@ -7,6 +7,8 @@ import logging
 import re
 import sys
 
+from pdf2audiobook.progress_display import bars_active, write_stderr
+
 LOGGER = logging.getLogger("pdf2audiobook")
 _OVERRIDE_LEVEL: int | None = None
 _CACHE_DIRECTORY_WARNING_EMITTED = False
@@ -62,6 +64,13 @@ class CurrentStderrHandler(logging.StreamHandler):
 
     def emit(self, record: logging.LogRecord) -> None:
         self.stream = sys.stderr
+        if bars_active():
+            # Keep log lines from interleaving with an active progress bar.
+            try:
+                write_stderr(self.format(record) + "\n")
+            except Exception:
+                self.handleError(record)
+            return
         super().emit(record)
 
 
@@ -134,7 +143,7 @@ def _dispatch(event: str, level: int, fields: dict[str, object]) -> None:
                 ),
                 "degraded_output": "Some chapters produced degraded output",
             }.get(event, event.replace("_", " "))
-            sys.stderr.write(f"Warning: {description}.\n")
+            write_stderr(f"Warning: {description}.\n")
         return
     if event == "command_failed" and not structured:
         return

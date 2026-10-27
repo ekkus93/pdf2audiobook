@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import shutil
+import time
 from importlib import import_module
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,12 @@ from pdf2audiobook.logging import (
     set_output_mode,
     take_warning_codes,
     use_default_event_policy,
+)
+from pdf2audiobook.progress_display import (
+    NullReporter,
+    ProgressReporter,
+    format_elapsed,
+    make_reporter,
 )
 
 app = typer.Typer(
@@ -112,6 +119,18 @@ def fail_interrupted(*, json_output: bool = False) -> None:
     raise typer.Exit(code=130)
 
 
+def _progress_reporter(settings: Settings, json_output: bool) -> ProgressReporter:
+    """Resolve --progress/--no-progress, ``general.progress``, --json and --quiet."""
+    forced = _ROOT_OPTIONS.get("progress")
+    mode = "always" if forced is True else "never" if forced is False else settings.general.progress
+    return make_reporter(mode, json_output=json_output, quiet=bool(_ROOT_OPTIONS.get("quiet")))
+
+
+def _progress_kwargs(reporter: ProgressReporter) -> dict[str, Any]:
+    """Pass a reporter only when one is shown; injected adapters need not accept it."""
+    return {"progress": reporter} if reporter.enabled else {}
+
+
 def emit(payload: dict[str, Any], json_output: bool) -> None:
     if json_output:
         result = dict(payload)
@@ -134,6 +153,10 @@ def configure_effective_logging(settings: Settings, origins: dict[str, str]) -> 
     )
 
 
+# Root options for the running command; reset by every invocation of the root callback.
+_ROOT_OPTIONS: dict[str, Any] = {}
+
+
 @app.callback()
 def entry(
     ctx: typer.Context,
@@ -142,10 +165,17 @@ def entry(
         False, "--verbose", help="Emit privacy-safe debug events to stderr."
     ),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress non-error log events."),
+    progress: bool | None = typer.Option(
+        None,
+        "--progress/--no-progress",
+        help="Force progress bars with time estimates on or off (default: when stderr is a terminal).",
+    ),
 ) -> None:
     if verbose and quiet:
         raise typer.BadParameter("--verbose and --quiet cannot be combined")
-    ctx.obj = {"verbose": verbose, "quiet": quiet}
+    ctx.obj = {"verbose": verbose, "quiet": quiet, "progress": progress}
+    _ROOT_OPTIONS.clear()
+    _ROOT_OPTIONS.update(ctx.obj)
     configure_logging(verbose=verbose, quiet=quiet)
     if not verbose:
         use_default_event_policy()
@@ -473,11 +503,16 @@ def analyze(
         configure_effective_logging(settings, origins)
         from pdf2audiobook.pipeline import analyze_book
 
+        reporter = _progress_reporter(settings, json_output)
+        started = time.monotonic()
         try:
-            manifest_path = analyze_book(source, settings)
+            manifest_path = analyze_book(source, settings, **_progress_kwargs(reporter))
         except OSError:
             raise WorkspaceError("Cannot create the output workspace") from None
+        finally:
+            reporter.close()
         emit({"manifest": str(manifest_path)}, json_output)
+        reporter.summary(f"Analysis finished in {format_elapsed(time.monotonic() - started)}")
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
     except (typer.Exit, ClickExit):
@@ -615,8 +650,13 @@ def convert(
         from pdf2audiobook.workspace import read_manifest, workspace_lock
 
         read_cover_image(settings.audio.cover_image)
+        reporter = _progress_reporter(settings, json_output)
+        started = time.monotonic()
         if dry_run:
-            manifest_path = analyze_book(source, settings)
+            try:
+                manifest_path = analyze_book(source, settings, **_progress_kwargs(reporter))
+            finally:
+                reporter.close()
             with workspace_lock(manifest_path.parent):
                 manifest = read_manifest(manifest_path)
                 selection = prepare_chapter_selection(
@@ -652,10 +692,16 @@ def convert(
                     chapter_range=selected_range,
                     force=force,
                     accept_review=tuple(accept_review),
+                    **_progress_kwargs(reporter),
                 )
             except OSError:
                 raise WorkspaceError("Cannot create the output workspace") from None
+            finally:
+                reporter.close()
             emit({"mp3_files": [str(path) for path in outputs]}, json_output)
+            reporter.summary(
+                f"Finished {len(outputs)} chapter(s) in {format_elapsed(time.monotonic() - started)}"
+            )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
     except (typer.Exit, ClickExit):
@@ -816,6 +862,7 @@ def pack_m4b(
 ) -> None:
     """Package completed chapter MP3s as a single M4B with chapter navigation."""
     set_output_mode(json_output)
+    reporter: ProgressReporter = NullReporter()
     try:
         from pdf2audiobook.audio import audio_output_path, encode_m4b, read_cover_image
         from pdf2audiobook.chapter_artifacts import load_artifact_state, plan_chapter_artifacts
@@ -847,9 +894,17 @@ def pack_m4b(
             skipped_ids = {chapter.id for chapter in selection.skipped}
             chapter_files = []
             stale_chapters = []
+            reporter = _progress_reporter(settings, json_output)
+            started = time.monotonic()
+            checking = reporter.stage(
+                "Checking chapter audio",
+                sum(1 for chapter in selection.chapters if chapter.id not in skipped_ids),
+                "chapter",
+            )
             for chapter in selection.chapters:
                 if chapter.id in skipped_ids:
                     continue
+                checking.advance()
                 path = audio_output_path(manifest, chapter, manifest_path.parent)
                 metadata = valid_mp3_sidecar(path)
                 rendering_inputs = (
@@ -897,11 +952,14 @@ def pack_m4b(
                     stale_chapters.append(chapter.number)
                     continue
                 chapter_files.append((path, chapter.title))
+            checking.close()
             if stale_chapters:
                 numbers = ", ".join(str(number) for number in stale_chapters)
                 raise AudioError(
                     f"Chapter audio is stale or missing for chapter(s): {numbers}; run convert"
                 )
+            # A single ffmpeg run cannot report fractional progress: elapsed time only.
+            encoding = reporter.stage("Encoding M4B", None, "file")
             try:
                 result = encode_m4b(
                     chapter_files,
@@ -911,8 +969,11 @@ def pack_m4b(
                     bitrate=bitrate,
                     cover_image=cover_image,
                 )
+                encoding.advance()
             except OSError:
                 raise WorkspaceError("Cannot create the output workspace") from None
+            finally:
+                encoding.close()
             emit(
                 {
                     "m4b_file": str(result),
@@ -920,12 +981,18 @@ def pack_m4b(
                 },
                 json_output,
             )
+            reporter.summary(
+                f"Packaged {len(chapter_files)} chapter(s) in "
+                f"{format_elapsed(time.monotonic() - started)}"
+            )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
     except (typer.Exit, ClickExit):
         raise
     except Exception as exc:
         fail(exc, json_output=json_output)
+    finally:
+        reporter.close()
 
 
 @app.command(

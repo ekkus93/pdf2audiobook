@@ -57,6 +57,21 @@ class CachedLLMProvider:
         self.hits = 0
         self.misses = 0
         self.requests_started = 0
+        # Optional progress handle; set by the caller that owns the display.
+        self.progress: Any = None
+        self._expected_requests = 0
+
+    def expect_requests(self, count: int, stage: str) -> None:
+        """Announce how many requests a stage will make so progress can show a total."""
+        if self.progress is None or count <= 0:
+            return
+        self._expected_requests += count
+        self.progress.set_total(self._expected_requests)
+        self.progress.set_detail(stage)
+
+    def _note_request(self, *, cached: bool) -> None:
+        if self.progress is not None:
+            self.progress.advance(1, cached=cached)
 
     def list_models(self) -> list[str]:
         """Forward capability discovery without reading or sending book content."""
@@ -250,6 +265,7 @@ class CachedLLMProvider:
             ):
                 self.hits += 1
                 self._write_usage()
+                self._note_request(cached=True)
                 return entry["response"]
         self.misses += 1
         prompt_bound = len(instructions.encode("utf-8")) + len(document_text.encode("utf-8")) + 128
@@ -456,4 +472,5 @@ class CachedLLMProvider:
             self._check_usage_budget(postflight=True)
         if self.enabled:
             write_json(target, {"schema_version": 1, "fingerprint": key, "response": reply})
+        self._note_request(cached=False)
         return reply

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from itertools import islice
 from pathlib import Path
-from typing import Literal, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 import pymupdf
 
@@ -1106,6 +1106,7 @@ def extract_pdf(
     *,
     ocr_cache_dir: Path | None = None,
     source_sha256: str | None = None,
+    progress: Any = None,
 ) -> ExtractedDocument:
     """Extract all pages, using OCR only for pages lacking meaningful embedded text."""
     spans: list[SourceSpan] = []
@@ -1142,7 +1143,14 @@ def extract_pdf(
             explicit_page_labels = bool(document.get_page_labels())
         except Exception:
             explicit_page_labels = False
+        page_progress = (
+            progress.stage("Extracting pages", len(document), "page")
+            if progress is not None
+            else None
+        )
         for page_index in range(len(document)):
+            if page_progress is not None and page_index:
+                page_progress.advance()  # the previous page is finished
             page_labels.append(None)
             load_page = getattr(document, "load_page", None)
             if callable(load_page):
@@ -1286,6 +1294,9 @@ def extract_pdf(
             )
             spans.extend(page_spans)
             blocks.extend(page_blocks)
+        if page_progress is not None:
+            page_progress.advance()  # the final page
+            page_progress.close()
         return ExtractedDocument(
             title=title,
             author=author,

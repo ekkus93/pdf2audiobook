@@ -480,7 +480,42 @@ imports from `pipeline`, `document.structure`, `audio`, and `llm` remain availab
 and artifact modules keep workspace persistence out of the renderer's domain logic.
 
 Old workspaces without artifact metadata are adopted only where files match the current rendered
-text. Preserve differing files before using a fresh workspace. The edited flag records only edits
-that an operation has observed, so it cannot detect a file edited and deleted between operations.
+text. `resolve_footnote_policy` infers the policy of such a workspace from the manifest's
+footnote edits and its recognizable (unedited) chapter files, and refuses when it is ambiguous;
+`regenerate-chapter --footnotes` is the explicit escape hatch. Preserve differing files with
+`regenerate-chapter` (backups go to `chapter-backups/`, never overwritten) before using a fresh
+workspace. The edited flag records only edits that an operation has observed, so it cannot
+detect a file edited and deleted between operations.
+
+Read-only access (`workspace.read_manifest`, the review page's `GET /api/manifest`) never takes
+the workspace lock, creates files or runs recovery; it raises `PendingRecoveryError` while a
+journal exists. Only lock holders recover. `workspace_lock(create=True)` is for writers that may
+start a workspace; `recover=False` is reserved for the `recover` command, which completes a
+blocked transaction itself (`--back-up-changed` copies changed targets to `chapter-backups/` or
+`workspace-backups/` first). Save outcomes carry stable `outcome` codes
+(`not_saved_conflict`, `not_saved_pending_recovery`, `committed_needs_recovery`) that the review
+page maps to messages; forward only the allowlisted messages of `ChapterConflictError` and
+`PendingRecoveryError`. `commit_artifacts` returns without writing a journal when nothing
+changes.
+
+## Request timeout and progress display
+
+`llm.<provider>.timeout_seconds` (Ollama 300, others 60) becomes the `httpx` read/write/pool
+timeout in `create_provider`; the connect timeout is `min(10, timeout)` and the Ollama `/api/ps`
+lookup always uses 10 s. It is excluded from analysis fingerprints and cache identities.
+
+`progress_display.py` is the only module that imports `tqdm`. Pipeline code receives a
+`ProgressReporter` (`analyze_book(progress=)`, `convert_book(progress=)`) and calls
+`stage(name, total, unit, initial)`; the CLI passes one only when it is enabled (injected
+adapters and test doubles need not accept it). `NullReporter` is the default and is used under
+`--json`, `--quiet`, `--no-progress` and, for `auto`, when stderr is not a terminal. Stages:
+extraction pages (`pdf.extract_pdf(progress=)`), LLM requests (`CachedLLMProvider.progress`,
+with each stage announcing its window count through `llm.advisory_common.planned_windows`),
+synthesis characters (`audio.synthesize_chunks(on_chunk=)`, cached and resumed work counted as
+`initial`/`cached=True` so it does not distort the estimate) and `pack-m4b` chapters/encode.
+Bar text may contain only stage names, counts and chapter numbers. Log lines go through
+`progress_display.write_stderr` so they do not corrupt an open bar. When the terminal size is
+unknown (a pseudo-terminal reporting 0x0), explicit dimensions are passed because tqdm would
+otherwise draw nothing.
 On platforms without POSIX locking, the existing lock implementation does not serialize processes;
 directory fsync is unavailable on Windows. Avoid concurrent workspace operations there.

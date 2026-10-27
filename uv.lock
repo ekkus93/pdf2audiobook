@@ -1875,6 +1875,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pymupdf" },
     { name = "rich" },
+    { name = "tqdm" },
     { name = "typer" },
 ]
 
@@ -1883,6 +1884,7 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "ruff" },
+    { name = "types-tqdm" },
 ]
 kitten = [
     { name = "kittenml" },
@@ -1900,7 +1902,9 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<10" },
     { name = "rich", specifier = ">=13,<15" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8,<1" },
+    { name = "tqdm", specifier = ">=4.66,<5" },
     { name = "typer", specifier = ">=0.12,<1" },
+    { name = "types-tqdm", marker = "extra == 'dev'", specifier = ">=4.66,<5" },
 ]
 provides-extras = ["kitten", "dev"]
 
@@ -3049,6 +3053,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/03/51/d33db42cc72ffd8c30777547b42d01f0cbf9d95a770457698d0174b3ed71/typer-0.27.3.tar.gz", hash = "sha256:d0396f770a560ab1b0a8504e13b5f254b728cedb05c61cf0359e944e50ce8901", size = 205303, upload-time = "2026-10-06T17:24:16.61Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/07/ea/2e31b67051e91a133189e9c000c222502ddc6969856416de0d095de4c0b0/typer-0.27.3-py3-none-any.whl", hash = "sha256:e50022f28b82a86313e54501317a1db64bf8f8d036ff8cfe5ca7e47675454aff", size = 123312, upload-time = "2026-10-06T17:24:15.054Z" },
+]
+
+[[package]]
+name = "types-tqdm"
+version = "4.70.0.20260906"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/fe/92/517d71d5a399cd2f8ead3b4328d987262478f22fbbe7f8312360d4c321d0/types_tqdm-4.70.0.20260906.tar.gz", hash = "sha256:6581dc996152a87d51ce2ea169169187ffc0a96dacdb8adbdef29cbee8c1e631", size = 19309, upload-time = "2026-09-06T06:35:31.916Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/81/ea/d12697988ab2c672877796ecaea69666e2379ee7b40f01f4540250d5a97b/types_tqdm-4.70.0.20260906-py3-none-any.whl", hash = "sha256:c3b88c694928515d601f73fa6646aa43adc0ef735bedbeebf0cc543f6a201ae8", size = 25181, upload-time = "2026-09-06T06:35:30.931Z" },
 ]
 
 [[package]]

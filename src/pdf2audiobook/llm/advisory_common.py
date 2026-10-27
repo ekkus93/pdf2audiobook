@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Any, Callable, Iterator, Literal, Protocol, runtime_checkable
+from typing import Any, Callable, Iterable, Iterator, Literal, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -12,6 +12,7 @@ from pdf2audiobook.errors import LLMError
 from pdf2audiobook.models import DocumentBlock
 
 LLM_PROMPT_SCHEMA_VERSION = "llm-advisory-v3"
+_Window = TypeVar("_Window", bound=tuple[Any, ...])
 
 
 class HeadingProposal(BaseModel):
@@ -250,3 +251,12 @@ def _ocr_plausible(original: str, replacement: str) -> bool:
                 if original.startswith(a, i) and replacement.startswith(b, j):
                     reachable[i + len(a)].add(j + len(b))
     return m in reachable[n]
+
+
+def planned_windows(provider: Any, stage: str, windows: Iterable[_Window]) -> list[_Window]:
+    """Materialize bounded windows and announce the request count for progress display."""
+    planned = list(windows)
+    announce = getattr(provider, "expect_requests", None)
+    if callable(announce):
+        announce(sum(1 for _start, window, _snippet in planned if window), stage)
+    return planned

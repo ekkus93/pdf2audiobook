@@ -298,6 +298,25 @@ cap also invalidates earlier LLM response-cache identities. Operators must verif
 context windows and `max_tokens` support against their selected live model.
 These checks do not guarantee that a misconfigured server honors its limit.
 
+## Progress and time estimates
+
+Long runs show a progress bar per stage on stderr, with elapsed time and an estimate of the time
+left: page extraction, LLM analysis requests, speech synthesis (counted in characters, so the
+estimate follows how much text remains) and M4B packaging. The estimate reads "estimating…"
+until the first real unit of work finishes, and work reused from a previous run (cached LLM
+answers, already converted chapters or chunks) is counted as done without making the estimate
+optimistic. A single FFmpeg encode shows elapsed time only. A one-line summary follows each
+command, for example `Finished 12 chapter(s) in 41m 07s`.
+
+~~~bash
+pdf2audiobook --progress convert ./book.pdf     # force bars on
+pdf2audiobook --no-progress convert ./book.pdf  # force bars off
+~~~
+
+By default (`general.progress = "auto"`, or `PDF2AUDIOBOOK_PROGRESS=auto|always|never`) bars
+appear only when stderr is a terminal. `--json` and `--quiet` always turn them off, so machine
+output stays parseable; bars never go to stdout and never include book text, titles or paths.
+
 ## LLM request timeout
 
 Each LLM request waits for a response for `timeout_seconds` per provider. Ollama defaults to

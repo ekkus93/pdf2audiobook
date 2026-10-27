@@ -49,6 +49,7 @@ from pdf2audiobook.llm.advisory_common import (
     _diagnostic_block_id,
     _ocr_plausible,
     _record_decision,
+    planned_windows,
 )
 from pdf2audiobook.llm.provider import (
     MAX_VISUAL_REVIEW_PAGES as MAX_VISUAL_REVIEW_PAGES,
@@ -108,11 +109,15 @@ def propose_llm_cleanup(
             source=source,
         )
 
-    for start, window, snippet in _bounded_block_windows(
-        blocks,
-        window_size=window_size,
-        max_json_bytes=chunk_tokens,
-        record=lambda block: {"id": block.id, "text": block.text},
+    for start, window, snippet in planned_windows(
+        provider,
+        "cleanup",
+        _bounded_block_windows(
+            blocks,
+            window_size=window_size,
+            max_json_bytes=chunk_tokens,
+            record=lambda block: {"id": block.id, "text": block.text},
+        ),
     ):
         if not window:
             warnings.append(f"LLM cleanup skipped oversized block at index {start}")
@@ -226,11 +231,15 @@ def propose_llm_narration(
     suggestions: list[NarrationSuggestion] = []
     warnings: list[str] = []
     known_ids = {block.id for block in blocks}
-    for start, window, snippet in _bounded_block_windows(
-        blocks,
-        window_size=window_size,
-        max_json_bytes=chunk_tokens,
-        record=lambda block: {"id": block.id, "text": block.text},
+    for start, window, snippet in planned_windows(
+        provider,
+        "narration",
+        _bounded_block_windows(
+            blocks,
+            window_size=window_size,
+            max_json_bytes=chunk_tokens,
+            record=lambda block: {"id": block.id, "text": block.text},
+        ),
     ):
         if not window:
             warnings.append(f"LLM narration skipped oversized block at index {start}")
@@ -392,16 +401,20 @@ def propose_llm_classification(
     accepted: list[ClassificationSuggestion] = []
     warnings: list[str] = []
     known_ids = {block.id for block in blocks}
-    for start, window, snippet in _bounded_block_windows(
-        blocks,
-        window_size=window_size,
-        max_json_bytes=chunk_tokens,
-        record=lambda block: {
-            "id": block.id,
-            "page": block.page_index + 1,
-            "kind": block.kind,
-            "text": block.text,
-        },
+    for start, window, snippet in planned_windows(
+        provider,
+        "classification",
+        _bounded_block_windows(
+            blocks,
+            window_size=window_size,
+            max_json_bytes=chunk_tokens,
+            record=lambda block: {
+                "id": block.id,
+                "page": block.page_index + 1,
+                "kind": block.kind,
+                "text": block.text,
+            },
+        ),
     ):
         if not window:
             warnings.append(f"LLM classification skipped oversized block at index {start}")

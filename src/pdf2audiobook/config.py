@@ -33,6 +33,7 @@ class General(ConfigModel):
     output_dir: str = "./audiobooks"
     resume: bool = True
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    progress: Literal["auto", "always", "never"] = "auto"
 
 
 class Pdf(ConfigModel):
@@ -204,6 +205,7 @@ class Settings(ConfigModel):
 
 ENV_KEYS = {
     "PDF2AUDIOBOOK_OUTPUT_DIR": ("general", "output_dir"),
+    "PDF2AUDIOBOOK_PROGRESS": ("general", "progress"),
     "PDF2AUDIOBOOK_RESUME": ("general", "resume"),
     "PDF2AUDIOBOOK_OCR": ("pdf", "ocr"),
     "PDF2AUDIOBOOK_OCR_LANGUAGE": ("pdf", "ocr_language"),

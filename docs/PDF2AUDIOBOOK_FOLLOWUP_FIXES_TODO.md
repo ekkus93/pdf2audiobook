@@ -122,16 +122,16 @@
 
 ## 8. Progress and ETA (R11) — feature
 
-- [ ] 8.1 Add `tqdm>=4.66,<5` to the runtime dependencies and `types-tqdm` to dev. Run `uv lock`. Confirm the clean-venv wheel/sdist install works locally.
-- [ ] 8.2 Add `src/pdf2audiobook/progress_display.py` (`ProgressReporter` protocol, `NullReporter`, `TqdmReporter`) and add it to mypy files. Exclude `initial` from the rate, show "estimating…" until real work completes, and route log lines through `tqdm.write`.
-- [ ] 8.3 Add the root `--progress/--no-progress`, `general.progress` (`auto|always|never`) and `PDF2AUDIOBOOK_PROGRESS` settings. Always disable progress under `--json` and `--quiet`. `auto` requires stderr to be a TTY.
-- [ ] 8.4 Wire up the stages, with reporters injected rather than importing `tqdm`:
+- [x] 8.1 Add `tqdm>=4.66,<5` to the runtime dependencies and `types-tqdm` to dev. Run `uv lock`. Confirm the clean-venv wheel/sdist install works locally.
+- [x] 8.2 Add `src/pdf2audiobook/progress_display.py` (`ProgressReporter` protocol, `NullReporter`, `TqdmReporter`) and add it to mypy files. Exclude `initial` from the rate, show "estimating…" until real work completes, and route log lines through `tqdm.write`.
+- [x] 8.3 Add the root `--progress/--no-progress`, `general.progress` (`auto|always|never`) and `PDF2AUDIOBOOK_PROGRESS` settings. Always disable progress under `--json` and `--quiet`. `auto` requires stderr to be a TTY.
+- [x] 8.4 Wire up the stages, with reporters injected rather than importing `tqdm`:
   - extraction pages;
   - analysis requests per stage, with cache hits advancing immediately and an indeterminate counter when the total isn't known;
   - synthesis characters, with cached and resumed work as `initial` and detail `chapter i/n`;
   - encoding and `pack-m4b` chapters, with the indeterminate M4B encode.
-- [ ] 8.5 Add the content-free completion summary line.
-- [ ] 8.6 Tests:
+- [x] 8.5 Add the content-free completion summary line.
+- [x] 8.6 Tests:
   - a recording reporter gets the right totals, initial values and advances for a fake-provider convert, a resumed convert with one cached chapter, and analysis with cache hits;
   - `TqdmReporter` on a fake TTY shows the stage, count and ETA field, with no book text or temp path;
   - `--json` and `--quiet` give no progress and parseable stdout;
@@ -139,7 +139,7 @@
   - `--progress --json` gives none;
   - the CLI smoke passes;
   - `tests/test_third_party_stdout_privacy.py` still passes.
-- [ ] 8.7 Update the README (progress option and how to read the ETA) and the MAINTAINER_GUIDE (reporter injection and the dependency). If ci.yml's install steps change, keep `tests/test_ci_uv_pin.py` consistent.
+- [x] 8.7 Update the README (progress option and how to read the ETA) and the MAINTAINER_GUIDE (reporter injection and the dependency). If ci.yml's install steps change, keep `tests/test_ci_uv_pin.py` consistent.
 
 ## 9. Finish
 

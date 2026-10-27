@@ -13,6 +13,7 @@ from typing import Any, Callable
 from pdf2audiobook.audio import AudioEncoder
 from pdf2audiobook.config import Settings
 from pdf2audiobook.errors import AudioError, PartialConversionError
+from pdf2audiobook.progress_display import ProgressHandle, ProgressReporter
 from pdf2audiobook.tts import TTSProvider
 from pdf2audiobook.workspace import digest_file, fingerprint, write_json
 
@@ -50,6 +51,7 @@ def _convert_analyzed_book(
     tts_provider: TTSProvider | None,
     encoder: AudioEncoder | None,
     services: ConversionServices,
+    progress: ProgressReporter | None = None,
 ) -> list[Path]:
     log_event = services.log_event
     read_manifest = services.read_manifest
@@ -166,6 +168,8 @@ def _convert_analyzed_book(
         }
         for item in chosen
     }
+    chapter_chars: dict[str, int] = {}
+    cached_chars = 0
     for item in chosen:
         if item.id in skipped_empty:
             continue
@@ -188,6 +192,7 @@ def _convert_analyzed_book(
             cover_image=cover_image,
             cover_identity=cover_identity,
         )
+        chapter_chars[item.id] = len(text)
         record = output.with_suffix(".cache.json")
         cached = False
         if settings.general.resume and not force:
@@ -237,6 +242,7 @@ def _convert_analyzed_book(
             # A long book may have hundreds of pending chapters.
             pending.append((item, output, text_file, record, identity))
         else:
+            cached_chars += len(text)
             conversion_status[item.id]["status"] = "complete"
             # A resumed chapter keeps the pause count its synthesized run reported.
             try:
@@ -246,11 +252,30 @@ def _convert_analyzed_book(
         del text
 
     encode = encode_mp3 if encoder is None else encoder
-    for item, output, text_file, record, identity in pending:
+    synthesis: ProgressHandle | None = None
+    if progress is not None and progress.enabled and pending:
+        # Characters, not chunks, so the estimate follows how much text is left.
+        synthesis = progress.stage(
+            "Synthesizing speech",
+            sum(chapter_chars.values()),
+            "char",
+            initial=cached_chars,
+        )
+    for position, (item, output, text_file, record, identity) in enumerate(pending, 1):
         try:
             text = text_file.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
             raise AudioError("Cannot read approved chapter text; check workspace files") from None
+        chunk_chars = [0]
+
+        def settle(chapter_size: int = len(text), done: list[int] = chunk_chars) -> None:
+            # Characters outside any spoken chunk (markers, blank lines) finish instantly.
+            if synthesis is not None and done[0] < chapter_size:
+                synthesis.advance(chapter_size - done[0], cached=True)
+                done[0] = chapter_size
+
+        if synthesis is not None:
+            synthesis.set_detail(f"chapter {position}/{len(pending)}")
         # Detect edits between the cache-check and synthesis passes. Never
         # publish audio with a fingerprint computed from different prose.
         if (
@@ -270,6 +295,7 @@ def _convert_analyzed_book(
             try:
                 provider = create_tts_provider(settings)
             except AudioError:
+                settle()
                 failed_chapters.add(item.number)
                 conversion_status[item.id] = {
                     "number": item.number,
@@ -281,7 +307,7 @@ def _convert_analyzed_book(
         _provider_name, selected_voice, selected_speed = tts_selection(settings, item)
         streamed_wav: Path | None = None
         try:
-            synth_kwargs = {}
+            synth_kwargs: dict[str, Any] = {}
             if encoder is None:
                 try:
                     manifest_path.parent.joinpath(".cache", "tts", "chapters").mkdir(
@@ -297,6 +323,14 @@ def _convert_analyzed_book(
                 except OSError:
                     raise AudioError("Could not create temporary chapter audio") from None
                 synth_kwargs["output_wav"] = streamed_wav
+            if synthesis is not None:
+
+                def on_chunk(characters: int, cached: bool, done: list[int] = chunk_chars) -> None:
+                    done[0] += characters
+                    if synthesis is not None:
+                        synthesis.advance(characters, cached=cached)
+
+                synth_kwargs["on_chunk"] = on_chunk
             progress_path = (
                 manifest_path.parent
                 / ".cache"
@@ -331,8 +365,8 @@ def _convert_analyzed_book(
                 track=item.number,
                 cover_image=cover_image,
             )
-            progress = read_synthesis_progress(progress_path)
-            pause_count, mapping = _progress_report_fields(progress)
+            chapter_progress = read_synthesis_progress(progress_path)
+            pause_count, mapping = _progress_report_fields(chapter_progress)
             conversion_status[item.id]["pause_count"] = pause_count
             conversion_status[item.id]["chunk_mapping"] = mapping
         except AudioError:
@@ -347,6 +381,7 @@ def _convert_analyzed_book(
             conversion_status[item.id] = failure_status
             continue
         finally:
+            settle()
             if streamed_wav is not None:
                 streamed_wav.unlink(missing_ok=True)
         write_json(
@@ -388,6 +423,8 @@ def _convert_analyzed_book(
                     level=logging.WARNING,
                     reason="candidate_uninspectable",
                 )
+    if synthesis is not None:
+        synthesis.close()
     pause_counts = [row.get("pause_count") for row in conversion_status.values()]
     total_pause_count = (
         sum(

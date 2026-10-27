@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os as os
 from pathlib import Path
+from typing import Any
 
 from pdf2audiobook.analysis_state import (
     _change_footnote_policy,
@@ -73,6 +74,7 @@ from pdf2audiobook.models import (
     generated_chapter_fingerprint,
 )
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
+from pdf2audiobook.progress_display import ProgressHandle, ProgressReporter
 from pdf2audiobook.review_reasons import (
     REVIEW_REASON_CODES,
 )
@@ -217,13 +219,17 @@ def _analysis_workspace_folder(source: Path, settings: Settings) -> Path:
 
 
 def analyze_book(
-    source: Path, settings: Settings, *, extractor: DocumentExtractor | None = None
+    source: Path,
+    settings: Settings,
+    *,
+    extractor: DocumentExtractor | None = None,
+    progress: ProgressReporter | None = None,
 ) -> Path:
     """Analyze one book while holding its workspace lock for every write."""
     folder = _analysis_workspace_folder(source, settings)
     try:
         with workspace_lock(folder, create=True):
-            return _analyze_book_locked(source, settings, extractor=extractor)
+            return _analyze_book_locked(source, settings, extractor=extractor, progress=progress)
     except WorkspaceLockedError as exc:
         if str(exc) == "Could not lock the book workspace":
             raise ExtractionError("Could not create or update the output workspace") from None
@@ -231,7 +237,11 @@ def analyze_book(
 
 
 def _analyze_book_locked(
-    source: Path, settings: Settings, *, extractor: DocumentExtractor | None = None
+    source: Path,
+    settings: Settings,
+    *,
+    extractor: DocumentExtractor | None = None,
+    progress: ProgressReporter | None = None,
 ) -> Path:
     log_event("stage_started", level=logging.INFO, stage="analysis")
 
@@ -320,7 +330,11 @@ def _analyze_book_locked(
     ocr_cache_dir = (folder / ".cache" / "ocr") if settings.cache.enabled else None
     if extractor is None:
         extracted = extract_pdf(
-            source, settings.pdf, ocr_cache_dir=ocr_cache_dir, source_sha256=book_hash
+            source,
+            settings.pdf,
+            ocr_cache_dir=ocr_cache_dir,
+            source_sha256=book_hash,
+            progress=progress if progress is not None and progress.enabled else None,
         )
     else:
         extracted = extractor.extract(
@@ -364,6 +378,7 @@ def _analyze_book_locked(
             "block(s) under explicit omit policy; inspect audited cleanup edits"
         )
     original_warning_count = len(warnings)
+    llm_progress: ProgressHandle | None = None
     try:
         if settings.llm.enabled and (
             settings.llm.structure
@@ -393,6 +408,9 @@ def _analyze_book_locked(
                     usage_report=folder / "reports" / "llm_usage.json",
                     ledger_path=folder / "reports" / "llm_budget.sqlite3",
                 )
+                if progress is not None and progress.enabled:
+                    llm_progress = progress.stage("Analyzing with the LLM", None, "request")
+                    worker.progress = llm_progress
                 if settings.llm.vision:
                     from pdf2audiobook.llm.vision import review_visual_pages
 
@@ -502,6 +520,8 @@ def _analyze_book_locked(
                 "suggestions": [],
             },
         )
+    if llm_progress is not None:
+        llm_progress.close()
     for decision in llm_decisions:
         decision.provider = settings.llm.provider
     write_json(
@@ -840,21 +860,24 @@ def convert_book(
     extractor: DocumentExtractor | None = None,
     tts_provider: TTSProvider | None = None,
     encoder: AudioEncoder | None = None,
+    progress: ProgressReporter | None = None,
 ) -> list[Path]:
     log_event("stage_started", level=logging.INFO, stage="conversion")
     manifest_path = None
+    # Injected analysis adapters need not know about progress; pass it only when shown.
+    analysis_extra: dict[str, Any] = {} if progress is None else {"progress": progress}
     if source.is_file():
         folder = _analysis_workspace_folder(source, settings)
     else:
         # Invalid inputs cannot write an analysis workspace; retain this path for
         # injected analysis adapters used by offline callers and tests.
-        manifest_path = analyze_book(source, settings, extractor=extractor)
+        manifest_path = analyze_book(source, settings, extractor=extractor, **analysis_extra)
         folder = manifest_path.parent
     with workspace_lock(folder, create=True):
         cover_image = read_cover_image(settings.audio.cover_image)
         cover_identity = digest_bytes(cover_image[0]) if cover_image is not None else None
         if manifest_path is None:
-            manifest_path = analyze_book(source, settings, extractor=extractor)
+            manifest_path = analyze_book(source, settings, extractor=extractor, **analysis_extra)
         return _convert_analyzed_book(
             manifest_path,
             settings,
@@ -866,6 +889,7 @@ def convert_book(
             accept_review=accept_review,
             tts_provider=tts_provider,
             encoder=encoder,
+            progress=progress,
         )
 
 
@@ -881,6 +905,7 @@ def _convert_analyzed_book(
     accept_review: tuple[str, ...],
     tts_provider: TTSProvider | None,
     encoder: AudioEncoder | None,
+    progress: ProgressReporter | None = None,
 ) -> list[Path]:
     services = ConversionServices(
         log_event=log_event,
@@ -912,4 +937,5 @@ def _convert_analyzed_book(
         tts_provider=tts_provider,
         encoder=encoder,
         services=services,
+        progress=progress,
     )
