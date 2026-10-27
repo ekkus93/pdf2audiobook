@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from pdf2audiobook import workspace
+from pdf2audiobook import review_transaction, workspace
 from pdf2audiobook.document import structure
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
 
@@ -45,15 +45,15 @@ def test_render_chapter_texts_streams_existing_artifact_comparison(tmp_path, mon
         writes.append(path)
         return original_atomic_write(path, data)
 
-    monkeypatch.setattr(workspace, "atomic_write", record_write)
+    monkeypatch.setattr(review_transaction, "atomic_write", record_write)
     structure.render_chapter_texts(manifest, tmp_path)
     assert chapter_path not in writes
 
     chapter_path.write_bytes(expected[:-1] + b"!")
     structure.render_chapter_texts(manifest, tmp_path)
-    assert chapter_path in writes
+    assert chapter_path not in writes
     assert chapter_path.stat().st_size == len(expected)
     with chapter_path.open("rb") as restored:
         assert restored.read(128) == expected[:128]
         restored.seek(-128, 2)
-        assert restored.read() == expected[-128:]
+        assert restored.read() == expected[-128:-1] + b"!"

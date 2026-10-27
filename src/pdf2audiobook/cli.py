@@ -607,35 +607,37 @@ def convert(
             convert_book,
             prepare_chapter_selection,
         )
-        from pdf2audiobook.workspace import read_manifest
+        from pdf2audiobook.workspace import read_manifest, workspace_lock
 
         read_cover_image(settings.audio.cover_image)
         if dry_run:
             manifest_path = analyze_book(source, settings)
-            manifest = read_manifest(manifest_path)
-            selection = prepare_chapter_selection(
-                manifest_path,
-                manifest,
-                settings,
-                chapter=chapter,
-                chapter_range=selected_range,
-                acknowledge=tuple(accept_review),
-            )
-            skipped_ids = {item.id for item in selection.skipped}
-            chapters = [item for item in selection.chapters if item.id not in skipped_ids]
-            output_files = [
-                str(audio_output_path(manifest, item, manifest_path.parent)) for item in chapters
-            ]
-            emit(
-                {
-                    "dry_run": True,
-                    "chapters": len(chapters),
-                    "mp3_files": output_files,
-                    "skipped_chapters": sorted(item.number for item in selection.skipped),
-                    "would_acknowledge": selection.would_acknowledge,
-                },
-                json_output,
-            )
+            with workspace_lock(manifest_path.parent):
+                manifest = read_manifest(manifest_path)
+                selection = prepare_chapter_selection(
+                    manifest_path,
+                    manifest,
+                    settings,
+                    chapter=chapter,
+                    chapter_range=selected_range,
+                    acknowledge=tuple(accept_review),
+                )
+                skipped_ids = {item.id for item in selection.skipped}
+                chapters = [item for item in selection.chapters if item.id not in skipped_ids]
+                output_files = [
+                    str(audio_output_path(manifest, item, manifest_path.parent))
+                    for item in chapters
+                ]
+                emit(
+                    {
+                        "dry_run": True,
+                        "chapters": len(chapters),
+                        "mp3_files": output_files,
+                        "skipped_chapters": sorted(item.number for item in selection.skipped),
+                        "would_acknowledge": selection.would_acknowledge,
+                    },
+                    json_output,
+                )
         else:
             try:
                 outputs = convert_book(
@@ -811,9 +813,10 @@ def pack_m4b(
     set_output_mode(json_output)
     try:
         from pdf2audiobook.audio import audio_output_path, encode_m4b, read_cover_image
+        from pdf2audiobook.chapter_artifacts import load_artifact_state, plan_chapter_artifacts
         from pdf2audiobook.document.structure import render_chapter_narration
         from pdf2audiobook.pipeline import prepare_chapter_selection, valid_mp3_sidecar
-        from pdf2audiobook.workspace import read_manifest
+        from pdf2audiobook.workspace import read_manifest, workspace_lock
 
         settings, origins = load_settings(
             config,
@@ -821,68 +824,97 @@ def pack_m4b(
             overrides={"audio": {"cover_image": str(cover)}} if cover is not None else None,
         )
         configure_effective_logging(settings, origins)
-        manifest = read_manifest(manifest_path)
-        cover_image = read_cover_image(settings.audio.cover_image)
-        selection = prepare_chapter_selection(manifest_path, manifest, settings)
-        skipped_ids = {chapter.id for chapter in selection.skipped}
-        chapter_files = []
-        stale_chapters = []
-        for chapter in selection.chapters:
-            if chapter.id in skipped_ids:
-                continue
-            path = audio_output_path(manifest, chapter, manifest_path.parent)
-            metadata = valid_mp3_sidecar(path)
-            rendering_inputs = metadata.get("rendering_inputs") if metadata is not None else None
-            footnotes = (
-                rendering_inputs.get("footnotes") if isinstance(rendering_inputs, dict) else None
+        with workspace_lock(manifest_path.parent):
+            manifest = read_manifest(manifest_path)
+            artifact_state = load_artifact_state(manifest_path.parent)
+            artifact_plan = (
+                plan_chapter_artifacts(manifest, manifest_path.parent, artifact_state["footnotes"])
+                if artifact_state is not None
+                else None
             )
-            if (
-                metadata is None
-                or metadata.get("chapter_id") != chapter.id
-                or not isinstance(footnotes, str)
-            ):
-                stale_chapters.append(chapter.number)
-                continue
-            try:
-                # convert reads this text back from disk with universal newlines.
-                text = (
-                    render_chapter_narration(manifest, chapter, footnotes)
-                    .replace("\r\n", "\n")
-                    .replace("\r", "\n")
+            cover_image = read_cover_image(settings.audio.cover_image)
+            selection = prepare_chapter_selection(
+                manifest_path,
+                manifest,
+                settings,
+                footnotes=artifact_state["footnotes"] if artifact_state is not None else None,
+            )
+            skipped_ids = {chapter.id for chapter in selection.skipped}
+            chapter_files = []
+            stale_chapters = []
+            for chapter in selection.chapters:
+                if chapter.id in skipped_ids:
+                    continue
+                path = audio_output_path(manifest, chapter, manifest_path.parent)
+                metadata = valid_mp3_sidecar(path)
+                rendering_inputs = (
+                    metadata.get("rendering_inputs") if metadata is not None else None
                 )
-            except ExtractionError:
-                stale_chapters.append(chapter.number)
-                continue
-            if (
-                metadata is None
-                or metadata.get("text_sha256") != hashlib.sha256(text.encode("utf-8")).hexdigest()
-            ):
-                stale_chapters.append(chapter.number)
-                continue
-            chapter_files.append((path, chapter.title))
-        if stale_chapters:
-            numbers = ", ".join(str(number) for number in stale_chapters)
-            raise AudioError(
-                f"Chapter audio is stale or missing for chapter(s): {numbers}; run convert"
+                footnotes = (
+                    rendering_inputs.get("footnotes")
+                    if isinstance(rendering_inputs, dict)
+                    else None
+                )
+                if (
+                    metadata is None
+                    or metadata.get("chapter_id") != chapter.id
+                    or not isinstance(footnotes, str)
+                    or (artifact_state is not None and footnotes != artifact_state["footnotes"])
+                ):
+                    stale_chapters.append(chapter.number)
+                    continue
+                try:
+                    # convert reads this text back from disk with universal newlines.
+                    name = f"{chapter.number:03d}.txt"
+                    if artifact_plan is not None:
+                        if name in artifact_plan.writes:
+                            stale_chapters.append(chapter.number)
+                            continue
+                        text = (manifest_path.parent / "chapters" / name).read_text(
+                            encoding="utf-8"
+                        )
+                    else:
+                        text = (manifest_path.parent / "chapters" / name).read_text(
+                            encoding="utf-8"
+                        )
+                        if text != render_chapter_narration(manifest, chapter, footnotes):
+                            stale_chapters.append(chapter.number)
+                            continue
+                    text = text.replace("\r\n", "\n").replace("\r", "\n")
+                except (ExtractionError, OSError, UnicodeError):
+                    stale_chapters.append(chapter.number)
+                    continue
+                if (
+                    metadata is None
+                    or metadata.get("text_sha256")
+                    != hashlib.sha256(text.encode("utf-8")).hexdigest()
+                ):
+                    stale_chapters.append(chapter.number)
+                    continue
+                chapter_files.append((path, chapter.title))
+            if stale_chapters:
+                numbers = ", ".join(str(number) for number in stale_chapters)
+                raise AudioError(
+                    f"Chapter audio is stale or missing for chapter(s): {numbers}; run convert"
+                )
+            try:
+                result = encode_m4b(
+                    chapter_files,
+                    output,
+                    title=manifest.title,
+                    artist=manifest.author,
+                    bitrate=bitrate,
+                    cover_image=cover_image,
+                )
+            except OSError:
+                raise WorkspaceError("Cannot create the output workspace") from None
+            emit(
+                {
+                    "m4b_file": str(result),
+                    "skipped_chapters": sorted(chapter.number for chapter in selection.skipped),
+                },
+                json_output,
             )
-        try:
-            result = encode_m4b(
-                chapter_files,
-                output,
-                title=manifest.title,
-                artist=manifest.author,
-                bitrate=bitrate,
-                cover_image=cover_image,
-            )
-        except OSError:
-            raise WorkspaceError("Cannot create the output workspace") from None
-        emit(
-            {
-                "m4b_file": str(result),
-                "skipped_chapters": sorted(chapter.number for chapter in selection.skipped),
-            },
-            json_output,
-        )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
     except (typer.Exit, ClickExit):

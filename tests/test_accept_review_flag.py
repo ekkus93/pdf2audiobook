@@ -1,6 +1,7 @@
 """`convert --accept-review` validates early, logs the acknowledgement and works in dry-run."""
 
 import json
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -175,6 +176,8 @@ def test_dry_run_logs_acknowledgement_without_writing(tmp_path, monkeypatch):
         for item in path.parent.rglob("*")
         if item.is_file()
     }
+    # The read lock may be created for this synthetic workspace; it carries no content.
+    assert after.pop(Path(".convert.lock"), b"") == b""
     assert after == before
     assert read_manifest(path).review_required == ["damaged_source"]
 

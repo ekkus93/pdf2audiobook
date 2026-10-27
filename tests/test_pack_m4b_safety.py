@@ -33,8 +33,7 @@ def make_book(root):
         blocks=[DocumentBlock(id="p1", text="Narration.", page_index=0)],
         chapters=[chapter],
     )
-    (root / "chapters").mkdir(parents=True)
-    (root / "chapters" / "001.txt").write_text("Narration.", encoding="utf-8")
+    render_chapter_texts(manifest, root)
     manifest_path = root / "manifest.json"
     write_manifest(manifest_path, manifest)
     return manifest, chapter, manifest_path
@@ -106,9 +105,7 @@ def test_boundary_edit_after_convert_makes_affected_chapter_audio_stale(tmp_path
         ],
         chapters=[first, second],
     )
-    (tmp_path / "chapters").mkdir()
-    (tmp_path / "chapters" / "001.txt").write_text("Narration 1.", encoding="utf-8")
-    (tmp_path / "chapters" / "002.txt").write_text("Narration 2.\n\nNarration 3.", encoding="utf-8")
+    render_chapter_texts(manifest, tmp_path)
     manifest_path = tmp_path / "manifest.json"
     write_manifest(manifest_path, manifest)
     settings = Settings()

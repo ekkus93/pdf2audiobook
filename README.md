@@ -69,6 +69,22 @@ The narrator introduces the scene.
 
 The marker is omitted from speech; that voice continues until another marker or the end of the chapter. The chapter's configured voice is used before the first marker. Markers require blank-line paragraph boundaries, and their source offsets remain in the narration progress record.
 
+Chapter files are editable. After changing one, keep a backup: resume and conversion preserve
+compatible edits, and changed narration makes existing audio stale. If a boundary, source text,
+cleanup decision or footnote policy changes for an edited chapter, the operation stops with a
+chapter number. Back up the edited file, restore the original generated file before retrying, or
+use a fresh output directory; then reapply your edits after reviewing the new text. A legacy
+workspace with no generation record adopts a chapter file only when it matches current generated
+text. Preserve a differing legacy file separately before regenerating it in a fresh workspace.
+
+Review and chapter regeneration record a workspace transaction before publishing files. If a
+committed update reports that recovery is needed, retry the operation; recovery runs on the next
+workspace lock. If a chapter was changed after the interruption, back up that new edit and restore
+the file that was present before the interrupted save, then retry and reapply the edit. The
+transaction file can contain book text and should be protected like the workspace. The stored
+footnote policy is reused by review and packaging. A deleted edit can be detected only after the
+application has observed it; keep backups even when an edit has not yet been processed.
+
 After converting all chapters, package them as a single AAC audiobook with chapter navigation:
 
 ~~~bash
@@ -137,7 +153,7 @@ You can also configure `[pdf] password_env = "BOOK_PDF_PASSWORD"` in TOML. Never
 
 ## Protecting manual edits
 
-After reviewing a `manifest.json`, mark a chapter's `manually_approved` field or the book's `approved` field to preserve the approved boundaries. The app will regenerate missing derived chapter text from that manifest on resume, but will **reject a destructive reanalysis** when approved content would otherwise be overwritten (including when using `--no-resume` or changing analysis settings). To start a new analysis, back up the approved manifest and choose a fresh output directory.
+After reviewing a `manifest.json`, mark a chapter's `manually_approved` field or the book's `approved` field to preserve the approved boundaries. The app will regenerate missing derived chapter text from that manifest on resume, but will **reject a destructive reanalysis** when approved content would otherwise be overwritten (including when using `--no-resume` or changing analysis settings). A footnote policy change can reuse approved analysis when its policy-specific cleanup decisions are unchanged and affected chapter files have no edits. To start a new analysis, back up the approved manifest and choose a fresh output directory.
 
 ## Explicit fallback when a local LLM is unavailable
 

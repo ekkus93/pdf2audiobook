@@ -82,7 +82,11 @@ def _analyze_with_stubbed_llm(monkeypatch, tmp_path, policy, *, fail_cleanup=Fal
             [],
         ),
     )
-    monkeypatch.setattr(pipeline, "render_chapter_texts", lambda *args: None)
+    monkeypatch.setattr(
+        pipeline,
+        "render_chapter_texts",
+        lambda manifest, *_args, **_kwargs: captured.update(manifest=manifest),
+    )
     monkeypatch.setattr(pipeline, "write_json", lambda *args: None)
     monkeypatch.setattr(
         pipeline,

@@ -11,11 +11,12 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from pdf2audiobook.document.structure import chapter_coverage_report, render_chapter_texts
+from pdf2audiobook.document.structure import chapter_coverage_report
 from pdf2audiobook.errors import ExtractionError, WorkspaceLockedError
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
-from pdf2audiobook.workspace import read_manifest, workspace_lock, write_manifest
+from pdf2audiobook.review_transaction import ReviewRecoveryRequired, commit_review
+from pdf2audiobook.workspace import read_manifest, workspace_lock
 
 _MAX_REQUEST_BYTES = 1024 * 1024
 _MAX_PREVIEW_CHARS = 1200
@@ -146,7 +147,12 @@ def _save_chapter_updates_locked(
         BOOK_WIDE_REVIEW_REASON_CODES
     ):
         raise ExtractionError("Review acknowledgement is invalid")
+    from pdf2audiobook.chapter_artifacts import _read_digest
+
+    expected_manifest = _read_digest(manifest_path)
     manifest = read_manifest(manifest_path)
+    if expected_manifest is None or _read_digest(manifest_path) != expected_manifest:
+        raise ExtractionError("Manifest changed during review; retry")
     if not isinstance(updates, list) or len(updates) != len(manifest.chapters):
         raise ExtractionError("Review update must include every existing chapter")
     for chapter, update in zip(manifest.chapters, updates, strict=True):
@@ -189,8 +195,12 @@ def _save_chapter_updates_locked(
             code for code in manifest.review_required if code not in set(acknowledge)
         ]
     chapter_coverage_report(manifest)
-    write_manifest(manifest_path, manifest)
-    render_chapter_texts(manifest, manifest_path.parent)
+    from pdf2audiobook.chapter_artifacts import load_artifact_state, plan_chapter_artifacts
+
+    state = load_artifact_state(manifest_path.parent)
+    policy = state["footnotes"] if state is not None else "warn"
+    plan = plan_chapter_artifacts(manifest, manifest_path.parent, policy)
+    commit_review(manifest_path, manifest, plan, expected_manifest=expected_manifest)
 
 
 def create_review_server(
@@ -307,6 +317,9 @@ def create_review_server(
                 )
             except WorkspaceLockedError:
                 self._json(409, {"error": "Workspace is locked"})
+                return
+            except ReviewRecoveryRequired:
+                self._json(503, {"error": "Review update was committed but needs recovery; retry."})
                 return
             except Exception:
                 self._json(400, {"error": "Review update was invalid; no changes were saved"})

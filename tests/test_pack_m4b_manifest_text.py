@@ -1,4 +1,4 @@
-"""pack-m4b judges freshness from text rendered from the manifest, not from disk (R76)."""
+"""pack-m4b checks freshness against the effective chapter text."""
 
 import hashlib
 import json
@@ -93,7 +93,7 @@ def test_boundary_edited_in_the_manifest_only_makes_audio_stale(tmp_path, monkey
     assert str(tmp_path) not in result.stderr
 
 
-def test_pack_ignores_a_tampered_chapter_text_file(tmp_path, monkeypatch):
+def test_pack_rejects_audio_for_a_changed_chapter_text_file(tmp_path, monkeypatch):
     manifest, manifest_path = make_book(tmp_path)
     add_sidecar(manifest, manifest.chapters[0], tmp_path, Settings())
     (tmp_path / "chapters" / "001.txt").write_text("Something else entirely.", encoding="utf-8")
@@ -102,7 +102,8 @@ def test_pack_ignores_a_tampered_chapter_text_file(tmp_path, monkeypatch):
         app,
         ["pack-m4b", str(manifest_path), "--output", str(tmp_path / "book.m4b"), "--no-config"],
     )
-    assert result.exit_code == 0, result.stderr
+    assert result.exit_code == 6
+    assert "chapter(s): 1" in result.stderr
 
 
 @pytest.mark.skipif(

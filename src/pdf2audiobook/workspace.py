@@ -27,6 +27,9 @@ def workspace_lock(folder: Path, *, blocking: bool = False) -> Iterator[None]:
     try:
         import fcntl
     except ImportError:  # pragma: no cover - platforms without POSIX file locks
+        from pdf2audiobook.review_transaction import recover_review_transaction
+
+        recover_review_transaction(folder)
         yield
         return
     try:
@@ -44,6 +47,9 @@ def workspace_lock(folder: Path, *, blocking: bool = False) -> Iterator[None]:
             ) from None
         _workspace_locks.held = {*held, lock_key}
         try:
+            from pdf2audiobook.review_transaction import recover_review_transaction
+
+            recover_review_transaction(folder)
             yield
         finally:
             _workspace_locks.held = held
@@ -99,7 +105,8 @@ def write_json(path: Path, obj: Any) -> None:
 def read_manifest(path: Path) -> BookManifest:
     """Fail closed without disclosing user book content or private file paths."""
     try:
-        return BookManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        with workspace_lock(path.parent):
+            return BookManifest.model_validate_json(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         # Pydantic diagnostics can include untrusted field values and input
         # fragments; filesystem exceptions may contain private workspace paths.

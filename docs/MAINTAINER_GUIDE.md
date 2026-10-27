@@ -456,3 +456,28 @@ LLM, llama-server and consented OpenAI acceptance, human listening review of
 real Kitten audio, and real-book/difficult-scan special-material qualification
 are still outstanding. Documentation and offline CI
 passing do not close these gates.
+
+## Chapter artifact persistence
+
+`chapter_artifacts.py` plans generated text, records chapter identities, source/rendering
+fingerprints, generated digests, observed edits and the footnote policy. It refuses ambiguous
+legacy files and edits affected by changes to their rendering inputs. `review_transaction.py`
+publishes the manifest and derived artifacts via a committed journal, checks target digests during
+recovery, and is invoked while the workspace lock is held. The journal can contain book text and
+must be treated as private workspace data. A committed journal is replayed when a workspace lock
+is next acquired; if a target changed externally, back it up and restore its pre-transaction bytes
+before retrying. Do not delete an unresolved journal as a recovery shortcut.
+Transactions larger than 512 MiB are rejected before commit; the encoded journal includes the
+manifest and any generated chapter files being published.
+
+`pipeline.py` coordinates analysis and conversion. `document/structure.py` validates source
+coverage and renders narration; `audio/freshness.py` checks owned MP3 sidecars; `audio/__init__.py`
+handles synthesis and encoding. `llm/` contains model requests, budget accounting and response
+caching. The transaction and artifact modules keep workspace persistence out of the renderer's
+domain logic; the pipeline continues to re-export `valid_mp3_sidecar` for existing callers.
+
+Old workspaces without artifact metadata are adopted only where files match the current rendered
+text. Preserve differing files before using a fresh workspace. The edited flag records only edits
+that an operation has observed, so it cannot detect a file edited and deleted between operations.
+On platforms without POSIX locking, the existing lock implementation does not serialize processes;
+directory fsync is unavailable on Windows. Avoid concurrent workspace operations there.

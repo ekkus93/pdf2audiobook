@@ -22,6 +22,7 @@ from pdf2audiobook.audio import (
     unspeakable_pause_ranges,
     voice_marker_ids,
 )
+from pdf2audiobook.audio.freshness import valid_mp3_sidecar as valid_mp3_sidecar
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import (
     chapter_has_speakable_text,
@@ -247,6 +248,75 @@ def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]
     return changed or ["analysis"]
 
 
+def _change_footnote_policy(manifest: BookManifest, previous: str, current: str) -> BookManifest:
+    """Rebuild policy-owned edits while preserving unrelated approved decisions."""
+
+    def policy_edit(edit: CleanupEdit) -> bool:
+        return edit.provider == "deterministic" and (
+            edit.reason == "explicit footnotes=omit policy (conservative classification)"
+            or (
+                edit.reason.startswith("footnote anchor marker ")
+                and edit.reason.endswith(" (note handled)")
+            )
+        )
+
+    other = [edit for edit in manifest.edits if not policy_edit(edit)]
+
+    def generated(policy: str) -> list[CleanupEdit]:
+        notes = [block for block in manifest.blocks if block.kind == "footnote"]
+        owned = footnote_omit_edits(manifest.blocks) if policy == "omit" else []
+        accepted = {edit.block_id for edit in other if edit.accepted}
+        if any(edit.block_id in accepted for edit in owned):
+            raise ExtractionError(
+                "Footnote policy conflicts with an approved cleanup edit; use a new output directory"
+            )
+        if notes and policy in {"inline", "end", "omit"}:
+            owned.extend(
+                footnote_anchor_edits(manifest.blocks, accepted | {e.block_id for e in owned})
+            )
+        return owned
+
+    original = [edit.model_dump(mode="json") for edit in manifest.edits if policy_edit(edit)]
+    expected = [edit.model_dump(mode="json") for edit in generated(previous)]
+    if original != expected:
+        raise ExtractionError(
+            "Footnote policy conflicts with protected cleanup decisions; use a new output directory"
+        )
+    updated = manifest.model_copy(deep=True)
+    updated.edits = [*other, *generated(current)]
+    updated.warnings = [
+        warning
+        for warning in updated.warnings
+        if not (warning.startswith("Excluded ") and "footnote" in warning)
+        and not (warning.startswith("Narrating ") and "footnote" in warning)
+    ]
+    notes = [block for block in updated.blocks if block.kind == "footnote"]
+    if notes and current == "omit":
+        updated.warnings.append(
+            f"Excluded {len(notes)} conservatively classified footnote "
+            "block(s) under explicit omit policy; inspect audited cleanup edits"
+        )
+    if notes and current in {"inline", "end"}:
+        moved = kept = 0
+        for chapter in updated.chapters:
+            _, moved_count, kept_count = place_footnotes(
+                updated.blocks[chapter.start_block : chapter.end_block], current
+            )
+            moved += moved_count
+            kept += kept_count
+        if current == "end":
+            updated.warnings.append(
+                f"Narrating {moved} classified footnote(s) at the end of their chapter; "
+                "source blocks are unchanged"
+            )
+        else:
+            updated.warnings.append(
+                f"Narrating {moved} classified footnote(s) after the paragraph holding "
+                f"their anchor; {kept} without a unique anchor keep their PDF position"
+            )
+    return updated
+
+
 def _progress_report_fields(
     progress: dict[str, object] | None,
 ) -> tuple[int | None, list[object] | None]:
@@ -256,40 +326,6 @@ def _progress_report_fields(
         return None, None
     pauses = [row for row in mapping if isinstance(row, dict) and row.get("kind") == "pause"]
     return len(pauses), mapping
-
-
-def valid_mp3_sidecar(audio_path: Path) -> dict[str, object] | None:
-    """Return a verified owned sidecar; foreign or stale files are never trusted."""
-    record = audio_path.with_suffix(".cache.json")
-    data = load_bounded_json(record, max_bytes=4096, max_depth=8)
-    if not isinstance(data, dict):
-        return None
-    rendering_inputs = data.get("rendering_inputs")
-    footnote_policy = (
-        rendering_inputs.get("footnotes") if isinstance(rendering_inputs, dict) else None
-    )
-    if not isinstance(footnote_policy, str) or footnote_policy not in {
-        "warn",
-        "inline",
-        "end",
-        "omit",
-    }:
-        return None
-    try:
-        valid = (
-            isinstance(data.get("chapter_id"), str)
-            and data.get("sidecar_version") == 3
-            and isinstance(data.get("text_sha256"), str)
-            and isinstance(data.get("fingerprint"), str)
-            and isinstance(data.get("bytes"), int)
-            and not isinstance(data.get("bytes"), bool)
-            and data["bytes"] == audio_path.stat().st_size
-            and isinstance(data.get("sha256"), str)
-            and data["sha256"] == digest_file(audio_path)
-        )
-    except OSError:
-        return None
-    return data if valid else None
 
 
 def settings_for_book_tts(
@@ -482,6 +518,30 @@ def _analyze_book_locked(
             # Regenerate missing or stale derived texts without replacing user edits.
             render_chapter_texts(existing, folder, settings.pdf.footnotes)
             return manifest_path
+        if same_input and not same_analysis:
+            from pdf2audiobook.chapter_artifacts import load_artifact_state
+
+            artifact_state = load_artifact_state(folder)
+            if artifact_state is not None and artifact_state["footnotes"] != settings.pdf.footnotes:
+                previous_settings = settings.model_copy(deep=True)
+                previous_settings.pdf.footnotes = artifact_state["footnotes"]
+                previous_key = fingerprint(
+                    _analysis_stage_fingerprints(book_hash, previous_settings, extractor)
+                )
+                if existing.analysis_fingerprint == previous_key:
+                    updated = _change_footnote_policy(
+                        existing, artifact_state["footnotes"], settings.pdf.footnotes
+                    )
+                    updated.analysis_fingerprint = analysis_key
+                    refresh_empty_chapter_reason(manifest_path, updated, persist=False)
+                    render_chapter_texts(
+                        updated, folder, settings.pdf.footnotes, commit_manifest=True
+                    )
+                    write_json(
+                        folder / "reports" / "analysis_fingerprints.json",
+                        {"schema_version": 1, "stages": stage_fingerprints},
+                    )
+                    return manifest_path
         if approved_content:
             changed_stages = _changed_analysis_stages(folder, stage_fingerprints)
             if other_approved_content or not rejected_deterministic_edits:
@@ -920,8 +980,7 @@ def _analyze_book_locked(
         warnings=extracted.warnings + warnings,
         review_required=[code for code in REVIEW_REASON_CODES if code in review_reasons],
     )
-    render_chapter_texts(manifest, folder, settings.pdf.footnotes)
-    write_manifest(manifest_path, manifest)
+    render_chapter_texts(manifest, folder, settings.pdf.footnotes, commit_manifest=True)
     write_json(
         folder / "reports" / "analysis_fingerprints.json",
         {"schema_version": 1, "stages": stage_fingerprints},
@@ -933,7 +992,11 @@ def _analyze_book_locked(
 
 
 def refresh_empty_chapter_reason(
-    manifest_path: Path, manifest: BookManifest, *, persist: bool = True
+    manifest_path: Path,
+    manifest: BookManifest,
+    *,
+    persist: bool = True,
+    speakability: dict[str, bool] | None = None,
 ) -> None:
     """Recompute the empty-chapter review reason from the manifest as it is now.
 
@@ -950,8 +1013,12 @@ def refresh_empty_chapter_reason(
         return  # No source blocks to judge; coverage validation reports this elsewhere.
     replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
     has_empty = any(
-        not chapter_has_speakable_text(
-            manifest.blocks, chapter.start_block, chapter.end_block, replacements
+        not (
+            speakability[chapter.id]
+            if speakability is not None
+            else chapter_has_speakable_text(
+                manifest.blocks, chapter.start_block, chapter.end_block, replacements
+            )
         )
         for chapter in manifest.chapters
     )
@@ -974,6 +1041,7 @@ def select_chapters(
     *,
     chapter: int | None = None,
     chapter_range: tuple[int, int] | None = None,
+    speakability: dict[str, bool] | None = None,
 ) -> list:
     """Validate chosen chapters before loading or downloading a speech model."""
     if chapter is not None and chapter_range is not None:
@@ -995,11 +1063,15 @@ def select_chapters(
     for item in chosen:
         if (
             "empty_chapter" in manifest.review_required
-            and not chapter_has_speakable_text(
-                manifest.blocks,
-                item.start_block,
-                item.end_block,
-                {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted},
+            and not (
+                speakability[item.id]
+                if speakability is not None
+                else chapter_has_speakable_text(
+                    manifest.blocks,
+                    item.start_block,
+                    item.end_block,
+                    {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted},
+                )
             )
             and not item.manually_approved
         ):
@@ -1050,11 +1122,40 @@ def prepare_chapter_selection(
     chapter_range: tuple[int, int] | None = None,
     acknowledge: tuple[str, ...] = (),
     persist: bool = False,
+    footnotes: str | None = None,
 ) -> ChapterSelection:
     """Refresh review gates and select converted, skipped and refused chapters."""
     previous_review_required = list(manifest.review_required)
     previous_acknowledged = list(manifest.review_acknowledged)
-    refresh_empty_chapter_reason(manifest_path, manifest, persist=False)
+    from pdf2audiobook.audio import has_speakable_chapter_narration
+    from pdf2audiobook.chapter_artifacts import load_artifact_state, plan_chapter_artifacts
+
+    state = load_artifact_state(manifest_path.parent)
+    speakability: dict[str, bool] | None = None
+    if state is not None or (
+        manifest_path.is_file() and manifest.blocks and (manifest_path.parent / "chapters").is_dir()
+    ):
+        policy = footnotes if footnotes is not None else settings.pdf.footnotes
+        plan = plan_chapter_artifacts(manifest, manifest_path.parent, policy)
+        speakability = {}
+        for item in manifest.chapters:
+            name = f"{item.number:03d}.txt"
+            try:
+                text = (
+                    plan.writes[name].decode("utf-8")
+                    if name in plan.writes
+                    else (manifest_path.parent / "chapters" / name).read_text(encoding="utf-8")
+                )
+            except (OSError, UnicodeError):
+                raise AudioError(
+                    "Cannot read approved chapter text; check workspace files"
+                ) from None
+            try:
+                speakability[item.id] = has_speakable_chapter_narration(text)
+            except AudioError:
+                # Leave invalid markers to per-chapter voice preflight.
+                speakability[item.id] = True
+    refresh_empty_chapter_reason(manifest_path, manifest, persist=False, speakability=speakability)
     requested_acknowledgements = set(acknowledge)
     if not requested_acknowledgements <= set(BOOK_WIDE_REVIEW_REASON_CODES):
         raise AudioError("Unknown review reason code")
@@ -1073,7 +1174,9 @@ def prepare_chapter_selection(
     ):
         write_manifest(manifest_path, manifest)
 
-    chosen = select_chapters(manifest, settings, chapter=chapter, chapter_range=chapter_range)
+    chosen = select_chapters(
+        manifest, settings, chapter=chapter, chapter_range=chapter_range, speakability=speakability
+    )
     replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
     skipped = [
         item
@@ -1081,8 +1184,12 @@ def prepare_chapter_selection(
         if (
             "empty_chapter" in manifest.review_required
             and item.manually_approved
-            and not chapter_has_speakable_text(
-                manifest.blocks, item.start_block, item.end_block, replacements
+            and not (
+                speakability[item.id]
+                if speakability is not None
+                else chapter_has_speakable_text(
+                    manifest.blocks, item.start_block, item.end_block, replacements
+                )
             )
         )
     ]

@@ -1520,25 +1520,17 @@ def render_chapter_narration(
     )
 
 
-def render_chapter_texts(manifest: BookManifest, folder: Path, footnotes: str = "warn") -> None:
-    """Regenerate derived text from source-linked, verified edits and manual boundaries."""
-    from pdf2audiobook.workspace import atomic_write, digest_bytes, digest_file, write_json
+def render_chapter_texts(
+    manifest: BookManifest, folder: Path, footnotes: str = "warn", *, commit_manifest: bool = False
+) -> None:
+    """Render generated text while preserving identified user edits."""
+    from pdf2audiobook.chapter_artifacts import plan_chapter_artifacts
+    from pdf2audiobook.review_transaction import commit_artifacts
+    from pdf2audiobook.workspace import workspace_lock
 
-    report = chapter_coverage_report(manifest)
-    for chapter in manifest.chapters:
-        content = render_chapter_narration(manifest, chapter, footnotes).encode("utf-8")
-        path = folder / "chapters" / f"{chapter.number:03d}.txt"
-        # Compare existing chapter text using bounded reads. read_bytes()
-        # would duplicate an entire long chapter in memory on every resume.
-        if not path.is_file() or digest_file(path) != digest_bytes(content):
-            atomic_write(path, content)
-    # A re-plan with fewer chapters must not leave stale derived text behind.
-    # Only remove files named like derived chapter text; others are untouched.
-    current = {f"{chapter.number:03d}.txt" for chapter in manifest.chapters}
-    for stale in (folder / "chapters").glob("[0-9][0-9][0-9]*.txt"):
-        if CHAPTER_TEXT_NAME.fullmatch(stale.name) and stale.name not in current:
-            stale.unlink(missing_ok=True)
-    write_json(folder / "coverage.json", report)
+    with workspace_lock(folder):
+        plan = plan_chapter_artifacts(manifest, folder, footnotes)
+        commit_artifacts(folder, plan, manifest=manifest if commit_manifest else None)
 
 
 def _is_wrapped_line(

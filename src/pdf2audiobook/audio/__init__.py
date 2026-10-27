@@ -454,6 +454,11 @@ def voice_marker_ids(text: str) -> list[str]:
     return [voice for _, voice in _voice_markers(text, "")[1][1:]]
 
 
+def has_speakable_chapter_narration(text: str) -> bool:
+    """Ignore voice control paragraphs when checking chapter narration."""
+    return has_speakable_narration(_voice_markers(text, "")[0])
+
+
 def split_sentences(
     text: str,
     max_chars: int = 350,
