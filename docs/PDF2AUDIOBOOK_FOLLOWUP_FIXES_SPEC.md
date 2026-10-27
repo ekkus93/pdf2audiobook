@@ -1,6 +1,6 @@
 # PDF2Audiobook Follow-up Fixes and Progress Specification
 
-**Status:** Proposed
+**Status:** Implemented
 **Date:** 2026-10-27
 **Companion:** `docs/PDF2AUDIOBOOK_FOLLOWUP_FIXES_TODO.md`
 **Baseline:** master at 5a4f96e (`fix(workspace): preserve reviewed narration and recover updates`) plus the uncommitted module split in the working tree
@@ -185,7 +185,7 @@ Users currently see no indication of what a long analysis or conversion is doing
 
 **Dependency and module**
 - Add the runtime dependency `tqdm>=4.66,<5` and the dev dependency `types-tqdm`. Update `uv.lock`; the packaging smoke must still pass in a clean venv.
-- Add `src/pdf2audiobook/progress_display.py` and register it in `[tool.mypy].files`. It defines a small `ProgressReporter` protocol: `stage(name, total, unit, initial=0)` returning a handle with `advance(n)`, `set_detail(text)` and `close()`. It provides a `NullReporter` and a `TqdmReporter`. Pipeline code depends only on the protocol, never on `tqdm` directly. Reporters are passed in the way `tts_provider` and `encoder` are today.
+- Add `src/pdf2audiobook/progress_display.py` and register it in `[tool.mypy].files`. It defines a small `ProgressReporter` protocol: `stage(name, total, unit, initial=0)` returning a handle with `advance(n, cached=False)`, `set_total(n)`, `set_detail(text)` and `close()`; the reporter also has `enabled`, `summary(text)` and `close()`. `cached=True` advances move the count and the rate baseline together so that instant work never shortens the estimate. It provides a `NullReporter` and a `TqdmReporter`. Pipeline code depends only on the protocol, never on `tqdm` directly. Reporters are passed in the way `tts_provider` and `encoder` are today.
 
 **When it is shown**
 - New root option `--progress/--no-progress` plus `general.progress: "auto" | "always" | "never"` (default `auto`) and env `PDF2AUDIOBOOK_PROGRESS`.
@@ -198,9 +198,9 @@ Users currently see no indication of what a long analysis or conversion is doing
 | Stage | Unit | Total and initial | Detail |
 | --- | --- | --- | --- |
 | Extraction | page | page count; OCR'd pages advance as they finish | — |
-| Analysis | request | planned LLM requests per enabled stage (structure, cleanup, classification, narration, contents, vision); cache hits advance immediately | stage name, e.g. "cleanup" |
+| Analysis | request | planned LLM requests per enabled windowed stage (structure, contents, cleanup, classification, narration), announced through `planned_windows` before the stage makes them; cache hits advance immediately; vision requests advance the counter but are not pre-announced, so the total grows when they run | stage name, e.g. "cleanup" |
 | Synthesis | character | narration characters of the selected chapters; already-valid cached chapters and resumed chunks count toward `initial` | `chapter i/n` |
-| Encoding and `pack-m4b` | chapter | chapter count | — |
+| `pack-m4b` | chapter | "Checking chapter audio" over the chapters being packaged, then an indeterminate "Encoding M4B" | — |
 
 - If the analysis request total isn't known in advance, show an indeterminate counter with elapsed time instead of an ETA.
 - The single ffmpeg M4B encode is indeterminate: elapsed time only.

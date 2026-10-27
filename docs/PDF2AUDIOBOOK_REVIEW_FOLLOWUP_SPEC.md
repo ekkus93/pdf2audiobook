@@ -69,3 +69,13 @@ This is a maintainability improvement, not a requirement to split files at an ar
 ## Validation and documentation
 
 Use focused deterministic tests for each requirement, followed by `uv run pytest -q -ra`, `uv run ruff check .`, and `uv run mypy`. Run `uv lock --check` if dependencies change. Report unavailable external-tool or optional-model checks as limitations rather than claiming they passed. Update the README and maintainer guide with editing, conflicts, recovery, policy persistence and upgrade behavior. Do not commit real book content, credentials or workspaces.
+
+## Amendments (2026-10-27 follow-up fixes)
+
+`docs/PDF2AUDIOBOOK_FOLLOWUP_FIXES_SPEC.md` supersedes the following statements above:
+
+- **Recovery on read (R2):** reading a manifest no longer takes the lock or recovers. Only lock holders recover; a read refuses with `PendingRecoveryError` while a journal exists.
+- **Outcomes (R2):** a failure to recover an *earlier* transaction while acquiring the lock is reported as "not saved" (`not_saved_pending_recovery`), not as "committed". Only a failure after this operation's own commit point is `committed_needs_recovery`. Chapter conflicts return 422 with the chapter number.
+- **Explicit recovery path (R1, R2):** `regenerate-chapter` and `recover` are the supported ways to resolve conflicts and blocked transactions, with backups in `chapter-backups/` and `workspace-backups/`. Deleting `chapter-artifacts.json` remains unsupported.
+- **Legacy workspaces (R3):** a workspace without a recorded policy has its footnote policy inferred, or is refused when ambiguous, instead of silently using `warn`.
+- **Journal writes (R2):** an unchanged artifact set is not published and writes no journal.

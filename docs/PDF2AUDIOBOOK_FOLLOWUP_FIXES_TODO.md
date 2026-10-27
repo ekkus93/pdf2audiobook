@@ -143,7 +143,7 @@
 
 ## 9. Finish
 
-- [ ] 9.1 Merge the superseding text into `docs/PDF2AUDIOBOOK_REVIEW_FOLLOWUP_SPEC.md` and `docs/PDF2AUDIOBOOK_SPEC.md`: the read-only access rule, outcome codes, regeneration and recovery commands, policy resolution, timeout and progress.
+- [x] 9.1 Merge the superseding text into `docs/PDF2AUDIOBOOK_REVIEW_FOLLOWUP_SPEC.md` and `docs/PDF2AUDIOBOOK_SPEC.md`: the read-only access rule, outcome codes, regeneration and recovery commands, policy resolution, timeout and progress.
 - [ ] 9.2 Run `/verify`, plus `mypy --python-version 3.12` and `3.13`. Record pass and skip counts and any skipped external-tool checks.
 - [ ] 9.3 Review the final diff against every acceptance criterion in R1–R11. Record unresolved limitations without checking incomplete items.
 
