@@ -24,14 +24,20 @@ class WorkspaceError(ExtractionError):
 class PendingRecoveryError(WorkspaceError):
     """A committed workspace update is pending and must be recovered first."""
 
+    def __init__(self, message: str, *, labels: tuple[str, ...] | list[str] = ()):
+        super().__init__(message)
+        # Safe target labels such as "chapter 1"; never paths, digests or text.
+        self.labels = tuple(labels)
+
 
 class ChapterConflictError(ExtractionError):
     """A chapter file conflicts with generated text; carries only its number."""
 
     def __init__(self, chapter: int):
         super().__init__(
-            f"Chapter {chapter} text conflicts with generated content; back up the chapter file "
-            "and restore generated text or use a fresh output directory"
+            f"Chapter {chapter} text conflicts with generated content; run pdf2audiobook "
+            f"regenerate-chapter on the manifest with --chapter {chapter} to keep a backup of "
+            "the file and regenerate it, or use a fresh output directory"
         )
         self.chapter = chapter
 

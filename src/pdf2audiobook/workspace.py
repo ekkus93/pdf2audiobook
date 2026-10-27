@@ -7,6 +7,7 @@ import tempfile
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -26,11 +27,15 @@ _MANIFEST_UNREADABLE = (
 
 
 @contextmanager
-def workspace_lock(folder: Path, *, blocking: bool = False, create: bool = False) -> Iterator[None]:
+def workspace_lock(
+    folder: Path, *, blocking: bool = False, create: bool = False, recover: bool = True
+) -> Iterator[None]:
     """Hold the per-book lock used by analysis, conversion and review writes.
 
     Only writers that may start a new workspace pass ``create=True``; every other
     caller fails closed on a missing workspace instead of creating directories.
+    Only the explicit ``recover`` command passes ``recover=False``, so that it can
+    complete a blocked transaction itself.
     """
     lock_key = folder.resolve()
     held: set[Path] = getattr(_workspace_locks, "held", set())
@@ -40,9 +45,10 @@ def workspace_lock(folder: Path, *, blocking: bool = False, create: bool = False
     try:
         import fcntl
     except ImportError:  # pragma: no cover - platforms without POSIX file locks
-        from pdf2audiobook.review_transaction import recover_review_transaction
+        if recover:
+            from pdf2audiobook.review_transaction import recover_review_transaction
 
-        recover_review_transaction(folder)
+            recover_review_transaction(folder)
         yield
         return
     if not create and not folder.is_dir():
@@ -63,9 +69,10 @@ def workspace_lock(folder: Path, *, blocking: bool = False, create: bool = False
             ) from None
         _workspace_locks.held = {*held, lock_key}
         try:
-            from pdf2audiobook.review_transaction import recover_review_transaction
+            if recover:
+                from pdf2audiobook.review_transaction import recover_review_transaction
 
-            recover_review_transaction(folder)
+                recover_review_transaction(folder)
             yield
         finally:
             _workspace_locks.held = held
@@ -110,6 +117,50 @@ def atomic_write(path: Path, data: bytes) -> None:
                 pass
 
 
+def sync_directory(path: Path) -> None:
+    if os.name == "nt":  # Windows does not expose directory fsync via os.open.
+        return
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def backup_file(
+    folder: Path, source: Path, *, subdir: str, stem: str, suffix: str = "", timestamp: str = ""
+) -> str:
+    """Copy ``source`` into ``folder/subdir`` and return its workspace-relative name.
+
+    The copy is created exclusively and durably, and an existing backup is never
+    replaced: a name collision picks the next free numbered name.
+    """
+    stamp = timestamp or datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    directory = folder / subdir
+    try:
+        if directory.is_symlink() or source.is_symlink() or not source.is_file():
+            raise OSError("unsupported backup path")
+        directory.mkdir(exist_ok=True)
+        attempt = 1
+        while True:
+            name = f"{stem}-{stamp}{'' if attempt == 1 else f'-{attempt}'}{suffix}"
+            try:
+                descriptor = os.open(directory / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                break
+            except FileExistsError:
+                attempt += 1
+        with os.fdopen(descriptor, "wb") as handle, source.open("rb") as reader:
+            for chunk in iter(lambda: reader.read(1024 * 1024), b""):
+                handle.write(chunk)
+            handle.flush()
+            os.fsync(handle.fileno())
+        sync_directory(directory)
+        sync_directory(folder)
+    except OSError:
+        raise WorkspaceError("Cannot write a backup copy; check workspace permissions") from None
+    return f"{subdir}/{name}"
+
+
 def write_json(path: Path, obj: Any) -> None:
     # Standard JSON has no NaN/Infinity tokens. Serialize before touching
     # the destination so a malformed report cannot replace a valid artifact.
@@ -122,8 +173,8 @@ def _refuse_pending_update(folder: Path) -> None:
     journal = folder / REVIEW_JOURNAL
     if journal.exists() or journal.is_symlink():
         raise PendingRecoveryError(
-            "A workspace update is pending recovery; run a writing command such as convert "
-            "to complete it"
+            "A workspace update is pending recovery; run pdf2audiobook recover on the manifest "
+            "(or retry a writing command such as convert) to complete it"
         )
 
 

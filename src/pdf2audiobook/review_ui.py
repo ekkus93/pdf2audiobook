@@ -332,17 +332,20 @@ def create_review_server(
                 self._json(
                     503,
                     {
-                        "error": "Review update was committed but needs recovery; retry.",
+                        "error": "Review update was committed but needs recovery; run "
+                        "pdf2audiobook recover on the manifest, then reload.",
                         "outcome": "committed_needs_recovery",
                     },
                 )
                 return
-            except PendingRecoveryError:
+            except PendingRecoveryError as pending:
                 self._json(
                     503,
                     {
-                        "error": "A previous workspace update needs recovery; "
-                        "this update was not saved.",
+                        "error": "A previous workspace update needs recovery"
+                        + (f" ({', '.join(pending.labels)} changed)" if pending.labels else "")
+                        + "; this update was not saved. Run pdf2audiobook recover on the "
+                        "manifest, then reload.",
                         "outcome": "not_saved_pending_recovery",
                     },
                 )

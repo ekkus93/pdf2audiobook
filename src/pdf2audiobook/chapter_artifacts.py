@@ -104,8 +104,39 @@ def load_artifact_state(folder: Path) -> dict[str, Any] | None:
     return raw
 
 
-def plan_chapter_artifacts(manifest: BookManifest, folder: Path, policy: str) -> ArtifactPlan:
-    """Validate all chapter changes and return a plan without writing anything."""
+def _flag(conflicts: list[int] | None, number: int) -> None:
+    """Raise the conflict, or record it when the caller is collecting conflicts."""
+    if conflicts is None:
+        raise _conflict(number)
+    if number not in conflicts:
+        conflicts.append(number)
+
+
+def plan_chapter_artifacts(
+    manifest: BookManifest, folder: Path, policy: str, *, force: frozenset[int] = frozenset()
+) -> ArtifactPlan:
+    """Validate all chapter changes and return a plan without writing anything.
+
+    ``force`` names chapter numbers whose files the caller has already backed up
+    and wants replaced by generated text, so they are never reported as conflicts.
+    """
+    return _plan(manifest, folder, policy, force, None)
+
+
+def find_chapter_conflicts(manifest: BookManifest, folder: Path, policy: str) -> list[int]:
+    """Return every chapter number the planner would currently refuse, in order."""
+    conflicts: list[int] = []
+    _plan(manifest, folder, policy, frozenset(), conflicts)
+    return sorted(conflicts)
+
+
+def _plan(
+    manifest: BookManifest,
+    folder: Path,
+    policy: str,
+    force: frozenset[int],
+    conflicts: list[int] | None,
+) -> ArtifactPlan:
     if policy not in _POLICIES:
         raise ExtractionError("Chapter footnote policy is invalid")
     coverage = chapter_coverage_report(manifest)
@@ -125,9 +156,11 @@ def plan_chapter_artifacts(manifest: BookManifest, folder: Path, policy: str) ->
     for chapter_id, record in previous.items():
         if new_numbers.get(chapter_id) == record["number"]:
             continue
+        if record["number"] in force:
+            continue
         actual = _read_digest(chapter_dir / f"{record['number']:03d}.txt")
         if record["edited"] or (actual is not None and actual != record["generated"]):
-            raise _conflict(record["number"])
+            _flag(conflicts, record["number"])
     observed: dict[str, str | None] = {}
     writes: dict[str, bytes] = {}
     records: dict[str, dict[str, Any]] = {}
@@ -142,19 +175,29 @@ def plan_chapter_artifacts(manifest: BookManifest, folder: Path, policy: str) ->
         observed[name] = actual
         old = previous.get(chapter.id)
         occupant = old_by_number.get(chapter.number)
-        if occupant and occupant[0] != chapter.id and actual is not None:
-            if actual != occupant[1]["generated"] or occupant[1]["edited"]:
-                raise _conflict(chapter.number)
-        if old is None or old["number"] != chapter.number:
+        if chapter.number in force:
+            edited = False
+        elif (
+            occupant
+            and occupant[0] != chapter.id
+            and actual is not None
+            and (actual != occupant[1]["generated"] or occupant[1]["edited"])
+        ):
+            _flag(conflicts, chapter.number)
+            continue
+        elif old is None or old["number"] != chapter.number:
             if actual is not None and actual != generated and not occupant:
-                raise _conflict(chapter.number)
+                _flag(conflicts, chapter.number)
+                continue
             edited = False
         else:
             if actual is None and old["edited"]:
-                raise _conflict(chapter.number)
+                _flag(conflicts, chapter.number)
+                continue
             edited = actual is not None and actual != old["generated"]
             if edited and old["identity"] != identity:
-                raise _conflict(chapter.number)
+                _flag(conflicts, chapter.number)
+                continue
         if not edited and actual != generated:
             writes[name] = content
         records[chapter.id] = {
@@ -173,8 +216,11 @@ def plan_chapter_artifacts(manifest: BookManifest, folder: Path, policy: str) ->
             old_entry = next(
                 (r for r in previous.values() if f"{r['number']:03d}.txt" == path.name), None
             )
-            if old_entry is None or old_entry["edited"] or actual != old_entry["generated"]:
-                raise _conflict(int(path.stem))
+            if int(path.stem) not in force and (
+                old_entry is None or old_entry["edited"] or actual != old_entry["generated"]
+            ):
+                _flag(conflicts, int(path.stem))
+                continue
             deletes.append(path.name)
     return ArtifactPlan(
         writes,

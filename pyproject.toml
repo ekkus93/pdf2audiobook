@@ -44,6 +44,7 @@ files = [
     "src/pdf2audiobook/workspace.py",
     "src/pdf2audiobook/jsonio.py",
     "src/pdf2audiobook/chapter_artifacts.py",
+    "src/pdf2audiobook/chapter_recovery.py",
     "src/pdf2audiobook/chapter_selection.py",
     "src/pdf2audiobook/conversion.py",
     "src/pdf2audiobook/analysis_state.py",

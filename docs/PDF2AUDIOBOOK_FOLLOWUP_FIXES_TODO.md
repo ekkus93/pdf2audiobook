@@ -64,12 +64,12 @@
 
 ## 3. Regeneration and recovery commands (R4, R5)
 
-- [ ] 3.1 Add a shared backup helper: exclusive create in `chapter-backups/` and `workspace-backups/`, a UTC timestamp name, fsync of the file and directory, and never overwriting. Make the planner ignore both directories.
-- [ ] 3.2 Make recovery errors name blocking targets by safe label (`chapter N`, `manifest`, `coverage report`, `chapter metadata`).
-- [ ] 3.3 Add the `recover MANIFEST [--back-up-changed] [--json]` command.
-- [ ] 3.4 Add the `regenerate-chapter MANIFEST --chapter N ... | --all-conflicts [--json]` command. It plans from the committed manifest and recorded policy, backs up differing files, and publishes `edited=false` through one transaction.
-- [ ] 3.5 Update the conflict, recovery and README text to name these commands. Document that deleting `chapter-artifacts.json` is unsupported.
-- [ ] 3.6 Tests:
+- [x] 3.1 Add a shared backup helper: exclusive create in `chapter-backups/` and `workspace-backups/`, a UTC timestamp name, fsync of the file and directory, and never overwriting. Make the planner ignore both directories.
+- [x] 3.2 Make recovery errors name blocking targets by safe label (`chapter N`, `manifest`, `coverage report`, `chapter metadata`).
+- [x] 3.3 Add the `recover MANIFEST [--back-up-changed] [--json]` command.
+- [x] 3.4 Add the `regenerate-chapter MANIFEST --chapter N ... | --all-conflicts [--json]` command. It plans from the committed manifest and recorded policy, backs up differing files, and publishes `edited=false` through one transaction.
+- [x] 3.5 Update the conflict, recovery and README text to name these commands. Document that deleting `chapter-artifacts.json` is unsupported.
+- [x] 3.6 Tests:
   - an observed edited file that was then deleted is regenerated and conversion then proceeds;
   - an edited file is backed up byte for byte;
   - a repeat run makes no new backup;

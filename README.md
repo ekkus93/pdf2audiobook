@@ -71,19 +71,39 @@ The marker is omitted from speech; that voice continues until another marker or 
 
 Chapter files are editable. After changing one, keep a backup: resume and conversion preserve
 compatible edits, and changed narration makes existing audio stale. If a boundary, source text,
-cleanup decision or footnote policy changes for an edited chapter, the operation stops with a
-chapter number. Back up the edited file, restore the original generated file before retrying, or
-use a fresh output directory; then reapply your edits after reviewing the new text. A legacy
-workspace with no generation record adopts a chapter file only when it matches current generated
-text. Preserve a differing legacy file separately before regenerating it in a fresh workspace.
+cleanup decision or footnote policy changes for an edited chapter, the operation stops and names
+the chapter number. Resolve it with:
 
-Review and chapter regeneration record a workspace transaction before publishing files. If a
-committed update reports that recovery is needed, retry the operation; recovery runs on the next
-workspace lock. If a chapter was changed after the interruption, back up that new edit and restore
-the file that was present before the interrupted save, then retry and reapply the edit. The
-transaction file can contain book text and should be protected like the workspace. The stored
-footnote policy is reused by review and packaging. A deleted edit can be detected only after the
-application has observed it; keep backups even when an edit has not yet been processed.
+```bash
+pdf2audiobook regenerate-chapter ./audiobooks/BOOK/manifest.json --chapter 3
+pdf2audiobook regenerate-chapter ./audiobooks/BOOK/manifest.json --all-conflicts
+```
+
+This copies a differing chapter file to `chapter-backups/NNN-<UTC time>.txt` (a backup is never
+overwritten or deleted by the tool), then writes the generated text and records it as unedited.
+It does not change approvals, review reasons or the manifest. Reapply your edits afterwards from
+the backup. If you deleted an edited chapter file that the application had already observed, the
+same command restores it. Do not delete `chapter-artifacts.json`; that is unsupported. A legacy
+workspace with no generation record adopts a chapter file only when it matches current generated
+text, and `regenerate-chapter` resolves a differing legacy file the same way.
+
+Review and chapter regeneration record a workspace transaction before publishing files. If an
+update reports that recovery is needed, or a later command says a previous update needs recovery,
+run:
+
+```bash
+pdf2audiobook recover ./audiobooks/BOOK/manifest.json
+```
+
+It completes the interrupted update, or reports which targets (`chapter 3`, `manifest`,
+`coverage report`, `chapter metadata`) were changed after the interruption. Add
+`--back-up-changed` to copy those files to `chapter-backups/` or `workspace-backups/` first and
+then finish the update. An invalid transaction file is never repaired automatically; restore the
+workspace from a backup. Reading a manifest (for example the review page or `inspect`) never
+runs recovery and refuses while an update is pending. The transaction file can contain book
+text and should be protected like the workspace. The stored footnote policy is reused by review
+and packaging. A deleted edit can be detected only after the application has observed it; keep
+backups even when an edit has not yet been processed.
 
 After converting all chapters, package them as a single AAC audiobook with chapter navigation:
 
