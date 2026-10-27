@@ -100,9 +100,9 @@
 
 ## 6. Missing acceptance coverage (R8)
 
-- [ ] 6.1 Dry-run test: after a voice marker and a correction in an approved chapter, `convert --dry-run --json` reflects the edited text, writes no audio and leaves the bytes unchanged.
-- [ ] 6.2 Legacy end-to-end test: with `chapter-artifacts.json` removed, run analyze resume, review save and a fake-TTS convert. A matching file is adopted; a differing file is preserved, reported, and resolved by `regenerate-chapter`.
-- [ ] 6.3 No-mixed-consumption test: with a committed but unpublished journal, conversion recovers before selection and synthesizes the new text.
+- [x] 6.1 Dry-run test: after a voice marker and a correction in an approved chapter, `convert --dry-run --json` reflects the edited text, writes no audio and leaves the bytes unchanged.
+- [x] 6.2 Legacy end-to-end test: with `chapter-artifacts.json` removed, run analyze resume, review save and a fake-TTS convert. A matching file is adopted; a differing file is preserved, reported, and resolved by `regenerate-chapter`.
+- [x] 6.3 No-mixed-consumption test: with a committed but unpublished journal, conversion recovers before selection and synthesizes the new text.
 
 ## 7. LLM request timeout (R10) — feature
 
