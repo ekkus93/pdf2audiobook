@@ -298,6 +298,25 @@ cap also invalidates earlier LLM response-cache identities. Operators must verif
 context windows and `max_tokens` support against their selected live model.
 These checks do not guarantee that a misconfigured server honors its limit.
 
+## LLM request timeout
+
+Each LLM request waits for a response for `timeout_seconds` per provider. Ollama defaults to
+300 seconds (5 minutes), since local models can be slow on modest hardware; OpenAI and
+llama-server default to 60 seconds. Connecting always fails after at most 10 seconds, so an
+unreachable server is reported quickly.
+
+~~~toml
+[llm.ollama]
+timeout_seconds = 600
+~~~
+
+`PDF2AUDIOBOOK_LLM_TIMEOUT_SECONDS` overrides the selected provider's value (the valid range is
+greater than 0 up to 3600). A timed-out request is retried up to `llm.max_retries` times, so the
+worst-case wait for one request is `timeout_seconds × (max_retries + 1)`. If it still fails the
+error names the setting to raise. Listing the model's served context (`/api/ps`) always uses its
+own 10-second limit. The timeout does not change analysis or cache identities. `config show` and
+`doctor --json` report the effective value.
+
 ## Optional visual review
 
 Set `llm.vision = true` (or `PDF2AUDIOBOOK_LLM_VISION=true`) to render up to 12 pages with detected images, vector art, or likely multi-column layouts for review-only descriptions. Use `--vision` for a one-command opt-in. Visual suggestions are saved in `reports/vision_review.json`; they do not change chapter text or narration. Select a vision-capable model. Remote page images follow the same explicit consent and HTTPS rules as other book content.

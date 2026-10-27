@@ -75,6 +75,7 @@ class OpenAICompatibleProvider:
         max_output_tokens: int = 1024,
     ):
         self.provider = provider
+        self.timeout = timeout
         self.base_url = validate_endpoint(base_url, allow_remote)
         self.model = model
         self.temperature = temperature
@@ -96,7 +97,8 @@ class OpenAICompatibleProvider:
         self.require_output_cap = False
         self._attempt_settled: Callable[[int, dict | None, AttemptOutcome], None] | None = None
         self._client = httpx.Client(
-            timeout=timeout,
+            # Only slow responses should wait this long; an unreachable server fails fast.
+            timeout=httpx.Timeout(timeout, connect=min(10.0, timeout)),
             transport=transport,
             headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
         )
@@ -250,7 +252,8 @@ class OpenAICompatibleProvider:
                 self._client.post(
                     f"{root}/api/generate", json={"model": model, "prompt": "", "stream": False}
                 ).raise_for_status()
-                response = self._client.get(f"{root}/api/ps")
+                # Model loading above may be slow; listing what is loaded must not be.
+                response = self._client.get(f"{root}/api/ps", timeout=10.0)
                 response.raise_for_status()
                 for item in response.json()["models"]:
                     length = item.get("context_length")
@@ -576,6 +579,18 @@ class OpenAICompatibleProvider:
                     if self.provider in ("openai", "ollama", "llama-server")
                     else "provider"
                 )
+                if isinstance(exc, httpx.TimeoutException) and not isinstance(
+                    exc, httpx.ConnectTimeout
+                ):
+                    setting = (
+                        f"llm.{self.provider.replace('-', '_')}.timeout_seconds"
+                        if label != "provider"
+                        else "the LLM timeout_seconds setting"
+                    )
+                    raise LLMError(
+                        f"{label} LLM transport failure: request timed out after "
+                        f"{self.timeout:g} s; increase {setting}"
+                    ) from None
                 raise LLMError(
                     f"{label} LLM transport failure",
                     unbilled=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)),
@@ -624,6 +639,7 @@ def create_provider(
         api_key=api_key,
         transport=transport,
         temperature=settings.llm.temperature,
+        timeout=choice.timeout_seconds,
         max_retries=settings.llm.max_retries,
         max_context_tokens=settings.llm.max_context_tokens,
         max_output_tokens=settings.llm.max_output_tokens,

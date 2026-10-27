@@ -55,6 +55,8 @@ class RemoteLLM(ConfigModel):
     model: str
     base_url: str | None = None
     api_key_env: str | None = None
+    # Read/write/pool timeout per request; connecting always fails fast (10 s at most).
+    timeout_seconds: float = Field(default=60.0, gt=0, le=3600)
 
 
 class LLM(ConfigModel):
@@ -82,7 +84,9 @@ class LLM(ConfigModel):
         default_factory=lambda: RemoteLLM(model="gpt-4.1-mini", api_key_env="OPENAI_API_KEY")
     )
     ollama: RemoteLLM = Field(
-        default_factory=lambda: RemoteLLM(model="qwen3.5:9b", base_url="http://127.0.0.1:11434/v1")
+        default_factory=lambda: RemoteLLM(
+            model="qwen3.5:9b", base_url="http://127.0.0.1:11434/v1", timeout_seconds=300.0
+        )
     )
     llama_server: RemoteLLM = Field(
         default_factory=lambda: RemoteLLM(
@@ -223,6 +227,7 @@ ENV_KEYS = {
     ),
     "PDF2AUDIOBOOK_LLM_MODEL": ("llm", "@selected", "model"),
     "PDF2AUDIOBOOK_LLM_URL": ("llm", "@selected", "base_url"),
+    "PDF2AUDIOBOOK_LLM_TIMEOUT_SECONDS": ("llm", "@selected", "timeout_seconds"),
     "PDF2AUDIOBOOK_ALLOW_REMOTE_CONTENT": ("llm", "allow_remote_content"),
     "PDF2AUDIOBOOK_LLM_FALLBACK_TO_DETERMINISTIC": ("llm", "fallback_to_deterministic"),
     "PDF2AUDIOBOOK_TTS_PROVIDER": ("tts", "provider"),

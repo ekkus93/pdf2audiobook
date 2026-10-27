@@ -185,6 +185,7 @@ def test_environment_mapping_covers_every_declared_variable():
         "PDF2AUDIOBOOK_LLM_OUTPUT_COST_USD_PER_MILLION_TOKENS": "1.0",
         "PDF2AUDIOBOOK_LLM_MODEL": "7",
         "PDF2AUDIOBOOK_LLM_URL": "http://127.0.0.1:11434/v1",
+        "PDF2AUDIOBOOK_LLM_TIMEOUT_SECONDS": "420",
         "PDF2AUDIOBOOK_ALLOW_REMOTE_CONTENT": "false",
         "PDF2AUDIOBOOK_LLM_FALLBACK_TO_DETERMINISTIC": "0",
         "PDF2AUDIOBOOK_TTS_PROVIDER": "kitten",
@@ -202,6 +203,7 @@ def test_environment_mapping_covers_every_declared_variable():
     settings, _ = load_settings(no_config=True, environ=environ)
     assert settings.llm.max_estimated_cost_usd == 2.0
     assert settings.llm.ollama.model == "7"
+    assert settings.llm.ollama.timeout_seconds == 420
     assert settings.tts.kitten.model == "7"
     assert settings.tts.kitten.speed == 1.25
     assert settings.tts.piper.speed == 1.5

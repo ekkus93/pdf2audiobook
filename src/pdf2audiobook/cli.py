@@ -308,6 +308,11 @@ def doctor(
                 "kitten_installed": kitten_installed,
                 "piper_installed": bool(shutil.which("piper")),
                 "llm_provider": settings.llm.provider if settings.llm.enabled else "disabled",
+                "llm_timeout_seconds": (
+                    getattr(settings.llm, settings.llm.provider.replace("-", "_")).timeout_seconds
+                    if settings.llm.enabled
+                    else None
+                ),
             },
             json_output,
         )

@@ -106,11 +106,11 @@
 
 ## 7. LLM request timeout (R10) — feature
 
-- [ ] 7.1 Add `RemoteLLM.timeout_seconds` (`> 0`, `<= 3600`). Defaults: Ollama 300, OpenAI and llama-server 60. Add the env override `PDF2AUDIOBOOK_LLM_TIMEOUT_SECONDS` mapped to `@selected`.
-- [ ] 7.2 Have the provider factory pass the selected provider's timeout, using an `httpx.Timeout` whose connect timeout is `min(10, t)`. Give the `/api/ps` lookup a fixed 10 s timeout.
-- [ ] 7.3 Treat a timeout as a retryable transport failure. The final message is content-free and names `llm.<provider>.timeout_seconds`; budget accounting is unchanged.
-- [ ] 7.4 Report the value in `config show` (text and `--json`) and `doctor --json`. Update the README, including the worst-case time per request, and the default config docs.
-- [ ] 7.5 Tests:
+- [x] 7.1 Add `RemoteLLM.timeout_seconds` (`> 0`, `<= 3600`). Defaults: Ollama 300, OpenAI and llama-server 60. Add the env override `PDF2AUDIOBOOK_LLM_TIMEOUT_SECONDS` mapped to `@selected`.
+- [x] 7.2 Have the provider factory pass the selected provider's timeout, using an `httpx.Timeout` whose connect timeout is `min(10, t)`. Give the `/api/ps` lookup a fixed 10 s timeout.
+- [x] 7.3 Treat a timeout as a retryable transport failure. The final message is content-free and names `llm.<provider>.timeout_seconds`; budget accounting is unchanged.
+- [x] 7.4 Report the value in `config show` (text and `--json`) and `doctor --json`. Update the README, including the worst-case time per request, and the default config docs.
+- [x] 7.5 Tests:
   - the default is 300;
   - config-file and env values reach the client timeout;
   - out-of-range values are rejected;
