@@ -57,7 +57,7 @@ def test_audio_errors_redact_private_backend_diagnostics(
         def invalid_metadata(*args, **kwargs):
             raise ValueError(f"invalid ID3 book content {PRIVATE}")
 
-        monkeypatch.setattr(audio, "MP3", invalid_metadata)
+        monkeypatch.setattr("pdf2audiobook.audio.encoding.MP3", invalid_metadata)
 
     with pytest.raises(AudioError) as raised:
         _encode(tmp_path)

@@ -192,7 +192,8 @@ def test_stale_empty_acknowledgement_is_ignored_and_warned(tmp_path, monkeypatch
     monkeypatch.setattr("pdf2audiobook.pipeline.analyze_book", lambda *_a, **_k: path)
     events = []
     monkeypatch.setattr(
-        "pdf2audiobook.pipeline.log_event", lambda *args, **kwargs: events.append((args, kwargs))
+        "pdf2audiobook.chapter_selection.log_event",
+        lambda *args, **kwargs: events.append((args, kwargs)),
     )
     with pytest.raises(AudioError, match="Chapter 2 has no speakable text"):
         convert_book(source, Settings(), chapter=2)

@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-import hashlib
 import logging
-import os
-import tempfile
-from dataclasses import dataclass
-from functools import lru_cache
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as package_version
+import os as os
 from pathlib import Path
 
+from pdf2audiobook.analysis_state import (
+    _change_footnote_policy,
+    _changed_analysis_stages,
+    _hand_edit_conflict,
+    _match_edited_chapter,
+    _preserve_rejected_deterministic_edits,
+)
 from pdf2audiobook.audio import (
     AudioEncoder,
     audio_output_path,
@@ -23,7 +24,21 @@ from pdf2audiobook.audio import (
     voice_marker_ids,
 )
 from pdf2audiobook.audio.freshness import valid_mp3_sidecar as valid_mp3_sidecar
+from pdf2audiobook.chapter_selection import (
+    ChapterSelection as ChapterSelection,
+)
+from pdf2audiobook.chapter_selection import (
+    prepare_chapter_selection as _prepare_chapter_selection,
+)
+from pdf2audiobook.chapter_selection import (
+    refresh_empty_chapter_reason as refresh_empty_chapter_reason,
+)
+from pdf2audiobook.chapter_selection import (
+    select_chapters as select_chapters,
+)
 from pdf2audiobook.config import Settings
+from pdf2audiobook.conversion import ConversionServices
+from pdf2audiobook.conversion import _convert_analyzed_book as _run_conversion
 from pdf2audiobook.document.structure import (
     chapter_has_speakable_text,
     footnote_anchor_edits,
@@ -35,14 +50,11 @@ from pdf2audiobook.document.structure import (
     validate_chapter_coverage,
 )
 from pdf2audiobook.errors import (
-    AudioError,
     ExtractionError,
     InputError,
     LLMError,
-    PartialConversionError,
     WorkspaceLockedError,
 )
-from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.llm import (
     LLMDecision,
     create_provider,
@@ -57,16 +69,29 @@ from pdf2audiobook.logging import log_event
 from pdf2audiobook.models import (
     BookManifest,
     Chapter,
-    CleanupEdit,
     generated_baseline_fingerprint,
     generated_chapter_fingerprint,
 )
 from pdf2audiobook.pdf import DocumentExtractor, extract_pdf
 from pdf2audiobook.review_reasons import (
-    BOOK_WIDE_REVIEW_REASON_CODES,
     REVIEW_REASON_CODES,
 )
-from pdf2audiobook.tts import KITTEN_MODEL_ALIASES, KittenProvider, PiperProvider, TTSProvider
+from pdf2audiobook.tts import KittenProvider, PiperProvider, TTSProvider
+from pdf2audiobook.tts.selection import (
+    _model_file_digest as _model_file_digest,
+)
+from pdf2audiobook.tts.selection import (
+    _tts_model_identity as _tts_model_identity,
+)
+from pdf2audiobook.tts.selection import (
+    chapter_voice as chapter_voice,
+)
+from pdf2audiobook.tts.selection import (
+    settings_for_book_tts as settings_for_book_tts,
+)
+from pdf2audiobook.tts.selection import (
+    tts_selection as tts_selection,
+)
 from pdf2audiobook.workspace import (
     digest_bytes,
     digest_file,
@@ -74,8 +99,8 @@ from pdf2audiobook.workspace import (
     read_manifest,
     workspace_lock,
     write_json,
-    write_manifest,
 )
+from pdf2audiobook.workspace import write_manifest as write_manifest
 
 
 def _llm_cache_identity(settings: Settings) -> str:
@@ -91,38 +116,6 @@ def _llm_cache_identity(settings: Settings) -> str:
         settings.llm.chunk_tokens,
         settings.llm.max_output_tokens,
     )
-
-
-@lru_cache(maxsize=128)
-def _model_file_digest(path: str, size: int, mtime_ns: int) -> str:
-    """Memoize local model hashes while still invalidating changed file metadata."""
-    del size, mtime_ns
-    return digest_file(Path(path))
-
-
-def _tts_model_identity(settings: Settings) -> str:
-    """Return content/version identity for the active TTS model without loading it."""
-    if settings.tts.provider == "piper":
-        configured = settings.tts.piper.model_path
-        if not configured:
-            return fingerprint("piper-model-v1", "missing")
-        model_path = Path(configured).expanduser().resolve()
-        digests = []
-        for path in (model_path, Path(f"{model_path}.json")):
-            try:
-                stat = path.stat()
-                digest = _model_file_digest(str(path), stat.st_size, stat.st_mtime_ns)
-            except OSError:
-                digest = "missing"
-            digests.append((path.suffix, digest))
-        return fingerprint("piper-model-v1", str(model_path), digests)
-    model = settings.tts.kitten.model
-    resolved_model = KITTEN_MODEL_ALIASES.get(model, model)
-    try:
-        engine_version = package_version("kittenml")
-    except PackageNotFoundError:
-        engine_version = "not-installed"
-    return fingerprint("kitten-model-v1", resolved_model, engine_version)
 
 
 def _resolve_auto_llm_model(settings: Settings) -> Settings:
@@ -195,128 +188,6 @@ def _analysis_stage_fingerprints(
     }
 
 
-def _preserve_rejected_deterministic_edits(
-    previous: BookManifest | None, edits: list[CleanupEdit]
-) -> None:
-    """Carry a rejected deterministic edit forward by block identity and reason."""
-    if previous is None:
-        return
-    rejected = [
-        edit for edit in previous.edits if edit.provider == "deterministic" and not edit.accepted
-    ]
-    regenerated = {
-        (edit.block_id, edit.reason, edit.original, edit.replacement): edit for edit in edits
-    }
-    for edit in rejected:
-        key = (edit.block_id, edit.reason, edit.original, edit.replacement)
-        replacement = regenerated.get(key)
-        if replacement is None:
-            old_position = next(
-                (index for index, block in enumerate(previous.blocks) if block.id == edit.block_id),
-                None,
-            )
-            chapter_number = 1
-            if old_position is not None:
-                chapter_number = next(
-                    (
-                        chapter.number
-                        for chapter in previous.chapters
-                        if chapter.start_block <= old_position < chapter.end_block
-                    ),
-                    1,
-                )
-            raise ExtractionError(
-                f"Rejected cleanup edit for chapter {chapter_number} cannot be aligned; "
-                "review the chapter before reanalysis"
-            )
-        replacement.accepted = edit.accepted
-
-
-def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]:
-    """Return changed stage names without loading or displaying their inputs."""
-    previous = load_bounded_json(
-        folder / "reports" / "analysis_fingerprints.json", max_bytes=4096, max_depth=8
-    )
-    prior_stages = previous.get("stages") if isinstance(previous, dict) else None
-    if not isinstance(prior_stages, dict):
-        return ["analysis"]
-    changed = sorted(
-        name
-        for name, value in current.items()
-        if not isinstance(prior_stages.get(name), str) or prior_stages[name] != value
-    )
-    return changed or ["analysis"]
-
-
-def _change_footnote_policy(manifest: BookManifest, previous: str, current: str) -> BookManifest:
-    """Rebuild policy-owned edits while preserving unrelated approved decisions."""
-
-    def policy_edit(edit: CleanupEdit) -> bool:
-        return edit.provider == "deterministic" and (
-            edit.reason == "explicit footnotes=omit policy (conservative classification)"
-            or (
-                edit.reason.startswith("footnote anchor marker ")
-                and edit.reason.endswith(" (note handled)")
-            )
-        )
-
-    other = [edit for edit in manifest.edits if not policy_edit(edit)]
-
-    def generated(policy: str) -> list[CleanupEdit]:
-        notes = [block for block in manifest.blocks if block.kind == "footnote"]
-        owned = footnote_omit_edits(manifest.blocks) if policy == "omit" else []
-        accepted = {edit.block_id for edit in other if edit.accepted}
-        if any(edit.block_id in accepted for edit in owned):
-            raise ExtractionError(
-                "Footnote policy conflicts with an approved cleanup edit; use a new output directory"
-            )
-        if notes and policy in {"inline", "end", "omit"}:
-            owned.extend(
-                footnote_anchor_edits(manifest.blocks, accepted | {e.block_id for e in owned})
-            )
-        return owned
-
-    original = [edit.model_dump(mode="json") for edit in manifest.edits if policy_edit(edit)]
-    expected = [edit.model_dump(mode="json") for edit in generated(previous)]
-    if original != expected:
-        raise ExtractionError(
-            "Footnote policy conflicts with protected cleanup decisions; use a new output directory"
-        )
-    updated = manifest.model_copy(deep=True)
-    updated.edits = [*other, *generated(current)]
-    updated.warnings = [
-        warning
-        for warning in updated.warnings
-        if not (warning.startswith("Excluded ") and "footnote" in warning)
-        and not (warning.startswith("Narrating ") and "footnote" in warning)
-    ]
-    notes = [block for block in updated.blocks if block.kind == "footnote"]
-    if notes and current == "omit":
-        updated.warnings.append(
-            f"Excluded {len(notes)} conservatively classified footnote "
-            "block(s) under explicit omit policy; inspect audited cleanup edits"
-        )
-    if notes and current in {"inline", "end"}:
-        moved = kept = 0
-        for chapter in updated.chapters:
-            _, moved_count, kept_count = place_footnotes(
-                updated.blocks[chapter.start_block : chapter.end_block], current
-            )
-            moved += moved_count
-            kept += kept_count
-        if current == "end":
-            updated.warnings.append(
-                f"Narrating {moved} classified footnote(s) at the end of their chapter; "
-                "source blocks are unchanged"
-            )
-        else:
-            updated.warnings.append(
-                f"Narrating {moved} classified footnote(s) after the paragraph holding "
-                f"their anchor; {kept} without a unique anchor keep their PDF position"
-            )
-    return updated
-
-
 def _progress_report_fields(
     progress: dict[str, object] | None,
 ) -> tuple[int | None, list[object] | None]:
@@ -328,117 +199,11 @@ def _progress_report_fields(
     return len(pauses), mapping
 
 
-def settings_for_book_tts(
-    settings: Settings, book_stem: str, *, explicit: frozenset[str] = frozenset()
-) -> Settings:
-    """Apply a named TTS profile unless a command-line option overrides it."""
-    profile = settings.tts.profiles.get(book_stem)
-    if profile is None:
-        return settings
-    selected = settings.model_copy(deep=True)
-    if "tts_provider" not in explicit and profile.provider is not None:
-        selected.tts.provider = profile.provider
-    if "tts_model" not in explicit:
-        if profile.kitten_model is not None:
-            selected.tts.kitten.model = profile.kitten_model
-        if profile.piper_model_path is not None:
-            selected.tts.piper.model_path = profile.piper_model_path
-    if "voice" not in explicit and profile.voice is not None:
-        if selected.tts.provider == "piper":
-            selected.tts.piper.voice = profile.voice
-        else:
-            selected.tts.kitten.voice = profile.voice
-    if "speed" not in explicit and profile.speed is not None:
-        if selected.tts.provider == "piper":
-            selected.tts.piper.speed = profile.speed
-        else:
-            selected.tts.kitten.speed = profile.speed
-    return selected
-
-
-def tts_selection(
-    settings: Settings,
-    chapter: Chapter | None = None,
-    *,
-    provider: str | None = None,
-) -> tuple[str, str, float]:
-    """Select the effective provider, voice and speed for one chapter or CLI request."""
-    provider_name = provider or settings.tts.provider
-    provider_settings = getattr(settings.tts, provider_name)
-    voice = (
-        chapter.voice_id
-        if chapter is not None and chapter.voice_id is not None
-        else provider_settings.voice
-    )
-    return provider_name, voice, provider_settings.speed
-
-
-def chapter_voice(settings: Settings, chapter: Chapter) -> str:
-    """Resolve an explicit per-chapter voice before the configured default."""
-    return tts_selection(settings, chapter)[1]
-
-
 def create_tts_provider(settings: Settings) -> TTSProvider:
     """Construct the selected TTS adapter in one place."""
     if settings.tts.provider == "piper":
         return PiperProvider(settings.tts.piper.model_path)
     return KittenProvider(settings.tts.kitten.model)
-
-
-def _match_edited_chapter(
-    edited: Chapter,
-    chapters: list[Chapter],
-    previous: BookManifest,
-    new_positions: dict[str, int],
-) -> Chapter | None:
-    """Find the regenerated chapter that an edited chapter was generated as.
-
-    Chapter numbers shift whenever analysis finds more or fewer chapters, so the
-    analysis-generated start block (mapped through stable block IDs) identifies
-    the chapter, never its number. The generated title breaks a tie.
-    """
-    generated_start = edited.generated_start_block
-    if generated_start is None or generated_start >= len(previous.blocks):
-        return None
-    old_start = new_positions.get(previous.blocks[generated_start].id)
-    if old_start is None:
-        return None
-    exact = [
-        chapter
-        for chapter in chapters
-        if (
-            chapter.generated_start_block
-            if chapter.generated_start_block is not None
-            else chapter.start_block
-        )
-        == old_start
-    ]
-    if len(exact) == 1:
-        return exact[0]
-    containing = [
-        chapter
-        for chapter in chapters
-        if (
-            chapter.generated_start_block
-            if chapter.generated_start_block is not None
-            else chapter.start_block
-        )
-        <= old_start
-        and (
-            chapter.generated_end_block
-            if chapter.generated_end_block is not None
-            else chapter.end_block
-        )
-        > old_start
-    ]
-    return containing[0] if len(containing) == 1 else None
-
-
-def _hand_edit_conflict(message: str, numbers: set[int]) -> ExtractionError:
-    chapter_numbers = ", ".join(str(number) for number in sorted(numbers))
-    return ExtractionError(
-        f"{message} for chapter(s) {chapter_numbers}; approve or revert the named chapter(s)."
-    )
 
 
 def _analysis_workspace_folder(source: Path, settings: Settings) -> Path:
@@ -991,128 +756,6 @@ def _analyze_book_locked(
     return manifest_path
 
 
-def refresh_empty_chapter_reason(
-    manifest_path: Path,
-    manifest: BookManifest,
-    *,
-    persist: bool = True,
-    speakability: dict[str, bool] | None = None,
-) -> None:
-    """Recompute the empty-chapter review reason from the manifest as it is now.
-
-    Analysis only knew the chapters it proposed; a hand edit or a review-UI save
-    can empty a chapter later, or fix one that was empty.
-    """
-    if "empty_chapter" in manifest.review_acknowledged:
-        log_event(
-            "review_warning",
-            level=logging.WARNING,
-            reason="empty_chapter_requires_approval",
-        )
-    if not manifest.blocks:
-        return  # No source blocks to judge; coverage validation reports this elsewhere.
-    replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
-    has_empty = any(
-        not (
-            speakability[chapter.id]
-            if speakability is not None
-            else chapter_has_speakable_text(
-                manifest.blocks, chapter.start_block, chapter.end_block, replacements
-            )
-        )
-        for chapter in manifest.chapters
-    )
-    needed = has_empty
-    required = [code for code in manifest.review_required if code != "empty_chapter"]
-    if needed:
-        required = manifest.review_required + (
-            [] if "empty_chapter" in manifest.review_required else ["empty_chapter"]
-        )
-    if persist and required != manifest.review_required:
-        manifest.review_required = required
-        write_manifest(manifest_path, manifest)
-    else:
-        manifest.review_required = required
-
-
-def select_chapters(
-    manifest: BookManifest,
-    settings: Settings,
-    *,
-    chapter: int | None = None,
-    chapter_range: tuple[int, int] | None = None,
-    speakability: dict[str, bool] | None = None,
-) -> list:
-    """Validate chosen chapters before loading or downloading a speech model."""
-    if chapter is not None and chapter_range is not None:
-        raise AudioError("--chapter and --chapter-range cannot be combined")
-    count = len(manifest.chapters)
-    if chapter_range is not None:
-        first, last = chapter_range
-        if first < 1 or last < first or last > count:
-            raise AudioError(
-                f"Chapter range {first}:{last} is outside the book's 1:{count} chapters"
-            )
-        chosen = [c for c in manifest.chapters if first <= c.number <= last]
-    elif chapter is not None:
-        chosen = [c for c in manifest.chapters if c.number == chapter]
-    else:
-        chosen = list(manifest.chapters)
-    if not chosen:
-        raise AudioError(f"Chapter {chapter} does not exist")
-    for item in chosen:
-        if (
-            "empty_chapter" in manifest.review_required
-            and not (
-                speakability[item.id]
-                if speakability is not None
-                else chapter_has_speakable_text(
-                    manifest.blocks,
-                    item.start_block,
-                    item.end_block,
-                    {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted},
-                )
-            )
-            and not item.manually_approved
-        ):
-            raise AudioError(
-                f"Chapter {item.number} has no speakable text; review and approve it before synthesis"
-            )
-        if (
-            "damaged_source" in manifest.review_required
-            and "damaged_source" not in manifest.review_acknowledged
-        ):
-            raise AudioError(
-                f"Chapter {item.number} comes from a damaged source; "
-                "review and approve it before synthesis"
-            )
-        if (
-            "ambiguous_page_numbers" in manifest.review_required
-            and "ambiguous_page_numbers" not in manifest.review_acknowledged
-        ):
-            raise AudioError(
-                f"Chapter {item.number} has ambiguous page-number cleanup; review and approve it"
-            )
-        if item.confidence < settings.chapters.min_boundary_confidence and not (
-            item.manually_approved or settings.chapters.allow_single_chapter
-        ):
-            raise AudioError(
-                f"Chapter {item.number} has low boundary confidence; "
-                "review the manifest before synthesis"
-            )
-    return chosen
-
-
-@dataclass(frozen=True)
-class ChapterSelection:
-    """Chapters approved for conversion and empty chapters intentionally skipped."""
-
-    chapters: list[Chapter]
-    skipped: list[Chapter]
-    acknowledged: list[str]
-    would_acknowledge: list[str]
-
-
 def prepare_chapter_selection(
     manifest_path: Path,
     manifest: BookManifest,
@@ -1124,76 +767,18 @@ def prepare_chapter_selection(
     persist: bool = False,
     footnotes: str | None = None,
 ) -> ChapterSelection:
-    """Refresh review gates and select converted, skipped and refused chapters."""
-    previous_review_required = list(manifest.review_required)
-    previous_acknowledged = list(manifest.review_acknowledged)
-    from pdf2audiobook.audio import has_speakable_chapter_narration
-    from pdf2audiobook.chapter_artifacts import load_artifact_state, plan_chapter_artifacts
-
-    state = load_artifact_state(manifest_path.parent)
-    speakability: dict[str, bool] | None = None
-    if state is not None or (
-        manifest_path.is_file() and manifest.blocks and (manifest_path.parent / "chapters").is_dir()
-    ):
-        policy = footnotes if footnotes is not None else settings.pdf.footnotes
-        plan = plan_chapter_artifacts(manifest, manifest_path.parent, policy)
-        speakability = {}
-        for item in manifest.chapters:
-            name = f"{item.number:03d}.txt"
-            try:
-                text = (
-                    plan.writes[name].decode("utf-8")
-                    if name in plan.writes
-                    else (manifest_path.parent / "chapters" / name).read_text(encoding="utf-8")
-                )
-            except (OSError, UnicodeError):
-                raise AudioError(
-                    "Cannot read approved chapter text; check workspace files"
-                ) from None
-            try:
-                speakability[item.id] = has_speakable_chapter_narration(text)
-            except AudioError:
-                # Leave invalid markers to per-chapter voice preflight.
-                speakability[item.id] = True
-    refresh_empty_chapter_reason(manifest_path, manifest, persist=False, speakability=speakability)
-    requested_acknowledgements = set(acknowledge)
-    if not requested_acknowledgements <= set(BOOK_WIDE_REVIEW_REASON_CODES):
-        raise AudioError("Unknown review reason code")
-    acknowledged = sorted(requested_acknowledgements)
-    would_acknowledge = sorted(requested_acknowledgements & set(manifest.review_required))
-    for code in acknowledged:
-        log_event("review_acknowledged", level=logging.INFO, status=code)
-    if acknowledged:
-        manifest.review_acknowledged = sorted(set(manifest.review_acknowledged) | set(acknowledged))
-        manifest.review_required = [
-            code for code in manifest.review_required if code not in set(acknowledged)
-        ]
-    if persist and (
-        manifest.review_required != previous_review_required
-        or manifest.review_acknowledged != previous_acknowledged
-    ):
-        write_manifest(manifest_path, manifest)
-
-    chosen = select_chapters(
-        manifest, settings, chapter=chapter, chapter_range=chapter_range, speakability=speakability
+    """Apply chapter review gates while preserving the pipeline selector hook."""
+    return _prepare_chapter_selection(
+        manifest_path,
+        manifest,
+        settings,
+        chapter=chapter,
+        chapter_range=chapter_range,
+        acknowledge=acknowledge,
+        persist=persist,
+        footnotes=footnotes,
+        selector=select_chapters,
     )
-    replacements = {edit.block_id: edit.replacement for edit in manifest.edits if edit.accepted}
-    skipped = [
-        item
-        for item in chosen
-        if (
-            "empty_chapter" in manifest.review_required
-            and item.manually_approved
-            and not (
-                speakability[item.id]
-                if speakability is not None
-                else chapter_has_speakable_text(
-                    manifest.blocks, item.start_block, item.end_block, replacements
-                )
-            )
-        )
-    ]
-    return ChapterSelection(chosen, skipped, acknowledged, would_acknowledge)
 
 
 # Bump when spoken text changes for unchanged chapter text (alignment, dashes,
@@ -1297,352 +882,34 @@ def _convert_analyzed_book(
     tts_provider: TTSProvider | None,
     encoder: AudioEncoder | None,
 ) -> list[Path]:
-    temporary_wav_dir = manifest_path.parent / ".cache" / "tts" / "chapters"
-    try:
-        if temporary_wav_dir.is_dir():
-            for stale_wav in temporary_wav_dir.glob("chapter-*.wav"):
-                stale_wav.unlink(missing_ok=True)
-    except OSError:
-        raise AudioError("Could not clean stale temporary chapter audio") from None
-    adapters = tuple(
-        f"{role}={type(adapter).__module__}.{type(adapter).__qualname__}"
-        for role, adapter in (("tts", tts_provider), ("encoder", encoder))
-        if adapter is not None
+    services = ConversionServices(
+        log_event=log_event,
+        read_manifest=read_manifest,
+        prepare_chapter_selection=prepare_chapter_selection,
+        render_chapter_texts=render_chapter_texts,
+        create_tts_provider=create_tts_provider,
+        synthesize_chunks=synthesize_chunks,
+        encode_mp3=encode_mp3,
+        chapter_audio_fingerprint=chapter_audio_fingerprint,
+        audio_output_path=audio_output_path,
+        read_synthesis_progress=read_synthesis_progress,
+        valid_mp3_sidecar=valid_mp3_sidecar,
+        tts_selection=tts_selection,
+        voice_marker_ids=voice_marker_ids,
+        unspeakable_pause_ranges=unspeakable_pause_ranges,
+        _tts_model_identity=_tts_model_identity,
+        _progress_report_fields=_progress_report_fields,
     )
-    manifest = read_manifest(manifest_path)
-    selection = prepare_chapter_selection(
+    return _run_conversion(
         manifest_path,
-        manifest,
         settings,
+        cover_image,
+        cover_identity,
         chapter=chapter,
         chapter_range=chapter_range,
-        acknowledge=accept_review,
-        persist=True,
+        force=force,
+        accept_review=accept_review,
+        tts_provider=tts_provider,
+        encoder=encoder,
+        services=services,
     )
-    render_chapter_texts(manifest, manifest_path.parent, settings.pdf.footnotes)
-    chosen = selection.chapters
-    skipped_empty = {item.id for item in selection.skipped}
-    preflight_failed: dict[int, int] = {}
-    preflight_reasons: dict[int, str] = {}
-    approved_marker_chapters: dict[int, list[str]] = {}
-    for item in chosen:
-        if item.id in skipped_empty:
-            continue
-        text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
-        try:
-            chapter_source = text_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            raise AudioError("Cannot read approved chapter text; check workspace files") from None
-        try:
-            marker_ids = voice_marker_ids(chapter_source)
-        except AudioError:
-            # A misplaced marker fails its own chapter, not the whole book.
-            preflight_failed[item.number] = AudioError.exit_code
-            preflight_reasons[item.number] = "invalid_voice_marker"
-            continue
-        if marker_ids and not item.manually_approved:
-            preflight_failed[item.number] = AudioError.exit_code
-        elif marker_ids:
-            approved_marker_chapters[item.number] = marker_ids
-    provider = tts_provider
-    all_marker_ids = {marker for markers in approved_marker_chapters.values() for marker in markers}
-    if all_marker_ids:
-        try:
-            if provider is None:
-                provider = create_tts_provider(settings)
-            supports_voice_listing = getattr(provider, "supports_voice_listing", True) is not False
-            if supports_voice_listing:
-                voice_list = provider.list_voices()
-                if not isinstance(voice_list, list) or any(
-                    not isinstance(voice, str) for voice in voice_list
-                ):
-                    raise AudioError("Voice list is unavailable")
-                available_voices = voice_list
-            else:
-                available_voices = None
-        except Exception:
-            available_voices = None
-            for item in chosen:
-                if approved_marker_chapters.get(item.number):
-                    preflight_failed[item.number] = AudioError.exit_code
-                    preflight_reasons[item.number] = "voice_list_unavailable"
-        if available_voices is not None:
-            for item in chosen:
-                marker_ids = approved_marker_chapters.get(item.number, [])
-                if any(marker not in available_voices for marker in marker_ids):
-                    preflight_failed[item.number] = AudioError.exit_code
-                    preflight_reasons[item.number] = "invalid_voice_marker"
-    # Audio identities include all audible and encoding settings, not merely the PDF hash.
-    pending = []
-    outputs = []
-    failed_chapters = set(preflight_failed)
-    conversion_status: dict[str, dict[str, object]] = {
-        item.id: {
-            "number": item.number,
-            "status": (
-                "skipped"
-                if item.id in skipped_empty
-                else "failed"
-                if item.number in preflight_failed
-                else "pending"
-            ),
-            **({"reason_code": "empty_chapter"} if item.id in skipped_empty else {}),
-            **({"error_code": AudioError.exit_code} if item.number in preflight_failed else {}),
-            **(
-                {"reason_code": preflight_reasons[item.number]}
-                if item.number in preflight_reasons
-                else {}
-            ),
-        }
-        for item in chosen
-    }
-    for item in chosen:
-        if item.id in skipped_empty:
-            continue
-        output = audio_output_path(manifest, item, manifest_path.parent)
-        outputs.append(output)
-        if item.number in preflight_failed:
-            continue
-        text_file = manifest_path.parent / "chapters" / f"{item.number:03d}.txt"
-        try:
-            text = text_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            # PDF-derived filenames and source text must not escape in errors.
-            raise AudioError("Cannot read approved chapter text; check workspace files") from None
-        identity = chapter_audio_fingerprint(
-            text,
-            settings,
-            manifest,
-            item,
-            adapters,
-            cover_image=cover_image,
-            cover_identity=cover_identity,
-        )
-        record = output.with_suffix(".cache.json")
-        cached = False
-        if settings.general.resume and not force:
-            # A file can disappear or become unreadable between is_file()
-            # and stat(). Treat this as a cache miss, not a book-path error.
-            try:
-                cache_files_ready = (
-                    output.is_file() and output.stat().st_size > 0 and record.is_file()
-                )
-            except OSError:
-                cache_files_ready = False
-        else:
-            cache_files_ready = False
-        if cache_files_ready:
-            try:
-                from mutagen import MutagenError
-                from mutagen.easyid3 import EasyID3
-                from mutagen.mp3 import MP3
-
-                metadata = valid_mp3_sidecar(output)
-                cached = (
-                    isinstance(metadata, dict)
-                    and metadata.get("fingerprint") == identity
-                    and metadata.get("chapter_id", item.id) == item.id
-                    and metadata.get("rendering_inputs") == {"footnotes": settings.pdf.footnotes}
-                )
-                if cached:
-                    mp3 = MP3(output, ID3=EasyID3)
-                    tags = mp3.tags
-                    # The sidecar is not sufficient evidence of correct chapter
-                    # identity: verify the actual audio tags before reusing it.
-                    cached = (
-                        mp3.info is not None
-                        and mp3.info.length > 0
-                        and tags is not None
-                        and tags.get("title") == [item.title]
-                        and tags.get("album") == [manifest.title]
-                        and tags.get("tracknumber") == [str(item.number)]
-                        and (not manifest.author or tags.get("artist") == [manifest.author])
-                    )
-            except (OSError, ValueError, MutagenError):
-                # A corrupt MP3, even with a matching cache sidecar checksum,
-                # must be regenerated rather than aborting the entire book.
-                cached = False
-        if not cached:
-            # Retain the path and identity, not the full text of every chapter.
-            # A long book may have hundreds of pending chapters.
-            pending.append((item, output, text_file, record, identity))
-        else:
-            conversion_status[item.id]["status"] = "complete"
-            # A resumed chapter keeps the pause count its synthesized run reported.
-            try:
-                conversion_status[item.id]["pause_count"] = len(unspeakable_pause_ranges(text))
-            except AudioError:
-                conversion_status[item.id]["pause_count"] = 0
-        del text
-
-    encode = encode_mp3 if encoder is None else encoder
-    for item, output, text_file, record, identity in pending:
-        try:
-            text = text_file.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
-            raise AudioError("Cannot read approved chapter text; check workspace files") from None
-        # Detect edits between the cache-check and synthesis passes. Never
-        # publish audio with a fingerprint computed from different prose.
-        if (
-            chapter_audio_fingerprint(
-                text,
-                settings,
-                manifest,
-                item,
-                adapters,
-                cover_image=cover_image,
-                cover_identity=cover_identity,
-            )
-            != identity
-        ):
-            raise AudioError("Approved chapter text changed during conversion; retry")
-        if provider is None:
-            try:
-                provider = create_tts_provider(settings)
-            except AudioError:
-                failed_chapters.add(item.number)
-                conversion_status[item.id] = {
-                    "number": item.number,
-                    "status": "failed",
-                    "error_code": AudioError.exit_code,
-                }
-                continue
-        selected_model = _tts_model_identity(settings)
-        _provider_name, selected_voice, selected_speed = tts_selection(settings, item)
-        streamed_wav: Path | None = None
-        try:
-            synth_kwargs = {}
-            if encoder is None:
-                try:
-                    manifest_path.parent.joinpath(".cache", "tts", "chapters").mkdir(
-                        parents=True, exist_ok=True
-                    )
-                    with tempfile.NamedTemporaryFile(
-                        prefix="chapter-",
-                        suffix=".wav",
-                        dir=manifest_path.parent / ".cache" / "tts" / "chapters",
-                        delete=False,
-                    ) as temp_wav:
-                        streamed_wav = Path(temp_wav.name)
-                except OSError:
-                    raise AudioError("Could not create temporary chapter audio") from None
-                synth_kwargs["output_wav"] = streamed_wav
-            progress_path = (
-                manifest_path.parent
-                / ".cache"
-                / "tts"
-                / "progress"
-                / f"{fingerprint(item.id, item.number)[:32]}.json"
-            )
-            samples = synthesize_chunks(
-                text,
-                provider,
-                # Chunk cache keys include the model; qualify it for injected engines.
-                model=":".join((selected_model, *(a for a in adapters if a.startswith("tts=")))),
-                voice=selected_voice,
-                speed=selected_speed,
-                pause_ms=settings.tts.pause_ms,
-                pronunciations=settings.tts.pronunciations,
-                max_retries=settings.tts.max_retries,
-                cache=manifest_path.parent / ".cache" / "tts",
-                use_cache=settings.cache.enabled and settings.general.resume and not force,
-                progress_file=progress_path,
-                **synth_kwargs,
-            )
-            encode(
-                samples,
-                provider.sample_rate,
-                output,
-                bitrate=settings.tts.bitrate,
-                target_rate=settings.tts.sample_rate,
-                title=item.title,
-                artist=manifest.author,
-                album=manifest.title,
-                track=item.number,
-                cover_image=cover_image,
-            )
-            progress = read_synthesis_progress(progress_path)
-            pause_count, mapping = _progress_report_fields(progress)
-            conversion_status[item.id]["pause_count"] = pause_count
-            conversion_status[item.id]["chunk_mapping"] = mapping
-        except AudioError:
-            failed_chapters.add(item.number)
-            failure_status: dict[str, object] = {
-                "number": item.number,
-                "status": "failed",
-                "error_code": AudioError.exit_code,
-            }
-            if item.number in preflight_reasons:
-                failure_status["reason_code"] = preflight_reasons[item.number]
-            conversion_status[item.id] = failure_status
-            continue
-        finally:
-            if streamed_wav is not None:
-                streamed_wav.unlink(missing_ok=True)
-        write_json(
-            record,
-            {
-                "chapter_id": item.id,
-                "sidecar_version": 3,
-                "rendering_inputs": {"footnotes": settings.pdf.footnotes},
-                "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-                "fingerprint": identity,
-                "sha256": digest_file(output),
-                "bytes": output.stat().st_size,
-            },
-        )
-        conversion_status[item.id]["status"] = "complete"
-        log_event("stage_completed", level=logging.INFO, stage="chapter_audio", count=item.number)
-        for previous in output.parent.glob("*.mp3"):
-            if previous == output:
-                continue
-            try:
-                if os.path.samefile(previous, output):
-                    continue
-            except OSError:
-                log_event(
-                    "audio_cleanup_candidate_skipped",
-                    level=logging.WARNING,
-                    reason="candidate_uninspectable",
-                )
-                continue
-            try:
-                metadata = valid_mp3_sidecar(previous)
-                if metadata is None or metadata.get("chapter_id") != item.id:
-                    continue
-                previous.unlink()
-                previous.with_suffix(".cache.json").unlink(missing_ok=True)
-            except OSError:
-                log_event(
-                    "audio_cleanup_candidate_skipped",
-                    level=logging.WARNING,
-                    reason="candidate_uninspectable",
-                )
-    pause_counts = [row.get("pause_count") for row in conversion_status.values()]
-    total_pause_count = (
-        sum(
-            value
-            for value in pause_counts
-            if isinstance(value, int) and not isinstance(value, bool)
-        )
-        if all(isinstance(value, int) and not isinstance(value, bool) for value in pause_counts)
-        else None
-    )
-    write_json(
-        manifest_path.parent / "reports" / "conversion_status.json",
-        {
-            "schema_version": 1,
-            "pause_count": total_pause_count,
-            "chapters": sorted(
-                conversion_status.values(),
-                key=lambda value: value["number"] if isinstance(value.get("number"), int) else 0,
-            ),
-        },
-    )
-    if failed_chapters:
-        log_event(
-            "degraded_output", level=logging.WARNING, stage="conversion", count=len(failed_chapters)
-        )
-        numbers = ", ".join(str(number) for number in sorted(failed_chapters))
-        raise PartialConversionError(f"Chapter audio failed for chapter(s): {numbers}")
-    return outputs

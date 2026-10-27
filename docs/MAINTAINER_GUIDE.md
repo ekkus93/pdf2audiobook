@@ -470,11 +470,14 @@ before retrying. Do not delete an unresolved journal as a recovery shortcut.
 Transactions larger than 512 MiB are rejected before commit; the encoded journal includes the
 manifest and any generated chapter files being published.
 
-`pipeline.py` coordinates analysis and conversion. `document/structure.py` validates source
-coverage and renders narration; `audio/freshness.py` checks owned MP3 sidecars; `audio/__init__.py`
-handles synthesis and encoding. `llm/` contains model requests, budget accounting and response
-caching. The transaction and artifact modules keep workspace persistence out of the renderer's
-domain logic; the pipeline continues to re-export `valid_mp3_sidecar` for existing callers.
+`pipeline.py` coordinates analysis and delegates chapter conversion to `conversion.py`.
+`analysis_state.py` preserves reviewed decisions, `chapter_selection.py` applies review gates,
+and `tts/selection.py` resolves profiles and model identities. The document package separates
+chapter detection (`structure.py`), pagination, coverage, list classification and narration.
+The audio package separates synthesis, progress records, encoding and sidecar validation. The LLM
+package separates provider transport, shared advisory schemas, and structure proposals. Existing
+imports from `pipeline`, `document.structure`, `audio`, and `llm` remain available. The transaction
+and artifact modules keep workspace persistence out of the renderer's domain logic.
 
 Old workspaces without artifact metadata are adopted only where files match the current rendered
 text. Preserve differing files before using a fresh workspace. The edited flag records only edits
