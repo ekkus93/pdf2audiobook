@@ -93,6 +93,46 @@ class KittenProvider:
         except Exception:
             return False
 
+    # The model's real limit is in tokens, so dense text (identifiers, numbers, quotations)
+    # can be rejected well below max_chars_per_chunk. Retry as two shorter pieces.
+    _MIN_SPLIT_CHARS = 40
+    _MAX_SPLIT_DEPTH = 4
+    _SPLIT_PAUSE_SECONDS = 0.12
+
+    @staticmethod
+    def _split_point(text: str) -> int | None:
+        """Index of the whitespace nearest the middle, or None if there is none."""
+        middle = len(text) // 2
+        gaps = [
+            index for index, char in enumerate(text) if char.isspace() and 0 < index < len(text) - 1
+        ]
+        return min(gaps, key=lambda index: abs(index - middle)) if gaps else None
+
+    def _generate_piece(self, text: str, voice: str, speed: float, depth: int) -> np.ndarray:
+        try:
+            with _quiet_stdout():
+                return np.asarray(
+                    self.model.generate(text, voice=voice, speed=speed), dtype=np.float32
+                )
+        except Exception:
+            if depth >= self._MAX_SPLIT_DEPTH or len(text) < self._MIN_SPLIT_CHARS:
+                raise
+            point = self._split_point(text)
+            if point is None:
+                raise
+        left = text[:point].strip()
+        right = text[point:].strip()
+        if not left or not right:
+            raise ValueError("nothing to split")
+        pause = np.zeros(int(self._SPLIT_PAUSE_SECONDS * self.sample_rate), dtype=np.float32)
+        return np.concatenate(
+            [
+                self._generate_piece(left, voice, speed, depth + 1),
+                pause,
+                self._generate_piece(right, voice, speed, depth + 1),
+            ]
+        )
+
     def generate(self, text: str, *, voice: str, speed: float) -> np.ndarray:
         # The protocol is callable outside the Pydantic/CLI configuration path.
         # Validate the same finite speed bounds before invoking third-party code.
@@ -123,10 +163,7 @@ class KittenProvider:
         if not known_voice:
             raise AudioError("Unknown Kitten voice; check the available voices with doctor")
         try:
-            with _quiet_stdout():
-                result = np.asarray(
-                    self.model.generate(text, voice=voice, speed=speed), dtype=np.float32
-                )
+            result = self._generate_piece(text, voice, speed, depth=0)
         except Exception:
             # The backend may include private narration text in its exception.
             raise AudioError("Kitten speech generation failed; verify model and voice") from None
