@@ -44,9 +44,9 @@
 
 ## 2. Truthful save outcomes (R2, R3)
 
-- [ ] 2.1 Raise `PendingRecoveryError` for recovery failures during lock acquisition. Keep `ReviewRecoveryRequired` for this operation's own post-commit failures.
-- [ ] 2.2 Add `ChapterConflictError(chapter_number)` and raise it from `chapter_artifacts._conflict`. Update its message to name `regenerate-chapter`.
-- [ ] 2.3 Map the HTTP outcomes with stable `outcome` fields:
+- [x] 2.1 Raise `PendingRecoveryError` for recovery failures during lock acquisition. Keep `ReviewRecoveryRequired` for this operation's own post-commit failures.
+- [x] 2.2 Add `ChapterConflictError(chapter_number)` and raise it from `chapter_artifacts._conflict`. Update its message to name `regenerate-chapter`.
+- [x] 2.3 Map the HTTP outcomes with stable `outcome` fields:
   - 503 `not_saved_pending_recovery`
   - 503 `committed_needs_recovery`
   - 422 `not_saved_conflict` plus `chapter`
@@ -54,8 +54,8 @@
   - generic 400 for everything else
 
   Forward only allowlisted messages.
-- [ ] 2.4 Update the browser script so it shows the message and the next action for each outcome, and never "Saved" on failure. Map CLI exit codes.
-- [ ] 2.5 Tests:
+- [x] 2.4 Update the browser script so it shows the message and the next action for each outcome, and never "Saved" on failure. Map CLI exit codes.
+- [x] 2.5 Tests:
   - a leftover unrecoverable journal gives 503 `not_saved_pending_recovery` with the manifest byte-identical;
   - the existing committed-recovery test returns `committed_needs_recovery`;
   - a boundary change on an edited chapter returns 422 naming the chapter with files unchanged;

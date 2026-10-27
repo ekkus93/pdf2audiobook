@@ -12,7 +12,12 @@ from typing import Any
 from urllib.parse import urlparse
 
 from pdf2audiobook.document.structure import chapter_coverage_report
-from pdf2audiobook.errors import ExtractionError, PendingRecoveryError, WorkspaceLockedError
+from pdf2audiobook.errors import (
+    ChapterConflictError,
+    ExtractionError,
+    PendingRecoveryError,
+    WorkspaceLockedError,
+)
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
 from pdf2audiobook.review_transaction import ReviewRecoveryRequired, commit_review
@@ -88,8 +93,11 @@ document.querySelector('#save').addEventListener('click',async()=>{
    headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
    body:JSON.stringify({chapters,acknowledge:
     [...document.querySelectorAll('[data-review-reason]:checked')].map(input=>input.dataset.reviewReason)})});
-  const result=await response.json();
-  if(!response.ok) throw new Error(result.error||'Save failed');
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok){
+   const prefix=result.outcome==='committed_needs_recovery'?'Committed, but derived files need recovery. ':'Not saved. ';
+   throw new Error(prefix+(result.error||'Save failed'));
+  }
   statusNode.textContent='Saved and approved. Derived chapter text was refreshed.';
  }catch(error){statusNode.textContent=error.message;}
 });
@@ -321,7 +329,33 @@ def create_review_server(
                 self._json(409, {"error": "Workspace is locked"})
                 return
             except ReviewRecoveryRequired:
-                self._json(503, {"error": "Review update was committed but needs recovery; retry."})
+                self._json(
+                    503,
+                    {
+                        "error": "Review update was committed but needs recovery; retry.",
+                        "outcome": "committed_needs_recovery",
+                    },
+                )
+                return
+            except PendingRecoveryError:
+                self._json(
+                    503,
+                    {
+                        "error": "A previous workspace update needs recovery; "
+                        "this update was not saved.",
+                        "outcome": "not_saved_pending_recovery",
+                    },
+                )
+                return
+            except ChapterConflictError as conflict:
+                self._json(
+                    422,
+                    {
+                        "error": str(conflict),
+                        "outcome": "not_saved_conflict",
+                        "chapter": conflict.chapter,
+                    },
+                )
                 return
             except Exception:
                 self._json(400, {"error": "Review update was invalid; no changes were saved"})

@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from pdf2audiobook.document.structure import chapter_coverage_report, render_chapter_narration
-from pdf2audiobook.errors import ExtractionError
+from pdf2audiobook.errors import ChapterConflictError, ExtractionError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.workspace import digest_bytes, fingerprint
@@ -31,11 +31,8 @@ class ArtifactPlan:
     coverage: dict[str, object]
 
 
-def _conflict(number: int) -> ExtractionError:
-    return ExtractionError(
-        f"Chapter {number} text conflicts with generated content; back up the chapter file "
-        "and restore generated text or use a fresh output directory"
-    )
+def _conflict(number: int) -> ChapterConflictError:
+    return ChapterConflictError(number)
 
 
 def _read_digest(path: Path) -> str | None:

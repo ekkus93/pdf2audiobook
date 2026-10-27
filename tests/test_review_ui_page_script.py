@@ -18,7 +18,7 @@ NODE = shutil.which("node")
 
 HARNESS = r"""
 const fs = require('fs');
-const [scriptPath, payloadPath, ackChecked, editedVoice] = process.argv.slice(2);
+const [scriptPath, payloadPath, ackChecked, editedVoice, saveResponse] = process.argv.slice(2);
 const payload = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
 class El {
   constructor(tag) { this.tag = tag; this.children = []; this.dataset = {}; this.value = '';
@@ -42,7 +42,10 @@ global.document = {
 };
 const calls = [];
 global.fetch = async (url, opts = {}) => { calls.push({ url, opts });
-  return url === '/api/manifest' ? { ok: true, json: async () => payload } : { ok: true, json: async () => ({ ok: true }) }; };
+  if (url === '/api/manifest') return { ok: true, json: async () => payload };
+  if (saveResponse) { const r = JSON.parse(saveResponse);
+    return { ok: r.status < 400, status: r.status, json: async () => r.body }; }
+  return { ok: true, json: async () => ({ ok: true }) }; };
 eval(fs.readFileSync(scriptPath, 'utf8'));
 (async () => {
   await new Promise(r => setTimeout(r, 20));
@@ -58,7 +61,8 @@ eval(fs.readFileSync(scriptPath, 'utf8'));
   await new Promise(r => setTimeout(r, 20));
   console.log(JSON.stringify({ body: JSON.parse(calls[calls.length - 1].opts.body),
     acknowledgementControls: ids['#review-acknowledgements'].findAll(c => c.dataset.reviewReason)
-      .map(c => c.dataset.reviewReason), damagedHidden: ids['#damaged'].hidden }));
+      .map(c => c.dataset.reviewReason), damagedHidden: ids['#damaged'].hidden,
+    status: ids['#status'].textContent }));
 })();
 """
 
@@ -89,7 +93,7 @@ def _manifest(**kwargs):
     )
 
 
-def _run_page(tmp_path, manifest, *, acknowledged=False, edited_voice=None):
+def _run_page(tmp_path, manifest, *, acknowledged=False, edited_voice=None, save_response=None):
     script = (
         _HTML.split("<script>", 1)[1]
         .split("</script>", 1)[0]
@@ -107,6 +111,7 @@ def _run_page(tmp_path, manifest, *, acknowledged=False, edited_voice=None):
             str(tmp_path / "payload.json"),
             str(acknowledged).lower(),
             edited_voice or "",
+            json.dumps(save_response) if save_response else "",
         ],
         capture_output=True,
         text=True,
@@ -147,3 +152,58 @@ def test_book_wide_checkbox_is_shown_and_posted_only_when_ticked(tmp_path, reaso
     ticked = _run_page(tmp_path, manifest, acknowledged=True)
     assert ticked["body"]["acknowledge"] == [reason]
     assert _run_page(tmp_path, _manifest())["acknowledgementControls"] == []
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
+@pytest.mark.parametrize(
+    ("response", "expected_prefix", "expected_text"),
+    [
+        (
+            {
+                "status": 422,
+                "body": {
+                    "error": "Chapter 2 text conflicts with generated content",
+                    "outcome": "not_saved_conflict",
+                    "chapter": 2,
+                },
+            },
+            "Not saved.",
+            "Chapter 2 text conflicts",
+        ),
+        (
+            {
+                "status": 503,
+                "body": {
+                    "error": "A previous workspace update needs recovery; this update was not saved.",
+                    "outcome": "not_saved_pending_recovery",
+                },
+            },
+            "Not saved.",
+            "previous workspace update needs recovery",
+        ),
+        (
+            {
+                "status": 503,
+                "body": {
+                    "error": "Review update was committed but needs recovery; retry.",
+                    "outcome": "committed_needs_recovery",
+                },
+            },
+            "Committed, but derived files need recovery.",
+            "committed but needs recovery",
+        ),
+        ({"status": 409, "body": {"error": "Workspace is locked"}}, "Not saved.", "locked"),
+    ],
+)
+def test_failed_saves_show_a_truthful_message_never_saved(
+    tmp_path, response, expected_prefix, expected_text
+):
+    status = _run_page(tmp_path, _manifest(), save_response=response)["status"]
+    assert status.startswith(expected_prefix)
+    assert expected_text in status
+    assert not status.startswith("Saved")
+
+
+@pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
+def test_successful_save_still_reports_saved(tmp_path):
+    assert _run_page(tmp_path, _manifest())["status"].startswith("Saved and approved")

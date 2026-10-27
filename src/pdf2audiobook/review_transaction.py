@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from pdf2audiobook.chapter_artifacts import STATE_NAME, ArtifactPlan, _read_digest
-from pdf2audiobook.errors import ExtractionError
+from pdf2audiobook.errors import ExtractionError, PendingRecoveryError
 from pdf2audiobook.jsonio import load_bounded_json
 from pdf2audiobook.models import BookManifest
 from pdf2audiobook.workspace import REVIEW_JOURNAL, atomic_write, digest_bytes
@@ -130,8 +130,9 @@ def recover_review_transaction(folder: Path) -> None:
             raise ExtractionError("Invalid transaction")
         _recover(folder, record)
     except Exception:
-        raise ReviewRecoveryRequired(
-            "Workspace update was committed but needs recovery; restore changed files or a backup"
+        raise PendingRecoveryError(
+            "A previous workspace update needs recovery; this operation was not performed. "
+            "Restore changed files or a backup, then retry"
         ) from None
 
 

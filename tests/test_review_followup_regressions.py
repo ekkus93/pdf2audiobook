@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from pdf2audiobook.config import Settings
 from pdf2audiobook.document.structure import render_chapter_texts
+from pdf2audiobook.errors import PendingRecoveryError
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
 from pdf2audiobook.pipeline import analyze_book, convert_book
 from pdf2audiobook.review_transaction import JOURNAL, ReviewRecoveryRequired
@@ -317,7 +318,7 @@ def test_recovery_refuses_to_overwrite_an_edit_after_commit(tmp_path: Path, monk
         with pytest.raises(ReviewRecoveryRequired):
             save_chapter_updates(path, updates)
     target.write_text("User changed this during recovery.", encoding="utf-8")
-    with pytest.raises(ReviewRecoveryRequired):
+    with pytest.raises(PendingRecoveryError):
         _recovered_manifest(path)
     assert target.read_text() == "User changed this during recovery."
     assert (tmp_path / JOURNAL).exists()

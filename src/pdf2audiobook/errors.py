@@ -25,6 +25,17 @@ class PendingRecoveryError(WorkspaceError):
     """A committed workspace update is pending and must be recovered first."""
 
 
+class ChapterConflictError(ExtractionError):
+    """A chapter file conflicts with generated text; carries only its number."""
+
+    def __init__(self, chapter: int):
+        super().__init__(
+            f"Chapter {chapter} text conflicts with generated content; back up the chapter file "
+            "and restore generated text or use a fresh output directory"
+        )
+        self.chapter = chapter
+
+
 class LLMError(AudiobookError):
     exit_code = 5
 
