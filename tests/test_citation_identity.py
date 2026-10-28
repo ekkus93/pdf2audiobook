@@ -9,14 +9,17 @@ import numpy as np
 import pytest
 from typer.testing import CliRunner
 
+from pdf2audiobook import pipeline
 from pdf2audiobook.cli import app
 from pdf2audiobook.config import Settings
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
 from pdf2audiobook.pipeline import chapter_audio_fingerprint, convert_book
 
-# Computed from the code as it was before citation processing existed.
-GOLDEN_OFF = "f1a29b8aeda3aeb8b11f489ea01dae492109ff7e872363dc8d93c0eab3e727d2"
-GOLDEN_OFF_WITH_ADAPTER = "c20d0ec41226aac2a5ed96f9b1ccc2d1857394793b6f7671a539b04e581e9d2a"
+# Computed from the code as it was before citation processing existed (commit 8e3c204),
+# with the TTS model identity pinned: the real identity embeds the installed kittenml
+# version, so an unpinned golden would only match the machine that produced it.
+GOLDEN_OFF = "1bf26140f8157af69176f93d867e274b6848252bab1d1ab1e1754fa831d757df"
+GOLDEN_OFF_WITH_ADAPTER = "658a77ffd939d5158c8dab03897924a2c625c31adbe8213c13bb2de3b71cb823"
 TEXT = "Attention is useful [13]. It also scales [35, 2, 5].\n"
 needs_ffmpeg = pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg is not installed")
 
@@ -33,6 +36,11 @@ def _manifest() -> BookManifest:
     )
 
 
+@pytest.fixture
+def pinned_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(pipeline, "_tts_model_identity", lambda _settings: "pinned-model-identity")
+
+
 def _fingerprint(settings: Settings, adapters: tuple[str, ...] = ()) -> str:
     manifest = _manifest()
     return chapter_audio_fingerprint(
@@ -40,11 +48,13 @@ def _fingerprint(settings: Settings, adapters: tuple[str, ...] = ()) -> str:
     )
 
 
+@pytest.mark.usefixtures("pinned_model")
 def test_with_the_setting_off_the_fingerprint_is_byte_identical_to_before() -> None:
     assert _fingerprint(Settings()) == GOLDEN_OFF
     assert _fingerprint(Settings(), ("tts=x.Y",)) == GOLDEN_OFF_WITH_ADAPTER
 
 
+@pytest.mark.usefixtures("pinned_model")
 def test_turning_it_on_changes_the_fingerprint_and_is_stable() -> None:
     on = Settings()
     on.reading.process_citations = True
@@ -52,6 +62,7 @@ def test_turning_it_on_changes_the_fingerprint_and_is_stable() -> None:
     assert _fingerprint(on) == _fingerprint(on)
 
 
+@pytest.mark.usefixtures("pinned_model")
 def test_the_equation_setting_does_not_touch_audio_identity() -> None:
     settings = Settings()
     settings.reading.process_equations = True
