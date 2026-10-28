@@ -35,10 +35,16 @@ def test_changing_narration_version_changes_computed_chapter_audio_fingerprint(m
     assert after != before
 
 
-def test_extraction_fingerprint_is_the_fx9_generation():
+def test_extraction_fingerprint_is_the_epub_chapters_generation():
+    # Supersedes the FX9 pin (analysis-v22): EPUB chapter detection changed the stored
+    # warnings and review reasons, so older extraction results are not reused.
     stages = _analysis_stage_fingerprints("a" * 64, Settings(), None)
     from pdf2audiobook.workspace import fingerprint
 
     assert stages["extraction"] == fingerprint(
-        "analysis-v22", "a" * 64, Settings().pdf.model_dump()
+        "analysis-v23", "a" * 64, Settings().pdf.model_dump()
+    )
+    assert stages["chapter-boundaries"] == fingerprint(
+        "chapter-detection-v2",
+        Settings().chapters.model_dump(exclude={"allow_single_chapter", "min_boundary_confidence"}),
     )

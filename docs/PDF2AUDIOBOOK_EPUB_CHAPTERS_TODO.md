@@ -71,11 +71,11 @@
 
 ## 6. Identity and upgrade (E6)
 
-- [ ] 6.1 Tests:
+- [x] 6.1 Tests:
   - a workspace analyzed before the bump is re-planned after it;
   - with a manually approved chapter, it refuses with the existing message;
   - a re-run reuses the LLM cache, asserting cache hits.
-- [ ] 6.2 Add `chapter-detection-v2` to the `chapter-boundaries` fingerprint and bump `analysis-v22` to `analysis-v23`. Add the upgrade note to `docs/MAINTAINER_GUIDE.md`.
+- [x] 6.2 Add `chapter-detection-v2` to the `chapter-boundaries` fingerprint and bump `analysis-v22` to `analysis-v23`. Add the upgrade note to `docs/MAINTAINER_GUIDE.md`.
 
 ## 7. Documentation (E7)
 

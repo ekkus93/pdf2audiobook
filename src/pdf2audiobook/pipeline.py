@@ -185,12 +185,12 @@ def _analysis_stage_fingerprints(
         )
     return {
         "extraction": fingerprint(
-            "analysis-v22",
+            "analysis-v23",
             book_hash,
             settings.pdf.model_dump(),
             *(() if extractor is None else ("extractor", extractor.name)),
         ),
-        "chapter-boundaries": fingerprint(chapter_settings),
+        "chapter-boundaries": fingerprint("chapter-detection-v2", chapter_settings),
         "llm-analysis": llm_fingerprint,
     }
 
