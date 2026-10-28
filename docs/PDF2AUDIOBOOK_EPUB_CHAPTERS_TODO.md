@@ -79,8 +79,8 @@
 
 ## 7. Documentation (E7)
 
-- [ ] 7.1 Fix FR-017 in `docs/PDF2AUDIOBOOK_SPEC.md` and document E1–E5 in §5.
-- [ ] 7.2 Update the README's EPUB note: outline anchoring, numeral headings, cover pages and the single warning line.
+- [x] 7.1 Fix FR-017 in `docs/PDF2AUDIOBOOK_SPEC.md` and document E1–E5 in §5.
+- [x] 7.2 Update the README's EPUB note: outline anchoring, numeral headings, cover pages and the single warning line.
 
 ## 8. Finish
 

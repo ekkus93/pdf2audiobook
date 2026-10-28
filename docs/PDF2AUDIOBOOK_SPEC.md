@@ -33,7 +33,7 @@ The target is an **offline-first, inspect-before-synthesize, resumable** utility
 | FR-014 | Permit running with --no-llm; report weaker chapter-detection confidence where applicable | Yes |
 | FR-015 | Output structured logs, progress, error diagnostics, and optional usage/cost accounting | Yes |
 | FR-016 | Validate external dependencies, model availability, and local/remote connectivity using doctor | Yes |
-| FR-017 | Batch convert directories, GUI, EPUB, cloud sync, and multilingual automatic translation | No (future) |
+| FR-017 | GUI, cloud sync, and multilingual automatic translation (batch directory conversion and EPUB input are implemented; see §8 and §9) | No (future) |
 
 ### 2.2 Nonfunctional requirements
 
@@ -154,6 +154,8 @@ Order of evidence:
 3. Layout clues: heading font/size, whitespace, page transitions, numbered headings, “Chapter”, “Part”, Roman numerals and typographic patterns.
 4. Bounded LLM-assisted ranking/classification of candidate headings and boundaries.
 5. User-supplied chapter overrides in a human-editable manifest.
+
+An outline entry is anchored on the page it points to, in this order: a unique block equal to the entry's title; otherwise, for a numbered label (`Chapter 12`, `CHAPTER XII`, `Chapter Twelve`, `Part 3`), the first line on that page when it is that chapter's lone numeral (`12`, `12.` or `XII`), because many books open a chapter with only its numeral; otherwise a unique block within two pages, which is never a block on a page that lists chapters. A label on a contents-listing page is a reference, not a heading, when its chapter opens elsewhere, whether through the outline or through a numeral heading corroborated by the printed contents (numerals first on their pages, named by the contents, strictly increasing, at least three and at least half of those listed, and not advancing exactly one per page). An LLM heading proposal naming a lone numeral line with that chapter's label ("Chapter 2" for `2`) is accepted without changing the source text. EPUB input follows the same rules, with these differences: an EPUB cover or plate that is only an image on a page-sized background fill is not `damaged_source`, and its pages have no printed labels, which is reported once.
 
 Support books without a TOC, front matter, prologue/epilogue and mid-page transitions. Normalize chapter spans as ordered, nonoverlapping half-open intervals. Detect holes, overlapping chapters, duplicate text and empty chapters; produce a coverage report. Never silently treat the entire book as one chapter when detection fails. Require user review or explicit --allow-single-chapter.
 
