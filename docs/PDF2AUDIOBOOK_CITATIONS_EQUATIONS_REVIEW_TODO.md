@@ -34,11 +34,11 @@
 
 ## 3. One accepted edit per block (Q3)
 
-- [ ] 3.1 Tests:
+- [x] 3.1 Tests:
   - a block with an accepted edit refuses another accept, by ID and with `--all`, with manifest, chapters and audio byte-identical;
   - two pending edits on one block refuse `--all`;
   - the message names only the block ID.
-- [ ] 3.2 Check both conditions in `_select` for explicit IDs and `--all`, before any change.
+- [x] 3.2 Check both conditions in `_select` for explicit IDs and `--all`, before any change.
 
 ## 4. Reported audit failures (Q4)
 

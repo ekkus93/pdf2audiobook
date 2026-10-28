@@ -68,12 +68,36 @@ def list_edits(manifest_path: Path, *, status: str = "pending") -> list[EditRow]
     return [row for row in rows if status == "all" or row.status == status]
 
 
+def _refuse_conflicts(manifest: BookManifest, chosen: Sequence[CleanupEdit]) -> None:
+    """Accepting must never discard another edit: a block takes one accepted edit.
+
+    Accepted edits are applied as a block-to-replacement map, so a second one would
+    silently replace the first. Block IDs are not book text and may be named.
+    """
+    already = {edit.block_id for edit in manifest.edits if edit.accepted}
+    seen: set[str] = set()
+    for edit in chosen:
+        if edit.block_id in already:
+            raise ConfigError(
+                f"Block {edit.block_id} already has an accepted edit; "
+                "accepting another would discard it"
+            )
+        if edit.block_id in seen:
+            raise ConfigError(
+                f"More than one pending edit targets block {edit.block_id}; "
+                "reject the unwanted one first"
+            )
+        seen.add(edit.block_id)
+
+
 def _select(
     manifest: BookManifest, block_ids: Sequence[str] | None, verb: str
 ) -> list[CleanupEdit]:
     """Pending edits to act on; refuse unknown or ambiguous block IDs before any change."""
     pending = [edit for edit in manifest.edits if edit_status(edit) == "pending"]
     if block_ids is None:
+        if verb == "accept":
+            _refuse_conflicts(manifest, pending)
         return pending
     chosen: list[CleanupEdit] = []
     for block_id in dict.fromkeys(block_ids):
@@ -87,11 +111,14 @@ def _select(
             )
         if len(open_ones) > 1:
             raise ConfigError(
-                "More than one pending edit targets that block; reject the unwanted one first"
+                f"More than one pending edit targets block {block_id}; "
+                "reject the unwanted one first"
             )
         if not open_ones and verb == "reject":
             raise ConfigError("That edit is already accepted and cannot be rejected")
         chosen.extend(open_ones)
+    if verb == "accept":
+        _refuse_conflicts(manifest, chosen)
     return chosen
 
 

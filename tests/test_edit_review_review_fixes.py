@@ -86,3 +86,65 @@ def test_naming_a_rejected_builtin_edit_is_a_content_free_usage_error(tmp_path: 
         assert "rejected during review" in result.stderr
         assert SECRET not in result.stdout + result.stderr
     assert path.read_bytes() == before
+
+
+def _snapshot(folder: Path) -> dict[str, bytes]:
+    return {
+        str(p.relative_to(folder)): p.read_bytes()
+        for p in sorted(folder.rglob("*"))
+        if p.is_file() and p.name != ".convert.lock"
+    }
+
+
+def _doubled_workspace(tmp_path: Path) -> Path:
+    """Block a1 already carries an accepted edit; a second one is pending. b2 is clean."""
+    return _workspace(
+        tmp_path,
+        [
+            _edit("a1", "Alpha teh first.", "Alpha the first.", "deterministic", True),
+            _edit("a1", "Alpha teh first.", "Alpha first, read aloud."),
+            _edit("b2", "Beta closing block.", "Beta final block."),
+        ],
+    )
+
+
+def test_accepting_a_second_edit_on_a_block_is_refused_by_id_and_by_all(tmp_path: Path) -> None:
+    path = _doubled_workspace(tmp_path)
+    before = _snapshot(tmp_path)
+    for args in (("a1",), ("--all",)):
+        result = _run("accept", str(path), *args)
+        assert result.exit_code == 2, args
+        assert "already has an accepted edit" in result.stderr
+        assert "a1" in result.stderr
+        assert SECRET not in result.stdout + result.stderr
+        assert _snapshot(tmp_path) == before  # all-or-nothing: b2 was not accepted either
+
+
+def test_two_pending_edits_on_one_block_refuse_accept_all(tmp_path: Path) -> None:
+    path = _workspace(
+        tmp_path,
+        [
+            _edit("b1", "Beta teh opening.", "Beta the opening."),
+            _edit("b1", "Beta teh opening.", "Beta opening, spoken."),
+        ],
+    )
+    before = _snapshot(tmp_path)
+    result = _run("accept", str(path), "--all")
+    assert result.exit_code == 2
+    assert "More than one pending edit targets block b1" in result.stderr
+    assert _snapshot(tmp_path) == before
+
+
+def test_a_single_pending_edit_on_a_block_still_accepts(tmp_path: Path) -> None:
+    path = _workspace(
+        tmp_path,
+        [
+            _edit("b1", "Beta teh opening.", "Beta the opening."),
+            _edit("b1", "Beta teh opening.", "Beta opening, spoken."),
+        ],
+    )
+    # Control: with only one proposal left the same block accepts normally.
+    manifest = read_manifest(path)
+    manifest.edits = manifest.edits[:1]
+    write_manifest(path, manifest)
+    assert _run("accept", str(path), "--all").exit_code == 0
