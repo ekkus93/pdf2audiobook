@@ -1,8 +1,9 @@
 # PDF2Audiobook Citation and Equation Reading Specification
 
-**Status:** Proposed
+**Status:** Implemented; amended 2026-10-28 (defaults, C2 intervals, C4 statuses)
 **Date:** 2026-10-27
 **Companion:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_TODO.md`
+**Amended by:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_SPEC.md` (Q1–Q9)
 **Baseline:** master at b0b4d7c (`docs: record epub chapters follow-up completion and CI evidence`)
 **Supplements:** `docs/PDF2AUDIOBOOK_SPEC.md` (§4.3 text restoration and special material, §6 LLM layer, §7 configuration, §9 audio)
 
@@ -14,7 +15,7 @@ Technical books and papers are full of material that sounds wrong when read lite
 
 The narration stage of the LLM layer already runs, but it is advisory only. For this paper it produced 28 pronunciation hints for author names, saved to `reports/narration_suggestions.json` and never applied to audio. The classification stage has no equation category, and the extractor marked only two stray fragments (`√dk`, `lrate = d−0.5`) as equations.
 
-This spec adds **two independent, opt-in settings**:
+This spec adds **two independent settings** (written as opt-in; superseded: both are now on by default, see the amendment below):
 - **Citation processing** skips numeric citations in the audio. It is deterministic and needs no LLM.
 - **Equation processing** has the LLM propose a spoken reading for blocks of mathematical notation. Proposals stay **pending until the user accepts them**; nothing the model writes reaches the audio unreviewed.
 
@@ -41,7 +42,7 @@ process_equations = true
 - `config show` (text and `--json`) and `doctor --json` report both values.
 
 **Acceptance:**
-- Defaults are false.
+- Defaults are true. *Amended 2026-10-27:* the original acceptance said false; see the amendment in section 1.
 - Each flag form, the environment variable and the TOML key reach `Settings`, with CLI over environment over TOML.
 - The two settings are independent.
 - The LLM-required error is exit 2 and content-free.
@@ -59,6 +60,8 @@ When `process_citations` is on, numeric citations are **not spoken**. The chapte
 - the group is preceded by whitespace, an opening bracket or quote, or the start of a line.
 
 A group attached directly to a word (`a[1]`, `x[i]`) is not a citation, nor is `[` containing letters. Author–year forms such as `(Vaswani et al., 2017)` are out of scope for this version and are read as written.
+
+*Amendment (2026-10-28, Q5):* a bracketed group directly after one of `∈ = ≤ ≥ < > ≈ ×` is an interval, not a citation (`x ∈ [1, 5]`), so it is read. "as shown in [1, 5]" remains a citation. The on-state audio fingerprint part is `citations-skipped-v2`. Bibliography entry numbers (`[1] Author. Title.`) are skipped on purpose.
 
 **How it is skipped.** The spoken layer already works on word tokens aligned to source character ranges (`split_sentences`, `_spoken_sequence`, `chunk_source_ranges`, `_droppable_word`). Citation groups are removed from the spoken sequence, so chunking, voice markers, pauses and the chunk-to-source mapping stay correct. The skipped range remains in the source mapping.
 - Trailing punctuation stays: "translation [38]." is spoken "translation."
@@ -113,6 +116,7 @@ pdf2audiobook edits reject MANIFEST (--all | BLOCK_ID ...)
 - `accept` sets `accepted = true` and regenerates the affected chapters' text through the existing artifact planner and transaction machinery, under the workspace lock: chapter text, coverage, metadata and manifest are published together or recovered.
 - An accepted edit whose chapter file was hand-edited produces the existing content-free chapter conflict, naming the chapter and `regenerate-chapter`, and nothing is changed.
 - `reject` removes a pending proposal from `edits`; an accepted edit cannot be rejected. Decisions are recorded in `reports/edit_decisions.json` (block ID, action, provider; no book text). *Amendment:* a rejected proposal can reappear if the workspace is re-analyzed, because the model's cached answer is unchanged; remembering rejections would need a manifest schema change and is out of scope.
+- *Amendment (2026-10-28, Q2, Q3, Q4):* an unaccepted built-in (`deterministic`) edit is a human rejection with status `rejected`, listed by `--status rejected` and never acted on by `accept` or `reject`. `accept` refuses, with nothing changed, a block that already has an accepted edit. A failed write of `reports/edit_decisions.json` warns (`edit_audit_not_written`) without undoing the decision.
 - Both commands refuse an unknown block ID (exit 2). Accepting twice is harmless.
 - Changed chapter text invalidates that chapter's audio automatically (the text hash changes) and nothing else.
 
