@@ -1,6 +1,6 @@
 # PDF2Audiobook EPUB Chapter Detection Specification
 
-**Status:** Proposed
+**Status:** Implemented
 **Date:** 2026-10-27
 **Companion:** `docs/PDF2AUDIOBOOK_EPUB_CHAPTERS_TODO.md`
 **Baseline:** master at 04e4e8c (`feat(cli): add --llm-output-tokens to analyze and convert`)
