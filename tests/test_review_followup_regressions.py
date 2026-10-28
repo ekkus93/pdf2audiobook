@@ -544,7 +544,7 @@ def test_footnote_policy_survives_analyze_review_and_convert(
 
     outputs = convert_book(source, settings, tts_provider=Provider(), encoder=encode)
     record = json.loads(outputs[0].with_suffix(".cache.json").read_text())
-    assert record["rendering_inputs"] == {"footnotes": policy}
+    assert record["rendering_inputs"]["footnotes"] == policy
     assert record["text_sha256"] == hashlib.sha256(expected.encode()).hexdigest()
     from pdf2audiobook.cli import app
 

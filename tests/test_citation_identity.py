@@ -50,8 +50,10 @@ def _fingerprint(settings: Settings, adapters: tuple[str, ...] = ()) -> str:
 
 @pytest.mark.usefixtures("pinned_model")
 def test_with_the_setting_off_the_fingerprint_is_byte_identical_to_before() -> None:
-    assert _fingerprint(Settings()) == GOLDEN_OFF
-    assert _fingerprint(Settings(), ("tts=x.Y",)) == GOLDEN_OFF_WITH_ADAPTER
+    off = Settings()
+    off.reading.process_citations = False
+    assert _fingerprint(off) == GOLDEN_OFF
+    assert _fingerprint(off, ("tts=x.Y",)) == GOLDEN_OFF_WITH_ADAPTER
 
 
 @pytest.mark.usefixtures("pinned_model")
@@ -65,6 +67,7 @@ def test_turning_it_on_changes_the_fingerprint_and_is_stable() -> None:
 @pytest.mark.usefixtures("pinned_model")
 def test_the_equation_setting_does_not_touch_audio_identity() -> None:
     settings = Settings()
+    settings.reading.process_citations = False
     settings.reading.process_equations = True
     assert _fingerprint(settings) == GOLDEN_OFF
 
@@ -97,6 +100,7 @@ def _book(tmp_path: Path) -> tuple[Path, Settings]:
     settings.general.output_dir = str(tmp_path / "out")
     settings.llm.enabled = False
     settings.pdf.ocr = "never"
+    settings.reading.process_citations = False
     return source, settings
 
 

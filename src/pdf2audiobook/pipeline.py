@@ -139,6 +139,7 @@ def _resolve_auto_llm_model(settings: Settings) -> Settings:
             settings.llm.classification,
             settings.llm.narration,
             settings.llm.vision,
+            settings.reading.process_equations,
         )
     ):
         return settings
@@ -183,8 +184,6 @@ def _analysis_stage_fingerprints(
             settings.llm.provider,
             selected.model,
             selected.base_url,
-            # Present only when on, so every existing workspace keeps its identity.
-            *(("equation-readings-v1",) if settings.reading.process_equations else ()),
         )
     return {
         "extraction": fingerprint(

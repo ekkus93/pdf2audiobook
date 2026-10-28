@@ -23,9 +23,9 @@ def _load(*, toml: str | None = None, env: dict[str, str] | None = None, overrid
     return load_settings(path, no_config=path is None, environ=env or {}, overrides=overrides)[0]
 
 
-def test_both_settings_default_to_off() -> None:
+def test_both_settings_default_to_on() -> None:
     reading = Settings().reading
-    assert reading.process_citations is False and reading.process_equations is False
+    assert reading.process_citations is True and reading.process_equations is True
 
 
 @pytest.mark.parametrize(
@@ -33,9 +33,9 @@ def test_both_settings_default_to_off() -> None:
     [("process_citations", "process_equations"), ("process_equations", "process_citations")],
 )
 def test_the_toml_keys_are_independent(tmp_path: Path, key: str, other: str) -> None:
-    settings = _load(toml=f"[reading]\n{key} = true\n", tmp=tmp_path)
-    assert getattr(settings.reading, key) is True
-    assert getattr(settings.reading, other) is False
+    settings = _load(toml=f"[reading]\n{key} = false\n", tmp=tmp_path)
+    assert getattr(settings.reading, key) is False
+    assert getattr(settings.reading, other) is True
 
 
 @pytest.mark.parametrize(
@@ -50,28 +50,36 @@ def test_environment_variables_set_each_setting(
 
 
 def test_cli_overrides_environment_overrides_toml(tmp_path: Path) -> None:
-    toml = "[reading]\nprocess_citations = true\n"
-    assert _load(toml=toml, tmp=tmp_path).reading.process_citations is True
-    assert (
-        _load(toml=toml, env={CITATIONS: "false"}, tmp=tmp_path).reading.process_citations is False
-    )
+    toml = "[reading]\nprocess_citations = false\n"
+    assert _load(toml=toml, tmp=tmp_path).reading.process_citations is False
+    assert _load(toml=toml, env={CITATIONS: "true"}, tmp=tmp_path).reading.process_citations is True
     forced = _load(
         toml=toml,
-        env={CITATIONS: "false"},
-        overrides={"reading": {"process_citations": True}},
+        env={CITATIONS: "true"},
+        overrides={"reading": {"process_citations": False}},
         tmp=tmp_path,
     )
-    assert forced.reading.process_citations is True
+    assert forced.reading.process_citations is False
 
 
-def test_equation_processing_needs_the_llm() -> None:
+def test_equation_processing_asked_for_explicitly_needs_the_llm() -> None:
     with pytest.raises(ConfigError, match="Equation processing needs the LLM") as raised:
         _load(env={EQUATIONS: "true", "PDF2AUDIOBOOK_LLM_ENABLED": "false"})
     assert raised.value.exit_code == 2
+    with pytest.raises(ConfigError, match="Equation processing needs the LLM"):
+        _load(
+            overrides={"reading": {"process_equations": True}, "llm": {"enabled": False}},
+        )
     # Citations are deterministic and never need it.
     assert _load(
         env={CITATIONS: "true", "PDF2AUDIOBOOK_LLM_ENABLED": "false"}
     ).reading.process_citations
+
+
+def test_the_default_is_quietly_inactive_without_the_llm() -> None:
+    settings = _load(env={"PDF2AUDIOBOOK_LLM_ENABLED": "false"})
+    assert settings.reading.process_equations is False
+    assert settings.reading.process_citations is True
 
 
 @pytest.fixture
@@ -111,10 +119,14 @@ def test_flags_reach_the_settings_independently(
     assert _invoke(command, tmp_path, "--process-citations").exit_code == 0
     assert _invoke(command, tmp_path, "--process-equations").exit_code == 0
     assert _invoke(command, tmp_path).exit_code == 0
+    assert _invoke(command, tmp_path, "--no-process-citations").exit_code == 0
+    assert _invoke(command, tmp_path, "--no-process-equations").exit_code == 0
     assert seen == [
-        {"process_citations": True, "process_equations": False},
+        {"process_citations": True, "process_equations": True},
+        {"process_citations": True, "process_equations": True},
+        {"process_citations": True, "process_equations": True},
         {"process_citations": False, "process_equations": True},
-        {"process_citations": False, "process_equations": False},
+        {"process_citations": True, "process_equations": False},
     ]
 
 
@@ -122,18 +134,22 @@ def test_flags_reach_the_settings_independently(
 def test_negative_flags_override_the_environment(
     command: str, tmp_path: Path, seen: list[dict[str, bool]]
 ) -> None:
-    env = {CITATIONS: "true", EQUATIONS: "true"}
-    result = _invoke(command, tmp_path, "--no-process-citations", env=env)
+    result = _invoke(command, tmp_path, "--process-citations", env={CITATIONS: "false"})
     assert result.exit_code == 0, result.stderr
-    assert seen == [{"process_citations": False, "process_equations": True}]
+    result = _invoke(command, tmp_path, "--no-process-equations", env={EQUATIONS: "true"})
+    assert result.exit_code == 0, result.stderr
+    assert seen == [
+        {"process_citations": True, "process_equations": True},
+        {"process_citations": True, "process_equations": False},
+    ]
 
 
 @pytest.mark.parametrize("command", ["analyze", "convert"])
 def test_unset_flags_leave_the_environment_in_charge(
     command: str, tmp_path: Path, seen: list[dict[str, bool]]
 ) -> None:
-    assert _invoke(command, tmp_path, env={CITATIONS: "true"}).exit_code == 0
-    assert seen == [{"process_citations": True, "process_equations": False}]
+    assert _invoke(command, tmp_path, env={CITATIONS: "false"}).exit_code == 0
+    assert seen == [{"process_citations": False, "process_equations": True}]
 
 
 @pytest.mark.parametrize("command", ["analyze", "convert"])
@@ -147,13 +163,21 @@ def test_equations_with_no_llm_is_a_content_free_usage_error(
     assert seen == []
 
 
+@pytest.mark.parametrize("command", ["analyze", "convert"])
+def test_no_llm_alone_just_leaves_equations_inactive(
+    command: str, tmp_path: Path, seen: list[dict[str, bool]]
+) -> None:
+    assert _invoke(command, tmp_path, "--no-llm").exit_code == 0
+    assert seen == [{"process_citations": True, "process_equations": False}]
+
+
 def test_config_show_and_doctor_report_both_values() -> None:
-    env = {CITATIONS: "true"}
+    env = {CITATIONS: "false"}
     shown = CliRunner().invoke(app, ["config", "show", "--json", "--no-config"], env=env)
     assert json.loads(shown.stdout)["reading"] == {
-        "process_citations": True,
-        "process_equations": False,
+        "process_citations": False,
+        "process_equations": True,
     }
     doctor: Any = CliRunner().invoke(app, ["doctor", "--json", "--no-config"], env=env)
     payload = json.loads(doctor.stdout)
-    assert payload["process_citations"] is True and payload["process_equations"] is False
+    assert payload["process_citations"] is False and payload["process_equations"] is True

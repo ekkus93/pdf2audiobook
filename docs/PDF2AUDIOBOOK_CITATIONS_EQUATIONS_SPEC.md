@@ -18,7 +18,7 @@ This spec adds **two independent, opt-in settings**:
 - **Citation processing** skips numeric citations in the audio. It is deterministic and needs no LLM.
 - **Equation processing** has the LLM propose a spoken reading for blocks of mathematical notation. Proposals stay **pending until the user accepts them**; nothing the model writes reaches the audio unreviewed.
 
-Both default to off, so existing behavior, caches and fingerprints are unchanged for anyone who does not enable them.
+*Amendment (2026-10-27, user decision):* both default to **on**. Equation processing is quietly inactive when the LLM is off and was not requested explicitly, and the setting is not part of the `llm-analysis` fingerprint (C5), so existing workspaces are not re-analyzed or refused. Audio regenerates once because citation skipping changes the audio identity.
 
 The project invariants still hold: the source transcript is never altered or silently dropped, PDF text and LLM output are untrusted, LLM edits are proposals until a human accepts them, errors and logs are content-free, and CI stays offline.
 
@@ -30,14 +30,14 @@ Add a `[reading]` table (not `[narration]`, which would collide with the existin
 
 ```toml
 [reading]
-process_citations = false
-process_equations = false
+process_citations = true
+process_equations = true
 ```
 
 - Environment: `PDF2AUDIOBOOK_PROCESS_CITATIONS` and `PDF2AUDIOBOOK_PROCESS_EQUATIONS`.
 - CLI, on `analyze` and `convert`: `--process-citations/--no-process-citations` and `--process-equations/--no-process-equations`. The pairs default to unset, so config and environment values stay effective unless a flag is given (the project's boolean-pair convention). The precedence is CLI > environment > TOML > default.
 - Each setting affects only its own feature. Turning one on never turns the other on.
-- `process_equations = true` with the LLM disabled (`--no-llm` or `llm.enabled = false`) is a configuration error with exit code 2 and a content-free message: "Equation processing needs the LLM; enable it or turn equation processing off". `process_citations` has no such requirement.
+- An explicit `process_equations = true` with the LLM disabled (`--no-llm` or `llm.enabled = false`) is a configuration error with exit code 2 and a content-free message: "Equation processing needs the LLM; enable it or turn equation processing off". `process_citations` has no such requirement.
 - `config show` (text and `--json`) and `doctor --json` report both values.
 
 **Acceptance:**
@@ -126,7 +126,7 @@ pdf2audiobook edits reject MANIFEST (--all | BLOCK_ID ...)
 
 ### C5: Identity, upgrade and documentation
 
-- When `process_equations` is on, include it in the `llm-analysis` stage fingerprint **only when true** (so off-state fingerprints are unchanged), and bump nothing else. Existing workspaces without approvals are re-analyzed on the next run with the setting on, reusing cached LLM answers for earlier stages. A workspace with an approved chapter keeps refusing reanalysis with the existing message; the equation setting should be chosen before the first analysis, and this is documented.
+- *Amended:* the equation setting is **not** in any stage fingerprint. With the default on, a fingerprint part would stale every existing workspace and refuse approved ones. The cost: changing the setting does not itself re-analyze a workspace; use `--no-resume` on an unapproved workspace or a new `--output`.
 - Update `docs/MAINTAINER_GUIDE.md` (settings, the spoken-layer citation hook, the edit workflow) and the README (the two settings, the `edits` commands, and the limitations below). Update §4.3, §6 and §7 of `docs/PDF2AUDIOBOOK_SPEC.md`.
 
 ## 3. Known limitations (documented, not solved here)

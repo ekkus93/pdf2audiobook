@@ -188,7 +188,7 @@ def test_convert_omit_footnotes_then_pack_without_config_uses_sidecar_inputs(tmp
     outputs = convert_book(source, settings, tts_provider=StubProvider(), encoder=encode)
     assert len(outputs) == 1
     sidecar = json.loads(outputs[0].with_suffix(".cache.json").read_text(encoding="utf-8"))
-    assert sidecar["rendering_inputs"] == {"footnotes": "omit"}
+    assert sidecar["rendering_inputs"]["footnotes"] == "omit"
     result = CliRunner().invoke(
         app,
         ["pack-m4b", str(manifest_path), "--output", str(tmp_path / "book.m4b"), "--no-config"],

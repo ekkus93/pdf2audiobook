@@ -197,8 +197,8 @@ class Audio(ConfigModel):
 class Reading(ConfigModel):
     """Opt-in processing of material that sounds wrong when read literally."""
 
-    process_citations: bool = False
-    process_equations: bool = False
+    process_citations: bool = True
+    process_equations: bool = True
 
 
 class Settings(ConfigModel):
@@ -401,9 +401,12 @@ def load_settings(
     ):
         raise ConfigError("max_estimated_cost_usd requires explicit input/output token prices")
     if result.reading.process_equations and not result.llm.enabled:
-        raise ConfigError(
-            "Equation processing needs the LLM; enable it or turn equation processing off"
-        )
+        if sources.get("reading.process_equations", "built-in") != "built-in":
+            raise ConfigError(
+                "Equation processing needs the LLM; enable it or turn equation processing off"
+            )
+        # On by default, but only where it can work: without an LLM it is simply inactive.
+        result.reading.process_equations = False
     if result.llm.chunk_tokens >= result.llm.max_context_tokens:
         raise ConfigError("llm.chunk_tokens must be smaller than llm.max_context_tokens")
     if result.llm.max_output_tokens + 128 >= result.llm.max_context_tokens:

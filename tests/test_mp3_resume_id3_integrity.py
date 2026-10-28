@@ -11,6 +11,7 @@ from mutagen.easyid3 import EasyID3
 from pdf2audiobook import pipeline
 from pdf2audiobook.audio import audio_output_path
 from pdf2audiobook.config import Settings
+from pdf2audiobook.conversion import _rendering_inputs
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
 from pdf2audiobook.workspace import digest_file
 
@@ -94,7 +95,7 @@ def test_mp3_resume_checks_actual_chapter_id3_tags(
             {
                 "chapter_id": chapter.id,
                 "sidecar_version": 3,
-                "rendering_inputs": {"footnotes": settings.pdf.footnotes},
+                "rendering_inputs": _rendering_inputs(settings),
                 "text_sha256": hashlib.sha256(chapter_text.encode("utf-8")).hexdigest(),
                 "fingerprint": pipeline.chapter_audio_fingerprint(
                     chapter_text,

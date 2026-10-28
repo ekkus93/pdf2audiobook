@@ -313,12 +313,12 @@ These checks do not guarantee that a misconfigured server honors its limit.
 ## Citations and equations
 
 Technical books read badly aloud when citations and equations are spoken literally. Two
-independent settings, both **off by default**, change that:
+independent settings, both **on by default**, change that:
 
 ~~~toml
 [reading]
-process_citations = true   # skip [13], [35, 2, 5], [1-3] in the audio
-process_equations = true   # LLM proposes spoken readings; you approve them
+process_citations = true   # (default) skip [13], [35, 2, 5], [1-3] in the audio
+process_equations = true   # (default) LLM proposes spoken readings; you approve them
 ~~~
 
 Each also has a flag pair on `analyze` and `convert` (`--process-citations/--no-process-citations`,
@@ -347,8 +347,15 @@ pdf2audiobook edits reject ./audiobooks/BOOK/manifest.json p00003-l00020
 Accepting regenerates that chapter's text (a chapter file you edited by hand is a conflict;
 see `regenerate-chapter`) and makes only its audio stale. The checks cannot judge whether an
 operator was read correctly, which is why nothing is applied unreviewed. `edits` also resolves
-pending cleanup suggestions. Choose the equation setting before the first analysis: a workspace
-with an approved chapter refuses re-analysis, so enabling it later needs a new `--output`.
+pending cleanup suggestions. Turn either off with `--no-process-citations` or
+`--no-process-equations` (or `false` in `[reading]`). With the LLM off (`--no-llm`) equation
+processing is simply inactive; asking for it explicitly alongside `--no-llm` is an error.
+
+Because citation skipping is on by default, audio made before this setting existed is regenerated
+on its next `convert` (chapter text and analysis are not). The equation setting is not part of the
+analysis identity, so changing it does not re-analyze an existing workspace; to get equation
+proposals for a book analyzed without them, re-run analysis with `--no-resume` on a workspace with
+no approved chapters, or use a new `--output`.
 
 ## Progress and time estimates
 

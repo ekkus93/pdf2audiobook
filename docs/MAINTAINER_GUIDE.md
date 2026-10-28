@@ -510,9 +510,11 @@ changes.
 
 ## Citation and equation reading
 
-`[reading]` holds two independent, default-off booleans (`process_citations`,
+`[reading]` holds two independent, default-on booleans (`process_citations`,
 `process_equations`; env `PDF2AUDIOBOOK_PROCESS_*`; paired CLI flags on `analyze` and
-`convert`). Equation processing with the LLM disabled is a `ConfigError` (exit 2).
+`convert`). Equation processing requested explicitly (env, TOML or CLI) with the LLM disabled is a
+`ConfigError` (exit 2); left at its built-in default it is quietly set false when the LLM is
+off, and the `auto` model resolution also counts it as an LLM consumer.
 
 **Citations** are deterministic. `audio/citations.py` finds bracketed integer lists and
 ascending ranges (`citation_ranges`) and `mask_citations` blanks them to spaces, moving any
@@ -521,14 +523,16 @@ closing punctuation into the gap, without changing the length. `synthesize_chunk
 voice markers, so chunking and the chunk-to-source mapping stay valid. The chapter file is
 never touched. `conversion.py` passes `skip_citations` only when on (injected synthesis doubles
 need not accept it), records `"citations": true` in the sidecar's `rendering_inputs` and adds a
-part to `chapter_audio_fingerprint` only when on, so every identity is byte-identical when off.
+part to `chapter_audio_fingerprint` only when on, so the identity is byte-identical when off. Being
+on by default, existing audio regenerates on its next `convert`.
 `pack-m4b` ignores the key.
 
 **Equations** are an LLM task (`llm/equations.py`). `equation_candidates` picks blocks by symbol
 test, `verify_reading` rejects unfaithful readings (digit stream, surviving words, length,
 markup), and `propose_llm_equation_readings` stores survivors as `CleanupEdit(provider="llm",
-accepted=False)`. The analysis hook runs after the other stages and adds
-`equation-readings-v1` to the `llm-analysis` fingerprint only when on.
+accepted=False)`. The analysis hook runs after the other stages. The setting is deliberately
+**not** in any stage fingerprint: with it on by default, a fingerprint part would make every
+existing workspace stale and refuse re-analysis of approved ones.
 
 **Pending edits** are resolved with `pdf2audiobook edits list|accept|reject` (`edit_review.py`).
 `accept` flips the flag in memory and calls `render_chapter_texts(commit_manifest=True)` under

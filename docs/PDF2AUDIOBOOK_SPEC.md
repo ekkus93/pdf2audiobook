@@ -145,7 +145,7 @@ In auto mode, OCR only pages with raster coverage above the configured trigger, 
 - Preserve quotations, scene breaks, emphasis cues, lists and paragraph boundaries. Treat footnotes/endnotes via configurable policy: omit, inline at anchor, or end of chapter; default to warn/omit ancillary material only when explicitly classified.
 - For tables, figures, formulas, sidebars and diagrams, default to a warning and conservative narration, not invented descriptions. A future vision-capable provider may describe these under explicit opt-in.
 - Avoid introducing new prose. Flag anomalous OCR tokens, huge edits, repeated/missing spans or nonmonotonic reading order.
-- **Citations and equations (opt-in, both default off).** `reading.process_citations` blanks numeric citations (`[13]`, `[35, 2, 5]`, `[1-3]`) from the spoken text only; the chapter file and every source offset keep them, and it needs no LLM. `reading.process_equations` has the LLM propose a spoken reading of mathematical notation; each proposal is verified (identical digit stream, surviving words, bounded length, no markup) and stored as a **pending** edit that changes narration only after `pdf2audiobook edits accept`. Author–year citations and prose math without listed symbols are not handled.
+- **Citations and equations (both default on, each separately switchable).** `reading.process_citations` blanks numeric citations (`[13]`, `[35, 2, 5]`, `[1-3]`) from the spoken text only; the chapter file and every source offset keep them, and it needs no LLM. `reading.process_equations` has the LLM propose a spoken reading of mathematical notation; each proposal is verified (identical digit stream, surviving words, bounded length, no markup) and stored as a **pending** edit that changes narration only after `pdf2audiobook edits accept`. Author–year citations and prose math without listed symbols are not handled.
 
 ## 5. Chapter discovery
 
@@ -291,8 +291,8 @@ speed = 1.0
 enabled = true
 
 [reading]
-process_citations = false   # skip numeric citations such as [13] in the audio
-process_equations = false   # LLM-proposed spoken readings of equations, pending approval
+process_citations = true    # skip numeric citations such as [13] in the audio
+process_equations = true    # LLM-proposed spoken readings of equations, pending approval
 ```
 
 Example environment names: `PDF2AUDIOBOOK_LLM_PROVIDER`, `PDF2AUDIOBOOK_LLM_MODEL`, `PDF2AUDIOBOOK_LLM_URL`, `PDF2AUDIOBOOK_TTS_PROVIDER`, `PDF2AUDIOBOOK_TTS_MODEL`, `PDF2AUDIOBOOK_TTS_VOICE`, `PDF2AUDIOBOOK_TTS_SPEED`, and `OPENAI_API_KEY`. Reject unknown configuration keys, non-table sections, and unsupported combinations with content-free actionable messages. Only MPEG-compatible sample rates are accepted. `cache.directory` is retained for compatibility, but ignored with a warning when explicitly set.

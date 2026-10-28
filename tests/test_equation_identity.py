@@ -10,7 +10,6 @@ import pytest
 
 from pdf2audiobook import pipeline
 from pdf2audiobook.config import Settings
-from pdf2audiobook.errors import ExtractionError
 from pdf2audiobook.pipeline import _analysis_stage_fingerprints, analyze_book
 from pdf2audiobook.workspace import read_manifest, write_manifest
 
@@ -23,28 +22,19 @@ GOLDEN = {
 GOLDEN_LLM_DISABLED = "9982c77107fc84c3a01ffcc418fc63bcfc463fc1806f5642ef9ef912679d5773"
 
 
-def test_with_the_setting_off_every_stage_fingerprint_is_unchanged() -> None:
+def test_stage_fingerprints_are_unchanged_by_either_reading_setting() -> None:
     assert _analysis_stage_fingerprints("a" * 64, Settings(), None) == GOLDEN
+    for citations in (False, True):
+        for equations in (False, True):
+            settings = Settings()
+            settings.reading.process_citations = citations
+            settings.reading.process_equations = equations
+            assert _analysis_stage_fingerprints("a" * 64, settings, None) == GOLDEN
     disabled = Settings()
     disabled.llm.enabled = False
     assert _analysis_stage_fingerprints("a" * 64, disabled, None)["llm-analysis"] == (
         GOLDEN_LLM_DISABLED
     )
-
-
-def test_turning_it_on_changes_only_the_llm_stage() -> None:
-    settings = Settings()
-    settings.reading.process_equations = True
-    on = _analysis_stage_fingerprints("a" * 64, settings, None)
-    assert on["llm-analysis"] != GOLDEN["llm-analysis"]
-    assert on["extraction"] == GOLDEN["extraction"]
-    assert on["chapter-boundaries"] == GOLDEN["chapter-boundaries"]
-
-
-def test_the_citation_setting_does_not_touch_analysis_identity() -> None:
-    settings = Settings()
-    settings.reading.process_citations = True
-    assert _analysis_stage_fingerprints("a" * 64, settings, None) == GOLDEN
 
 
 class Model:
@@ -105,35 +95,24 @@ def _book(tmp_path: Path) -> tuple[Path, Settings]:
     return source, settings
 
 
-def test_enabling_it_replans_an_unapproved_workspace_from_cached_answers(
+def test_an_approved_workspace_is_not_refused_when_the_setting_differs(
     tmp_path: Path, model: type[Model]
 ) -> None:
     source, settings = _book(tmp_path)
-    first = analyze_book(source, settings)
-    assert model.structure > 0 and model.equations == 0
-    structure_calls = model.structure
-    manifest = read_manifest(first)
-    manifest.warnings.append("STALE-MARKER")  # disappears only if the workspace is re-planned
-    write_manifest(first, manifest)
-
-    settings.reading.process_equations = True
-    second = read_manifest(analyze_book(source, settings))
-    assert "STALE-MARKER" not in second.warnings
-    assert model.structure == structure_calls  # earlier stages came from the cache
-    assert model.equations > 0
-    assert [e.original for e in second.edits if e.provider == "llm"] == ["h1 = 8", "h2 = 9"]
-
-
-def test_an_approved_workspace_keeps_the_existing_refusal(
-    tmp_path: Path, model: type[Model]
-) -> None:
-    source, settings = _book(tmp_path)
+    settings.reading.process_equations = False
     path = analyze_book(source, settings)
     manifest = read_manifest(path)
     manifest.chapters[0].manually_approved = True
     write_manifest(path, manifest)
-    before = path.read_bytes()
     settings.reading.process_equations = True
-    with pytest.raises(ExtractionError, match="manually approved or protected"):
-        analyze_book(source, settings)
-    assert path.read_bytes() == before and model.equations == 0
+    assert analyze_book(source, settings) == path  # resumed as is, no refusal
+    assert model.equations == 0
+
+
+def test_the_setting_on_proposes_pending_equation_edits(tmp_path: Path, model: type[Model]) -> None:
+    source, settings = _book(tmp_path)
+    settings.reading.process_equations = True
+    manifest = read_manifest(analyze_book(source, settings))
+    pending = [e for e in manifest.edits if e.provider == "llm"]
+    assert [e.original for e in pending] == ["h1 = 8", "h2 = 9"]
+    assert not any(e.accepted for e in pending)
