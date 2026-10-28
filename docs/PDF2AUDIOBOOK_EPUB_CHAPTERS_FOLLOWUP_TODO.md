@@ -49,8 +49,8 @@
 
 ## 6. Identity and docs
 
-- [ ] 6.1 Bump `chapter-detection-v3` to `chapter-detection-v4` (F1 and F3 change plans). Update the pin in `tests/test_fingerprint_bumps_fx9.py` and the upgrade note in `docs/MAINTAINER_GUIDE.md`.
-- [ ] 6.2 Document F1 and F3 in §5 of `docs/PDF2AUDIOBOOK_SPEC.md`, and the F4 wording in the README's "Watching a long run" section if it quotes the line.
+- [x] 6.1 Bump `chapter-detection-v3` to `chapter-detection-v4` (F1 and F3 change plans). Update the pin in `tests/test_fingerprint_bumps_fx9.py` and the upgrade note in `docs/MAINTAINER_GUIDE.md`.
+- [x] 6.2 Document F1 and F3 in §5 of `docs/PDF2AUDIOBOOK_SPEC.md`, and the F4 wording in the README's "Watching a long run" section if it quotes the line.
 
 ## 7. Finish
 

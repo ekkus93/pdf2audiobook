@@ -190,7 +190,7 @@ def _analysis_stage_fingerprints(
             settings.pdf.model_dump(),
             *(() if extractor is None else ("extractor", extractor.name)),
         ),
-        "chapter-boundaries": fingerprint("chapter-detection-v3", chapter_settings),
+        "chapter-boundaries": fingerprint("chapter-detection-v4", chapter_settings),
         "llm-analysis": llm_fingerprint,
     }
 
