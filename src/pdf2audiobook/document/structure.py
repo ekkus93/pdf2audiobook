@@ -557,20 +557,28 @@ def propose_chapters(
         if match is None and wanted is not None:
             # Many books open a chapter with only its numeral ("12") while the outline
             # says "Chapter 12". The outline's page is authoritative: take the first
-            # line there when it is that chapter's numeral.
-            first = next(
-                (
-                    i
-                    for i, block in enumerate(blocks)
-                    if block.page_index == page_index
-                    and block.id not in omitted
-                    and block.text.strip()
-                ),
-                None,
-            )
-            if first is not None and bare_number(blocks[first].text) == wanted:
-                match = first
-                numeral_anchored.add(first)
+            # line there when it is that chapter's numeral. When the outline uses
+            # printed page numbers, the inferred offset locates the physical page.
+            candidate_pages = [page_index]
+            if inferred_offset is not None:
+                candidate_pages.append(page_index + inferred_offset)
+            for candidate_page in candidate_pages:
+                if candidate_page in listing_pages:
+                    continue
+                first = next(
+                    (
+                        i
+                        for i, block in enumerate(blocks)
+                        if block.page_index == candidate_page
+                        and block.id not in omitted
+                        and block.text.strip()
+                    ),
+                    None,
+                )
+                if first is not None and bare_number(blocks[first].text) == wanted:
+                    match = first
+                    numeral_anchored.add(first)
+                    break
         if match is None and not exact and len(nearby) == 1:
             match = nearby[0]
         if match is None and not exact and not nearby and inferred_offset is not None:

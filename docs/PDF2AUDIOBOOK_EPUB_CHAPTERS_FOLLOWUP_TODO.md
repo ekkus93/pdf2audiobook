@@ -1,6 +1,6 @@
 # PDF2Audiobook EPUB Chapter Detection Follow-up TODO
 
-**Status:** Not started
+**Status:** In progress
 **Date:** 2026-10-27
 **Baseline:** master at 792b822
 **Specification:** `docs/PDF2AUDIOBOOK_EPUB_CHAPTERS_FOLLOWUP_SPEC.md` (F1–F5)
@@ -20,8 +20,8 @@
 
 ## 1. Inferred offset for numeral anchors (F1)
 
-- [ ] 1.1 Tests: a synthetic book with two exact-title headings, a constant outline page offset and numeral chapter openings. Every chapter anchors at its numeral on the shifted page, with the alignment warning and confidence 0.85. With no inferred offset, behavior is unchanged.
-- [ ] 1.2 Try the numeral rule on `page_index + inferred_offset` after the raw page, never on a listing page. Record the existing alignment warning when the shifted page is used.
+- [x] 1.1 Tests: a synthetic book with two exact-title headings, a constant outline page offset and numeral chapter openings. Every chapter anchors at its numeral on the shifted page, with the alignment warning and confidence 0.85. With no inferred offset, behavior is unchanged.
+- [x] 1.2 Try the numeral rule on `page_index + inferred_offset` after the raw page, never on a listing page. Record the existing alignment warning when the shifted page is used.
 
 ## 2. No per-entry rescans (F2) — refactor
 
