@@ -145,8 +145,16 @@ def _dispatch(event: str, level: int, fields: dict[str, object]) -> None:
                 "llm_slow_request": "An LLM request was much slower or longer than usual",
             }.get(event, event.replace("_", " "))
             count = fields.get("count")
-            if event == "review_warning" and isinstance(count, int) and count > 1:
-                description += f" ({count} warnings in the manifest)"
+            if (
+                event == "review_warning"
+                and isinstance(count, int)
+                and not isinstance(count, bool)
+                and count >= 1
+            ):
+                # Most manifest warnings are informational; they do not themselves block
+                # conversion, so say what is counted rather than what must happen.
+                noun = "warning" if count == 1 else "warnings"
+                description = f"Analysis recorded {count} {noun}; see warnings in manifest.json"
             write_stderr(f"Warning: {description}.\n")
         return
     if event == "command_failed" and not structured:

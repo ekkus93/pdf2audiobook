@@ -36,11 +36,11 @@
 
 ## 4. Warning summary wording (F4)
 
-- [ ] 4.1 Tests:
+- [x] 4.1 Tests:
   - a counted `review_warning` prints "Analysis recorded N warnings; see warnings in manifest.json", or "1 warning" for a single one;
   - the uncounted empty-chapter path keeps "Book review is required before conversion";
   - `--json` still lists `review_warning` once, with stderr empty.
-- [ ] 4.2 Change the counted description in `logging._dispatch`. Update the wording assertion in `tests/test_warning_noise.py`, with the reason in the commit message.
+- [x] 4.2 Change the counted description in `logging._dispatch`. Update the wording assertion in `tests/test_warning_noise.py`, with the reason in the commit message.
 
 ## 5. EPUB3 nav outlines (F5)
 

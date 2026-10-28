@@ -40,10 +40,10 @@ def test_human_output_prints_one_review_line_with_the_warning_count(
 ) -> None:
     result = CliRunner().invoke(app, _args(epub, tmp_path / "out"))
     assert result.exit_code == 0, result.stderr
-    lines = [line for line in result.stderr.splitlines() if "Book review is required" in line]
+    lines = [line for line in result.stderr.splitlines() if "Analysis recorded" in line]
     assert len(lines) == 1
     manifest = read_manifest(next((tmp_path / "out").glob("*/manifest.json")))
-    assert f"({len(manifest.warnings)} warnings in the manifest)" in lines[0]
+    assert f"Analysis recorded {len(manifest.warnings)} warnings; see warnings in" in lines[0]
     assert len(manifest.warnings) > 1
 
 
@@ -70,3 +70,4 @@ def test_a_book_with_no_warnings_prints_no_review_line(tmp_path: Path) -> None:
     result = CliRunner().invoke(app, _args(source, tmp_path / "out", "--ocr", "never"))
     assert result.exit_code == 0, result.stderr
     assert "Book review is required" not in result.stderr
+    assert "Analysis recorded" not in result.stderr
