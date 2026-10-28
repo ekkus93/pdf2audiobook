@@ -17,7 +17,7 @@ from pdf2audiobook.errors import ConfigError
 from pdf2audiobook.models import BookManifest, CleanupEdit
 from pdf2audiobook.workspace import read_manifest, workspace_lock, write_json, write_manifest
 
-STATUSES = ("pending", "accepted", "all")
+STATUSES = ("pending", "accepted", "rejected", "all")
 
 
 @dataclass(frozen=True)
@@ -29,6 +29,13 @@ class EditRow:
     reason: str
     original: str
     replacement: str
+
+
+def edit_status(edit: CleanupEdit) -> str:
+    """Built-in edits start accepted, so an unaccepted one was rejected during review."""
+    if edit.accepted:
+        return "accepted"
+    return "rejected" if edit.provider == "deterministic" else "pending"
 
 
 def _chapter_of(manifest: BookManifest, block_id: str) -> int | None:
@@ -44,14 +51,14 @@ def _chapter_of(manifest: BookManifest, block_id: str) -> int | None:
 def list_edits(manifest_path: Path, *, status: str = "pending") -> list[EditRow]:
     """Edits in manifest order; reading never locks or recovers."""
     if status not in STATUSES:
-        raise ConfigError("Edit status must be pending, accepted or all")
+        raise ConfigError("Edit status must be pending, accepted, rejected or all")
     manifest = read_manifest(manifest_path)
     rows = [
         EditRow(
             edit.block_id,
             _chapter_of(manifest, edit.block_id),
             edit.provider,
-            "accepted" if edit.accepted else "pending",
+            edit_status(edit),
             edit.reason,
             edit.original,
             edit.replacement,
@@ -65,7 +72,7 @@ def _select(
     manifest: BookManifest, block_ids: Sequence[str] | None, verb: str
 ) -> list[CleanupEdit]:
     """Pending edits to act on; refuse unknown or ambiguous block IDs before any change."""
-    pending = [edit for edit in manifest.edits if not edit.accepted]
+    pending = [edit for edit in manifest.edits if edit_status(edit) == "pending"]
     if block_ids is None:
         return pending
     chosen: list[CleanupEdit] = []
@@ -73,7 +80,11 @@ def _select(
         matching = [edit for edit in manifest.edits if edit.block_id == block_id]
         if not matching:
             raise ConfigError("Unknown edit; run 'pdf2audiobook edits list' to see block IDs")
-        open_ones = [edit for edit in matching if not edit.accepted]
+        open_ones = [edit for edit in matching if edit_status(edit) == "pending"]
+        if not open_ones and any(edit_status(edit) == "rejected" for edit in matching):
+            raise ConfigError(
+                "That edit was rejected during review; it cannot be accepted or rejected here"
+            )
         if len(open_ones) > 1:
             raise ConfigError(
                 "More than one pending edit targets that block; reject the unwanted one first"

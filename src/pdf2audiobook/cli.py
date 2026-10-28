@@ -236,7 +236,7 @@ def show_config(
 @edits_app.command("list", epilog="Example: pdf2audiobook edits list MANIFEST --status all")
 def edits_list(
     manifest_path: Path = typer.Argument(..., help="A generated manifest.json."),
-    status: str = typer.Option("pending", "--status", help="pending, accepted or all."),
+    status: str = typer.Option("pending", "--status", help="pending, accepted, rejected or all."),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     """List edits. Book text appears in human output only; --json carries IDs and statuses."""

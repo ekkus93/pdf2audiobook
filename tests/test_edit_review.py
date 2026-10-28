@@ -17,14 +17,20 @@ from pdf2audiobook.workspace import read_manifest, write_manifest
 SECRET = "SecretBookSentence"
 
 
-def _edit(block_id: str, original: str, replacement: str, provider: str = "llm") -> CleanupEdit:
+def _edit(
+    block_id: str,
+    original: str,
+    replacement: str,
+    provider: str = "llm",
+    accepted: bool = False,
+) -> CleanupEdit:
     return CleanupEdit(
         block_id=block_id,
         original=original,
         replacement=replacement,
         reason=f"model said {SECRET}",
         confidence=0.9,
-        accepted=False,
+        accepted=accepted,
         provider=provider,
     )
 
@@ -235,11 +241,13 @@ def test_decisions_are_audited_without_book_text(tmp_path: Path) -> None:
     assert SECRET not in json.dumps(audit) and "teh" not in json.dumps(audit)
 
 
-def test_a_pending_deterministic_edit_is_handled_the_same_way(tmp_path: Path) -> None:
+def test_an_unaccepted_deterministic_edit_is_a_rejection_that_accept_leaves_alone(
+    tmp_path: Path,
+) -> None:
     path = _workspace(
         tmp_path, [_edit("a1", "Alpha teh first.", "Alpha the first.", provider="deterministic")]
     )
-    listed = json.loads(_run("list", str(path), "--json").stdout)["edits"]
-    assert listed[0]["provider"] == "deterministic"
+    listed = json.loads(_run("list", str(path), "--status", "rejected", "--json").stdout)["edits"]
+    assert listed[0]["provider"] == "deterministic" and listed[0]["status"] == "rejected"
     assert _run("accept", str(path), "--all").exit_code == 0
-    assert "Alpha the first." in _text(tmp_path, 1)
+    assert "Alpha teh first." in _text(tmp_path, 1)

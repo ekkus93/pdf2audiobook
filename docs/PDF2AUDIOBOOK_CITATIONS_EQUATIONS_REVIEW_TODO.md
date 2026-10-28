@@ -25,12 +25,12 @@
 
 ## 2. Rejected built-in edits (Q2)
 
-- [ ] 2.1 Tests with one accepted built-in edit, one rejected built-in edit, one pending LLM cleanup edit and one pending equation edit:
+- [x] 2.1 Tests with one accepted built-in edit, one rejected built-in edit, one pending LLM cleanup edit and one pending equation edit:
   - `list` and `--status rejected` show the right rows;
   - `accept --all` and `reject --all` act only on the two LLM edits;
   - the rejection stays in the manifest, and reanalysis still preserves it;
   - naming its block is exit 2, content-free.
-- [ ] 2.2 Add the `rejected` status and keep `accept` and `reject` to pending edits, in `edit_review.py` and the `--status` option.
+- [x] 2.2 Add the `rejected` status and keep `accept` and `reject` to pending edits, in `edit_review.py` and the `--status` option.
 
 ## 3. One accepted edit per block (Q3)
 
