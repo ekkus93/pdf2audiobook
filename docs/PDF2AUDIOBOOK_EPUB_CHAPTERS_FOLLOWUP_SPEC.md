@@ -1,6 +1,6 @@
 # PDF2Audiobook EPUB Chapter Detection Follow-up Specification
 
-**Status:** Proposed
+**Status:** Implemented
 **Date:** 2026-10-27
 **Companion:** `docs/PDF2AUDIOBOOK_EPUB_CHAPTERS_FOLLOWUP_TODO.md`
 **Baseline:** master at 792b822 (`docs: record epub chapter review fixes ci evidence`)
