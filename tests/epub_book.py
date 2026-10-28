@@ -26,8 +26,14 @@ def _page(title: str, body: str, head: str = "") -> str:
     return f"{XHTML}<head><title>{title}</title>{head}</head><body>{body}</body></html>"
 
 
-def chapter_body(number: int, paragraphs: int = 3) -> str:
-    """Chapter text that never repeats the words 'Chapter' or the chapter number."""
+def chapter_body(number: int, paragraphs: int | None = None) -> str:
+    """Chapter text that never repeats the words 'Chapter' or the chapter number.
+
+    Lengths vary from a fraction of a page to several pages, like a real novel, so the
+    numerals do not advance exactly one per page.
+    """
+    if paragraphs is None:
+        paragraphs = 3 + (number * 5) % 7 * 2
     openers = [
         "WHEN THE LAMPS were lit along the quiet road, the household began to stir.",
         "IT WAS HARDLY surprising that the letters arrived so late in the season.",
@@ -40,7 +46,8 @@ def chapter_body(number: int, paragraphs: int = 3) -> str:
     for index in range(1, paragraphs):
         lines.append(
             f"<p>Paragraph {index} of the invented passage {number} continues with plain "
-            "narrative prose that is long enough to read as ordinary running text.</p>"
+            "narrative prose that is long enough to read as ordinary running text, and then "
+            "carries on for a few more clauses so that several paragraphs fill a page.</p>"
         )
     return "".join(lines)
 

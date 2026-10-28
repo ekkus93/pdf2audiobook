@@ -52,7 +52,7 @@ A chapter label on a contents-listing page is not a chapter start when the chapt
 
 **Acceptance:** In the E1 fixture no chapter starts on a contents page, and the plan has the 30 numbered chapters plus front matter only (no one-line chapters from the contents labels). With the outline removed, the same holds when the body numerals are corroborated by the printed contents (see below). With prose headings and no outline, behavior matches today's.
 
-*Amendment (design):* without an outline nothing detects a bare numeral as a heading, so E2 also adds **numeral headings corroborated by the printed contents**: a bare numeral that is the first line on its page, whose number is named by a contents label ("Chapter N") on a listing page, in strictly increasing order, accepted only when at least three such numerals are found and they cover at least half of the listed chapters. The chapter title is the contents label.
+*Amendment (design):* without an outline nothing detects a bare numeral as a heading, so E2 also adds **numeral headings corroborated by the printed contents**: a bare numeral that is the first line on its page, whose number is named by a contents label ("Chapter N") on a listing page, in strictly increasing order, accepted only when at least three such numerals are found and they cover at least half of the listed chapters. The chapter title is the contents label. Running page numbers must not qualify: when every accepted numeral sits at the same page-minus-number offset (one number per page), the sequence is rejected. Contents lists with fewer than six lines per page are not treated as listings (the existing detector threshold), so very short books are unaffected.
 
 ### E3: LLM heading proposals tolerate the numeral form
 

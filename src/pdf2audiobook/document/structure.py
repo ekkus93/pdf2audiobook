@@ -587,6 +587,46 @@ def propose_chapters(
         ]
     # A chapter label on a contents-style page (most lines end in a page
     # reference) is a listing when the same label opens a chapter later.
+    # Books often open a chapter with only its numeral. When the printed contents names
+    # "Chapter N" and numerals 1..N then open pages in order, those numerals are the
+    # chapter headings and the contents labels are references to them.
+    numeral_titles: dict[int, str] = {}
+    listed_labels: dict[int, int] = {}
+    for i, block in enumerate(blocks):
+        if block.id in omitted or block.page_index not in listing_pages:
+            continue
+        listed_number = label_number(block.text)
+        if listed_number is not None and NUMBERED_LABEL.match(block.text.strip()):
+            listed_labels.setdefault(listed_number, i)
+    first_on_page: dict[int, int] = {}
+    for i, block in enumerate(blocks):
+        if block.id not in omitted and block.text.strip():
+            first_on_page.setdefault(block.page_index, i)
+    corroborated: dict[int, int] = {}
+    last_number = 0
+    for page in sorted(first_on_page):
+        i = first_on_page[page]
+        if page in listing_pages or i in bookmark_titles:
+            continue
+        number = bare_number(blocks[i].text)
+        if number is not None and number > last_number and number in listed_labels:
+            corroborated[i] = number
+            last_number = number
+    # Page numbers advance exactly one per page; chapters rarely do. A constant
+    # page-minus-number offset means these numerals are running page numbers.
+    page_numbers = len(corroborated) >= 3 and (
+        len({blocks[i].page_index - number for i, number in corroborated.items()}) == 1
+    )
+    if not page_numbers and len(corroborated) >= 3 and 2 * len(corroborated) >= len(listed_labels):
+        for i, number in corroborated.items():
+            numeral_titles[i] = blocks[listed_labels[number]].text.strip()
+            if i not in heading_indices:
+                heading_indices.append(i)
+    anchored_numbers = {
+        number
+        for i, title in bookmark_titles.items()
+        if blocks[i].page_index not in listing_pages and (number := label_number(title)) is not None
+    } | set(corroborated.values() if numeral_titles else ())
     label_positions: dict[str, list[int]] = defaultdict(list)
     for i in heading_indices:
         if NUMBERED_LABEL.match(blocks[i].text.strip()):
@@ -596,6 +636,14 @@ def propose_chapters(
         for positions in label_positions.values()
         for i in positions[:-1]
         if blocks[i].page_index in listing_pages and i not in bookmark_titles
+    }
+    # A listed label whose chapter opens elsewhere is a reference to it, not a heading.
+    listed |= {
+        i
+        for i in heading_indices
+        if blocks[i].page_index in listing_pages
+        and i not in bookmark_titles
+        and label_number(blocks[i].text) in anchored_numbers
     }
     heading_indices = [i for i in heading_indices if i not in listed]
     numbered_labels = sum(
@@ -609,6 +657,7 @@ def propose_chapters(
         if (i in typography_ids or blocks[i].id in llm_ids)
         and i not in bookmark_titles
         and i not in contents_titles
+        and i not in numeral_titles
         and not is_heading_line(blocks[i].text)
     }
     llm_only = {i for i in weak if i not in typography_ids}
@@ -670,8 +719,10 @@ def propose_chapters(
             confidence = 0.7
             evidence = ["unassigned material before chapter heading"]
         elif start in heading_indices:
-            name = bookmark_titles.get(start) or contents_titles.get(
-                start, blocks[start].text.strip()
+            name = (
+                bookmark_titles.get(start)
+                or numeral_titles.get(start)
+                or contents_titles.get(start, blocks[start].text.strip())
             )
             confidence = (
                 0.95
@@ -682,6 +733,8 @@ def propose_chapters(
                 )
                 else 0.85
                 if start in bookmark_titles
+                else 0.9
+                if start in numeral_titles
                 else 0.9
                 if start in contents_titles
                 else 0.82
@@ -695,6 +748,8 @@ def propose_chapters(
                 if start in numeral_anchored
                 else ["PDF bookmark/TOC matched unique source title"]
                 if start in bookmark_titles
+                else ["numeral heading corroborated by the printed contents"]
+                if start in numeral_titles
                 else ["printed contents entry matched unique later heading"]
                 if start in contents_titles
                 else ["typographic size contrast with body text"]

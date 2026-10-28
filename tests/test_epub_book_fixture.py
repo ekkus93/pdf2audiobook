@@ -53,3 +53,9 @@ def test_prose_headings_repeat_the_outline_title(tmp_path: Path) -> None:
     document = _open(tmp_path, body_numerals=False)
     page = document.get_toc()[0][2]
     assert document.load_page(page - 1).get_text().strip().splitlines()[0] == "Chapter 1"
+
+
+def test_chapters_vary_in_length_so_numerals_are_not_page_numbers(tmp_path: Path) -> None:
+    outline = _open(tmp_path, chapters=30).get_toc()
+    offsets = {page - number for number, (_depth, _title, page) in enumerate(outline, start=1)}
+    assert len(offsets) > 1

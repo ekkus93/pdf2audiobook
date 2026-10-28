@@ -38,9 +38,9 @@
 
 ## 2. Contents-listing labels (E2)
 
-- [ ] 2.1 Tests: with the outline, no chapter starts on a contents page and the plan is the numbered chapters plus front matter. Without the outline, numerals corroborated by the printed contents become headings. Prose-titled bodies behave as today.
-- [ ] 2.2 Drop listing-page labels whose chapter number is anchored elsewhere, by the outline or by a corroborated numeral heading. Compare by number.
-- [ ] 2.3 Detect numeral headings corroborated by the printed contents (first line on its page, number named by a listing-page label, strictly increasing, at least three and at least half of the listed chapters).
+- [x] 2.1 Tests: with the outline, no chapter starts on a contents page and the plan is the numbered chapters plus front matter. Without the outline, numerals corroborated by the printed contents become headings. Prose-titled bodies behave as today.
+- [x] 2.2 Drop listing-page labels whose chapter number is anchored elsewhere, by the outline or by a corroborated numeral heading. Compare by number.
+- [x] 2.3 Detect numeral headings corroborated by the printed contents (first line on its page, number named by a listing-page label, strictly increasing, at least three and at least half of the listed chapters).
 
 ## 3. LLM heading verification (E3)
 

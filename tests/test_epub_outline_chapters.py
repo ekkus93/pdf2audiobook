@@ -9,16 +9,25 @@ from pdf2audiobook.config import Settings
 from pdf2audiobook.pipeline import analyze_book
 from pdf2audiobook.workspace import read_manifest
 
-CHAPTERS = 30
+CHAPTERS = 12
+
+
+_CACHE: dict[tuple, object] = {}
 
 
 def _analyze(tmp_path: Path, **options):
-    source = write_novel_epub(tmp_path / "novel.epub", chapters=CHAPTERS, **options)
-    settings = Settings()
-    settings.general.output_dir = str(tmp_path / "out")
-    settings.llm.enabled = False
-    settings.chapters.allow_single_chapter = True
-    return read_manifest(analyze_book(source, settings))
+    """Analyze once per distinct option set: building and analyzing a book is slow."""
+    key = tuple(sorted(options.items()))
+    if key not in _CACHE:
+        folder = tmp_path.parent / f"shared-{abs(hash(key))}"
+        folder.mkdir(exist_ok=True)
+        source = write_novel_epub(folder / "novel.epub", chapters=CHAPTERS, **options)
+        settings = Settings()
+        settings.general.output_dir = str(folder / "out")
+        settings.llm.enabled = False
+        settings.chapters.allow_single_chapter = True
+        _CACHE[key] = read_manifest(analyze_book(source, settings))
+    return _CACHE[key]
 
 
 def _anchored(manifest):
