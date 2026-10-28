@@ -142,6 +142,9 @@ def _dispatch(event: str, level: int, fields: dict[str, object]) -> None:
                     "An audio cleanup candidate could not be inspected and was left untouched"
                 ),
                 "degraded_output": "Some chapters produced degraded output",
+                "edit_audit_not_written": (
+                    "Could not update reports/edit_decisions.json; the decision itself was saved"
+                ),
                 "llm_slow_request": "An LLM request was much slower or longer than usual",
             }.get(event, event.replace("_", " "))
             count = fields.get("count")

@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from test_edit_review import SECRET, _edit, _run, _workspace
 
 from pdf2audiobook.workspace import read_manifest, write_manifest
@@ -148,3 +149,56 @@ def test_a_single_pending_edit_on_a_block_still_accepts(tmp_path: Path) -> None:
     manifest.edits = manifest.edits[:1]
     write_manifest(path, manifest)
     assert _run("accept", str(path), "--all").exit_code == 0
+
+
+def _failing_audit(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(path: object, data: object) -> None:
+        raise OSError(f"disk exploded near {SECRET} at {path}")
+
+    monkeypatch.setattr("pdf2audiobook.edit_review.write_json", refuse)
+
+
+@pytest.mark.parametrize("verb", ["accept", "reject"])
+def test_a_failed_audit_write_is_reported_but_the_decision_is_saved(
+    verb: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _workspace(tmp_path)
+    _failing_audit(monkeypatch)
+    result = _run(verb, str(path), "--all")
+    assert result.exit_code == 0, result.stderr
+    assert "Could not update reports/edit_decisions.json; the decision itself was saved" in (
+        result.stderr
+    )
+    for leak in (SECRET, "disk exploded", str(tmp_path)):
+        assert leak not in result.stdout + result.stderr
+    edits = read_manifest(path).edits
+    assert (len(edits) == 0) if verb == "reject" else all(e.accepted for e in edits)
+
+
+@pytest.mark.parametrize("verb", ["accept", "reject"])
+def test_a_failed_audit_write_adds_a_json_warning_code(
+    verb: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = _workspace(tmp_path)
+    _failing_audit(monkeypatch)
+    result = _run(verb, str(path), "--all", "--json")
+    assert result.exit_code == 0, result.stderr
+    assert json.loads(result.stdout)["warnings"] == ["edit_audit_not_written"]
+    assert SECRET not in result.stdout + result.stderr
+
+
+def test_a_corrupt_audit_file_is_replaced(tmp_path: Path) -> None:
+    path = _workspace(tmp_path)
+    audit = tmp_path / "reports" / "edit_decisions.json"
+    audit.parent.mkdir(parents=True, exist_ok=True)
+    audit.write_text("{not json", encoding="utf-8")
+    result = _run("accept", str(path), "--all", "--json")
+    assert result.exit_code == 0, result.stderr
+    assert json.loads(result.stdout)["warnings"] == []
+    decisions = json.loads(audit.read_text(encoding="utf-8"))["decisions"]
+    assert [d["block_id"] for d in decisions] == ["a1", "b1"]
+
+
+def test_a_successful_audit_adds_no_warning(tmp_path: Path) -> None:
+    result = _run("accept", str(_workspace(tmp_path)), "--all", "--json")
+    assert json.loads(result.stdout)["warnings"] == []

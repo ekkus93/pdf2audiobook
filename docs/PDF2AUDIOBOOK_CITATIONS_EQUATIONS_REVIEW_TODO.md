@@ -42,11 +42,11 @@
 
 ## 4. Reported audit failures (Q4)
 
-- [ ] 4.1 Tests:
+- [x] 4.1 Tests:
   - with the audit write failing, accept and reject still exit 0 and save their decision;
   - the human warning and the JSON warning code appear, with no path or exception text;
   - a corrupt audit file is replaced.
-- [ ] 4.2 Catch only `OSError` and the bounded-JSON errors, return the failure to the CLI, emit the warning, and move the import to module level.
+- [x] 4.2 Catch only `OSError` and the bounded-JSON errors, return the failure to the CLI, emit the warning, and move the import to module level.
 
 ## 5. Math intervals (Q5)
 

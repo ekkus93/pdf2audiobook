@@ -7,6 +7,7 @@ chapter update: a hand-edited chapter file is a conflict and nothing is publishe
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,8 @@ from pathlib import Path
 from pdf2audiobook.chapter_artifacts import resolve_footnote_policy
 from pdf2audiobook.document.structure import render_chapter_texts
 from pdf2audiobook.errors import ConfigError
+from pdf2audiobook.jsonio import load_bounded_json
+from pdf2audiobook.logging import log_event
 from pdf2audiobook.models import BookManifest, CleanupEdit
 from pdf2audiobook.workspace import read_manifest, workspace_lock, write_json, write_manifest
 
@@ -123,23 +126,24 @@ def _select(
 
 
 def _audit(folder: Path, action: str, edits: Sequence[CleanupEdit]) -> None:
-    """Record who-did-what without book text; the audit never blocks the change."""
+    """Record who-did-what without book text.
+
+    The decision is already published, so a write failure only warns (content-free).
+    An unreadable or corrupt earlier audit is a cache miss and is replaced.
+    """
     if not edits:
         return
     path = folder / "reports" / "edit_decisions.json"
+    previous = load_bounded_json(path, max_bytes=4 * 1024 * 1024, max_depth=6)
+    decisions = previous.get("decisions", []) if isinstance(previous, dict) else []
+    decisions = [item for item in decisions if isinstance(item, dict)]
+    decisions += [
+        {"block_id": edit.block_id, "action": action, "provider": edit.provider} for edit in edits
+    ]
     try:
-        from pdf2audiobook.jsonio import load_bounded_json
-
-        previous = load_bounded_json(path, max_bytes=4 * 1024 * 1024, max_depth=6)
-        decisions = previous.get("decisions", []) if isinstance(previous, dict) else []
-        decisions = [item for item in decisions if isinstance(item, dict)]
-        decisions += [
-            {"block_id": edit.block_id, "action": action, "provider": edit.provider}
-            for edit in edits
-        ]
         write_json(path, {"schema_version": 1, "decisions": decisions})
-    except Exception:
-        return
+    except OSError:
+        log_event("edit_audit_not_written", level=logging.WARNING)
 
 
 def accept_edits(manifest_path: Path, block_ids: Sequence[str] | None) -> list[str]:
