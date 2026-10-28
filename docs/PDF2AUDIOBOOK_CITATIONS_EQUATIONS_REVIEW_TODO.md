@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Review Fixes TODO
 
-**Status:** Not started
+**Status:** In progress; 9.2, 9.3 and 10.2 wait on a running Ollama and the listening check
 **Date:** 2026-10-28
 **Baseline:** master at 686bd06
 **Specification:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_SPEC.md` (Q1–Q9)
@@ -85,7 +85,7 @@
 
 ## 10. Finish
 
-- [ ] 10.1 Run `/verify`, plus mypy on Python 3.12 and 3.13, and the Kitten smoke test with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`. Record the pass and skip counts.
+- [x] 10.1 Run `/verify`, plus mypy on Python 3.12 and 3.13, and the Kitten smoke test with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`. Record the pass and skip counts.
 - [ ] 10.2 Review the final diff against Q1–Q9, and record any unresolved limitations below.
 
 ## Unresolved limitations
@@ -107,3 +107,6 @@
 | 2026-10-28 | 91616ff672f36e7e6361e90cf728ddddfd7d5877 | 8.1: corrected the `Reading` docstring; documented that accepting an LLM edit makes the workspace approved content, the one-accepted-edit-per-block rule, the `rejected` status and the audit warning. | Docs and a docstring only; 1994 passed locally. Run [702](https://github.com/ekkus93/pdf2audiobook/actions/runs/40658170803) passed. | None |
 | 2026-10-28 | 9fb5bde8ca2655b498cd42f71568ad371305b67d | 8.2: amended the C1-C5 spec (status, opt-in wording, C1 acceptance, C2 intervals, C4 statuses). | Docs only. Run [703](https://github.com/ekkus93/pdf2audiobook/actions/runs/40658211507) passed. | None |
 | 2026-10-28 | f37d9ac68e887b038254019236c21b416e34c079 | 8.3: dated amendment notes on tasks 1.1, 2.6, 3.1 and 4.5 of the C1-C5 TODO (4.5 stays ticked, superseded by 686bd06) and a corrected status line. | Docs only. Run [704](https://github.com/ekkus93/pdf2audiobook/actions/runs/40658245628) passed. | None |
+| 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 9.1: ledger rows for 686bd06 and the first 6.2 counts, in both ledgers. | Docs only. | None |
+| 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 10.1 final gate: `uv lock --check`, Ruff, format, mypy on 3.11, 3.12 and 3.13, `pytest -q -ra` with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`, CLI smoke. | 1995 passed, nothing skipped (the Kitten smoke test ran). mypy reports only the two known `kittenml` errors locally because the Kitten extra is installed; CI does not install it and passed. | None |
+| 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 9.2 attempted: Ollama was not running (empty reply from `/api/tags`), and the changed equation prompt misses the LLM cache, so the repeat acceptance cannot run. | No result. | Needs Ollama running |
