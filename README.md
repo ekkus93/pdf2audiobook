@@ -328,8 +328,9 @@ Each also has a flag pair on `analyze` and `convert` (`--process-citations/--no-
 **Citations** are skipped in the spoken text only. The chapter file still contains them, so your
 edits and the source transcript are unchanged. A citation is a bracketed list of numbers or an
 ascending range after a space or an opening bracket or quote; `a[1]`, `x[i]`, `[see 13]` and
-author-year forms such as `(Vaswani et al., 2017)` are left alone. Changing the setting
-regenerates only audio.
+author-year forms such as `(Vaswani et al., 2017)` are left alone, and so is a list right after a
+relation symbol (`x ∈ [1, 5]`, `p = [2, 3]`), which is an interval. "As shown in [1, 5]" is still
+read as a citation. Changing the setting regenerates only audio.
 
 **Equations** need the LLM. It proposes a spoken form for each line of mathematics (found by
 symbols such as `= + − √ ∑ ≤ ∈` and Greek letters, at most 500 per book). Every proposal is checked

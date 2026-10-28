@@ -871,7 +871,7 @@ def chapter_audio_fingerprint(
         "mp3-v7",
         *adapters,
         # Present only when on, so every existing identity is unchanged.
-        *(("citations-skipped",) if settings.reading.process_citations else ()),
+        *(("citations-skipped-v2",) if settings.reading.process_citations else ()),
     )
 
 

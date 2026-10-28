@@ -90,3 +90,29 @@ def test_masking_is_idempotent_and_leaves_citation_free_text_alone() -> None:
     assert mask_citations(text) == text
     once = mask_citations("A [1] B [2].")
     assert mask_citations(once) == once
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "x ∈ [1, 5].",
+        "p = [2, 3]",
+        "a ≤ [4]",
+        "y ≥ [7]",
+        "z < [2]",
+        "n > [3]",
+        "q ≈ [2]",
+        "m × [3]",
+        "r =\n[2, 3]",
+    ],
+)
+def test_a_group_after_a_math_relation_is_an_interval_not_a_citation(text: str) -> None:
+    assert citation_ranges(text) == []
+    assert mask_citations(text) == text
+
+
+@pytest.mark.parametrize(
+    "text", ["as shown in [1, 5].", "results [13]", "see also [4; 7]", "so x [2]"]
+)
+def test_prose_context_still_makes_a_citation(text: str) -> None:
+    assert len(citation_ranges(text)) == 1

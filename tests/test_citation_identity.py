@@ -64,6 +64,20 @@ def test_turning_it_on_changes_the_fingerprint_and_is_stable() -> None:
     assert _fingerprint(on) == _fingerprint(on)
 
 
+# The on-state values before the interval rule changed what is spoken (token
+# "citations-skipped"), with the model identity pinned as above.
+GOLDEN_ON_V1 = "af80484cf88374364d8c04fd51b4ac879ba709d9ed37943400ca4f5158a65543"
+GOLDEN_ON_V1_WITH_ADAPTER = "457b33304f3a1c16a1c59365f8ee6640e162682e2f1086d428c83ff9f2806861"
+
+
+@pytest.mark.usefixtures("pinned_model")
+def test_the_on_state_identity_changed_when_the_interval_rule_did() -> None:
+    on = Settings()
+    on.reading.process_citations = True
+    assert _fingerprint(on) != GOLDEN_ON_V1
+    assert _fingerprint(on, ("tts=x.Y",)) != GOLDEN_ON_V1_WITH_ADAPTER
+
+
 @pytest.mark.usefixtures("pinned_model")
 def test_the_equation_setting_does_not_touch_audio_identity() -> None:
     settings = Settings()

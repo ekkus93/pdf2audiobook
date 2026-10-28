@@ -299,6 +299,12 @@ regenerate on the next `convert`. Chunk WAV keys contain the spoken chunk text a
 bumped: unchanged chunks stay cached. No manifest schema change; `budget` ledger rows
 without a recorded bound block token and USD budgets until `budget resolve` settles them.
 
+Upgrade note (citation intervals): with `reading.process_citations` on, the chapter audio
+fingerprint part is `citations-skipped-v2`, because a bracketed list right after `∈ = ≤ ≥ < > ≈ ×`
+is now read as an interval instead of being skipped. Audio made with citation skipping regenerates
+once on the next `convert`; chapter text, analysis and audio made with the setting off are
+unchanged. `tests/test_citation_identity.py` pins the old on-state values to prove the change.
+
 Upgrade note (EPUB chapters): analysis uses `analysis-v23` and the chapter-boundaries stage
 carries `chapter-detection-v4` (v4 anchors numeral chapters through an inferred page offset and lets corroborated numerals suppress font-size-only headings; v3 stripped contents leaders and page references from corroborated titles, rejects running page numbers even when an unnumbered page shifts their offset, and keys parts and chapters separately). Outline entries now anchor to the numeral that opens a chapter
 on their own page ("Chapter 12" pairs with a line reading "12"), contents-page labels no

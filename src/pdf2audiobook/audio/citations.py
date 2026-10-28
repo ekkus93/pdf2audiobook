@@ -17,8 +17,20 @@ _CONTEXT = "(?<![^\\s(\\[{\"'“‘])"
 CITATION = re.compile(_CONTEXT + rf"\[{_SPACE}({_ITEM}(?:{_SPACE}[,;]{_SPACE}{_ITEM})*){_SPACE}\]")
 _RANGE = re.compile(rf"({_NUMBER}){_SPACE}[-–]{_SPACE}({_NUMBER})")
 _BLANK_LINE = re.compile(r"\n[ \t]*\n|\r[ \t]*\r|\r\n[ \t]*\r\n")
+# After one of these a bracketed list is an interval or value ("x ∈ [1, 5]"), not a citation.
+# "in [1, 5]" stays a citation: "as shown in [1, 5]" is the usual form.
+_RELATIONS = frozenset("∈=≤≥<>≈×")
 # Punctuation that follows a citation and belongs to the word before it.
 _CLOSERS = frozenset(".,;:!?)}\"'’”")
+
+
+def _previous_character(text: str, index: int) -> str:
+    """The nearest non-space character before ``index``, or an empty string."""
+    while index > 0:
+        index -= 1
+        if not text[index].isspace():
+            return text[index]
+    return ""
 
 
 def citation_ranges(text: str) -> list[tuple[int, int]]:
@@ -29,6 +41,8 @@ def citation_ranges(text: str) -> list[tuple[int, int]]:
             continue  # a citation never spans a paragraph break
         if any(int(low) >= int(high) for low, high in _RANGE.findall(match.group(1))):
             continue  # ranges are ascending pairs
+        if _previous_character(text, match.start()) in _RELATIONS:
+            continue  # an interval after a relation symbol
         found.append(match.span())
     return found
 

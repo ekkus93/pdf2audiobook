@@ -50,12 +50,12 @@
 
 ## 5. Math intervals (Q5)
 
-- [ ] 5.1 Tests:
+- [x] 5.1 Tests:
   - `x ∈ [1, 5]`, `p = [2, 3]` and `a ≤ [4]` are kept;
   - `shown in [1, 5].` and `results [13]` are skipped;
   - the off-state goldens are unchanged;
   - the on-state fingerprint differs from a baseline golden, with the model identity pinned.
-- [ ] 5.2 Add the preceding-symbol rule to `audio/citations.py`, and bump `citations-skipped` to `citations-skipped-v2`. Add the upgrade note to `docs/MAINTAINER_GUIDE.md`.
+- [x] 5.2 Add the preceding-symbol rule to `audio/citations.py`, and bump `citations-skipped` to `citations-skipped-v2`. Add the upgrade note to `docs/MAINTAINER_GUIDE.md`.
 
 ## 6. Bibliography numbers and citation-only chapters (Q6)
 
