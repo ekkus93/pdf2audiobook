@@ -71,7 +71,7 @@
 
 ## 8. Accuracy of code comments and documents (Q8)
 
-- [ ] 8.1 Update the `Reading` docstring. Document in the README and the maintainer guide that accepting an equation reading makes the workspace approved content.
+- [x] 8.1 Update the `Reading` docstring. Document in the README and the maintainer guide that accepting an equation reading makes the workspace approved content.
 - [ ] 8.2 Amend the C1–C5 spec: the status, the "opt-in" opening, and C1's "Defaults are false".
 - [ ] 8.3 Amend the C1–C5 TODO with dated notes on tasks 1.1, 2.6, 3.1 and 4.5 (4.5 stays ticked, superseded by 686bd06), and correct its status line.
 

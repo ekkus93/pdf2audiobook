@@ -195,7 +195,7 @@ class Audio(ConfigModel):
 
 
 class Reading(ConfigModel):
-    """Opt-in processing of material that sounds wrong when read literally."""
+    """Processing of material that sounds wrong when read literally; on unless switched off."""
 
     process_citations: bool = True
     process_equations: bool = True

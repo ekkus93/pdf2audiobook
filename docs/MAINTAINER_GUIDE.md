@@ -551,6 +551,14 @@ usual content-free conflict. `reject` rewrites the manifest without the proposal
 block IDs and actions (no text) to `reports/edit_decisions.json`. A rejected proposal can return
 on re-analysis, because the cached model answer is unchanged.
 
+Status is derived by `edit_status`: accepted, rejected (an unaccepted `deterministic` edit, which
+starts accepted, so it records a human rejection that reanalysis preserves) or pending. `accept`
+and `reject` touch only pending edits, and `accept` refuses a block that already has an accepted
+edit because accepted edits apply as a block-to-replacement map. An accepted non-deterministic
+edit makes the workspace approved content in `pipeline` (`other_approved_content`), so a later
+re-analysis is refused with the existing message. A failed audit write is a `WARNING` event,
+`edit_audit_not_written`; the decision itself is already published.
+
 ## Request timeout and progress display
 
 `llm.<provider>.timeout_seconds` (Ollama 300, others 60) becomes the `httpx` read/write/pool

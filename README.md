@@ -350,8 +350,12 @@ pdf2audiobook edits reject ./audiobooks/BOOK/manifest.json p00003-l00020
 
 Accepting regenerates that chapter's text (a chapter file you edited by hand is a conflict;
 see `regenerate-chapter`) and makes only its audio stale. The checks cannot judge whether an
-operator was read correctly, which is why nothing is applied unreviewed. `edits` also resolves
-pending cleanup suggestions. Turn either off with `--no-process-citations` or
+operator was read correctly, which is why nothing is applied unreviewed. Accepting an LLM edit
+counts as approving the workspace's content, so that book then refuses re-analysis without a new
+`--output`, just as a manually approved chapter does. A block takes one accepted edit: accepting
+a second one on the same block is refused rather than replacing the first. `edits list --status
+rejected` shows cleanups you rejected during review; `edits` leaves those alone. `edits` also
+resolves pending cleanup suggestions. Turn either off with `--no-process-citations` or
 `--no-process-equations` (or `false` in `[reading]`). With the LLM off (`--no-llm`) equation
 processing is simply inactive; asking for it explicitly alongside `--no-llm` is an error.
 
