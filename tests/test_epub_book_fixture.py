@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pymupdf
+import pytest
 from epub_book import write_novel_epub
 
 
@@ -59,3 +60,19 @@ def test_chapters_vary_in_length_so_numerals_are_not_page_numbers(tmp_path: Path
     outline = _open(tmp_path, chapters=30).get_toc()
     offsets = {page - number for number, (_depth, _title, page) in enumerate(outline, start=1)}
     assert len(offsets) > 1
+
+
+def test_nav_and_ncx_outlines_expose_the_same_titles_and_pages(tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    ncx = pymupdf.open(write_novel_epub(tmp_path / "a" / "n.epub", chapters=8, outline="ncx"))
+    nav = pymupdf.open(write_novel_epub(tmp_path / "b" / "n.epub", chapters=8, outline="nav"))
+    assert nav.get_toc() == ncx.get_toc() != []
+    assert [entry[1] for entry in nav.get_toc()] == [f"Chapter {n}" for n in range(1, 9)]
+
+
+def test_outline_accepts_booleans_and_rejects_unknown_kinds(tmp_path: Path) -> None:
+    assert _open(tmp_path, outline=True).get_toc() != []
+    assert _open(tmp_path, outline=False).get_toc() == []
+    with pytest.raises(ValueError, match="outline must be"):
+        write_novel_epub(tmp_path / "bad.epub", outline="toc")

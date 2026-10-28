@@ -56,7 +56,7 @@ def write_novel_epub(
     path: Path,
     *,
     chapters: int = 6,
-    outline: bool = True,
+    outline: bool | str | None = True,
     cover: bool = True,
     contents: bool = True,
     body_numerals: bool = True,
@@ -64,9 +64,13 @@ def write_novel_epub(
 ) -> Path:
     """Write the fixture; returns ``path``.
 
-    ``body_numerals=False`` makes each chapter open with a heading that repeats the
-    outline title, as many ordinary EPUBs do.
+    ``outline`` is ``"ncx"`` (EPUB 2, also ``True``), ``"nav"`` (an EPUB 3 navigation
+    document) or ``None`` (also ``False``). ``body_numerals=False`` makes each chapter
+    open with a heading that repeats the outline title, as many ordinary EPUBs do.
     """
+    outline_kind = {True: "ncx", False: None}.get(outline, outline)  # type: ignore[call-overload]
+    if outline_kind not in {"ncx", "nav", None}:
+        raise ValueError("outline must be 'ncx', 'nav', True, False or None")
     items: list[tuple[str, str, str]] = []  # (id, href, xhtml)
     if cover:
         items.append(
@@ -126,12 +130,17 @@ def write_novel_epub(
     )
     if cover:
         manifest += '<item id="img" href="cover.png" media-type="image/png"/>'
-    if outline:
+    if outline_kind == "ncx":
         manifest += '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+    if outline_kind == "nav":
+        manifest += (
+            '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>'
+        )
     spine = "".join(f'<itemref idref="{item_id}"/>' for item_id, _, _ in items)
-    spine_attr = ' toc="ncx"' if outline else ""
+    spine_attr = ' toc="ncx"' if outline_kind == "ncx" else ""
+    version = "3.0" if outline_kind == "nav" else "2.0"
     package = (
-        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="2.0" '
+        f'<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="{version}" '
         'unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
         '<dc:identifier id="id">novel-fixture</dc:identifier><dc:title>Novel Fixture</dc:title>'
         "<dc:language>en</dc:language></metadata>"
@@ -146,7 +155,17 @@ def write_novel_epub(
             'media-type="application/oebps-package+xml"/></rootfiles></container>',
         )
         archive.writestr("OEBPS/content.opf", package)
-        if outline:
+        if outline_kind == "nav":
+            entries = "".join(
+                f'<li><a href="ch{number}.xhtml">Chapter {number}</a></li>'
+                for number in range(1, chapters + 1)
+            )
+            archive.writestr(
+                "OEBPS/nav.xhtml",
+                f'{XHTML[:-1]} xmlns:epub="http://www.idpf.org/2007/ops"><head><title>Nav</title>'
+                f'</head><body><nav epub:type="toc"><ol>{entries}</ol></nav></body></html>',
+            )
+        if outline_kind == "ncx":
             points = "".join(
                 f'<navPoint id="n{number}" playOrder="{number}"><navLabel><text>Chapter {number}'
                 f'</text></navLabel><content src="ch{number}.xhtml"/></navPoint>'

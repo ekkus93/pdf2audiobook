@@ -10,6 +10,7 @@ from pdf2audiobook.pipeline import analyze_book
 from pdf2audiobook.workspace import read_manifest
 
 CHAPTERS = 12
+OUTLINES = ["ncx", "nav"]
 
 
 _CACHE: dict[tuple, object] = {}
@@ -35,8 +36,11 @@ def _anchored(manifest):
     return [c for c in manifest.chapters if "numbered chapter heading" in c.evidence[0]]
 
 
-def test_every_outline_entry_opens_at_its_numeral_not_at_the_contents(tmp_path: Path) -> None:
-    manifest = _analyze(tmp_path)
+@pytest.mark.parametrize("outline", OUTLINES)
+def test_every_outline_entry_opens_at_its_numeral_not_at_the_contents(
+    tmp_path: Path, outline: str
+) -> None:
+    manifest = _analyze(tmp_path, outline=outline)
     chapters = _anchored(manifest)
     assert [c.title for c in chapters] == [f"Chapter {n}" for n in range(1, CHAPTERS + 1)]
     for number, chapter in enumerate(chapters, start=1):
@@ -44,8 +48,11 @@ def test_every_outline_entry_opens_at_its_numeral_not_at_the_contents(tmp_path: 
         assert chapter.end_block - chapter.start_block >= 3
 
 
-def test_anchored_chapters_are_high_confidence_and_cite_the_outline(tmp_path: Path) -> None:
-    manifest = _analyze(tmp_path)
+@pytest.mark.parametrize("outline", OUTLINES)
+def test_anchored_chapters_are_high_confidence_and_cite_the_outline(
+    tmp_path: Path, outline: str
+) -> None:
+    manifest = _analyze(tmp_path, outline=outline)
     for chapter in _anchored(manifest):
         assert chapter.confidence == 0.95
         assert chapter.evidence[0].startswith("PDF bookmark")
@@ -57,13 +64,14 @@ def test_the_result_does_not_depend_on_having_a_cover(tmp_path: Path, cover: boo
     assert len(_anchored(_analyze(tmp_path, cover=cover))) == CHAPTERS
 
 
+@pytest.mark.parametrize("outline", OUTLINES)
 def test_a_chapter_is_not_anchored_to_a_numeral_that_names_another_chapter(
-    tmp_path: Path,
+    tmp_path: Path, outline: str
 ) -> None:
     from pdf2audiobook.document.structure import bare_number, label_number
 
     assert label_number("Chapter 2") == 2 and bare_number("3") == 3
-    manifest = _analyze(tmp_path)
+    manifest = _analyze(tmp_path, outline=outline)
     for chapter in _anchored(manifest):
         assert bare_number(manifest.blocks[chapter.start_block].text) == label_number(chapter.title)
 

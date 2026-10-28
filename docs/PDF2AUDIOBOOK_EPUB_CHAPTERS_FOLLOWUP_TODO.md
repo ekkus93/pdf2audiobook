@@ -44,8 +44,8 @@
 
 ## 5. EPUB3 nav outlines (F5)
 
-- [ ] 5.1 Add `outline="ncx" | "nav" | None` to `tests/epub_book.py`, keeping the boolean values working. Confirm with PyMuPDF that the nav outline's titles and pages match.
-- [ ] 5.2 Parametrize the E1 anchoring and E2 contents-label tests over `ncx` and `nav`. If PyMuPDF cannot read a nav-only outline, record the limitation in the ledger and in the README's EPUB note instead.
+- [x] 5.1 Add `outline="ncx" | "nav" | None` to `tests/epub_book.py`, keeping the boolean values working. Confirm with PyMuPDF that the nav outline's titles and pages match.
+- [x] 5.2 Parametrize the E1 anchoring and E2 contents-label tests over `ncx` and `nav`. If PyMuPDF cannot read a nav-only outline, record the limitation in the ledger and in the README's EPUB note instead.
 
 ## 6. Identity and docs
 

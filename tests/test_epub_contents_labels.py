@@ -53,8 +53,9 @@ def _assert_clean_plan(manifest) -> None:
     assert sizes[-1] <= 3 * sizes[len(sizes) // 2]  # no chapter swallows the book
 
 
-def test_with_an_outline_no_contents_label_becomes_a_chapter(tmp_path: Path) -> None:
-    _assert_clean_plan(_analyze(tmp_path))
+@pytest.mark.parametrize("outline", ["ncx", "nav"])
+def test_with_an_outline_no_contents_label_becomes_a_chapter(tmp_path: Path, outline: str) -> None:
+    _assert_clean_plan(_analyze(tmp_path, outline=outline))
 
 
 def test_without_an_outline_numerals_named_by_the_contents_are_headings(tmp_path: Path) -> None:
