@@ -60,6 +60,7 @@ def write_novel_epub(
     cover: bool = True,
     contents: bool = True,
     body_numerals: bool = True,
+    art_page: bool = False,
 ) -> Path:
     """Write the fixture; returns ``path``.
 
@@ -76,6 +77,19 @@ def write_novel_epub(
                     "Cover",
                     '<div><img src="cover.png" alt="" width="120" height="180"/></div>',
                     "<style>body{background-color:#ffffff;margin:0}</style>",
+                ),
+            )
+        )
+    if art_page:
+        # A page with a drawn frame and no text: real vector art, not a page background.
+        items.append(
+            (
+                "art",
+                "art.xhtml",
+                _page(
+                    "Art",
+                    '<div style="width:200px;height:200px;border:3px solid #000000;'
+                    'background-color:#cc0000"></div>',
                 ),
             )
         )

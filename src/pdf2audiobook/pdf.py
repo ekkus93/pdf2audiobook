@@ -61,6 +61,30 @@ class _PageVisuals:
 
 
 _PAGE_VISUAL_ITEM_CAP = 5000
+_BACKGROUND_COVERAGE = 0.95
+
+
+def _background_only(page_rect: Any, drawings: list[dict]) -> bool:
+    """True when every drawing is a fill-only rectangle covering (nearly) the whole page.
+
+    That is how an EPUB renderer paints the page background behind a cover image; it
+    is not artwork whose text could be missing.
+    """
+    try:
+        area = float(page_rect.width) * float(page_rect.height)
+        return (
+            bool(drawings)
+            and area > 0
+            and all(
+                drawing.get("fill") is not None
+                and drawing.get("color") is None
+                and float(drawing["rect"].width) * float(drawing["rect"].height)
+                >= _BACKGROUND_COVERAGE * area
+                for drawing in drawings
+            )
+        )
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return False
 
 
 def _page_visuals(page: pymupdf.Page) -> _PageVisuals:
@@ -1212,6 +1236,14 @@ def extract_pdf(
                     reason = "drawing information unavailable; verify coverage"
                     if "damaged_source" not in review_reasons:
                         review_reasons.append("damaged_source")
+                elif (
+                    reflowable
+                    and visuals.image_count
+                    and len(visuals.drawings) == visuals.drawing_count
+                    and _background_only(page.rect, visuals.drawings)
+                ):
+                    # An EPUB cover or plate: an image on a page-sized background fill.
+                    reason = "image-only page; the image is not narrated"
                 elif visuals.drawing_count:
                     reason = "drawings present but not text-like; verify coverage"
                     if "damaged_source" not in review_reasons:

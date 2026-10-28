@@ -84,7 +84,7 @@ For reflowable documents, a page with no text does not set `damaged_source` when
 - every drawing on it is a fill-only rectangle covering at least 95% of the page (a background), and
 - the page has at least one image block (`page.get_text("dict")`, block type 1).
 
-Such a page is reported with the existing embedded-image warning instead ("embedded image detected; OCR does not describe figures or diagrams; review manually"). Every other no-text case keeps today's behavior, including any page whose drawings are not purely background and every PDF page.
+Such a page is reported as "no readable text (image-only page; the image is not narrated)", and the existing embedded-image warning still applies to it. The image is detected with `page.get_image_info()` (the same source as the other page heuristics), because `get_images()` returns nothing for EPUB covers. The rule applies only when `OCR` is not disabled; with `ocr = never` no page is flagged for drawings, as before. Every other no-text case keeps today's behavior, including any page whose drawings are not purely background and every PDF page.
 
 **Acceptance:**
 - The E1 fixture with a cover page (an image plus a full-page white background rectangle) has no `damaged_source`, and its manifest warns about the image.

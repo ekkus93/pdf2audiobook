@@ -63,11 +63,11 @@
 
 ## 5. EPUB cover and background pages (E5)
 
-- [ ] 5.1 Tests:
+- [x] 5.1 Tests:
   - the fixture cover page sets no `damaged_source` and records the embedded-image warning;
   - an EPUB page with a non-background drawing and no text still sets `damaged_source`;
   - PDF damaged-source tests are unchanged.
-- [ ] 5.2 Implement the background-rectangle and image-block rule for reflowable documents only.
+- [x] 5.2 Implement the background-rectangle and image-block rule for reflowable documents only.
 
 ## 6. Identity and upgrade (E6)
 
