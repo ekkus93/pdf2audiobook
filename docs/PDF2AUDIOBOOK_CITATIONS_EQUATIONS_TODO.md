@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Reading TODO
 
-**Status:** In progress; 6.2 and 6.3 wait on a running Ollama
+**Status:** In progress; 6.2 and 6.3 are finished by `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_TODO.md` (sections 9 and 10)
 **Date:** 2026-10-27
 **Baseline:** master at b0b4d7c
 **Specification:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_SPEC.md` (C1–C5)
@@ -21,6 +21,7 @@
 ## 1. The two settings (C1)
 
 - [x] 1.1 Tests: defaults are false; the TOML key, environment variable and each CLI flag form reach `Settings`; precedence is CLI over environment over TOML; the two settings are independent; `process_equations` with the LLM disabled is a content-free exit 2; `config show --json` and `doctor --json` report both. Extend the environment-variable coverage test for both variables.
+  - *Amendment (2026-10-28):* "defaults are false" was true when written. Both settings now default to true (commit 686bd06); the equation setting is quietly inactive without an LLM unless requested explicitly.
 - [x] 1.2 Add a `Reading` config model and `Settings.reading`, the two environment variables, and the validation that equation processing needs the LLM.
 - [x] 1.3 Add `--process-citations/--no-process-citations` and `--process-equations/--no-process-equations` to `analyze` and `convert`, as unset-by-default boolean pairs. Show both in `config show` and `doctor --json`.
 
@@ -32,10 +33,12 @@
 - [x] 2.4 Drop detected citation ranges from the spoken sequence while keeping the source mapping, voice markers and pause handling correct.
 - [x] 2.5 Tests for identity: with the setting on, `"citations": true` is in the chapter audio fingerprint and the sidecar's `rendering_inputs`; with it off both are byte-identical to today's; a cached chapter is reused only when the recorded value matches; toggling regenerates audio only; `pack-m4b` does not call differing audio stale.
 - [x] 2.6 Implement the fingerprint and sidecar change (conditional key), and the reuse check in `conversion.py` and `audio/freshness.py`. Confirm a fake-provider conversion never sends a citation when on, and does when off.
+  - *Amendment (2026-10-28):* `audio/freshness.py` needed no change; it does not read the sidecar's rendering inputs. The reuse check lives in `conversion.py`. The fingerprint part is now `citations-skipped-v2` (review spec Q5).
 
 ## 3. Accepting and rejecting pending edits (C4)
 
 - [x] 3.1 Tests: `edits list` filters by status and its `--json` output is content-free; `accept` sets `accepted` and changes exactly that block's narrated text; a hand-edited chapter file is a conflict naming the chapter, with every file unchanged; an interrupted accept recovers with `recover`; lock contention returns the lock error; accepting twice is harmless; an unknown block ID is exit 2; `reject` removes the proposal; `--all` works for both; the same commands handle a pending cleanup edit.
+  - *Amendment (2026-10-28):* true for pending LLM cleanup edits only. An unaccepted built-in edit is a human rejection with status `rejected`, which the commands leave alone (review spec Q2).
 - [x] 3.2 Add the `edits` command group (`list`, `accept`, `reject`) and the core functions behind it, using the workspace lock, the artifact planner and `commit_artifacts`/`commit_review` so the manifest and chapter files publish together.
 - [x] 3.3 Record accepted and rejected proposals in `reports/edit_decisions.json`. Confirm the changed chapter's audio goes stale and nothing else does.
 - [x] 3.4 Privacy tests for every new error path.
@@ -47,6 +50,7 @@
 - [x] 4.3 Tests for verification with a fake provider: a passing proposal becomes a pending edit (`provider="llm"`, `accepted=false`) and changes nothing else; each rule has a rejecting case (a dropped number, an invented digit, a dropped prose word, an empty or oversized proposal, markdown); the setting off makes no model calls; an LLM failure follows the existing fallback setting.
 - [x] 4.4 Implement the equation reading task in a new `llm` module (add it to the mypy files), the verification, and the analysis hook that runs only when `process_equations` is on and the LLM is enabled. Respect the budget limits, remote-content consent and the existing windowing.
 - [x] 4.5 Tests and implementation for the `llm-analysis` fingerprint: it includes the setting only when true, so off-state fingerprints do not change; enabling it re-analyzes an unapproved workspace from cached answers and still refuses an approved one with the existing message.
+  - *Amendment (2026-10-28):* ticked as delivered, then **superseded by 686bd06**. With the setting on by default, a fingerprint part would have stale every existing workspace and refused approved ones, so the equation setting is in no stage fingerprint. Enabling it later does not re-analyze a workspace on its own. See spec C5 (amended).
 
 ## 5. Documentation
 
