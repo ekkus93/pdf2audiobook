@@ -66,6 +66,7 @@ from pdf2audiobook.llm import (
     propose_llm_narration,
 )
 from pdf2audiobook.llm.cache import CachedLLMProvider
+from pdf2audiobook.llm.equations import propose_llm_equation_readings
 from pdf2audiobook.logging import log_event
 from pdf2audiobook.models import (
     BookManifest,
@@ -394,6 +395,7 @@ def _analyze_book_locked(
             or settings.llm.classification
             or settings.llm.narration
             or settings.llm.vision
+            or settings.reading.process_equations
         ):
             # Only anchored proposals are accepted. OCR cleanup requires manual approval.
             source_blocks = [block for block in extracted.blocks if block.id not in omitted]
@@ -489,6 +491,17 @@ def _analyze_book_locked(
                             "suggestions": [item.model_dump() for item in spoken_suggestions],
                         },
                     )
+                if settings.reading.process_equations:
+                    # Pending edits only: nothing changes narration until a person
+                    # accepts it with ``pdf2audiobook edits accept``.
+                    equation_edits, equation_warnings = propose_llm_equation_readings(
+                        source_blocks,
+                        worker,
+                        chunk_tokens=settings.llm.chunk_tokens,
+                        decisions=llm_decisions,
+                    )
+                    edits.extend(equation_edits)
+                    warnings.extend(equation_warnings)
     except LLMError:
         if not settings.llm.fallback_to_deterministic:
             raise

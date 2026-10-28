@@ -66,7 +66,7 @@ class LLMDecision(BaseModel):
     """Privacy-preserving audit of one task's verifier decision on an LLM proposal."""
 
     model_config = ConfigDict(extra="forbid")
-    task: Literal["heading", "contents", "cleanup", "classification", "narration"]
+    task: Literal["heading", "contents", "cleanup", "classification", "narration", "equation"]
     block_id: str
     proposal_summary: str = Field(max_length=80)
     status: Literal["accepted", "rejected"]
@@ -168,7 +168,7 @@ def _diagnostic_block_id(candidate: str, known_ids: set[str]) -> str:
 def _record_decision(
     records: list[LLMDecision] | None,
     *,
-    task: Literal["heading", "contents", "cleanup", "classification", "narration"],
+    task: Literal["heading", "contents", "cleanup", "classification", "narration", "equation"],
     block_id: str,
     status: Literal["accepted", "rejected"],
     reason_code: str,

@@ -44,8 +44,8 @@
 
 - [x] 4.1 Tests for candidate selection: the listed symbols, Greek letters and function-call forms are candidates; ordinary prose, numbered list items and years are not; the cap and its warning.
 - [x] 4.2 Implement the deterministic candidate test as a pure function.
-- [ ] 4.3 Tests for verification with a fake provider: a passing proposal becomes a pending edit (`provider="llm"`, `accepted=false`) and changes nothing else; each rule has a rejecting case (a dropped number, an invented digit, a dropped prose word, an empty or oversized proposal, markdown); the setting off makes no model calls; an LLM failure follows the existing fallback setting.
-- [ ] 4.4 Implement the equation reading task in a new `llm` module (add it to the mypy files), the verification, and the analysis hook that runs only when `process_equations` is on and the LLM is enabled. Respect the budget limits, remote-content consent and the existing windowing.
+- [x] 4.3 Tests for verification with a fake provider: a passing proposal becomes a pending edit (`provider="llm"`, `accepted=false`) and changes nothing else; each rule has a rejecting case (a dropped number, an invented digit, a dropped prose word, an empty or oversized proposal, markdown); the setting off makes no model calls; an LLM failure follows the existing fallback setting.
+- [x] 4.4 Implement the equation reading task in a new `llm` module (add it to the mypy files), the verification, and the analysis hook that runs only when `process_equations` is on and the LLM is enabled. Respect the budget limits, remote-content consent and the existing windowing.
 - [ ] 4.5 Tests and implementation for the `llm-analysis` fingerprint: it includes the setting only when true, so off-state fingerprints do not change; enabling it re-analyzes an unapproved workspace from cached answers and still refuses an approved one with the existing message.
 
 ## 5. Documentation

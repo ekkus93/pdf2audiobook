@@ -83,16 +83,17 @@ When `process_equations` is on and the LLM is enabled, analysis runs an **equati
 **Task.** The model is asked to rewrite only the mathematical notation of a candidate block as words a person would say aloud, to keep every other word exactly, and not to solve, simplify or explain. The prompt carries the usual untrusted-content framing. Block text is sent in bounded windows like the other stages, and the usual remote-content consent rules apply.
 
 **Verification** (a proposal that fails is discarded and recorded in the decision audit; it never becomes an edit):
-1. Every number in the source appears in the proposal, as digits or as a number word.
-2. The proposal contains no digit sequence that is absent from the source.
-3. Every alphabetic word of four or more letters in the source appears in the proposal in the same order (prose and names such as `softmax` survive).
-4. The proposal is non-empty, contains no markup or code fences, and is at most six times the source length.
+1. The proposal is non-empty and differs from the source.
+2. It contains no markup, backticks or code fences, and is at most six times the source length plus 40 characters (so a three-character `√dk` may expand to a short phrase).
+3. **The stream of digits is identical** in source and proposal, in order, where a digit may be written as a numeral or as a number word (`eight`, `twenty-one`, `squared`, `cubed`; superscript digits count). This is stronger than comparing numbers one by one, and it does not wrongly reject faithful readings of text whose superscripts the extractor merged (`10000^2i` arrives as `100002i`).
+4. Every alphabetic word of four or more letters in the source appears in the proposal in the same order, compared without spaces so `dmodel` may be read "d model" (prose and names such as `softmax` survive).
+5. The model's confidence is at least 0.80, and it quotes the block text exactly.
 
 **Result.** An accepted-by-verification proposal is stored in `manifest.edits` as a `CleanupEdit` with `provider = "llm"`, `accepted = false`, the original text, and a reason such as "spoken reading of mathematical notation". It does **not** change chapter text until accepted (C4). With nothing accepted, audio is identical to today's.
 
 **Acceptance:**
 - A fake provider's proposals that pass produce pending edits; the manifest, chapter files and audio are unchanged until accepted.
-- Each verification rule has a rejecting case (a dropped number, an invented digit, a dropped prose word, an empty or oversized proposal, markdown).
+- Each verification rule has a rejecting case (a changed or invented digit, a dropped or reordered prose word, an empty, unchanged or oversized proposal, markup, low confidence, a misquoted source line).
 - The candidate test matches the listed forms and rejects ordinary prose, including numbered list items and years.
 - Over the cap, the cap applies with a warning.
 - Disabling the setting skips the task entirely and makes no model calls.
