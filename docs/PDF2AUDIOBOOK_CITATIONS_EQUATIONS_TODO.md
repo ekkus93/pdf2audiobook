@@ -28,8 +28,8 @@
 
 - [x] 2.1 Tests for the citation detector: the accepted forms (single, list, range with hyphen and en dash, semicolon list) and the rejected ones (`a[1]`, `x[i]`, bracketed text with letters, numbers over three digits, descending ranges, author–year forms).
 - [x] 2.2 Implement the detector as a pure function that returns source character ranges.
-- [ ] 2.3 Tests for the spoken layer: a citation mid-sentence, at a sentence end, at the start of a paragraph, alone in a paragraph, and split across a line break; trailing punctuation is kept; `chunk_source_ranges` alignment still succeeds; with the setting off, chunks are unchanged (golden comparison).
-- [ ] 2.4 Drop detected citation ranges from the spoken sequence while keeping the source mapping, voice markers and pause handling correct.
+- [x] 2.3 Tests for the spoken layer: a citation mid-sentence, at a sentence end, at the start of a paragraph, alone in a paragraph (nothing is spoken) or with punctuation (a pause), and split across a line break; trailing punctuation is kept; `chunk_source_ranges` alignment still succeeds; with the setting off, chunks are unchanged (golden comparison).
+- [x] 2.4 Drop detected citation ranges from the spoken sequence while keeping the source mapping, voice markers and pause handling correct.
 - [ ] 2.5 Tests for identity: with the setting on, `"citations": true` is in the chapter audio fingerprint and the sidecar's `rendering_inputs`; with it off both are byte-identical to today's; a cached chapter is reused only when the recorded value matches; toggling regenerates audio only; `pack-m4b` does not call differing audio stale.
 - [ ] 2.6 Implement the fingerprint and sidecar change (conditional key), and the reuse check in `conversion.py` and `audio/freshness.py`. Confirm a fake-provider conversion never sends a citation when on, and does when off.
 

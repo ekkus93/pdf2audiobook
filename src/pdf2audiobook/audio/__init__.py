@@ -16,6 +16,7 @@ from typing import Callable, Mapping, cast
 
 import numpy as np
 
+from pdf2audiobook.audio.citations import mask_citations as mask_citations
 from pdf2audiobook.audio.encoding import (
     AudioEncoder as AudioEncoder,
 )
@@ -180,9 +181,16 @@ def _unspeakable_ranges(text: str) -> list[tuple[int, int]]:
     return ranges
 
 
-def unspeakable_pause_ranges(chapter_text: str) -> list[tuple[int, int]]:
-    """Source ranges of nonempty paragraphs without spoken letters or digits."""
+def unspeakable_pause_ranges(
+    chapter_text: str, *, skip_citations: bool = False
+) -> list[tuple[int, int]]:
+    """Source ranges of nonempty paragraphs without spoken letters or digits.
+
+    With ``skip_citations`` a paragraph holding only citations counts as one.
+    """
     masked = _voice_markers(chapter_text, "")[0]
+    if skip_citations:
+        masked = mask_citations(masked)
     return _unspeakable_ranges(masked)
 
 
@@ -484,10 +492,13 @@ def synthesize_chunks(
     max_retries: int = 2,
     output_wav: Path | None = None,
     on_chunk: Callable[[int, bool], None] | None = None,
+    skip_citations: bool = False,
 ) -> np.ndarray | Path:
     """Reuse verified WAV chunks; atomically checkpoint chapter synthesis progress.
 
     ``on_chunk(characters, cached)`` reports each finished chunk for progress display.
+    ``skip_citations`` blanks numeric citations such as ``[13]`` from the spoken text
+    (the chapter text and every source offset are unchanged).
     """
     samples: list[np.ndarray] = []
     # Public synthesis is callable without Pydantic or the Kitten adapter.
@@ -527,8 +538,10 @@ def synthesize_chunks(
     if isinstance(chunk_limit, bool) or not isinstance(chunk_limit, int) or chunk_limit < 40:
         raise AudioError("TTS provider max_chars_per_chunk must be an integer >= 40")
     spoken_source, voice_changes = _voice_markers(chapter_text, voice)
+    if skip_citations:
+        spoken_source = mask_citations(spoken_source)
     chunks = split_sentences(spoken_source, max_chars=chunk_limit, pronunciations=pronunciations)
-    pause_ranges = unspeakable_pause_ranges(chapter_text)
+    pause_ranges = unspeakable_pause_ranges(chapter_text, skip_citations=skip_citations)
     if not chunks and not pause_ranges:
         raise AudioError("Chapter has no speakable text")
     # Use one validated snapshot of the engine rate throughout the request.

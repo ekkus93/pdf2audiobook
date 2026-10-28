@@ -62,7 +62,7 @@ A group attached directly to a word (`a[1]`, `x[i]`) is not a citation, nor is `
 
 **How it is skipped.** The spoken layer already works on word tokens aligned to source character ranges (`split_sentences`, `_spoken_sequence`, `chunk_source_ranges`, `_droppable_word`). Citation groups are removed from the spoken sequence, so chunking, voice markers, pauses and the chunk-to-source mapping stay correct. The skipped range remains in the source mapping.
 - Trailing punctuation stays: "translation [38]." is spoken "translation."
-- A paragraph consisting only of citations is an unspeakable (pause-only) paragraph, as for other punctuation-only paragraphs.
+- A paragraph consisting only of citations contributes nothing to the audio (it is blank once masked). A paragraph of citations and punctuation, such as `[13].`, is a pause-only paragraph like any other punctuation-only one.
 - A citation split across a line break is still one group.
 
 **Identity.** When the setting is on, add `"citations": true` to the chapter audio fingerprint and to the sidecar's `rendering_inputs`. When it is off, the fingerprint and sidecar are **byte-identical to today's**, so existing audio stays valid. A cached chapter is reused only when its recorded rendering inputs match the current setting. `pack-m4b` does not treat a differing citation setting as stale audio, because the audio is whatever was converted.
