@@ -38,6 +38,14 @@ class ConversionServices:
     _progress_report_fields: Callable[..., Any]
 
 
+def _rendering_inputs(settings: Settings) -> dict[str, object]:
+    """Narration inputs recorded beside the audio; optional keys appear only when set."""
+    inputs: dict[str, object] = {"footnotes": settings.pdf.footnotes}
+    if settings.reading.process_citations:
+        inputs["citations"] = True
+    return inputs
+
+
 def _convert_analyzed_book(
     manifest_path: Path,
     settings: Settings,
@@ -69,6 +77,10 @@ def _convert_analyzed_book(
     unspeakable_pause_ranges = services.unspeakable_pause_ranges
     _tts_model_identity = services._tts_model_identity
     _progress_report_fields = services._progress_report_fields
+    # Passed only when on, so injected synthesis doubles that predate it keep working.
+    citation_kwargs: dict[str, Any] = (
+        {"skip_citations": True} if settings.reading.process_citations else {}
+    )
     temporary_wav_dir = manifest_path.parent / ".cache" / "tts" / "chapters"
     try:
         if temporary_wav_dir.is_dir():
@@ -217,7 +229,7 @@ def _convert_analyzed_book(
                     isinstance(metadata, dict)
                     and metadata.get("fingerprint") == identity
                     and metadata.get("chapter_id", item.id) == item.id
-                    and metadata.get("rendering_inputs") == {"footnotes": settings.pdf.footnotes}
+                    and metadata.get("rendering_inputs") == _rendering_inputs(settings)
                 )
                 if cached:
                     mp3 = MP3(output, ID3=EasyID3)
@@ -246,7 +258,9 @@ def _convert_analyzed_book(
             conversion_status[item.id]["status"] = "complete"
             # A resumed chapter keeps the pause count its synthesized run reported.
             try:
-                conversion_status[item.id]["pause_count"] = len(unspeakable_pause_ranges(text))
+                conversion_status[item.id]["pause_count"] = len(
+                    unspeakable_pause_ranges(text, **citation_kwargs)
+                )
             except AudioError:
                 conversion_status[item.id]["pause_count"] = 0
         del text
@@ -307,7 +321,7 @@ def _convert_analyzed_book(
         _provider_name, selected_voice, selected_speed = tts_selection(settings, item)
         streamed_wav: Path | None = None
         try:
-            synth_kwargs: dict[str, Any] = {}
+            synth_kwargs: dict[str, Any] = dict(citation_kwargs)
             if encoder is None:
                 try:
                     manifest_path.parent.joinpath(".cache", "tts", "chapters").mkdir(
@@ -389,7 +403,7 @@ def _convert_analyzed_book(
             {
                 "chapter_id": item.id,
                 "sidecar_version": 3,
-                "rendering_inputs": {"footnotes": settings.pdf.footnotes},
+                "rendering_inputs": _rendering_inputs(settings),
                 "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 "fingerprint": identity,
                 "sha256": digest_file(output),
