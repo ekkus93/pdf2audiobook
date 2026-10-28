@@ -165,10 +165,33 @@ def _ordinal_value(token: str) -> int | None:
     return _roman_value(token)
 
 
+def label_key(text: str) -> tuple[str, int] | None:
+    """("chapter", 12) for "Chapter 12"/"CHAPTER XII", ("part", 3) for "Part 3"."""
+    stripped = text.strip()
+    match = LABEL_NUMBER.match(stripped)
+    value = _ordinal_value(match.group(1)) if match else None
+    if value is None:
+        return None
+    return ("part" if stripped.casefold().startswith("part") else "chapter", value)
+
+
 def label_number(text: str) -> int | None:
     """Number named by "Chapter 12", "CHAPTER XII", "Chapter Twelve" or "Part 3"."""
-    match = LABEL_NUMBER.match(text.strip())
-    return _ordinal_value(match.group(1)) if match else None
+    key = label_key(text)
+    return key[1] if key else None
+
+
+# A contents entry's leader and page reference: "Chapter One ........ 7" or "… xii".
+# A single space before a numeral is not a leader ("Chapter IV" keeps its number).
+_LEADER_PAGE_REF = re.compile(
+    r"(?:\s*[.\u00b7\u2026]{2,}\s*|\s+[.\u00b7\u2026]\s+)(?:\d{1,4}|[ivxlcdm]{1,8})$",
+    re.IGNORECASE,
+)
+
+
+def contents_label_title(text: str) -> str:
+    """A contents line's chapter label without its leader dots and page reference."""
+    return _LEADER_PAGE_REF.sub("", text.strip()).strip()
 
 
 def bare_number(text: str) -> int | None:
@@ -585,19 +608,20 @@ def propose_chapters(
             for i in heading_indices
             if i not in crowded or is_heading_line(blocks[i].text) or i in contents_titles
         ]
-    # A chapter label on a contents-style page (most lines end in a page
-    # reference) is a listing when the same label opens a chapter later.
     # Books often open a chapter with only its numeral. When the printed contents names
-    # "Chapter N" and numerals 1..N then open pages in order, those numerals are the
-    # chapter headings and the contents labels are references to them.
+    # "Chapter N" and numerals then open pages in order, those numerals are the chapter
+    # headings and the contents labels are references to them. Parts and chapters are
+    # numbered separately, so labels are keyed by (kind, number).
     numeral_titles: dict[int, str] = {}
-    listed_labels: dict[int, int] = {}
+    listed_by_kind: dict[str, dict[int, int]] = defaultdict(dict)
     for i, block in enumerate(blocks):
         if block.id in omitted or block.page_index not in listing_pages:
             continue
-        listed_number = label_number(block.text)
-        if listed_number is not None and NUMBERED_LABEL.match(block.text.strip()):
-            listed_labels.setdefault(listed_number, i)
+        key = label_key(block.text)
+        if key is not None and NUMBERED_LABEL.match(block.text.strip()):
+            listed_by_kind[key[0]].setdefault(key[1], i)
+    numeral_kind = "chapter" if listed_by_kind.get("chapter") else "part"
+    listed_labels = listed_by_kind.get(numeral_kind, {})
     first_on_page: dict[int, int] = {}
     for i, block in enumerate(blocks):
         if block.id not in omitted and block.text.strip():
@@ -612,21 +636,27 @@ def propose_chapters(
         if number is not None and number > last_number and number in listed_labels:
             corroborated[i] = number
             last_number = number
-    # Page numbers advance exactly one per page; chapters rarely do. A constant
-    # page-minus-number offset means these numerals are running page numbers.
-    page_numbers = len(corroborated) >= 3 and (
-        len({blocks[i].page_index - number for i, number in corroborated.items()}) == 1
+    # Running page numbers advance one per page; chapters rarely do. When most
+    # consecutive numerals are exactly that far apart, they are page numbers, even if
+    # an unnumbered page somewhere shifts the offset.
+    steps = sorted((blocks[i].page_index, number) for i, number in corroborated.items())
+    pairs = list(zip(steps, steps[1:]))
+    lockstep = sum(
+        1 for (page_a, num_a), (page_b, num_b) in pairs if page_b - page_a == num_b - num_a
     )
+    page_numbers = bool(pairs) and 2 * lockstep >= len(pairs)
     if not page_numbers and len(corroborated) >= 3 and 2 * len(corroborated) >= len(listed_labels):
         for i, number in corroborated.items():
-            numeral_titles[i] = blocks[listed_labels[number]].text.strip()
+            numeral_titles[i] = contents_label_title(blocks[listed_labels[number]].text)
             if i not in heading_indices:
                 heading_indices.append(i)
-    anchored_numbers = {
-        number
+    anchored_keys = {
+        key
         for i, title in bookmark_titles.items()
-        if blocks[i].page_index not in listing_pages and (number := label_number(title)) is not None
-    } | set(corroborated.values() if numeral_titles else ())
+        if blocks[i].page_index not in listing_pages and (key := label_key(title)) is not None
+    } | {(numeral_kind, number) for number in (corroborated.values() if numeral_titles else ())}
+    # A chapter label on a contents-style page (most lines end in a page
+    # reference) is a listing when the same label opens a chapter later.
     label_positions: dict[str, list[int]] = defaultdict(list)
     for i in heading_indices:
         if NUMBERED_LABEL.match(blocks[i].text.strip()):
@@ -643,7 +673,7 @@ def propose_chapters(
         for i in heading_indices
         if blocks[i].page_index in listing_pages
         and i not in bookmark_titles
-        and label_number(blocks[i].text) in anchored_numbers
+        and label_key(blocks[i].text) in anchored_keys
     }
     heading_indices = [i for i in heading_indices if i not in listed]
     numbered_labels = sum(

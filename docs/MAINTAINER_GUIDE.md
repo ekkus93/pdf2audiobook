@@ -300,7 +300,7 @@ bumped: unchanged chunks stay cached. No manifest schema change; `budget` ledger
 without a recorded bound block token and USD budgets until `budget resolve` settles them.
 
 Upgrade note (EPUB chapters): analysis uses `analysis-v23` and the chapter-boundaries stage
-carries `chapter-detection-v2`. Outline entries now anchor to the numeral that opens a chapter
+carries `chapter-detection-v3` (v3 strips contents leaders and page references from corroborated titles, rejects running page numbers even when an unnumbered page shifts their offset, and keys parts and chapters separately). Outline entries now anchor to the numeral that opens a chapter
 on their own page ("Chapter 12" pairs with a line reading "12"), contents-page labels no
 longer open chapters, numerals corroborated by a printed contents are headings, an EPUB cover
 image on a page-sized background is not `damaged_source`, and a book's many manifest warnings
