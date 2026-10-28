@@ -66,8 +66,8 @@
 
 ## 7. Equation prompt (Q7)
 
-- [ ] 7.1 Test: the prompt describes records as lines or paragraphs, keeps the untrusted-content framing, and changes the cache key.
-- [ ] 7.2 Reword the prompt in `llm/equations.py`.
+- [x] 7.1 Test: the prompt describes records as lines or paragraphs, keeps the untrusted-content framing, and changes the cache key.
+- [x] 7.2 Reword the prompt in `llm/equations.py`.
 
 ## 8. Accuracy of code comments and documents (Q8)
 
