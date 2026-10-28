@@ -511,13 +511,13 @@ def propose_chapters(
     # Infer a nontrivial offset only from at least two distinct, uniquely
     # matched textual headings and no conflicting unique heading evidence.
     offset_evidence: dict[int, set[str]] = defaultdict(set)
+    headings_by_title: dict[str, list[int]] = defaultdict(list)
+    for i in heading_indices:
+        if blocks[i].id not in omitted:
+            headings_by_title[_title_key(blocks[i].text)].append(i)
     for title, page_num in valid_bookmarks:
         normalized = _title_key(title)
-        matches = [
-            i
-            for i in heading_indices
-            if blocks[i].id not in omitted and _title_key(blocks[i].text) == normalized
-        ]
+        matches = headings_by_title.get(normalized, [])
         if len(matches) == 1:
             offset = blocks[matches[0]].page_index - (page_num - 1)
             if abs(offset) <= 128:
@@ -532,16 +532,22 @@ def propose_chapters(
                 f"{len(titles)} unique headings; verify chapter alignment"
             )
 
+    # One pass indexes every block by title and every page by its first line, so each
+    # outline entry is matched without rescanning the book.
+    blocks_by_title: dict[str, list[int]] = defaultdict(list)
+    first_on_page: dict[int, int] = {}
+    for i, block in enumerate(blocks):
+        if block.id in omitted:
+            continue
+        blocks_by_title[_title_key(block.text)].append(i)
+        if block.text.strip():
+            first_on_page.setdefault(block.page_index, i)
     for title, page_num in valid_bookmarks:
         page_index = page_num - 1
         title_normalized = _title_key(title)
         if not title_normalized:
             continue
-        matching = [
-            i
-            for i, block in enumerate(blocks)
-            if block.id not in omitted and _title_key(block.text) == title_normalized
-        ]
+        matching = blocks_by_title.get(title_normalized, [])
         exact = [i for i in matching if blocks[i].page_index == page_index]
         # A TOC page number may refer to printed rather than physical pages.
         # Correct only a unique nearby title, never a duplicated phrase. A page that
@@ -565,16 +571,7 @@ def propose_chapters(
             for candidate_page in candidate_pages:
                 if candidate_page in listing_pages:
                     continue
-                first = next(
-                    (
-                        i
-                        for i, block in enumerate(blocks)
-                        if block.page_index == candidate_page
-                        and block.id not in omitted
-                        and block.text.strip()
-                    ),
-                    None,
-                )
+                first = first_on_page.get(candidate_page)
                 if first is not None and bare_number(blocks[first].text) == wanted:
                     match = first
                     numeral_anchored.add(first)
@@ -630,10 +627,6 @@ def propose_chapters(
             listed_by_kind[key[0]].setdefault(key[1], i)
     numeral_kind = "chapter" if listed_by_kind.get("chapter") else "part"
     listed_labels = listed_by_kind.get(numeral_kind, {})
-    first_on_page: dict[int, int] = {}
-    for i, block in enumerate(blocks):
-        if block.id not in omitted and block.text.strip():
-            first_on_page.setdefault(block.page_index, i)
     corroborated: dict[int, int] = {}
     last_number = 0
     for page in sorted(first_on_page):

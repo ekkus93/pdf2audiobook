@@ -25,9 +25,9 @@
 
 ## 2. No per-entry rescans (F2) — refactor
 
-- [ ] 2.1 Test: count block iterations with a counting list subclass. With 200 numbered outline entries, `propose_chapters` stays within a small constant number of passes over the blocks.
-- [ ] 2.2 Build the `title_key → indices` map and move `first_on_page` before the outline loop. Use both inside the loop.
-- [ ] 2.3 Confirm the full suite passes unchanged, so anchors and order are identical.
+- [x] 2.1 Test: count block iterations with a counting list subclass. With 200 numbered outline entries, `propose_chapters` stays within a small constant number of passes over the blocks.
+- [x] 2.2 Build the `title_key → indices` map and move `first_on_page` before the outline loop. Use both inside the loop.
+- [x] 2.3 Confirm the full suite passes unchanged, so anchors and order are identical.
 
 ## 3. Font-size gate with corroborated numerals (F3)
 
