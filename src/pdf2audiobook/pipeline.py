@@ -183,6 +183,8 @@ def _analysis_stage_fingerprints(
             settings.llm.provider,
             selected.model,
             selected.base_url,
+            # Present only when on, so every existing workspace keeps its identity.
+            *(("equation-readings-v1",) if settings.reading.process_equations else ()),
         )
     return {
         "extraction": fingerprint(
