@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Reading TODO
 
-**Status:** Not started
+**Status:** In progress
 **Date:** 2026-10-27
 **Baseline:** master at b0b4d7c
 **Specification:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_SPEC.md` (C1–C5)
@@ -20,9 +20,9 @@
 
 ## 1. The two settings (C1)
 
-- [ ] 1.1 Tests: defaults are false; the TOML key, environment variable and each CLI flag form reach `Settings`; precedence is CLI over environment over TOML; the two settings are independent; `process_equations` with the LLM disabled is a content-free exit 2; `config show --json` and `doctor --json` report both. Extend the environment-variable coverage test for both variables.
-- [ ] 1.2 Add a `Reading` config model and `Settings.reading`, the two environment variables, and the validation that equation processing needs the LLM.
-- [ ] 1.3 Add `--process-citations/--no-process-citations` and `--process-equations/--no-process-equations` to `analyze` and `convert`, as unset-by-default boolean pairs. Show both in `config show` and `doctor --json`.
+- [x] 1.1 Tests: defaults are false; the TOML key, environment variable and each CLI flag form reach `Settings`; precedence is CLI over environment over TOML; the two settings are independent; `process_equations` with the LLM disabled is a content-free exit 2; `config show --json` and `doctor --json` report both. Extend the environment-variable coverage test for both variables.
+- [x] 1.2 Add a `Reading` config model and `Settings.reading`, the two environment variables, and the validation that equation processing needs the LLM.
+- [x] 1.3 Add `--process-citations/--no-process-citations` and `--process-equations/--no-process-equations` to `analyze` and `convert`, as unset-by-default boolean pairs. Show both in `config show` and `doctor --json`.
 
 ## 2. Citation skipping (C2)
 

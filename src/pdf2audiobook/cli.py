@@ -354,6 +354,8 @@ def doctor(
                 "kitten_installed": kitten_installed,
                 "piper_installed": bool(shutil.which("piper")),
                 "llm_provider": settings.llm.provider if settings.llm.enabled else "disabled",
+                "process_citations": settings.reading.process_citations,
+                "process_equations": settings.reading.process_equations,
                 "llm_timeout_seconds": (
                     getattr(settings.llm, settings.llm.provider.replace("-", "_")).timeout_seconds
                     if settings.llm.enabled
@@ -484,6 +486,16 @@ def analyze(
         min=1,
         help="Cap on tokens the model may write per request, e.g. 32768 for reasoning models.",
     ),
+    process_citations: bool | None = typer.Option(
+        None,
+        "--process-citations/--no-process-citations",
+        help="Skip numeric citations such as [13] in the audio.",
+    ),
+    process_equations: bool | None = typer.Option(
+        None,
+        "--process-equations/--no-process-equations",
+        help="Have the LLM propose spoken readings of equations (pending your approval).",
+    ),
     allow_remote_content: bool | None = typer.Option(
         None, "--allow-remote-content/--no-allow-remote-content"
     ),
@@ -529,6 +541,10 @@ def analyze(
             overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
         if llm_output_tokens is not None:
             overrides.setdefault("llm", {})["max_output_tokens"] = llm_output_tokens
+        if process_citations is not None:
+            overrides.setdefault("reading", {})["process_citations"] = process_citations
+        if process_equations is not None:
+            overrides.setdefault("reading", {})["process_equations"] = process_equations
         if vision is not None:
             overrides.setdefault("llm", {})["vision"] = vision
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
@@ -588,6 +604,16 @@ def convert(
         "--llm-output-tokens",
         min=1,
         help="Cap on tokens the model may write per request, e.g. 32768 for reasoning models.",
+    ),
+    process_citations: bool | None = typer.Option(
+        None,
+        "--process-citations/--no-process-citations",
+        help="Skip numeric citations such as [13] in the audio.",
+    ),
+    process_equations: bool | None = typer.Option(
+        None,
+        "--process-equations/--no-process-equations",
+        help="Have the LLM propose spoken readings of equations (pending your approval).",
     ),
     allow_remote_content: bool | None = typer.Option(
         None, "--allow-remote-content/--no-allow-remote-content"
@@ -666,6 +692,10 @@ def convert(
             overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
         if llm_output_tokens is not None:
             overrides.setdefault("llm", {})["max_output_tokens"] = llm_output_tokens
+        if process_citations is not None:
+            overrides.setdefault("reading", {})["process_citations"] = process_citations
+        if process_equations is not None:
+            overrides.setdefault("reading", {})["process_equations"] = process_equations
         if vision is not None:
             overrides.setdefault("llm", {})["vision"] = vision
         if speed is not None:

@@ -194,6 +194,13 @@ class Audio(ConfigModel):
     cover_image: str | None = None
 
 
+class Reading(ConfigModel):
+    """Opt-in processing of material that sounds wrong when read literally."""
+
+    process_citations: bool = False
+    process_equations: bool = False
+
+
 class Settings(ConfigModel):
     general: General = Field(default_factory=General)
     pdf: Pdf = Field(default_factory=Pdf)
@@ -202,6 +209,7 @@ class Settings(ConfigModel):
     tts: TTS = Field(default_factory=TTS)
     cache: Cache = Field(default_factory=Cache)
     audio: Audio = Field(default_factory=Audio)
+    reading: Reading = Field(default_factory=Reading)
 
 
 ENV_KEYS = {
@@ -209,6 +217,8 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_PROGRESS": ("general", "progress"),
     "PDF2AUDIOBOOK_HEARTBEAT_SECONDS": ("general", "heartbeat_seconds"),
     "PDF2AUDIOBOOK_RESUME": ("general", "resume"),
+    "PDF2AUDIOBOOK_PROCESS_CITATIONS": ("reading", "process_citations"),
+    "PDF2AUDIOBOOK_PROCESS_EQUATIONS": ("reading", "process_equations"),
     "PDF2AUDIOBOOK_OCR": ("pdf", "ocr"),
     "PDF2AUDIOBOOK_OCR_LANGUAGE": ("pdf", "ocr_language"),
     "PDF2AUDIOBOOK_PDF_PASSWORD_ENV": ("pdf", "password_env"),
@@ -339,7 +349,7 @@ def load_settings(
             ) from None
         if any(
             key in toml and not isinstance(toml[key], dict)
-            for key in ("general", "pdf", "chapters", "llm", "tts", "cache", "audio")
+            for key in ("general", "pdf", "chapters", "llm", "tts", "cache", "audio", "reading")
         ):
             raise ConfigError("invalid configuration values; check field names and types")
         _merge(data, toml)
@@ -390,6 +400,10 @@ def load_settings(
         or result.llm.output_cost_usd_per_million_tokens is None
     ):
         raise ConfigError("max_estimated_cost_usd requires explicit input/output token prices")
+    if result.reading.process_equations and not result.llm.enabled:
+        raise ConfigError(
+            "Equation processing needs the LLM; enable it or turn equation processing off"
+        )
     if result.llm.chunk_tokens >= result.llm.max_context_tokens:
         raise ConfigError("llm.chunk_tokens must be smaller than llm.max_context_tokens")
     if result.llm.max_output_tokens + 128 >= result.llm.max_context_tokens:
