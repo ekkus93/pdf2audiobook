@@ -30,16 +30,17 @@
 
 ## 1. Outline anchoring (E1)
 
-- [ ] 1.1 Tests: with the outline, the fixture yields exactly N chapters, each starting at its numeral block and titled from the outline, with no chapter starting on a contents page. Record the failures at the parent commit.
-- [ ] 1.2 Compute `listing_pages` before the outline loop in `document/structure.py`.
-- [ ] 1.3 Add numbered-label parsing for arabic, roman and optional number-word forms, and `Chapter`/`Part`, with matching bare chapter numbers. Anchor on the target page in the order: exact title, then numbered label against the first block, then the nearby fallback, which must never land on a listing page.
-- [ ] 1.4 Record the matched rule in the content-free alignment warning.
-- [ ] 1.5 Confirm the existing PDF bookmark tests pass unchanged.
+- [x] 1.1 Tests: with the outline, every outline entry is anchored to its numeral block, titled from the outline, with confidence 0.95 and no alignment warning; plus tests for the number parsers. (No-chapter-on-a-contents-page belongs to E2, section 2.) Record the failures at the parent commit.
+- [x] 1.2 Compute `listing_pages` before the outline loop in `document/structure.py`.
+- [x] 1.3 Add numbered-label parsing for arabic, roman and optional number-word forms, and `Chapter`/`Part`, with matching bare chapter numbers. Anchor on the target page in the order: exact title, then numbered label against the first block, then the nearby fallback, which must never land on a listing page.
+- [x] 1.4 Record the matched rule in the chapter's evidence (numeral anchoring is not a page mismatch, so it adds no warning).
+- [x] 1.5 Confirm the existing PDF bookmark tests pass unchanged.
 
 ## 2. Contents-listing labels (E2)
 
-- [ ] 2.1 Tests: without the outline, a numeral-headed body produces no one-line chapters from the contents pages. Prose-titled bodies behave as today.
-- [ ] 2.2 Drop listing-page labels whose chapter number is anchored elsewhere, by the outline or by a later numeral heading. Compare by number.
+- [ ] 2.1 Tests: with the outline, no chapter starts on a contents page and the plan is the numbered chapters plus front matter. Without the outline, numerals corroborated by the printed contents become headings. Prose-titled bodies behave as today.
+- [ ] 2.2 Drop listing-page labels whose chapter number is anchored elsewhere, by the outline or by a corroborated numeral heading. Compare by number.
+- [ ] 2.3 Detect numeral headings corroborated by the printed contents (first line on its page, number named by a listing-page label, strictly increasing, at least three and at least half of the listed chapters).
 
 ## 3. LLM heading verification (E3)
 

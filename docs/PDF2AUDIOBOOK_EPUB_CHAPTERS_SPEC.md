@@ -39,7 +39,9 @@ For each valid outline entry, after the existing offset inference:
 3. **Nearby fallback.** Only if steps 1 and 2 fail, use the existing ±2-page unique-match fallback, now with one restriction: it must never select a block on a contents-listing page (`listing_pages` in the same function). Compute the listing pages before the outline loop.
 4. Each anchor records which rule matched in the existing alignment warning. The warning stays content-free: it carries the outline title and page numbers, never block text.
 
-**Acceptance:** A synthetic EPUB has a two-page contents list (`Chapter 1` … `Chapter 30`), chapters that open with a bare numeral, and an outline `Chapter N` pointing at each opening page. It yields exactly 30 chapters, each starting at its numeral block, with no chapter starting on a contents page. Existing PDF bookmark tests (exact match, printed-page offset, duplicated titles, malformed records) pass unchanged.
+**Acceptance:** A synthetic EPUB has a two-page contents list (`Chapter 1` … `Chapter 30`), chapters that open with a bare numeral, and an outline `Chapter N` pointing at each opening page. All 30 outline entries are anchored to their numeral block (title from the outline, confidence 0.95, evidence naming the numbered chapter heading), with no "matched unique title on page" alignment warning. Whether the contents labels still add extra chapters is E2's acceptance. Existing PDF bookmark tests (exact match, printed-page offset, duplicated titles, malformed records) pass unchanged.
+
+*Amendment (implemented):* anchoring by numeral is not a page-mismatch, so it adds no alignment warning. The rule that matched is recorded in the chapter's `evidence` instead, which avoids one warning per chapter.
 
 ### E2: Contents-listing labels do not open chapters
 
@@ -48,7 +50,9 @@ A chapter label on a contents-listing page is not a chapter start when the chapt
 - Labels for chapters that are anchored nowhere keep today's behavior.
 - The existing rule that drops a listed label when the same label opens a chapter later stays as it is.
 
-**Acceptance:** In the E1 fixture, removing the outline still produces no one-line chapters from the contents pages when the body uses numeral headings. With the outline removed and the body headings changed to non-numeral prose titles, behavior matches today's.
+**Acceptance:** In the E1 fixture no chapter starts on a contents page, and the plan has the 30 numbered chapters plus front matter only (no one-line chapters from the contents labels). With the outline removed, the same holds when the body numerals are corroborated by the printed contents (see below). With prose headings and no outline, behavior matches today's.
+
+*Amendment (design):* without an outline nothing detects a bare numeral as a heading, so E2 also adds **numeral headings corroborated by the printed contents**: a bare numeral that is the first line on its page, whose number is named by a contents label ("Chapter N") on a listing page, in strictly increasing order, accepted only when at least three such numerals are found and they cover at least half of the listed chapters. The chapter title is the contents label.
 
 ### E3: LLM heading proposals tolerate the numeral form
 

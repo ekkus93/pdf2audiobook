@@ -121,6 +121,64 @@ def _title_key(text: str) -> str:
     return " ".join(text.casefold().split()).rstrip(".:;, ")
 
 
+_NUMBER_WORDS = {
+    word: value
+    for value, word in enumerate(
+        "one two three four five six seven eight nine ten eleven twelve thirteen fourteen "
+        "fifteen sixteen seventeen eighteen nineteen".split(),
+        start=1,
+    )
+}
+_TENS_WORDS = {
+    word: value * 10
+    for value, word in enumerate(
+        "twenty thirty forty fifty sixty seventy eighty ninety".split(), start=2
+    )
+}
+LABEL_NUMBER = re.compile(
+    rf"^(?i:{CHAPTER_WORD}|part)\s+([A-Za-z0-9]+(?:-[A-Za-z]+)?)(?:\s*[.:\-\u2013\u2014]\s*.*|\.)?$"
+)
+
+
+def _roman_value(token: str) -> int | None:
+    token = token.upper()
+    if not token or not CANONICAL_ROMAN.fullmatch(token):
+        return None
+    values = {"I": 1, "V": 5, "X": 10, "L": 50, "C": 100, "D": 500, "M": 1000}
+    total = 0
+    for current, following in zip(token, token[1:] + " "):
+        value = values[current]
+        total += -value if following != " " and values[following] > value else value
+    return total
+
+
+def _ordinal_value(token: str) -> int | None:
+    """Value of "12", "XII" or "twelve"/"twenty-one"; None for anything else."""
+    token = token.strip().casefold()
+    if token.isdecimal():
+        return int(token) if len(token) <= 3 else None
+    if token in _NUMBER_WORDS:
+        return _NUMBER_WORDS[token]
+    tens, _, ones = token.partition("-")
+    if tens in _TENS_WORDS:
+        return _TENS_WORDS[tens] + (_NUMBER_WORDS.get(ones, 0) if ones else 0)
+    return _roman_value(token)
+
+
+def label_number(text: str) -> int | None:
+    """Number named by "Chapter 12", "CHAPTER XII", "Chapter Twelve" or "Part 3"."""
+    match = LABEL_NUMBER.match(text.strip())
+    return _ordinal_value(match.group(1)) if match else None
+
+
+def bare_number(text: str) -> int | None:
+    """Number of a line that is only a numeral ("12", "12." or capital "XII")."""
+    token = text.strip().rstrip(".").strip()
+    if token.isdecimal():
+        return int(token) if len(token) <= 3 else None
+    return _roman_value(token) if token.isupper() else None
+
+
 CONTENTS_HEADINGS = frozenset({"contents", "table of contents"})
 CONTENTS_PAGE_REF = re.compile(r"[\s.·…]+(?:\d{1,4}|[ivxlcdm]{1,8})$", re.IGNORECASE)
 
@@ -376,10 +434,32 @@ def propose_chapters(
             for i in heading_indices
             if i not in lone or is_heading_line(blocks[i].text) or i in contents_titles
         ]
+    # Pages that list chapters (a contents run) name chapters; they do not open them.
+    lines_on_page: dict[int, list[str]] = defaultdict(list)
+    for block in blocks:
+        if block.id not in omitted and block.text.strip():
+            lines_on_page[block.page_index].append(block.text.strip())
+    listing_pages = {
+        page
+        for page, texts in lines_on_page.items()
+        if len(texts) >= 6
+        and sum(
+            bool(PAGE_REFERENCE_END.search(text) or re.fullmatch(r"\d{1,4}", text))
+            for text in texts
+        )
+        >= 0.3 * len(texts)
+    }
+    # A contents run spans consecutive pages; fill single-page gaps.
+    listing_pages |= {
+        page + 1
+        for page in listing_pages
+        if page + 2 in listing_pages and page + 1 in lines_on_page
+    }
     # Combine confirmed bookmark anchors with textual headings. Some books mix
     # numbered headings and ornamental titles; do not discard the TOC merely
     # because a subset of chapters matched the regular expression.
     bookmark_titles: dict[int, str] = {}
+    numeral_anchored: set[int] = set()
     malformed_bookmarks = 0
     valid_bookmarks: list[tuple[str, int]] = []
     for entry in toc:
@@ -441,13 +521,42 @@ def propose_chapters(
         ]
         exact = [i for i in matching if blocks[i].page_index == page_index]
         # A TOC page number may refer to printed rather than physical pages.
-        # Correct only a unique nearby title, never a duplicated phrase.
-        nearby = [i for i in matching if abs(blocks[i].page_index - page_index) <= 2]
-        match = (
-            exact[0] if len(exact) == 1 else (nearby[0] if not exact and len(nearby) == 1 else None)
-        )
+        # Correct only a unique nearby title, never a duplicated phrase. A page that
+        # lists chapters never opens one, so it is not a candidate.
+        nearby = [
+            i
+            for i in matching
+            if abs(blocks[i].page_index - page_index) <= 2
+            and blocks[i].page_index not in listing_pages
+        ]
+        match = exact[0] if len(exact) == 1 else None
+        wanted = label_number(title)
+        if match is None and wanted is not None:
+            # Many books open a chapter with only its numeral ("12") while the outline
+            # says "Chapter 12". The outline's page is authoritative: take the first
+            # line there when it is that chapter's numeral.
+            first = next(
+                (
+                    i
+                    for i, block in enumerate(blocks)
+                    if block.page_index == page_index
+                    and block.id not in omitted
+                    and block.text.strip()
+                ),
+                None,
+            )
+            if first is not None and bare_number(blocks[first].text) == wanted:
+                match = first
+                numeral_anchored.add(first)
+        if match is None and not exact and len(nearby) == 1:
+            match = nearby[0]
         if match is None and not exact and not nearby and inferred_offset is not None:
-            shifted = [i for i in matching if blocks[i].page_index == page_index + inferred_offset]
+            shifted = [
+                i
+                for i in matching
+                if blocks[i].page_index == page_index + inferred_offset
+                and blocks[i].page_index not in listing_pages
+            ]
             if len(shifted) == 1:
                 match = shifted[0]
         if match is not None:
@@ -478,26 +587,6 @@ def propose_chapters(
         ]
     # A chapter label on a contents-style page (most lines end in a page
     # reference) is a listing when the same label opens a chapter later.
-    lines_on_page: dict[int, list[str]] = defaultdict(list)
-    for block in blocks:
-        if block.id not in omitted and block.text.strip():
-            lines_on_page[block.page_index].append(block.text.strip())
-    listing_pages = {
-        page
-        for page, texts in lines_on_page.items()
-        if len(texts) >= 6
-        and sum(
-            bool(PAGE_REFERENCE_END.search(text) or re.fullmatch(r"\d{1,4}", text))
-            for text in texts
-        )
-        >= 0.3 * len(texts)
-    }
-    # A contents run spans consecutive pages; fill single-page gaps.
-    listing_pages |= {
-        page + 1
-        for page in listing_pages
-        if page + 2 in listing_pages and page + 1 in lines_on_page
-    }
     label_positions: dict[str, list[int]] = defaultdict(list)
     for i in heading_indices:
         if NUMBERED_LABEL.match(blocks[i].text.strip()):
@@ -602,7 +691,9 @@ def propose_chapters(
                 else 0.9
             )
             evidence = (
-                ["PDF bookmark/TOC matched unique source title"]
+                ["PDF bookmark matched the numbered chapter heading on its page"]
+                if start in numeral_anchored
+                else ["PDF bookmark/TOC matched unique source title"]
                 if start in bookmark_titles
                 else ["printed contents entry matched unique later heading"]
                 if start in contents_titles
