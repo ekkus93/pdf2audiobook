@@ -777,8 +777,11 @@ def _analyze_book_locked(
         folder / "reports" / "analysis_fingerprints.json",
         {"schema_version": 1, "stages": stage_fingerprints},
     )
-    for _warning in extracted.warnings + warnings:
-        log_event("review_warning", level=logging.WARNING, stage="analysis")
+    manifest_warnings = len(extracted.warnings + warnings)
+    if manifest_warnings:
+        log_event(
+            "review_warning", level=logging.WARNING, stage="analysis", count=manifest_warnings
+        )
     log_event("stage_completed", level=logging.INFO, stage="analysis", count=len(chapters))
     return manifest_path
 

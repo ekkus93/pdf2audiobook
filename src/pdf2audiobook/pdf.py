@@ -1125,7 +1125,9 @@ def extract_pdf(
         if repaired:
             warnings.append("source PDF was damaged and repaired; verify page coverage")
             review_reasons.append("damaged_source")
-        if bool(getattr(document, "is_reflowable", False)):
+        reflowable = bool(getattr(document, "is_reflowable", False))
+        reflowable_labels_noted = False
+        if reflowable:
             warnings.append(
                 "EPUB pages use generated reflowable layout; page numbers can vary by renderer"
             )
@@ -1277,10 +1279,17 @@ def extract_pdf(
             except Exception:
                 # Page labels are advisory; keep the transcript and provenance.
                 page_label = str(page_index + 1)
-                warnings.append(
-                    f"Page {page_index + 1}: could not read PDF page label; "
-                    "using physical page number"
-                )
+                if not reflowable:
+                    warnings.append(
+                        f"Page {page_index + 1}: could not read PDF page label; "
+                        "using physical page number"
+                    )
+                elif not reflowable_labels_noted:
+                    # Generated EPUB pages never have labels: say so once, not per page.
+                    reflowable_labels_noted = True
+                    warnings.append(
+                        "EPUB pages have no printed page labels; physical page numbers are used"
+                    )
             page_spans, page_blocks = _build_page_blocks(
                 page_lines,
                 page_index=page_index,

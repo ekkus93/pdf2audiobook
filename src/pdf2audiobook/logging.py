@@ -144,6 +144,9 @@ def _dispatch(event: str, level: int, fields: dict[str, object]) -> None:
                 "degraded_output": "Some chapters produced degraded output",
                 "llm_slow_request": "An LLM request was much slower or longer than usual",
             }.get(event, event.replace("_", " "))
+            count = fields.get("count")
+            if event == "review_warning" and isinstance(count, int) and count > 1:
+                description += f" ({count} warnings in the manifest)"
             write_stderr(f"Warning: {description}.\n")
         return
     if event == "command_failed" and not structured:

@@ -53,13 +53,13 @@
 
 ## 4. Warning noise (E4)
 
-- [ ] 4.1 Tests:
+- [x] 4.1 Tests:
   - K > 1 warnings print exactly one human warning line, with the count;
   - `--json` lists `review_warning` once;
   - the EPUB fixture has one page-label summary warning and no per-page ones;
   - PDF page-label warnings are unchanged.
-- [ ] 4.2 Emit a single `review_warning` with `count`, and update its description.
-- [ ] 4.3 Collapse page-label warnings for reflowable documents into one summary warning.
+- [x] 4.2 Emit a single `review_warning` with `count`, and update its description.
+- [x] 4.3 Collapse page-label warnings for reflowable documents into one summary warning.
 
 ## 5. EPUB cover and background pages (E5)
 
