@@ -14,6 +14,7 @@ from typing import Any
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 
 try:
     ClickExit: type[BaseException] = getattr(import_module("click.exceptions"), "Exit")
@@ -263,10 +264,12 @@ def edits_list(
             )
         else:
             for row in rows:
+                # Book text and model-written reasons are data, never Rich markup.
                 console.print(
-                    f"[bold]{row.block_id}[/bold] chapter {row.chapter} · {row.provider} · "
-                    f"{row.status}\n  was: {row.original}\n  now: {row.replacement}\n"
-                    f"  why: {row.reason}",
+                    f"[bold]{escape(row.block_id)}[/bold] chapter {row.chapter} · "
+                    f"{escape(row.provider)} · {row.status}\n"
+                    f"  was: {escape(row.original)}\n  now: {escape(row.replacement)}\n"
+                    f"  why: {escape(row.reason)}",
                     markup=True,
                     highlight=False,
                 )

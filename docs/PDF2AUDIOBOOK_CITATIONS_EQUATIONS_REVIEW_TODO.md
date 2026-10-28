@@ -20,8 +20,8 @@
 
 ## 1. Literal text in `edits list` (Q1)
 
-- [ ] 1.1 Tests: an edit containing `x[i]`, `[/b]`, `[bold]` and `[13]` lists with exit 0 and every bracket verbatim; `--json` is unchanged.
-- [ ] 1.2 Escape book-derived fields (or print them without markup) in the human `edits list` output.
+- [x] 1.1 Tests: an edit containing `x[i]`, `[/b]`, `[bold]` and `[13]` lists with exit 0 and every bracket verbatim; `--json` is unchanged.
+- [x] 1.2 Escape book-derived fields (or print them without markup) in the human `edits list` output.
 
 ## 2. Rejected built-in edits (Q2)
 
