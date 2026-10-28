@@ -1,6 +1,6 @@
 # PDF2Audiobook EPUB Chapter Detection TODO
 
-**Status:** Not started
+**Status:** In progress
 **Date:** 2026-10-27
 **Baseline:** master at 04e4e8c
 **Specification:** `docs/PDF2AUDIOBOOK_EPUB_CHAPTERS_SPEC.md` (E1–E7)
@@ -20,7 +20,7 @@
 
 ## 0. Shared fixture
 
-- [ ] 0.1 Add a synthetic EPUB builder under `tests/`, extending the `_write_epub` pattern in `tests/test_epub_input.py`. It needs options for:
+- [x] 0.1 Add a synthetic EPUB builder under `tests/`, extending the `_write_epub` pattern in `tests/test_epub_input.py`. It needs options for:
   - a cover page: an image plus a full-page white background rectangle;
   - a contents list spanning two generated pages with `Chapter 1` … `Chapter N`;
   - body chapters that open with a bare numeral line;
