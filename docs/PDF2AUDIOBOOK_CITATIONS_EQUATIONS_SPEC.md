@@ -103,7 +103,7 @@ When `process_equations` is on and the LLM is enabled, analysis runs an **equati
 Today nothing in the CLI or review UI can set an LLM edit's `accepted` flag, so any LLM edit (cleanup, equation) is permanently a proposal. Add:
 
 ```
-pdf2audiobook edits list   MANIFEST [--pending|--accepted|--all] [--json]
+pdf2audiobook edits list   MANIFEST [--status pending|accepted|all] [--json]
 pdf2audiobook edits accept MANIFEST (--all | BLOCK_ID ...)
 pdf2audiobook edits reject MANIFEST (--all | BLOCK_ID ...)
 ```
@@ -111,7 +111,7 @@ pdf2audiobook edits reject MANIFEST (--all | BLOCK_ID ...)
 - `list` shows block ID, chapter number, provider, reason, status and the original and proposed text. Text appears in human output only; `--json` carries IDs, chapter numbers, status and reason codes, never book text.
 - `accept` sets `accepted = true` and regenerates the affected chapters' text through the existing artifact planner and transaction machinery, under the workspace lock: chapter text, coverage, metadata and manifest are published together or recovered.
 - An accepted edit whose chapter file was hand-edited produces the existing content-free chapter conflict, naming the chapter and `regenerate-chapter`, and nothing is changed.
-- `reject` removes the proposal from `edits` (recorded in the decision audit), so it is not proposed again for the same text.
+- `reject` removes a pending proposal from `edits`; an accepted edit cannot be rejected. Decisions are recorded in `reports/edit_decisions.json` (block ID, action, provider; no book text). *Amendment:* a rejected proposal can reappear if the workspace is re-analyzed, because the model's cached answer is unchanged; remembering rejections would need a manifest schema change and is out of scope.
 - Both commands refuse an unknown block ID (exit 2). Accepting twice is harmless.
 - Changed chapter text invalidates that chapter's audio automatically (the text hash changes) and nothing else.
 

@@ -35,10 +35,10 @@
 
 ## 3. Accepting and rejecting pending edits (C4)
 
-- [ ] 3.1 Tests: `edits list` filters by status and its `--json` output is content-free; `accept` sets `accepted` and changes exactly that block's narrated text; a hand-edited chapter file is a conflict naming the chapter, with every file unchanged; an interrupted accept recovers with `recover`; lock contention returns the lock error; accepting twice is harmless; an unknown block ID is exit 2; `reject` removes the proposal; `--all` works for both; the same commands handle a pending cleanup edit.
-- [ ] 3.2 Add the `edits` command group (`list`, `accept`, `reject`) and the core functions behind it, using the workspace lock, the artifact planner and `commit_artifacts`/`commit_review` so the manifest and chapter files publish together.
-- [ ] 3.3 Record accepted and rejected proposals in the decision audit. Confirm the changed chapter's audio goes stale and nothing else does.
-- [ ] 3.4 Privacy tests for every new error path.
+- [x] 3.1 Tests: `edits list` filters by status and its `--json` output is content-free; `accept` sets `accepted` and changes exactly that block's narrated text; a hand-edited chapter file is a conflict naming the chapter, with every file unchanged; an interrupted accept recovers with `recover`; lock contention returns the lock error; accepting twice is harmless; an unknown block ID is exit 2; `reject` removes the proposal; `--all` works for both; the same commands handle a pending cleanup edit.
+- [x] 3.2 Add the `edits` command group (`list`, `accept`, `reject`) and the core functions behind it, using the workspace lock, the artifact planner and `commit_artifacts`/`commit_review` so the manifest and chapter files publish together.
+- [x] 3.3 Record accepted and rejected proposals in `reports/edit_decisions.json`. Confirm the changed chapter's audio goes stale and nothing else does.
+- [x] 3.4 Privacy tests for every new error path.
 
 ## 4. Equation proposals (C3)
 

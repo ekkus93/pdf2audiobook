@@ -66,6 +66,11 @@ budget_app = typer.Typer(
     epilog="Example: pdf2audiobook budget show --output ./audiobooks/BOOK",
 )
 app.add_typer(budget_app, name="budget")
+edits_app = typer.Typer(
+    help="Review pending edits that analysis proposed (LLM cleanup, equation readings).",
+    epilog="Example: pdf2audiobook edits list ./audiobooks/BOOK/manifest.json",
+)
+app.add_typer(edits_app, name="edits")
 console = Console(stderr=True)
 
 
@@ -225,6 +230,104 @@ def show_config(
         raise
     except Exception as exc:
         fail(exc, json_output=json_output)
+
+
+@edits_app.command("list", epilog="Example: pdf2audiobook edits list MANIFEST --status all")
+def edits_list(
+    manifest_path: Path = typer.Argument(..., help="A generated manifest.json."),
+    status: str = typer.Option("pending", "--status", help="pending, accepted or all."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """List edits. Book text appears in human output only; --json carries IDs and statuses."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.edit_review import list_edits
+
+        rows = list_edits(manifest_path, status=status)
+        if json_output:
+            emit(
+                {
+                    "edits": [
+                        {
+                            "block_id": row.block_id,
+                            "chapter": row.chapter,
+                            "provider": row.provider,
+                            "status": row.status,
+                            # Model-written reasons can echo book text; fixed ones cannot.
+                            **({"reason": row.reason} if row.provider == "deterministic" else {}),
+                        }
+                        for row in rows
+                    ]
+                },
+                True,
+            )
+        else:
+            for row in rows:
+                console.print(
+                    f"[bold]{row.block_id}[/bold] chapter {row.chapter} · {row.provider} · "
+                    f"{row.status}\n  was: {row.original}\n  now: {row.replacement}\n"
+                    f"  why: {row.reason}",
+                    markup=True,
+                    highlight=False,
+                )
+            console.print(f"{len(rows)} edit(s)")
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
+def _edit_decision(
+    action: str,
+    manifest_path: Path,
+    block_ids: list[str] | None,
+    all_edits: bool,
+    json_output: bool,
+) -> None:
+    if bool(block_ids) == all_edits:
+        raise typer.BadParameter("Name one or more block IDs, or pass --all")
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.edit_review import accept_edits, reject_edits
+
+        changed = (accept_edits if action == "accepted" else reject_edits)(
+            manifest_path, None if all_edits else block_ids
+        )
+        key = "accepted" if action == "accepted" else "rejected"
+        if json_output:
+            emit({key: changed}, True)
+        else:
+            console.print(f"{key.capitalize()} {len(changed)} edit(s)")
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
+@edits_app.command("accept", epilog="Example: pdf2audiobook edits accept MANIFEST --all")
+def edits_accept(
+    manifest_path: Path = typer.Argument(..., help="A generated manifest.json."),
+    block_ids: list[str] | None = typer.Argument(None, help="Block IDs to accept."),
+    all_edits: bool = typer.Option(False, "--all", help="Accept every pending edit."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Accept pending edits; their chapters are regenerated and their audio goes stale."""
+    _edit_decision("accepted", manifest_path, block_ids, all_edits, json_output)
+
+
+@edits_app.command("reject", epilog="Example: pdf2audiobook edits reject MANIFEST BLOCK_ID")
+def edits_reject(
+    manifest_path: Path = typer.Argument(..., help="A generated manifest.json."),
+    block_ids: list[str] | None = typer.Argument(None, help="Block IDs to reject."),
+    all_edits: bool = typer.Option(False, "--all", help="Reject every pending edit."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Remove pending edits. Accepted edits cannot be rejected."""
+    _edit_decision("rejected", manifest_path, block_ids, all_edits, json_output)
 
 
 @budget_app.command("show", epilog="Example: pdf2audiobook budget show --output ./audiobooks/BOOK")
