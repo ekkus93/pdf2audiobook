@@ -78,6 +78,7 @@ files = [
     "src/pdf2audiobook/llm/provider.py",
     "src/pdf2audiobook/llm/advisory_common.py",
     "src/pdf2audiobook/llm/structure.py",
+    "src/pdf2audiobook/llm/equations.py",
     "src/pdf2audiobook/llm/usage.py",
     "src/pdf2audiobook/review_ui.py",
     "src/pdf2audiobook/review_reasons.py",

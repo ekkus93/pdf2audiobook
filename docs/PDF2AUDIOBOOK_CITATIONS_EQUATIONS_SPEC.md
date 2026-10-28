@@ -78,7 +78,7 @@ A group attached directly to a word (`a[1]`, `x[i]`) is not a citation, nor is `
 
 When `process_equations` is on and the LLM is enabled, analysis runs an **equation reading** task after the other LLM stages.
 
-**Candidates** are chosen without the LLM: blocks with `kind == "equation"`, or blocks containing mathematical notation by a deterministic test. The test matches any of the symbols `= + − × ÷ √ ∑ ∏ ∫ ≤ ≥ ≠ ≈ ∈ ∞ ± ∂ ∇ ^`, a Greek letter, or a function-call form such as `f(x)`, `Name(Q, K, V)` followed by `=`. The candidate count is capped (default 500 per book, content-free warning when exceeded), and the LLM budget limits still apply.
+**Candidates** are chosen without the LLM: blocks with `kind == "equation"`, or blocks containing mathematical notation by a deterministic test. The test matches any of the symbols `= + − × ÷ √ ∑ ∏ ∫ ≤ ≥ ≠ ≈ ∈ ∞ ± ∂ ∇ ^`, a Greek letter, or a function-call form being defined, such as `f(x) =` or `Attention(Q, K, V) =`. A bare `layer(s)` or `f(x)` in prose is not enough, and a line containing `://` is never a candidate. The candidate count is capped (default 500 per book, content-free warning when exceeded), and the LLM budget limits still apply.
 
 **Task.** The model is asked to rewrite only the mathematical notation of a candidate block as words a person would say aloud, to keep every other word exactly, and not to solve, simplify or explain. The prompt carries the usual untrusted-content framing. Block text is sent in bounded windows like the other stages, and the usual remote-content consent rules apply.
 
