@@ -31,8 +31,8 @@
 
 ## 3. Font-size gate with corroborated numerals (F3)
 
-- [ ] 3.1 Tests: no outline, a printed contents list, numeral chapters and one large-type prose line in the body. That line is not a chapter, and the "Ignored … font-size-only" warning is recorded. Without numerals, behavior is unchanged.
-- [ ] 3.2 Add `or len(numeral_titles) >= 3` to the weak-candidate gate.
+- [x] 3.1 Tests: no outline, a printed contents list, numeral chapters and one large-type prose line in the body. That line is not a chapter, and the "Ignored … font-size-only" warning is recorded. Without numerals, behavior is unchanged.
+- [x] 3.2 Add `or len(numeral_titles) >= 3` to the weak-candidate gate.
 
 ## 4. Warning summary wording (F4)
 

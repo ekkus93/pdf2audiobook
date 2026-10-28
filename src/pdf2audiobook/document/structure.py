@@ -692,7 +692,12 @@ def propose_chapters(
         and not is_heading_line(blocks[i].text)
     }
     llm_only = {i for i in weak if i not in typography_ids}
-    if len(bookmark_titles) >= 2 or contents_titles or numbered_labels >= 3:
+    if (
+        len(bookmark_titles) >= 2
+        or contents_titles
+        or numbered_labels >= 3
+        or len(numeral_titles) >= 3
+    ):
         # A PDF outline or printed contents that matches the text is stronger
         # evidence than font size or LLM classification. Do not let material
         # it omits (catalogue entries, scene breaks, stray running heads)
