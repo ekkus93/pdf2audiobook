@@ -44,12 +44,12 @@
 
 ## 3. LLM heading verification (E3)
 
-- [ ] 3.1 Tests with a fake provider:
+- [x] 3.1 Tests with a fake provider:
   - `Chapter 2` for the source line `2` is accepted, with the block text unchanged;
   - `Chapter 3` for `2` is rejected;
   - prose for a numeral line is rejected;
   - warnings stay content-free.
-- [ ] 3.2 Accept numeral-equivalent proposals in `llm/structure.py` verification. Use the label only as the title.
+- [x] 3.2 Accept numeral-equivalent proposals in `llm/structure.py` verification. The label is not propagated to the chapter title.
 
 ## 4. Warning noise (E4)
 

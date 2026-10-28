@@ -6,6 +6,7 @@ import re
 
 from pydantic import ValidationError
 
+from pdf2audiobook.document.structure import bare_number, label_number
 from pdf2audiobook.llm.advisory_common import (
     LLM_PROMPT_SCHEMA_VERSION,
     ContentsBoundaryResponse,
@@ -18,6 +19,18 @@ from pdf2audiobook.llm.advisory_common import (
     planned_windows,
 )
 from pdf2audiobook.models import DocumentBlock
+
+
+def _names_the_source_line(title: str, source_text: str) -> bool:
+    """True when the proposal is the line itself, or the label of a lone chapter numeral.
+
+    A book that opens chapter 12 with only "12" is correctly labelled "Chapter 12";
+    nothing else may differ from the source.
+    """
+    if title.strip().casefold() == source_text.strip().casefold():
+        return True
+    numeral = bare_number(source_text)
+    return numeral is not None and label_number(title) == numeral
 
 
 def detect_llm_headings(
@@ -102,7 +115,7 @@ def detect_llm_headings(
                 )
                 continue
             source = valid[heading.block_id]
-            if heading.title.strip().casefold() != source.text.strip().casefold():
+            if not _names_the_source_line(heading.title, source.text):
                 _record_decision(
                     decisions,
                     task="heading",

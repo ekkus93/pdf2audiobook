@@ -57,7 +57,7 @@ A chapter label on a contents-listing page is not a chapter start when the chapt
 ### E3: LLM heading proposals tolerate the numeral form
 
 In LLM heading verification (`llm/structure.py`), accept a proposal whose block is a bare chapter number N and whose proposed title is a numbered label with the same N.
-- Record the proposal as matching. The block text is unchanged and nothing is invented or deleted. The proposed label is used only as the chapter title.
+- Record the proposal as matching. The block text is unchanged and nothing is invented or deleted. *Amendment (implemented):* the LLM label is not carried into the chapter; the chapter takes its title from the outline, the printed contents or the block text, as for every other LLM-nominated heading.
 - Any other mismatch is rejected as today.
 - The "LLM heading text mismatched source" warning remains for real mismatches.
 
