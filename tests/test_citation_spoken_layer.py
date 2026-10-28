@@ -12,6 +12,7 @@ from pdf2audiobook.audio import (
     unspeakable_pause_ranges,
 )
 from pdf2audiobook.audio.citations import mask_citations
+from pdf2audiobook.errors import AudioError
 
 
 def _chunks(text: str) -> list[str]:
@@ -113,3 +114,20 @@ def test_voice_markers_and_citations_work_together(tmp_path: Path) -> None:
     text = "[[voice:Bella]]\n\nSpoken [4] words.\n"
     provider = _synthesize(tmp_path, text, skip_citations=True)
     assert provider.calls == [("Spoken words.", "Bella")]
+
+
+def test_a_bibliography_entry_number_is_not_spoken_and_alignment_holds() -> None:
+    text = "[1] Jimmy Ba. Layer normalization.\n\n[2] Dzmitry Bahdanau. Neural translation."
+    masked = mask_citations(text)
+    chunks = split_sentences(masked)
+    assert chunks == [
+        "Jimmy Ba. Layer normalization.",
+        "Dzmitry Bahdanau. Neural translation.",
+    ]
+    for chunk, (start, end, _) in zip(chunks, chunk_source_ranges(masked, chunks), strict=True):
+        assert text[start:end].startswith(chunk.split()[0])
+
+
+def test_text_of_only_citations_has_nothing_to_speak(tmp_path: Path) -> None:
+    with pytest.raises(AudioError, match="no speakable text"):
+        _synthesize(tmp_path, "[1] [2]\n", skip_citations=True)

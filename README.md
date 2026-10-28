@@ -330,7 +330,10 @@ edits and the source transcript are unchanged. A citation is a bracketed list of
 ascending range after a space or an opening bracket or quote; `a[1]`, `x[i]`, `[see 13]` and
 author-year forms such as `(Vaswani et al., 2017)` are left alone, and so is a list right after a
 relation symbol (`x ∈ [1, 5]`, `p = [2, 3]`), which is an interval. "As shown in [1, 5]" is still
-read as a citation. Changing the setting regenerates only audio.
+read as a citation. Numbers that start bibliography entries (`[1] Jimmy Ba. …`) are brackets like
+any other, so they are not spoken either. A chapter you have edited down to nothing but citations
+has nothing to say: that chapter fails with the usual "Chapter audio failed" error and the others
+still convert. Changing the setting regenerates only audio.
 
 **Equations** need the LLM. It proposes a spoken form for each line of mathematics (found by
 symbols such as `= + − √ ∑ ≤ ∈` and Greek letters, at most 500 per book). Every proposal is checked

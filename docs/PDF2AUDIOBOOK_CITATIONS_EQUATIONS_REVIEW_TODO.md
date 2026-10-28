@@ -59,10 +59,10 @@
 
 ## 6. Bibliography numbers and citation-only chapters (Q6)
 
-- [ ] 6.1 Tests:
+- [x] 6.1 Tests:
   - a bibliography entry's leading `[1]` is skipped without altering chunking;
   - a two-chapter conversion whose second chapter is only citations completes chapter 1 and fails chapter 2 with the existing content-free error.
-- [ ] 6.2 Fix any failure the tests expose, keeping the per-chapter failure. Document both behaviors in the README and the maintainer guide.
+- [x] 6.2 Fix any failure the tests expose, keeping the per-chapter failure. Document both behaviors in the README and the maintainer guide.
 
 ## 7. Equation prompt (Q7)
 

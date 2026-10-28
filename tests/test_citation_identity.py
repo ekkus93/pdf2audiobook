@@ -12,8 +12,9 @@ from typer.testing import CliRunner
 from pdf2audiobook import pipeline
 from pdf2audiobook.cli import app
 from pdf2audiobook.config import Settings
+from pdf2audiobook.errors import PartialConversionError
 from pdf2audiobook.models import BookManifest, Chapter, DocumentBlock
-from pdf2audiobook.pipeline import chapter_audio_fingerprint, convert_book
+from pdf2audiobook.pipeline import analyze_book, chapter_audio_fingerprint, convert_book
 
 # Computed from the code as it was before citation processing existed (commit 8e3c204),
 # with the TTS model identity pinned: the real identity embeds the installed kittenml
@@ -181,3 +182,17 @@ def test_pack_m4b_does_not_call_differing_citation_audio_stale(
         app, ["pack-m4b", str(manifest), "--output", str(tmp_path / "b.m4b"), "--no-config"]
     )
     assert result.exit_code == 0, result.stderr
+
+
+@needs_ffmpeg
+def test_a_chapter_of_only_citations_fails_alone_and_content_free(tmp_path: Path) -> None:
+    source, settings = _book(tmp_path)
+    settings.reading.process_citations = True
+    manifest = analyze_book(source, settings)
+    # A hand-edited chapter can be nothing but citations; the title normally keeps it speakable.
+    (manifest.parent / "chapters" / "002.txt").write_text("[1] [2]\n", encoding="utf-8")
+    with pytest.raises(PartialConversionError) as raised:
+        convert_book(source, settings, tts_provider=Provider())
+    assert "chapter(s): 2" in str(raised.value)
+    assert "[1]" not in str(raised.value)
+    assert [p.name for p in (manifest.parent / "audio").glob("*.mp3")] == ["001 - Chapter 1.mp3"]

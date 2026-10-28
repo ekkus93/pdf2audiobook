@@ -527,7 +527,11 @@ ascending ranges (`citation_ranges`) and `mask_citations` blanks them to spaces,
 closing punctuation into the gap, without changing the length. `synthesize_chunks` and
 `unspeakable_pause_ranges` take `skip_citations` and mask after the voice markers, exactly like
 voice markers, so chunking and the chunk-to-source mapping stay valid. The chapter file is
-never touched. `conversion.py` passes `skip_citations` only when on (injected synthesis doubles
+never touched. Bibliography entry numbers (`[1] Author. Title.`) match the pattern and are
+skipped on purpose; a chapter left with no speakable text raises the usual `AudioError`, which
+`convert` reports as a content-free `PartialConversionError` for that chapter only (the title
+normally keeps a chapter speakable, so this needs a hand-edited chapter file).
+`conversion.py` passes `skip_citations` only when on (injected synthesis doubles
 need not accept it), records `"citations": true` in the sidecar's `rendering_inputs` and adds a
 part to `chapter_audio_fingerprint` only when on, so the identity is byte-identical when off. Being
 on by default, existing audio regenerates on its next `convert`.
