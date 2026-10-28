@@ -145,6 +145,7 @@ In auto mode, OCR only pages with raster coverage above the configured trigger, 
 - Preserve quotations, scene breaks, emphasis cues, lists and paragraph boundaries. Treat footnotes/endnotes via configurable policy: omit, inline at anchor, or end of chapter; default to warn/omit ancillary material only when explicitly classified.
 - For tables, figures, formulas, sidebars and diagrams, default to a warning and conservative narration, not invented descriptions. A future vision-capable provider may describe these under explicit opt-in.
 - Avoid introducing new prose. Flag anomalous OCR tokens, huge edits, repeated/missing spans or nonmonotonic reading order.
+- **Citations and equations (opt-in, both default off).** `reading.process_citations` blanks numeric citations (`[13]`, `[35, 2, 5]`, `[1-3]`) from the spoken text only; the chapter file and every source offset keep them, and it needs no LLM. `reading.process_equations` has the LLM propose a spoken reading of mathematical notation; each proposal is verified (identical digit stream, surviving words, bounded length, no markup) and stored as a **pending** edit that changes narration only after `pdf2audiobook edits accept`. Author–year citations and prose math without listed symbols are not handled.
 
 ## 5. Chapter discovery
 
@@ -193,6 +194,7 @@ If a provider explicitly rejects `max_tokens` or `temperature`, retry once witho
 - **OCR/cleanup suggestions:** propose precise edits to anchored source blocks, with original substring, replacement, reason and confidence.
 - **Content classification:** distinguish running headers, body prose, footnotes, bibliographies, page labels, captions and ornamental material.
 - **Narration policy:** flag terms that need pronunciation/speech normalization while retaining source text unchanged.
+- **Equation reading:** when `reading.process_equations` is on, propose spoken readings for candidate blocks chosen by a deterministic symbol test (at most 500 per book). Readings are verified against the source and stored as pending edits; see §4.3.
 
 Use bounded requests with nearby-context overlap, stable IDs and prompt versioning; avoid sending entire books to small-context models. Reserve configured output capacity before each request, use a conservative UTF-8-byte upper bound for prompt content plus explicit chat-message overhead, and pass max_tokens to the compatible API. This is a fail-closed preliminary bound, not a model-specific tokenizer guarantee; incompatible parameter support and live served-model context windows require real-model checks. Use low temperature when supported. Treat book text as **untrusted data**: embedded instructions may not change prompts, run tools, exfiltrate text or alter policy.
 
@@ -287,6 +289,10 @@ speed = 1.0
 
 [cache]
 enabled = true
+
+[reading]
+process_citations = false   # skip numeric citations such as [13] in the audio
+process_equations = false   # LLM-proposed spoken readings of equations, pending approval
 ```
 
 Example environment names: `PDF2AUDIOBOOK_LLM_PROVIDER`, `PDF2AUDIOBOOK_LLM_MODEL`, `PDF2AUDIOBOOK_LLM_URL`, `PDF2AUDIOBOOK_TTS_PROVIDER`, `PDF2AUDIOBOOK_TTS_MODEL`, `PDF2AUDIOBOOK_TTS_VOICE`, `PDF2AUDIOBOOK_TTS_SPEED`, and `OPENAI_API_KEY`. Reject unknown configuration keys, non-table sections, and unsupported combinations with content-free actionable messages. Only MPEG-compatible sample rates are accepted. `cache.directory` is retained for compatibility, but ignored with a warning when explicitly set.
@@ -307,6 +313,9 @@ pdf2audiobook convert book.pdf --config ./settings.toml --output ./audiobook
 pdf2audiobook analyze book.pdf --output ./audiobook
 pdf2audiobook inspect ./audiobook/manifest.json
 pdf2audiobook doctor
+pdf2audiobook convert paper.pdf --process-citations --process-equations
+pdf2audiobook edits list ./audiobook/manifest.json
+pdf2audiobook edits accept ./audiobook/manifest.json --all
 pdf2audiobook config show --sources
 ```
 

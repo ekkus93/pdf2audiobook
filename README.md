@@ -310,6 +310,46 @@ cap also invalidates earlier LLM response-cache identities. Operators must verif
 context windows and `max_tokens` support against their selected live model.
 These checks do not guarantee that a misconfigured server honors its limit.
 
+## Citations and equations
+
+Technical books read badly aloud when citations and equations are spoken literally. Two
+independent settings, both **off by default**, change that:
+
+~~~toml
+[reading]
+process_citations = true   # skip [13], [35, 2, 5], [1-3] in the audio
+process_equations = true   # LLM proposes spoken readings; you approve them
+~~~
+
+Each also has a flag pair on `analyze` and `convert` (`--process-citations/--no-process-citations`,
+`--process-equations/--no-process-equations`) and an environment variable
+(`PDF2AUDIOBOOK_PROCESS_CITATIONS`, `PDF2AUDIOBOOK_PROCESS_EQUATIONS`).
+
+**Citations** are skipped in the spoken text only. The chapter file still contains them, so your
+edits and the source transcript are unchanged. A citation is a bracketed list of numbers or an
+ascending range after a space or an opening bracket or quote; `a[1]`, `x[i]`, `[see 13]` and
+author-year forms such as `(Vaswani et al., 2017)` are left alone. Changing the setting
+regenerates only audio.
+
+**Equations** need the LLM. It proposes a spoken form for each line of mathematics (found by
+symbols such as `= + − √ ∑ ≤ ∈` and Greek letters, at most 500 per book). Every proposal is checked
+against the source: the digits must be identical, words of four letters or more must survive in
+order, and markup or runaway length is refused. Survivors are **pending** and never reach the
+audio until you accept them:
+
+~~~bash
+pdf2audiobook edits list ./audiobooks/BOOK/manifest.json
+pdf2audiobook edits accept ./audiobooks/BOOK/manifest.json p00003-l00012
+pdf2audiobook edits accept ./audiobooks/BOOK/manifest.json --all
+pdf2audiobook edits reject ./audiobooks/BOOK/manifest.json p00003-l00020
+~~~
+
+Accepting regenerates that chapter's text (a chapter file you edited by hand is a conflict;
+see `regenerate-chapter`) and makes only its audio stale. The checks cannot judge whether an
+operator was read correctly, which is why nothing is applied unreviewed. `edits` also resolves
+pending cleanup suggestions. Choose the equation setting before the first analysis: a workspace
+with an approved chapter refuses re-analysis, so enabling it later needs a new `--output`.
+
 ## Progress and time estimates
 
 Long runs show a progress bar per stage on stderr, with elapsed time and an estimate of the time

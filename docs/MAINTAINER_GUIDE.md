@@ -508,6 +508,35 @@ page maps to messages; forward only the allowlisted messages of `ChapterConflict
 `PendingRecoveryError`. `commit_artifacts` returns without writing a journal when nothing
 changes.
 
+## Citation and equation reading
+
+`[reading]` holds two independent, default-off booleans (`process_citations`,
+`process_equations`; env `PDF2AUDIOBOOK_PROCESS_*`; paired CLI flags on `analyze` and
+`convert`). Equation processing with the LLM disabled is a `ConfigError` (exit 2).
+
+**Citations** are deterministic. `audio/citations.py` finds bracketed integer lists and
+ascending ranges (`citation_ranges`) and `mask_citations` blanks them to spaces, moving any
+closing punctuation into the gap, without changing the length. `synthesize_chunks` and
+`unspeakable_pause_ranges` take `skip_citations` and mask after the voice markers, exactly like
+voice markers, so chunking and the chunk-to-source mapping stay valid. The chapter file is
+never touched. `conversion.py` passes `skip_citations` only when on (injected synthesis doubles
+need not accept it), records `"citations": true` in the sidecar's `rendering_inputs` and adds a
+part to `chapter_audio_fingerprint` only when on, so every identity is byte-identical when off.
+`pack-m4b` ignores the key.
+
+**Equations** are an LLM task (`llm/equations.py`). `equation_candidates` picks blocks by symbol
+test, `verify_reading` rejects unfaithful readings (digit stream, surviving words, length,
+markup), and `propose_llm_equation_readings` stores survivors as `CleanupEdit(provider="llm",
+accepted=False)`. The analysis hook runs after the other stages and adds
+`equation-readings-v1` to the `llm-analysis` fingerprint only when on.
+
+**Pending edits** are resolved with `pdf2audiobook edits list|accept|reject` (`edit_review.py`).
+`accept` flips the flag in memory and calls `render_chapter_texts(commit_manifest=True)` under
+the workspace lock, so manifest and chapter files publish together; a hand-edited chapter is the
+usual content-free conflict. `reject` rewrites the manifest without the proposal. Both append
+block IDs and actions (no text) to `reports/edit_decisions.json`. A rejected proposal can return
+on re-analysis, because the cached model answer is unchanged.
+
 ## Request timeout and progress display
 
 `llm.<provider>.timeout_seconds` (Ollama 300, others 60) becomes the `httpx` read/write/pool

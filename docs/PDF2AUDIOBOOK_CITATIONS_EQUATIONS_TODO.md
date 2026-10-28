@@ -50,8 +50,8 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Update `docs/PDF2AUDIOBOOK_SPEC.md` (§4.3, §6, §7) and `docs/MAINTAINER_GUIDE.md` (the settings, the spoken-layer citation hook, the edit workflow, the fingerprint rules).
-- [ ] 5.2 Update the README: the two settings and flags, the `edits` commands, what counts as a citation and as an equation candidate, and the known limitations.
+- [x] 5.1 Update `docs/PDF2AUDIOBOOK_SPEC.md` (§4.3, §6, §7) and `docs/MAINTAINER_GUIDE.md` (the settings, the spoken-layer citation hook, the edit workflow, the fingerprint rules).
+- [x] 5.2 Update the README: the two settings and flags, the `edits` commands, what counts as a citation and as an equation candidate, and the known limitations.
 
 ## 6. Finish
 
