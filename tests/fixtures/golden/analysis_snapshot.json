@@ -6,13 +6,13 @@
    "chapters/002.txt": "d8eb11c8c38b52942fc7c5bde4d644add2312f41c42eb30f03316ddff2f46ff6",
    "chapters/003.txt": "5e7e7751f594d6d7175ad38fe0b8a320dcd454ba336cf3298f0e0e667b862b2c",
    "coverage.json": "8e0761870bb2a052b77438524db617d9c7738c347a71d443cb3fd3df9a523806",
-   "manifest.json": "ae47c1ba339dd4c6d093f68ed9878feca6e9310efe5e66b724eb8abaf9a1edcd",
-   "reports/analysis_fingerprints.json": "dd965739d778125a24898423c776ab0f9d6eef37ca966bbb59251e54b791d23f",
+   "manifest.json": "000100de99186af62d57bd901aa7f60d550c58cfaa14e2dd9b2cd1fd83fe53c2",
+   "reports/analysis_fingerprints.json": "59eab53153f7b830cb32dd1f611b637416bd0e14057f664c1651c4c9ced5e6fe",
    "reports/llm_cleanup_audit.json": "8e44692c18d4c22a7b93130a73868920e259a48d0c08f6bf85f09e4d5e3eaad6",
    "reports/llm_decisions.json": "34ddf07d20261179dfecdf675da10b63b7ef64b4bb19a76774e3753f37ea27cb"
   },
   "manifest_sections": {
-   "analysis_fingerprint": "00f11ddd2b407fe785c9efd36eb748cc22b02ff1f4ed6e831e113a01ba1ba0c3",
+   "analysis_fingerprint": "09bef31b617a356461b214da47ed7adbd4f7366cb5404438fc3754a1494c478d",
    "approved": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
    "author": "f5defb7d8a17154e98e771f5f7645b0bf67d1400bafa961dcf38ed3a92beecc8",
    "blocks": "891b4e1decc9517f9ea837f4ccb1747063f0f549b263f963042b49ed164eb479",
@@ -29,7 +29,7 @@
    "warnings": "bc5d70c2b013e6a76f91daaeced4946b3bac3ff9911d6da10a91a2aea1aec5a0"
   },
   "summary": {
-   "analysis_fingerprint": "c25ebfbac9b60106bcfab2896cdad7dfc057421573b06aa3db07b8954abf3f45",
+   "analysis_fingerprint": "724bc11419dc4c565cb078fcd629f655aba633d3509cd457fd6bd39e574d64d4",
    "block_kinds": [
     "footnote",
     "heading",
@@ -80,13 +80,13 @@
    "chapters/006.txt": "e213550e373f853abb365a6525477cb678ef660f80af80a2172f756e29f46d76",
    "chapters/007.txt": "aa0d7594f287dcd9cec1cc37d877564c64b8aa2626dd54bace3454e7ef16767e",
    "coverage.json": "150733a40fa20c0536a0c75c339d67bf60fda4002d3dca64dcfd9196916533ed",
-   "manifest.json": "7074a696e53f76a113616b6352afec982135b9b6e09d26657ac34bdfd16ba52f",
-   "reports/analysis_fingerprints.json": "f0b498a89b526cf6873f275e34282ce510f46d369d48cc1d9481c47d52021e4f",
+   "manifest.json": "ee8c2fec25ed697b35ace4cb4f77be03ad44376ab6ef9db4aba8fcd0e0c3fc6d",
+   "reports/analysis_fingerprints.json": "b146c4e88b21a0f0bd016ca7fe2c5eea26789a78287f0509f14bb860f8fbe8ed",
    "reports/llm_cleanup_audit.json": "8e44692c18d4c22a7b93130a73868920e259a48d0c08f6bf85f09e4d5e3eaad6",
    "reports/llm_decisions.json": "34ddf07d20261179dfecdf675da10b63b7ef64b4bb19a76774e3753f37ea27cb"
   },
   "manifest_sections": {
-   "analysis_fingerprint": "ba4c805c3d92acfa021a9e15c059a459b265404d76acf5954674a1743d131bcf",
+   "analysis_fingerprint": "e3eba05fb5e8313edf808b38bd675e23135d069cf9aa4f923dfb10b23a0bd8a0",
    "approved": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
    "author": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
    "blocks": "dffe9b24d2db23894bcd9ba5591062730c06519cd174dae1325bcd9b4583a6c8",
@@ -103,7 +103,7 @@
    "warnings": "0e04754473c6a66226630af260317cc5af30509174cebe19bdc0df07bdbd5866"
   },
   "summary": {
-   "analysis_fingerprint": "46186b95dc512b93811fdd8bcb48ceae2797de54c374d06d3f70c4b7d2c22bd6",
+   "analysis_fingerprint": "eb05275b3b30f7f9548f7d9c45caea97523ee0b70d5d0295172150d53beb8a38",
    "block_kinds": [
     "heading",
     "unknown"

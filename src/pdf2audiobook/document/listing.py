@@ -16,7 +16,9 @@ def _list_marker(text: str) -> tuple[str, str] | None:
     match = _LIST_MARKER.match(text)
     if match is None:
         return None
-    marker = match.group("marker")[:-1]
+    raw = match.group("marker")
+    # Numbered markers end in "." or ")"; a bullet is its own whole marker.
+    marker = raw[:-1] if raw[-1] in ".)" else raw
     rest = match.group("rest")
     # A. Smith and B. Jones are prose initials, not alphabetic list items.
     if len(marker) == 1 and marker.isalpha() and re.match(r"[A-Z][a-z]+\b", rest):

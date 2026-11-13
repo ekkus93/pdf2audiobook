@@ -102,17 +102,8 @@ PROSE = "An ordinary line of prose."
         ("a) first", "b) second", True),
         ("a) first", "c) third", False),
         ("B. first", "c. second", True),
-        pytest.param(
-            "• first",
-            "• second",
-            True,
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="listing.py:19 strips a bullet marker to an empty string, so the "
-                "bullet rule at listing.py:34 never matches (test coverage TODO, "
-                "Found while testing)",
-            ),
-        ),
+        ("• first", "• second", True),
+        ("* first", "* second", True),
         ("* first", "• second", False),
         ("1. first", "• second", False),
         ("i) first", "ii) second", True),
@@ -126,6 +117,7 @@ PROSE = "An ordinary line of prose."
         "letters-skip",
         "letters-mixed-case",
         "bullets",
+        "asterisks",
         "different-bullets",
         "number-then-bullet",
         "roman",
@@ -148,3 +140,16 @@ def test_list_runs_need_sequential_markers(previous, line, expected):
 def test_three_digit_parenthesised_number_is_prose(line, expected):
     """T6.b: "250)" reads as a closing parenthesis after a number, not a list marker."""
     assert is_list_line(line) is expected
+
+
+def test_bulleted_lines_become_list_blocks():
+    """A run of matching bullets is a list during extraction, not unknown text."""
+    blocks = _blocks(
+        [
+            _line("• Gather the tools.", 100),
+            _line("• Read the manual.", 115),
+            _line("• Start the engine.", 130),
+        ]
+    )
+
+    assert [block.kind for block in blocks] == ["list", "list", "list"]
