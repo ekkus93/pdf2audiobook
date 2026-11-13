@@ -223,6 +223,78 @@ def test_status_that_grows_before_it_is_read_is_reported_oversized(tmp_path, mon
     _assert_content_free(result.stderr, tmp_path)
 
 
+def test_status_that_grows_between_open_and_read_is_reported_oversized(tmp_path, monkeypatch):
+    manifest_path = _status_workspace(tmp_path, b'{"chapters": []}')
+    real_open = Path.open
+    read_opens = []
+
+    class _GrowsOnFirstRead:
+        """Delegates to the real handle; the file grows just before the first read."""
+
+        def __init__(self, handle, path):
+            self._handle = handle
+            self._path = path
+            self._grown = False
+
+        def read(self, *args, **kwargs):
+            if not self._grown:
+                self._grown = True
+                with real_open(self._path, "ab") as stream:
+                    stream.write(b" " * (_STATUS_LIMIT + 1))
+            return self._handle.read(*args, **kwargs)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc_info):
+            self._handle.close()
+
+        def __getattr__(self, name):
+            return getattr(self._handle, name)
+
+    def growing_open(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "r")
+        handle = real_open(self, *args, **kwargs)
+        if self.name == "conversion_status.json" and "r" in mode:
+            read_opens.append(self)
+            return _GrowsOnFirstRead(handle, self)
+        return handle
+
+    monkeypatch.setattr(Path, "open", growing_open)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path), "--json"])
+
+    # Any size check made after opening but before reading (fstat, seek) sees
+    # the small file; only a decision from the bytes read reports the growth.
+    assert result.exit_code == 3, "an oversized status read must not be silently omitted"
+    error = json.loads(result.stderr)
+    assert error["error"]["message"] == "Conversion status file exceeds safe size limit"
+    _assert_content_free(result.stderr, tmp_path)
+    assert len(read_opens) == 1, "the status file must be read through a single handle"
+
+
+def test_valid_status_is_read_through_a_single_handle(tmp_path, monkeypatch):
+    status = json.dumps({"chapters": [{"number": 1, "status": "complete"}]}).encode()
+    manifest_path = _status_workspace(tmp_path, status)
+    real_open = Path.open
+    read_opens = []
+
+    def counting_open(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if self.name == "conversion_status.json" and "r" in mode:
+            read_opens.append(self)
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", counting_open)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path), "--json"])
+
+    assert result.exit_code == 0, result.stderr
+    assert json.loads(result.stdout)["conversion_status"]["chapters"][0]["status"] == "complete"
+    # The size decision and the parse must use the same bytes, from one handle.
+    assert len(read_opens) == 1
+
+
 def test_status_one_byte_over_the_limit_is_a_fixed_error_in_human_mode(tmp_path):
     status = b"{}" + b" " * (_STATUS_LIMIT - 1)
     assert len(status) == _STATUS_LIMIT + 1
@@ -233,6 +305,7 @@ def test_status_one_byte_over_the_limit_is_a_fixed_error_in_human_mode(tmp_path)
     assert result.exit_code == 3
     assert result.stderr.lstrip().startswith("Error:")
     assert "Conversion status file exceeds safe size limit" in result.stderr
+    _assert_content_free(result.stderr, tmp_path)
 
 
 def test_unavailable_synthesis_progress_uses_null_report_fields():
