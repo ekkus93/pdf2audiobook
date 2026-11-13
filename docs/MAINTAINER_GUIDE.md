@@ -110,7 +110,7 @@ uv run pdf2audiobook analyze scanned.pdf --no-llm --ocr always
 Avoid storing passwords or copyrighted source text in shared logs.
 
 In `auto` mode a page with no usable text is also OCRed when its drawings look
-like outlined text (`pdf.py`): at least `_VECTOR_GLYPH_MIN_PATHS` (40) small
+like outlined text (`pdf_ocr.py`): at least `_VECTOR_GLYPH_MIN_PATHS` (40) small
 filled paths, each no larger than `_VECTOR_GLYPH_MAX_FRACTION` (6%) of the page
 in either direction, or at least `_VECTOR_ARTWORK_MIN_PATHS` (100) paths of any
 size covering `_VECTOR_ARTWORK_MIN_COVERAGE` (15%) of it. A text-free page with
@@ -391,19 +391,27 @@ The executable `pdf2audiobook` maps to `pdf2audiobook.cli:app`
    privacy-safe structured events.
 2. `pdf.py` and `reading_order.py`: `DocumentExtractor` protocol with the
    default `PyMuPDFExtractor`; PyMuPDF inspection, embedded/OCR extraction,
-   provenance, geometry and conservative column-order decisions.
+   provenance, geometry and conservative column-order decisions. `pdf.py`
+   keeps extraction and `inspect_pdf`; `pdf_layout.py` classifies each page
+   (visuals, text lines, tables, footnotes, special material, block kinds) and
+   `pdf_ocr.py` decides when to OCR and runs Tesseract with its line cache.
 3. `models.py` and `document/structure.py`: source-aligned models,
    pagination edits, chapter proposals, coverage checks and chapter rendering.
 4. `llm/__init__.py`: `LLMProvider` protocol and OpenAI-compatible HTTP
    transport, endpoint validation, structured proposals and deterministic
    proposal verification. PDF text is untrusted user content, not instructions.
 5. `tts/__init__.py`: `TTSProvider` protocol and lazily loaded Kitten
-   adapter; `audio/__init__.py`: `AudioEncoder` protocol, source-aligned
-   chunks, WAV validation, PCM assembly, FFmpeg MP3 encoding (`encode_mp3`)
-   and ID3 metadata.
+   adapter; `audio/__init__.py` is a facade over `audio/speech_text.py`
+   (speakability, voice markers, source-aligned sentence chunks),
+   `audio/synthesis.py` (the bounded WAV chunk cache and chunked synthesis),
+   `audio/wav.py` (the streaming chapter WAV writer) and `audio/encoding.py`
+   (`AudioEncoder` protocol, FFmpeg MP3 encoding with `encode_mp3`, and ID3
+   metadata); it keeps only the output paths and the cover image.
 6. `workspace.py`: SHA-256 identities and atomic JSON writes;
-   `pipeline.py`: analysis, approved-edit protection, stage fingerprints,
-   chapter selection, resumable synthesis and output checksums.
+   `pipeline.py`: the facade and entry points (`analyze_book`,
+   `convert_book`), stage fingerprints and chapter selection; `analysis.py`:
+   the analysis steps and approved-edit protection; `conversion.py`: resumable
+   synthesis and output checksums.
 
 Typical call path:
 `cli.analyze -> pipeline.analyze_book -> pdf.extract_pdf ->
@@ -422,8 +430,9 @@ through a small private dataclass per run, never module state. When you change
 a step, keep the order: several steps are fail-closed checks that must run
 before anything is reserved, sent or written.
 
-- Analysis, `pipeline._analyze_book_locked` (state in `_AnalysisRun` and
-  `_AnalysisState`):
+- Analysis, `analysis._analyze_book_locked` (state in `_AnalysisRun` and
+  `_AnalysisState`; every dependency that tests patch on `pipeline` is called
+  through `AnalysisServices`, built by `pipeline.analyze_book` at call time):
   1. `_start_analysis`: hash the source and fingerprint each stage.
   2. `_reuse_existing_analysis`: keep, update (`_switch_footnote_policy`) or
      refuse an existing manifest.
@@ -434,7 +443,9 @@ before anything is reserved, sent or written.
   6. `_merge_hand_edits`: the hand-edit merge, using `_HandEditMerge`.
   7. `_chapter_review`, then `_write_analysis`.
 
-  These steps stay in `pipeline.py` because tests patch `pipeline.*` names.
+  `tests/test_patch_targets.py` fails if `analysis.py` or `conversion.py`
+  calls a name that tests patch on `pipeline` directly instead of through its
+  services record.
 - Conversion, `conversion._convert_analyzed_book` (state in `_ConversionRun`;
   every dependency is called through `ConversionServices`):
   1. Load the manifest and chapter selection.
@@ -446,7 +457,7 @@ before anything is reserved, sent or written.
 - Lower-level orchestrators split the same way:
   - `pagination_cleanup`: one named predicate per fail-closed margin rule;
   - `propose_chapters`: state in `_HeadingEvidence`;
-  - `audio.synthesize_chunks`: validation runs before any engine call or cache
+  - `audio.synthesis.synthesize_chunks`: validation runs before any engine call or cache
     replay;
   - `CachedLLMProvider._complete_json_call`: request bounds before the cache
     lookup, and server limits before the reservation;
@@ -542,11 +553,11 @@ before retrying. Do not delete an unresolved journal as a recovery shortcut.
 Transactions larger than 512 MiB are rejected before commit; the encoded journal includes the
 manifest and any generated chapter files being published.
 
-`pipeline.py` coordinates analysis and delegates chapter conversion to `conversion.py`.
+`pipeline.py` is the entry point: it delegates analysis to `analysis.py` and chapter conversion to `conversion.py`.
 `analysis_state.py` preserves reviewed decisions, `chapter_selection.py` applies review gates,
 and `tts/selection.py` resolves profiles and model identities. The document package separates
 chapter detection (`structure.py`), pagination, coverage, list classification and narration.
-The audio package separates synthesis, progress records, encoding and sidecar validation. The LLM
+The audio package separates speech text, synthesis, the chapter WAV writer, progress records, encoding and sidecar validation. The LLM
 package separates provider transport, shared advisory schemas, and structure proposals. Existing
 imports from `pipeline`, `document.structure`, `audio`, and `llm` remain available. The transaction
 and artifact modules keep workspace persistence out of the renderer's domain logic.

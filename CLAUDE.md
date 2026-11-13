@@ -29,7 +29,7 @@ Use uv only; never install into the system interpreter. These mirror `.github/wo
 - `manually_approved`/`approved` manifest entries block destructive reanalysis even with `--no-resume`/`--force`.
 - Resume is content-addressed: changing derived semantics requires a fingerprint or schema-version bump. Old manifest versions are rejected, not migrated.
 - JSON writes are atomic and reject NaN/Infinity. Cached reads are size- and depth-bounded (use `jsonio.load_bounded_json`; see `llm/cache.py`, `audio/progress.py`); bad cache entries are misses, not errors.
-- `pipeline`, `document.structure`, `audio` and `llm/__init__` are re-export facades for split-out modules; keep the re-exports when moving code.
+- `pipeline`, `pdf`, `document.structure`, `audio` and `llm/__init__` are re-export facades for split-out modules (`analysis`, `pdf_ocr`, `pdf_layout`, `audio.synthesis`, …); keep the public re-exports when moving code. Don't re-export a moved private name: retarget the tests that patch it, so a stale patch fails with `AttributeError` instead of silently doing nothing. Code moved out of `pipeline` reaches patched names through a services record (`AnalysisServices`, `ConversionServices`); `tests/test_patch_targets.py` enforces it.
 - Budget ledger fails closed and uses exact `Decimal` cost math.
 - Remote LLM content requires `--allow-remote-content`; plain HTTP to non-loopback hosts is always refused. PDF passwords are passed as an env-var *name*.
 
