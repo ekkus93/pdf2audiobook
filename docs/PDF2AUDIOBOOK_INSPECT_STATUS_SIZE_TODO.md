@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size TODO
 
-**Status:** R1–R2 implemented and verified locally in 19dc01b; FX11.04d (CI evidence) open until the commits are pushed
+**Status:** Complete; R1–R2 implemented in 19dc01b, verified locally and by CI run 43350264347
 **Date:** 2026-11-13
 **Specification:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_SPEC.md` (R1–R2)
 **Review source:** Fourth-review audit of `docs/PDF2AUDIOBOOK_FOURTH_REVIEW_TODO.md`, finding FX10.27b's remaining `inspect` size-check race.
@@ -88,7 +88,7 @@
 
 ### Verification and closure
 
-- [ ] FX11.04 Verify and record evidence.
+- [x] FX11.04 Verify and record evidence.
   - [x] FX11.04a Run the focused `inspect` tests and confirm the boundary,
     unreadable and race cases.
     - Evidence: `uv run --extra dev pytest -q tests/test_inspect_conversion_status.py tests/test_jsonio.py`: 17 passed.
@@ -98,9 +98,9 @@
   - [x] FX11.04c Confirm any environment-gated tests are reported accurately;
     do not claim they ran when skipped.
     - Evidence: The 12 skips are 11 Tesseract tests (Tesseract not installed locally) and 1 Kitten smoke (extra not installed); none exercise `inspect`. FFmpeg is installed locally and its tests ran.
-  - [ ] FX11.04d Append the local and CI results, the full fix SHA, and real
+  - [x] FX11.04d Append the local and CI results, the full fix SHA, and real
     run IDs to the ledger; check FX11 only when all acceptance criteria pass.
-    - Note: local results and the fix SHA are in the ledger. CI evidence needs the commits pushed to GitHub, which hasn't been authorized; this stays open until a real CI run for the fix SHA can be recorded.
+    - Evidence: Python CI [43350264347](https://github.com/ekkus93/pdf2audiobook/actions/runs/43350264347) on head 16e98a56bf85a4c0f9f50da9b3792970b2909624 (the fix plus a TODO-only docs commit; no separate run exists for 19dc01b because the three commits were pushed together) passed on Python 3.11, 3.12 and 3.13: 2006 passed and 1 skipped (the opt-in Kitten smoke) on each, so the Tesseract-gated tests that skip locally ran in CI; Ruff, format, mypy, CLI smoke and wheel/sdist clean-environment smoke passed. Ledger rows for 19dc01be16ee10a479434fe407733cb8c2167ca6 (local) and the CI run.
 
 ## Acceptance gate
 
@@ -121,3 +121,4 @@
 | --- | --- | --- | --- | --- |
 | 2026-11-13 | Not committed | Spec and TODO drafted; implementation not started. | Not run | FX11.01 regression tests |
 | 2026-11-13 | 19dc01be16ee10a479434fe407733cb8c2167ca6 | FX11.01–FX11.03, FX11.04a–c: `inspect` decides oversize from one bounded read (`jsonio.load_size_checked_json`); unreadable status omitted; FIFO limitation documented | Failed at the fix's parent d4c0aae: `test_status_that_grows_after_a_size_observation_is_reported_oversized` (status omitted, exit 0), `test_unreadable_conversion_status_is_omitted` (exit 1). After: `/verify` green on the rebased tree, 1995 passed and 12 skipped (11 Tesseract, 1 Kitten); mypy clean on 3.11–3.13. CI not run (not pushed) | FX11.04d: CI evidence needs a push |
+| 2026-11-13 | 16e98a56bf85a4c0f9f50da9b3792970b2909624 | FX11.04d: CI evidence for the FX11 fix (19dc01be16ee10a479434fe407733cb8c2167ca6) | Python CI [43350264347](https://github.com/ekkus93/pdf2audiobook/actions/runs/43350264347) on head 16e98a56bf85a4c0f9f50da9b3792970b2909624 (the fix plus a TODO-only docs commit; no separate run exists for 19dc01b because the three commits were pushed together) passed on Python 3.11, 3.12 and 3.13: 2006 passed and 1 skipped (the opt-in Kitten smoke) on each, so the Tesseract-gated tests that skip locally ran in CI; Ruff, format, mypy, CLI smoke and wheel/sdist clean-environment smoke passed | None |
