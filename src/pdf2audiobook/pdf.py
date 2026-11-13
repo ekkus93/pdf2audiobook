@@ -1124,6 +1124,312 @@ def _apply_ocr_fallback(
     return lines, origin, warnings
 
 
+@dataclass
+class _ExtractionRun:
+    """Settings and accumulated output for one document extraction.
+
+    `spans`, `blocks`, `warnings`, `review_reasons`, `sizes` and `page_labels`
+    grow page by page in document order and become the `ExtractedDocument`.
+    """
+
+    settings: PdfSettings
+    ocr_cache_dir: Path | None
+    source_sha256: str | None
+    reflowable: bool
+    explicit_page_labels: bool
+    spans: list[SourceSpan] = field(default_factory=list)
+    blocks: list[DocumentBlock] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+    review_reasons: list[str] = field(default_factory=list)
+    sizes: list[tuple[float, float]] = field(default_factory=list)
+    page_labels: list[str | None] = field(default_factory=list)
+    reflowable_labels_noted: bool = False
+
+    def note_damaged_source(self) -> None:
+        """Require review for a damaged source, once."""
+        if "damaged_source" not in self.review_reasons:
+            self.review_reasons.append("damaged_source")
+
+
+@dataclass
+class _PageAnnotations:
+    """Line indices of the special material found on one page."""
+
+    table_regions: list[tuple[float, float, float, float]]
+    caption_indices: set[int]
+    footnote_indices: set[int]
+    equation_indices: set[int]
+
+
+def _start_extraction(
+    document: Any,
+    source: Path,
+    settings: PdfSettings,
+    ocr_cache_dir: Path | None,
+    source_sha256: str | None,
+) -> tuple[_ExtractionRun, list[list], str, str | None]:
+    """Validate the opened document and read its outline, metadata and label flag.
+
+    Returns the run state, the outline, the title and the author.
+    """
+    warnings: list[str] = []
+    review_reasons: list[str] = []
+    if len(document) == 0:
+        raise ExtractionError("Book has no extractable pages")
+    try:
+        repaired = bool(getattr(document, "is_repaired", False))
+    except Exception:
+        repaired = True
+    if repaired:
+        warnings.append("source PDF was damaged and repaired; verify page coverage")
+        review_reasons.append("damaged_source")
+    reflowable = bool(getattr(document, "is_reflowable", False))
+    if reflowable:
+        warnings.append(
+            "EPUB pages use generated reflowable layout; page numbers can vary by renderer"
+        )
+    if ocr_cache_dir is not None and source_sha256 is None:
+        source_sha256 = digest_file(source)
+    try:
+        toc = document.get_toc()
+        metadata = document.metadata
+        title = metadata.get("title") or source.stem
+        author = metadata.get("author") or None
+    except Exception:
+        # PyMuPDF parser failures can include embedded text or file paths.
+        raise ExtractionError("Failed to read PDF outline or metadata") from None
+    try:
+        explicit_page_labels = bool(document.get_page_labels())
+    except Exception:
+        explicit_page_labels = False
+    run = _ExtractionRun(
+        settings=settings,
+        ocr_cache_dir=ocr_cache_dir,
+        source_sha256=source_sha256,
+        reflowable=reflowable,
+        explicit_page_labels=explicit_page_labels,
+        warnings=warnings,
+        review_reasons=review_reasons,
+    )
+    return run, toc, title, author
+
+
+def _load_page(run: _ExtractionRun, document: Any, page_index: int) -> Any | None:
+    """Load one page, or record it as unloadable and return None."""
+    load_page = getattr(document, "load_page", None)
+    if callable(load_page):
+        try:
+            return load_page(page_index)
+        except Exception:
+            run.warnings.append(f"Page {page_index + 1}: could not be loaded; verify coverage")
+            run.note_damaged_source()
+            run.sizes.append((0.0, 0.0))
+            return None
+    return next(islice(iter(document), page_index, page_index + 1))
+
+
+def _page_size(page: Any, page_index: int) -> tuple[float, float]:
+    """The page's cropbox size, refusing unreadable or invalid geometry."""
+    # page.get_text() coordinates are unrotated, unlike page.rect.
+    # Margin cleanup must use the same coordinate system as spans.
+    try:
+        width = float(page.cropbox.width)
+        height = float(page.cropbox.height)
+    except Exception:
+        # Untrusted page geometry can include document paths/content
+        # in parser exceptions. Fail before source-block creation.
+        raise ExtractionError(f"Page {page_index + 1}: cannot read PDF page geometry") from None
+    if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
+        raise ExtractionError(f"Page {page_index + 1}: invalid PDF page geometry")
+    return width, height
+
+
+def _no_text_reason(run: _ExtractionRun, page: Any, visuals: _PageVisuals) -> str:
+    """Explain why a page without OCR has no text, flagging possible damage."""
+    if run.settings.ocr == "never":
+        return "OCR disabled"
+    if visuals.drawings_unavailable:
+        run.note_damaged_source()
+        return "drawing information unavailable; verify coverage"
+    if (
+        run.reflowable
+        and visuals.image_count
+        and len(visuals.drawings) == visuals.drawing_count
+        and _background_only(page.rect, visuals.drawings)
+    ):
+        # An EPUB cover or plate: an image on a page-sized background fill.
+        return "image-only page; the image is not narrated"
+    if visuals.drawing_count:
+        run.note_damaged_source()
+        return "drawings present but not text-like; verify coverage"
+    return "no text or drawings found"
+
+
+def _page_text_lines(
+    run: _ExtractionRun, page: Any, page_index: int
+) -> tuple[list[dict], Literal["embedded", "ocr"], _PageVisuals]:
+    """Read a page's embedded lines, falling back to OCR where its strategy says so.
+
+    Returns the merged lines, their origin and the page's visuals.
+    """
+    settings = run.settings
+    try:
+        page_lines = _lines(page)
+    except Exception:
+        # Suppress parser exception details that may include book content.
+        raise ExtractionError(
+            f"Failed to extract embedded text from PDF page {page_index + 1}; check PDF integrity"
+        ) from None
+    visuals = _page_visuals(page)
+    usable, quality_issue, use_ocr, strategy_warnings = _page_ocr_strategy(
+        page, page_lines, settings, page_index + 1, visuals
+    )
+    run.warnings.extend(strategy_warnings)
+    origin: Literal["embedded", "ocr"] = "embedded"
+    if use_ocr:
+        page_lines, origin, ocr_warnings = _apply_ocr_fallback(
+            page,
+            page_lines,
+            settings,
+            cache_dir=run.ocr_cache_dir,
+            input_sha256=run.source_sha256,
+            page_index=page_index,
+            quality_issue=quality_issue,
+        )
+        run.warnings.extend(ocr_warnings)
+    if not page_lines and not use_ocr:
+        reason = _no_text_reason(run, page, visuals)
+        run.warnings.append(f"Page {page_index + 1}: no readable text ({reason})")
+    return merge_line_fragments(page_lines), origin, visuals
+
+
+def _annotate_page(
+    run: _ExtractionRun,
+    page: Any,
+    page_lines: list[dict],
+    page_index: int,
+    *,
+    origin: Literal["embedded", "ocr"],
+    visuals: _PageVisuals,
+    width: float,
+    height: float,
+) -> tuple[list[dict], _PageAnnotations]:
+    """Find tables, artwork, special material, reading order, captions, notes and equations.
+
+    Returns the lines in reading order and the indices of special material.
+    """
+    warnings = run.warnings
+    page_number = page_index + 1
+    # Preserve table cell text and annotate only contained blocks.
+    table_regions, table_warnings = _table_regions(page, page_number=page_number)
+    warnings.extend(table_warnings)
+    warnings.extend(
+        vector_artwork_warnings(
+            page,
+            page_number=page_number,
+            drawings=visuals.drawings,
+            unavailable=visuals.drawings_unavailable,
+            drawing_count=visuals.drawing_count,
+        )
+    )
+    # Surface non-prose material without changing the raw transcript.
+    warnings.extend(
+        _special_material_warnings(page, page_lines, page_number=page_number, visuals=visuals)
+    )
+    # Diagnose the original extraction order before changing it.
+    warnings.extend(page_review_warnings(page_lines, page_number=page_number, origin=origin))
+    page_lines, reordered = order_two_columns(page_lines, width)
+    if reordered:
+        warnings.append(
+            f"Page {page_number}: reconstructed two-column reading order; "
+            "review the transcript against the source page"
+        )
+    caption_indices, caption_warnings = caption_line_indices(
+        page,
+        page_lines,
+        table_regions,
+        page_number=page_number,
+        image_info=visuals.images,
+        drawings=visuals.drawings,
+    )
+    warnings.extend(caption_warnings)
+    footnote_indices = _footnote_line_indices(
+        page_lines,
+        page_height=height,
+        table_regions=table_regions,
+    )
+    equation_indices, equation_warnings = equation_line_indices(
+        page_lines,
+        page_number=page_number,
+    )
+    warnings.extend(equation_warnings)
+    if footnote_indices:
+        warnings.append(
+            f"Page {page_number}: {len(footnote_indices)} "
+            "likely footnote anchor(s)/continuation line(s) classified; verify against PDF"
+        )
+    return page_lines, _PageAnnotations(
+        table_regions, caption_indices, footnote_indices, equation_indices
+    )
+
+
+def _page_label(run: _ExtractionRun, page: Any, page_index: int) -> str:
+    """The page's printed label, recorded when the document has explicit labels."""
+    try:
+        page_label = page.get_label() or str(page_index + 1)
+        if run.explicit_page_labels:
+            run.page_labels[page_index] = page_label
+    except Exception:
+        # Page labels are advisory; keep the transcript and provenance.
+        page_label = str(page_index + 1)
+        if not run.reflowable:
+            run.warnings.append(
+                f"Page {page_index + 1}: could not read PDF page label; using physical page number"
+            )
+        elif not run.reflowable_labels_noted:
+            # Generated EPUB pages never have labels: say so once, not per page.
+            run.reflowable_labels_noted = True
+            run.warnings.append(
+                "EPUB pages have no printed page labels; physical page numbers are used"
+            )
+    return page_label
+
+
+def _extract_page(run: _ExtractionRun, document: Any, page_index: int) -> None:
+    """Extract one page's spans and blocks into the run."""
+    run.page_labels.append(None)
+    page = _load_page(run, document, page_index)
+    if page is None:
+        return
+    width, height = _page_size(page, page_index)
+    run.sizes.append((width, height))
+    page_lines, origin, visuals = _page_text_lines(run, page, page_index)
+    page_lines, annotations = _annotate_page(
+        run,
+        page,
+        page_lines,
+        page_index,
+        origin=origin,
+        visuals=visuals,
+        width=width,
+        height=height,
+    )
+    page_label = _page_label(run, page, page_index)
+    page_spans, page_blocks = _build_page_blocks(
+        page_lines,
+        page_index=page_index,
+        page_label=page_label,
+        origin=origin,
+        order_offset=len(run.blocks),
+        table_regions=annotations.table_regions,
+        footnote_indices=annotations.footnote_indices,
+        caption_indices=annotations.caption_indices,
+        equation_indices=annotations.equation_indices,
+    )
+    run.spans.extend(page_spans)
+    run.blocks.extend(page_blocks)
+
+
 def extract_pdf(
     source: Path,
     settings: PdfSettings,
@@ -1132,43 +1438,16 @@ def extract_pdf(
     source_sha256: str | None = None,
     progress: Any = None,
 ) -> ExtractedDocument:
-    """Extract all pages, using OCR only for pages lacking meaningful embedded text."""
-    spans: list[SourceSpan] = []
-    blocks: list[DocumentBlock] = []
-    warnings: list[str] = []
-    review_reasons: list[str] = []
-    sizes: list[tuple[float, float]] = []
-    page_labels: list[str | None] = []
+    """Extract all pages, using OCR only for pages lacking meaningful embedded text.
+
+    Steps: open and validate the document, then per page load it, choose its
+    strategy and build its lines (with the OCR fallback), annotate special
+    material and reading order, read its label and build its blocks.
+    """
     with _open(source, settings.password_env) as document:
-        if len(document) == 0:
-            raise ExtractionError("Book has no extractable pages")
-        try:
-            repaired = bool(getattr(document, "is_repaired", False))
-        except Exception:
-            repaired = True
-        if repaired:
-            warnings.append("source PDF was damaged and repaired; verify page coverage")
-            review_reasons.append("damaged_source")
-        reflowable = bool(getattr(document, "is_reflowable", False))
-        reflowable_labels_noted = False
-        if reflowable:
-            warnings.append(
-                "EPUB pages use generated reflowable layout; page numbers can vary by renderer"
-            )
-        if ocr_cache_dir is not None and source_sha256 is None:
-            source_sha256 = digest_file(source)
-        try:
-            toc = document.get_toc()
-            metadata = document.metadata
-            title = metadata.get("title") or source.stem
-            author = metadata.get("author") or None
-        except Exception:
-            # PyMuPDF parser failures can include embedded text or file paths.
-            raise ExtractionError("Failed to read PDF outline or metadata") from None
-        try:
-            explicit_page_labels = bool(document.get_page_labels())
-        except Exception:
-            explicit_page_labels = False
+        run, toc, title, author = _start_extraction(
+            document, source, settings, ocr_cache_dir, source_sha256
+        )
         page_progress = (
             progress.stage("Extracting pages", len(document), "page")
             if progress is not None
@@ -1177,164 +1456,7 @@ def extract_pdf(
         for page_index in range(len(document)):
             if page_progress is not None and page_index:
                 page_progress.advance()  # the previous page is finished
-            page_labels.append(None)
-            load_page = getattr(document, "load_page", None)
-            if callable(load_page):
-                try:
-                    page = load_page(page_index)
-                except Exception:
-                    warnings.append(f"Page {page_index + 1}: could not be loaded; verify coverage")
-                    if "damaged_source" not in review_reasons:
-                        review_reasons.append("damaged_source")
-                    sizes.append((0.0, 0.0))
-                    continue
-            else:
-                page = next(islice(iter(document), page_index, page_index + 1))
-            # page.get_text() coordinates are unrotated, unlike page.rect.
-            # Margin cleanup must use the same coordinate system as spans.
-            try:
-                width = float(page.cropbox.width)
-                height = float(page.cropbox.height)
-            except Exception:
-                # Untrusted page geometry can include document paths/content
-                # in parser exceptions. Fail before source-block creation.
-                raise ExtractionError(
-                    f"Page {page_index + 1}: cannot read PDF page geometry"
-                ) from None
-            if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
-                raise ExtractionError(f"Page {page_index + 1}: invalid PDF page geometry")
-            sizes.append((width, height))
-            try:
-                page_lines = _lines(page)
-            except Exception:
-                # Suppress parser exception details that may include book content.
-                raise ExtractionError(
-                    f"Failed to extract embedded text from PDF page {page_index + 1}; "
-                    "check PDF integrity"
-                ) from None
-            visuals = _page_visuals(page)
-            usable, quality_issue, use_ocr, strategy_warnings = _page_ocr_strategy(
-                page, page_lines, settings, page_index + 1, visuals
-            )
-            warnings.extend(strategy_warnings)
-            origin: Literal["embedded", "ocr"] = "embedded"
-            if use_ocr:
-                page_lines, origin, ocr_warnings = _apply_ocr_fallback(
-                    page,
-                    page_lines,
-                    settings,
-                    cache_dir=ocr_cache_dir,
-                    input_sha256=source_sha256,
-                    page_index=page_index,
-                    quality_issue=quality_issue,
-                )
-                warnings.extend(ocr_warnings)
-            if not page_lines and not use_ocr:
-                if settings.ocr == "never":
-                    reason = "OCR disabled"
-                elif visuals.drawings_unavailable:
-                    reason = "drawing information unavailable; verify coverage"
-                    if "damaged_source" not in review_reasons:
-                        review_reasons.append("damaged_source")
-                elif (
-                    reflowable
-                    and visuals.image_count
-                    and len(visuals.drawings) == visuals.drawing_count
-                    and _background_only(page.rect, visuals.drawings)
-                ):
-                    # An EPUB cover or plate: an image on a page-sized background fill.
-                    reason = "image-only page; the image is not narrated"
-                elif visuals.drawing_count:
-                    reason = "drawings present but not text-like; verify coverage"
-                    if "damaged_source" not in review_reasons:
-                        review_reasons.append("damaged_source")
-                else:
-                    reason = "no text or drawings found"
-                warnings.append(f"Page {page_index + 1}: no readable text ({reason})")
-            page_lines = merge_line_fragments(page_lines)
-            # Preserve table cell text and annotate only contained blocks.
-            table_regions, table_warnings = _table_regions(page, page_number=page_index + 1)
-            warnings.extend(table_warnings)
-            warnings.extend(
-                vector_artwork_warnings(
-                    page,
-                    page_number=page_index + 1,
-                    drawings=visuals.drawings,
-                    unavailable=visuals.drawings_unavailable,
-                    drawing_count=visuals.drawing_count,
-                )
-            )
-            # Surface non-prose material without changing the raw transcript.
-            warnings.extend(
-                _special_material_warnings(
-                    page, page_lines, page_number=page_index + 1, visuals=visuals
-                )
-            )
-            # Diagnose the original extraction order before changing it.
-            warnings.extend(
-                page_review_warnings(page_lines, page_number=page_index + 1, origin=origin)
-            )
-            page_lines, reordered = order_two_columns(page_lines, width)
-            if reordered:
-                warnings.append(
-                    f"Page {page_index + 1}: reconstructed two-column reading order; "
-                    "review the transcript against the source page"
-                )
-            caption_indices, caption_warnings = caption_line_indices(
-                page,
-                page_lines,
-                table_regions,
-                page_number=page_index + 1,
-                image_info=visuals.images,
-                drawings=visuals.drawings,
-            )
-            warnings.extend(caption_warnings)
-            footnote_indices = _footnote_line_indices(
-                page_lines,
-                page_height=height,
-                table_regions=table_regions,
-            )
-            equation_indices, equation_warnings = equation_line_indices(
-                page_lines,
-                page_number=page_index + 1,
-            )
-            warnings.extend(equation_warnings)
-            if footnote_indices:
-                warnings.append(
-                    f"Page {page_index + 1}: {len(footnote_indices)} "
-                    "likely footnote anchor(s)/continuation line(s) classified; verify against PDF"
-                )
-            try:
-                page_label = page.get_label() or str(page_index + 1)
-                if explicit_page_labels:
-                    page_labels[page_index] = page_label
-            except Exception:
-                # Page labels are advisory; keep the transcript and provenance.
-                page_label = str(page_index + 1)
-                if not reflowable:
-                    warnings.append(
-                        f"Page {page_index + 1}: could not read PDF page label; "
-                        "using physical page number"
-                    )
-                elif not reflowable_labels_noted:
-                    # Generated EPUB pages never have labels: say so once, not per page.
-                    reflowable_labels_noted = True
-                    warnings.append(
-                        "EPUB pages have no printed page labels; physical page numbers are used"
-                    )
-            page_spans, page_blocks = _build_page_blocks(
-                page_lines,
-                page_index=page_index,
-                page_label=page_label,
-                origin=origin,
-                order_offset=len(blocks),
-                table_regions=table_regions,
-                footnote_indices=footnote_indices,
-                caption_indices=caption_indices,
-                equation_indices=equation_indices,
-            )
-            spans.extend(page_spans)
-            blocks.extend(page_blocks)
+            _extract_page(run, document, page_index)
         if page_progress is not None:
             page_progress.advance()  # the final page
             page_progress.close()
@@ -1342,12 +1464,12 @@ def extract_pdf(
             title=title,
             author=author,
             toc=toc,
-            spans=spans,
-            blocks=blocks,
-            warnings=warnings,
-            page_sizes=sizes,
-            page_labels=page_labels,
-            review_reasons=review_reasons,
+            spans=run.spans,
+            blocks=run.blocks,
+            warnings=run.warnings,
+            page_sizes=run.sizes,
+            page_labels=run.page_labels,
+            review_reasons=run.review_reasons,
         )
 
 
