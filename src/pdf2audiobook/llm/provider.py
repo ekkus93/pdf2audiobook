@@ -10,7 +10,8 @@ import re
 import struct
 import sys
 import time
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import Any, Callable, Literal
 from urllib.parse import urlparse
 
 import httpx
@@ -56,6 +57,26 @@ def validate_endpoint(url: str, allow_remote: bool) -> str:
     if parsed.scheme == "http" and _loopback(host):
         return url.rstrip("/")
     raise LLMError("Non-loopback LLM endpoint must use HTTPS and explicit remote consent")
+
+
+# What one chat-completions response means for the request loop.
+_ResponseAction = Literal["json_mode_fallback", "rejected_parameter", "retry", "final"]
+
+
+@dataclass
+class _Attempt:
+    """One HTTP attempt's ledger reservation, cleared once it is settled."""
+
+    call_id: int | None
+
+
+@dataclass
+class _RequestState:
+    """The payload and retry state shared by every attempt of one request."""
+
+    payload: dict
+    format_fallback_used: bool
+    retry_count: int = 0
 
 
 class OpenAICompatibleProvider:
@@ -351,19 +372,8 @@ class OpenAICompatibleProvider:
             vision=True,
         )
 
-    def _complete_json_request(
-        self,
-        *,
-        instructions: str,
-        document_text: str,
-        user_content: str | list[dict[str, Any]],
-        vision: bool = False,
-    ) -> dict[str, Any]:
-        # Never expose the previous request's usage when this attempt fails before
-        # receiving a billable response. Accounted aggregate usage is unchanged.
-        self.last_usage = {}
-        self.validate_request_capacity(instructions=instructions, document_text=document_text)
-        self.validate_served_capacity(instructions=instructions, document_text=document_text)
+    def _build_payload(self, instructions: str, user_content: str | list[dict[str, Any]]) -> dict:
+        """Build the chat request with JSON mode and the output cap when available."""
         # The book is untrusted data; never send it as system instructions or as tools.
         payload = {
             "model": self._model(),
@@ -391,6 +401,10 @@ class OpenAICompatibleProvider:
             # cap on hidden thinking and return empty content. Answers are
             # schema-validated JSON, so hidden reasoning adds no safety.
             payload["reasoning_effort"] = "none"
+        return payload
+
+    def _warn_remote_upload(self, model: object, *, vision: bool) -> None:
+        """Warn once per data scope before the first upload to a remote provider."""
         # A remote-content opt-in must be accompanied by a visible warning
         # before the first upload, not only after analysis has completed.
         scope_key = "page-images" if vision else "book-text"
@@ -399,7 +413,7 @@ class OpenAICompatibleProvider:
             and scope_key not in self._remote_content_warned_scopes
         ):
             safe_provider = json.dumps(str(self.provider)[:80], ensure_ascii=True)
-            safe_model = json.dumps(str(payload["model"])[:80], ensure_ascii=True)
+            safe_model = json.dumps(str(model)[:80], ensure_ascii=True)
             scope = (
                 f"up to {MAX_VISUAL_REVIEW_PAGES} rendered PDF page images"
                 if vision
@@ -412,206 +426,245 @@ class OpenAICompatibleProvider:
                 file=sys.stderr,
             )
             self._remote_content_warned_scopes.add(scope_key)
-        format_fallback_used = self._json_mode_unsupported
-        retry_count = 0
+
+    def _provider_label(self) -> str:
+        """A provider name safe for error messages."""
+        return (
+            self.provider if self.provider in ("openai", "ollama", "llama-server") else "provider"
+        )
+
+    def _finish_attempt(
+        self,
+        attempt: _Attempt,
+        usage: dict | None = None,
+        *,
+        outcome: AttemptOutcome = "settled",
+    ) -> AttemptOutcome:
+        """Settle an attempt's ledger reservation once; later calls do nothing."""
+        if attempt.call_id is not None and self._attempt_settled is not None:
+            current_id = attempt.call_id
+            attempt.call_id = None
+            self._attempt_settled(current_id, usage, outcome)
+        return outcome
+
+    def _prepare_usage(self, raw_usage: object) -> dict[str, int]:
+        """Record the valid, non-overflowing usage counters of one response."""
+        self.last_usage = {}
+        if isinstance(raw_usage, dict):
+            for field in self.total_usage:
+                count = raw_usage.get(field)
+                if valid_usage_count(count) and count <= (2**63 - 1) - self.total_usage[field]:
+                    self.last_usage[field] = count
+        return self.last_usage
+
+    def _aggregate_usage(self) -> None:
+        """Add the last response's usage to the provider totals."""
+        for field, count in self.last_usage.items():
+            self.total_usage[field] += count
+
+    def _settle_error_usage(self, attempt: _Attempt, response: httpx.Response) -> AttemptOutcome:
+        """Settle a rejected response: billed if it reports usage, else rejected."""
+        try:
+            error_payload = response.json()
+        except (ValueError, json.JSONDecodeError):
+            error_payload = None
+        usage = error_payload.get("usage") if isinstance(error_payload, dict) else None
+        settlement_usage = self._prepare_usage(usage) if isinstance(usage, dict) else None
+        result = self._finish_attempt(
+            attempt,
+            settlement_usage,
+            outcome="settled" if isinstance(usage, dict) else "rejected",
+        )
+        if isinstance(usage, dict):
+            self._aggregate_usage()
+        return result
+
+    def _settle_non_retryable(self, attempt: _Attempt, response: httpx.Response) -> AttemptOutcome:
+        """Settle a final unsuccessful response; client errors may carry usage."""
+        if 400 <= response.status_code < 500 and response.status_code not in (408, 429):
+            return self._settle_error_usage(attempt, response)
+        return self._finish_attempt(attempt)
+
+    def _classify_response(
+        self, response: httpx.Response, request: _RequestState
+    ) -> tuple[_ResponseAction, str | None]:
+        """Decide what one response means, with the rejected parameter if any."""
+        if self._unsupported_json_mode(response) and not request.format_fallback_used:
+            return "json_mode_fallback", None
+        rejected_parameter = next(
+            (
+                parameter
+                for parameter in ("max_tokens", "max_completion_tokens", "temperature")
+                if parameter in request.payload
+                and parameter not in self._unsupported_parameters
+                and self._unsupported_parameter(response, parameter)
+            ),
+            None,
+        )
+        if rejected_parameter is not None:
+            return "rejected_parameter", rejected_parameter
+        # Ollama reports an aborted generation ("token repeat limit
+        # reached") as HTTP 500; a resample usually succeeds.
+        if (
+            response.status_code in (429, 500, 502, 503, 504)
+            and request.retry_count < self.max_retries
+        ):
+            return "retry", None
+        return "final", None
+
+    def _fall_back_from_json_mode(
+        self, attempt: _Attempt, response: httpx.Response, request: _RequestState
+    ) -> None:
+        """Retry without JSON mode after the server rejects it."""
+        # Older OpenAI-compatible local servers sometimes lack JSON mode.
+        # Output is still schema-validated by callers after decoding.
+        self._settle_error_usage(attempt, response)
+        self._json_mode_unsupported = True
+        request.payload.pop("response_format")
+        request.format_fallback_used = True
+
+    def _drop_rejected_parameter(
+        self, attempt: _Attempt, parameter: str, request: _RequestState
+    ) -> None:
+        """Retry without a rejected parameter, keeping an output cap when possible."""
+        self._finish_attempt(attempt, outcome="rejected")
+        request.payload.pop(parameter, None)
+        self._unsupported_parameters.add(parameter)
+        if (
+            parameter == "max_tokens"
+            and "max_completion_tokens" not in self._unsupported_parameters
+        ):
+            request.payload["max_completion_tokens"] = self.max_output_tokens
+        self._require_cap(request.payload)
+
+    def _back_off(self, attempt: _Attempt, request: _RequestState) -> None:
+        """Settle a retryable response and wait before the next attempt."""
+        self._finish_attempt(attempt)
+        time.sleep(min(0.2 * (2**request.retry_count), 2.0))
+        request.retry_count += 1
+
+    def _accept_response(self, attempt: _Attempt, response: httpx.Response) -> dict[str, Any]:
+        """Settle a final response's usage, then decode its JSON object answer."""
+        if not response.is_success:
+            self._settle_non_retryable(attempt, response)
+        response.raise_for_status()
+        reply = response.json()
+        # Provider usage is billable even when generated JSON is malformed.
+        # Account for it before attempting to parse or validate the content.
+        usage = reply.get("usage", {}) if isinstance(reply, dict) else {}
+        settlement_usage = self._prepare_usage(usage)
+        self._finish_attempt(attempt, settlement_usage)
+        self._aggregate_usage()
+        choice = reply["choices"][0]
+        message = choice["message"]["content"]
+        truncated = choice.get("finish_reason") == "length"
+        if truncated and not (isinstance(message, str) and message.strip()):
+            raise LLMError(
+                "LLM output cap reached before any answer; raise "
+                "llm.max_output_tokens or disable model reasoning",
+                reason="output_cap",
+            )
+        try:
+            decoded = json.loads(message)
+        except ValueError:
+            if truncated:
+                raise LLMError(
+                    "LLM answer was cut off at the output cap; raise llm.max_output_tokens",
+                    reason="output_cap",
+                ) from None
+            raise
+        if not isinstance(decoded, dict):
+            raise LLMError("Model response must be a JSON object")
+        self.request_count += 1
+        return decoded
+
+    def _handle_transport_error(
+        self, attempt: _Attempt, exc: httpx.TransportError, request: _RequestState
+    ) -> None:
+        """Settle a transport failure, then return to retry or raise a safe error."""
+        self._finish_attempt(
+            attempt,
+            outcome=(
+                "unbilled"
+                if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout))
+                else "settled"
+            ),
+        )
+        if request.retry_count < self.max_retries:
+            time.sleep(min(0.2 * (2**request.retry_count), 2.0))
+            request.retry_count += 1
+            return
+        label = self._provider_label()
+        if isinstance(exc, httpx.TimeoutException) and not isinstance(exc, httpx.ConnectTimeout):
+            setting = (
+                f"llm.{self.provider.replace('-', '_')}.timeout_seconds"
+                if label != "provider"
+                else "the LLM timeout_seconds setting"
+            )
+            raise LLMError(
+                f"{label} LLM transport failure: request timed out after "
+                f"{self.timeout:g} s; increase {setting}"
+            ) from None
+        raise LLMError(
+            f"{label} LLM transport failure",
+            unbilled=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)),
+        ) from None
+
+    def _complete_json_request(
+        self,
+        *,
+        instructions: str,
+        document_text: str,
+        user_content: str | list[dict[str, Any]],
+        vision: bool = False,
+    ) -> dict[str, Any]:
+        """Send one JSON request, dispatching on each attempt's typed outcome.
+
+        Every attempt reserves a ledger call (when accounting is attached) and
+        settles it exactly once: on success, retry, parameter rejection, JSON
+        mode fallback, final error, transport failure or unexpected error.
+        """
+        # Never expose the previous request's usage when this attempt fails before
+        # receiving a billable response. Accounted aggregate usage is unchanged.
+        self.last_usage = {}
+        self.validate_request_capacity(instructions=instructions, document_text=document_text)
+        self.validate_served_capacity(instructions=instructions, document_text=document_text)
+        payload = self._build_payload(instructions, user_content)
+        self._warn_remote_upload(payload["model"], vision=vision)
+        request = _RequestState(payload, format_fallback_used=self._json_mode_unsupported)
         while True:
-            attempt_id = self._attempt_started() if self._attempt_started is not None else None
-
-            def finish_attempt(
-                usage: dict | None = None,
-                *,
-                outcome: AttemptOutcome = "settled",
-            ) -> AttemptOutcome:
-                nonlocal attempt_id
-                if attempt_id is not None and self._attempt_settled is not None:
-                    current_id = attempt_id
-                    attempt_id = None
-                    self._attempt_settled(current_id, usage, outcome)
-                return outcome
-
-            def settle_success(usage: dict | None) -> AttemptOutcome:
-                return finish_attempt(usage)
-
-            def settle_retryable() -> AttemptOutcome:
-                return finish_attempt()
-
-            def settle_rejected_parameter() -> AttemptOutcome:
-                return finish_attempt(outcome="rejected")
-
-            def prepare_usage(raw_usage: object) -> dict[str, int]:
-                self.last_usage = {}
-                if isinstance(raw_usage, dict):
-                    for field in self.total_usage:
-                        count = raw_usage.get(field)
-                        if (
-                            valid_usage_count(count)
-                            and count <= (2**63 - 1) - self.total_usage[field]
-                        ):
-                            self.last_usage[field] = count
-                return self.last_usage
-
-            def aggregate_usage() -> None:
-                for field, count in self.last_usage.items():
-                    self.total_usage[field] += count
-
-            def settle_json_mode_fallback(response: httpx.Response) -> AttemptOutcome:
-                try:
-                    error_payload = response.json()
-                except (ValueError, json.JSONDecodeError):
-                    error_payload = None
-                usage = error_payload.get("usage") if isinstance(error_payload, dict) else None
-                settlement_usage = prepare_usage(usage) if isinstance(usage, dict) else None
-                result = finish_attempt(
-                    settlement_usage,
-                    outcome="settled" if isinstance(usage, dict) else "rejected",
-                )
-                if isinstance(usage, dict):
-                    aggregate_usage()
-                return result
-
-            def settle_non_retryable(response: httpx.Response) -> AttemptOutcome:
-                if 400 <= response.status_code < 500 and response.status_code not in (408, 429):
-                    try:
-                        error_payload = response.json()
-                    except (ValueError, json.JSONDecodeError):
-                        error_payload = None
-                    error_usage = (
-                        error_payload.get("usage") if isinstance(error_payload, dict) else None
-                    )
-                    settlement_usage = (
-                        prepare_usage(error_usage) if isinstance(error_usage, dict) else None
-                    )
-                    result = finish_attempt(
-                        settlement_usage,
-                        outcome="settled" if isinstance(error_usage, dict) else "rejected",
-                    )
-                    if isinstance(error_usage, dict):
-                        aggregate_usage()
-                    return result
-                return finish_attempt()
-
-            def settle_unexpected_error() -> AttemptOutcome:
-                return finish_attempt()
-
+            attempt = _Attempt(
+                self._attempt_started() if self._attempt_started is not None else None
+            )
             try:
                 response = self._client.post(f"{self.base_url}/chat/completions", json=payload)
-                if self._unsupported_json_mode(response) and not format_fallback_used:
-                    # Older OpenAI-compatible local servers sometimes lack JSON mode.
-                    # Output is still schema-validated by callers after decoding.
-                    settle_json_mode_fallback(response)
-                    self._json_mode_unsupported = True
-                    payload.pop("response_format")
-                    format_fallback_used = True
+                action, parameter = self._classify_response(response, request)
+                if action == "json_mode_fallback":
+                    self._fall_back_from_json_mode(attempt, response, request)
                     continue
-                rejected_parameter = next(
-                    (
-                        parameter
-                        for parameter in ("max_tokens", "max_completion_tokens", "temperature")
-                        if parameter in payload
-                        and parameter not in self._unsupported_parameters
-                        and self._unsupported_parameter(response, parameter)
-                    ),
-                    None,
-                )
-                if rejected_parameter is not None:
-                    settle_rejected_parameter()
-                    payload.pop(rejected_parameter, None)
-                    self._unsupported_parameters.add(rejected_parameter)
-                    if (
-                        rejected_parameter == "max_tokens"
-                        and "max_completion_tokens" not in self._unsupported_parameters
-                    ):
-                        payload["max_completion_tokens"] = self.max_output_tokens
-                    self._require_cap(payload)
+                if action == "rejected_parameter":
+                    assert parameter is not None
+                    self._drop_rejected_parameter(attempt, parameter, request)
                     continue
-                # Ollama reports an aborted generation ("token repeat limit
-                # reached") as HTTP 500; a resample usually succeeds.
-                if response.status_code in (429, 500, 502, 503, 504):
-                    if retry_count < self.max_retries:
-                        settle_retryable()
-                        time.sleep(min(0.2 * (2**retry_count), 2.0))
-                        retry_count += 1
-                        continue
-                if not response.is_success:
-                    settle_non_retryable(response)
-                response.raise_for_status()
-                reply = response.json()
-                # Provider usage is billable even when generated JSON is malformed.
-                # Account for it before attempting to parse or validate the content.
-                usage = reply.get("usage", {}) if isinstance(reply, dict) else {}
-                settlement_usage = prepare_usage(usage)
-                settle_success(settlement_usage)
-                aggregate_usage()
-                choice = reply["choices"][0]
-                message = choice["message"]["content"]
-                truncated = choice.get("finish_reason") == "length"
-                if truncated and not (isinstance(message, str) and message.strip()):
-                    raise LLMError(
-                        "LLM output cap reached before any answer; raise "
-                        "llm.max_output_tokens or disable model reasoning",
-                        reason="output_cap",
-                    )
-                try:
-                    decoded = json.loads(message)
-                except ValueError:
-                    if truncated:
-                        raise LLMError(
-                            "LLM answer was cut off at the output cap; raise llm.max_output_tokens",
-                            reason="output_cap",
-                        ) from None
-                    raise
-                if not isinstance(decoded, dict):
-                    raise LLMError("Model response must be a JSON object")
-                self.request_count += 1
-                return decoded
+                if action == "retry":
+                    self._back_off(attempt, request)
+                    continue
+                return self._accept_response(attempt, response)
             except httpx.TransportError as exc:
-                finish_attempt(
-                    outcome=(
-                        "unbilled"
-                        if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout))
-                        else "settled"
-                    )
-                )
-                if retry_count < self.max_retries:
-                    time.sleep(min(0.2 * (2**retry_count), 2.0))
-                    retry_count += 1
-                    continue
-                label = (
-                    self.provider
-                    if self.provider in ("openai", "ollama", "llama-server")
-                    else "provider"
-                )
-                if isinstance(exc, httpx.TimeoutException) and not isinstance(
-                    exc, httpx.ConnectTimeout
-                ):
-                    setting = (
-                        f"llm.{self.provider.replace('-', '_')}.timeout_seconds"
-                        if label != "provider"
-                        else "the LLM timeout_seconds setting"
-                    )
-                    raise LLMError(
-                        f"{label} LLM transport failure: request timed out after "
-                        f"{self.timeout:g} s; increase {setting}"
-                    ) from None
-                raise LLMError(
-                    f"{label} LLM transport failure",
-                    unbilled=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)),
-                ) from None
+                self._handle_transport_error(attempt, exc, request)
+                continue
             except LLMError:
-                settle_unexpected_error()
+                self._finish_attempt(attempt)
                 raise
             except (httpx.HTTPError, ValueError, IndexError, KeyError, TypeError):
-                settle_unexpected_error()
+                self._finish_attempt(attempt)
                 # Never print raw response bodies, exception chains or untrusted
                 # provider labels: an API can echo book text or secrets.
-                label = (
-                    self.provider
-                    if self.provider in ("openai", "ollama", "llama-server")
-                    else "provider"
-                )
-                raise LLMError(f"{label} LLM request or JSON decoding failed") from None
+                raise LLMError(
+                    f"{self._provider_label()} LLM request or JSON decoding failed"
+                ) from None
             except Exception:
-                settle_unexpected_error()
+                self._finish_attempt(attempt)
                 raise
 
 
