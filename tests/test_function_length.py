@@ -10,9 +10,11 @@ MAX_FUNCTION_LINES = 100
 # may shrink but never grow; remove it once its function is split. Keys are
 # "<path under src>::<qualified name>".
 ALLOWLIST = {
-    # Split by docs/PDF2AUDIOBOOK_LONG_FUNCTION_SPLIT_TODO.md (spec §1).
-    # Not in the split spec's scope; see the TODO's notes.
+    # The nine spec §1 functions are split and no longer listed.
+    # Over 200 lines but not listed in spec §1: awaiting the user's scope decision
+    # (docs/PDF2AUDIOBOOK_LONG_FUNCTION_SPLIT_TODO.md, LF0.01b note).
     "pdf2audiobook/llm/structure.py::propose_llm_contents_boundaries": 234,
+    # Out of scope: the split spec leaves functions under 200 lines alone (§1).
     "pdf2audiobook/review_ui.py::create_review_server": 163,
     "pdf2audiobook/llm/__init__.py::propose_llm_narration": 142,
     "pdf2audiobook/cli.py::pack_m4b": 134,

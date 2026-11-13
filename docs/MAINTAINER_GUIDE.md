@@ -416,6 +416,45 @@ for an up-to-date cached MP3. `analyze_book`/`convert_book` accept
 is folded into the analysis, chunk and MP3 cache identities so it never reuses
 artifacts made by the defaults.
 
+**Orchestrators and their steps.** The long pipeline functions are short
+orchestrators that call named steps in a fixed order. Shared state passes
+through a small private dataclass per run, never module state. When you change
+a step, keep the order: several steps are fail-closed checks that must run
+before anything is reserved, sent or written.
+
+- Analysis, `pipeline._analyze_book_locked` (state in `_AnalysisRun` and
+  `_AnalysisState`):
+  1. `_start_analysis`: hash the source and fingerprint each stage.
+  2. `_reuse_existing_analysis`: keep, update (`_switch_footnote_policy`) or
+     refuse an existing manifest.
+  3. `_extract`, then `_deterministic_cleanup`: pagination and the footnote
+     policy.
+  4. `_llm_proposals`, with `_run_llm_tasks` and `_deterministic_fallback`.
+  5. `propose_chapters`.
+  6. `_merge_hand_edits`: the hand-edit merge, using `_HandEditMerge`.
+  7. `_chapter_review`, then `_write_analysis`.
+
+  These steps stay in `pipeline.py` because tests patch `pipeline.*` names.
+- Conversion, `conversion._convert_analyzed_book` (state in `_ConversionRun`;
+  every dependency is called through `ConversionServices`):
+  1. Load the manifest and chapter selection.
+  2. `_preflight_voice_markers`, then `_initial_status`.
+  3. `_plan_synthesis`: decide which MP3s to reuse, including the MP3 tag check.
+  4. `_convert_chapter` for each pending chapter: synthesize, encode, then
+     `_publish_chapter`.
+  5. `_write_conversion_status`.
+- Lower-level orchestrators split the same way:
+  - `pagination_cleanup`: one named predicate per fail-closed margin rule;
+  - `propose_chapters`: state in `_HeadingEvidence`;
+  - `audio.synthesize_chunks`: validation runs before any engine call or cache
+    replay;
+  - `CachedLLMProvider._complete_json_call`: request bounds before the cache
+    lookup, and server limits before the reservation;
+  - `OpenAICompatibleProvider._complete_json_request`: each attempt is an
+    explicit `_Attempt` that is settled exactly once;
+  - `pdf.extract_pdf`: state in `_ExtractionRun`;
+  - the CLI `convert` command, through `_run_convert` and `_dry_run_convert`.
+
 **Change safety:** Preserve raw spans/blocks and the one-time prose-coverage
 invariant. Introduce schema versions or migrations deliberately; update
 analysis/audio fingerprints when changing derived semantics. Keep the LLM
@@ -438,7 +477,13 @@ uv run --extra dev pdf2audiobook doctor --json
 ```
 
 Ruff formatting is enforced repository-wide. Mypy checks the explicit `[tool.mypy].files` list in
-`pyproject.toml`; add every new module there. Third-party libraries that print
+`pyproject.toml`; add every new module there. `tests/test_function_length.py`
+fails when a function under `src/` is over 100 lines. Typer commands are
+measured from their first body statement. Its `ALLOWLIST` names the older
+functions still over the limit, each with its current line count as a ceiling.
+Such a function may shrink but never grow. Remove its entry once the function
+is split; the test fails on stale entries. Don't add an entry to make new code
+pass; split the function instead. Third-party libraries that print
 to stdout (PyMuPDF messages, kittenml's per-chunk echo) are silenced or routed
 to stderr at their adapter so `--json` output stays parseable and narration
 text never reaches logs.
