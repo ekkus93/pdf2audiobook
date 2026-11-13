@@ -11,7 +11,6 @@ MAX_FUNCTION_LINES = 100
 # "<path under src>::<qualified name>".
 ALLOWLIST = {
     # Split by docs/PDF2AUDIOBOOK_LONG_FUNCTION_SPLIT_TODO.md (spec §1).
-    "pdf2audiobook/pipeline.py::_analyze_book_locked": 553,
     "pdf2audiobook/conversion.py::_convert_analyzed_book": 421,
     "pdf2audiobook/audio/__init__.py::synthesize_chunks": 308,
     "pdf2audiobook/llm/cache.py::CachedLLMProvider._complete_json_call": 264,
