@@ -1,6 +1,6 @@
 # PDF2Audiobook — Long Function Split TODO
 
-**Status:** Open; LF0.01, LF0.02a and LF0.03 done locally; LF0.02b (CI) and all splits open
+**Status:** Open; LF0, LF1 and LF2 done with exact-head CI; LF3–LF5 open
 **Date:** 2026-11-13
 **Baseline:** master at 18681585b45a02b0e697b64c03ac38c513a28247
 **Specification:** `docs/PDF2AUDIOBOOK_LONG_FUNCTION_SPLIT_SPEC.md` (S1–S12)
@@ -26,13 +26,14 @@
     - Note: one of the 14 others, `llm/structure.py::propose_llm_contents_boundaries` (234 lines), is over the spec's 200-line out-of-scope threshold but isn't in spec §1. The spec doesn't say whether it is in scope; that's for the user to decide.
   - [x] LF0.01c Show the guard fails when a listed function grows by one line, and when a new function goes over 100 lines, using a scratch worktree. Record both in the ledger.
     - Evidence: in a scratch worktree, adding one line to `pagination_cleanup` failed with `{'pdf2audiobook/document/pagination.py::pagination_cleanup': 438}`, and adding a 102-line function to `jsonio.py` failed with `{'pdf2audiobook/jsonio.py::_new_long_function': 102}`. Each time the other test still passed.
-- [ ] LF0.02 Add the golden analysis snapshot (S11).
+- [x] LF0.02 Add the golden analysis snapshot (S11).
   - [x] LF0.02a Add a characterization test that runs `analyze` with the LLM off on the synthetic fixtures (generated PDFs, `tests/fixtures/outlined_text.pdf` and the synthetic EPUB). It compares normalized `manifest.json`, chapter texts, `coverage.json`, warnings and review reasons with a committed snapshot.
     - Evidence: `tests/test_golden_analysis_snapshot.py` against `tests/fixtures/golden/analysis_snapshot.json` (7.5 KB). The generated fixtures aren't byte-deterministic (zip and PDF timestamps), so `tests/fixtures/golden/golden_book.pdf` (9 KB) and `novel.epub` (6 KB, from `tests/epub_book.py`) were generated once and committed. The snapshot records per-file digests, manifest-section digests (fingerprints included) and a readable summary. Commit dd5f149926dd187e6c83dfe50e2abf92f513c32e.
     - Note: `outlined_text.pdf` is pinned on `--ocr never`, which fails with `ExtractionError` "No text found in PDF; no chapters can be created". With OCR its text would depend on the Tesseract version: 4.1.1 here, and CI's may differ.
-  - [ ] LF0.02b Confirm it passes at the baseline and is deterministic across two runs and across Python 3.11, 3.12 and 3.13 (CI).
+  - [x] LF0.02b Confirm it passes at the baseline and is deterministic across two runs and across Python 3.11, 3.12 and 3.13 (CI).
     - Evidence (local): passed on two consecutive runs; passed on Python 3.12 and 3.13 in offline venvs (`uv run --offline --python 3.12/3.13`).
-    - Note: not checked. The CI half needs these commits pushed, which hasn't been authorized in this run.
+    - Note: resolved. The user approved pushing on 2026-11-13.
+    - Evidence (CI): Python CI run 43371140000 at 27d950a04e38f312033792036ab5d59c125c398b passed. Its jobs `tests (3.11)`, `tests (3.12)` and `tests (3.13)` each ran the snapshot test.
 - [x] LF0.03 Measure branch coverage of each S1–S9 function with `uv run --with coverage` (the lockfile stays unchanged). For every branch named in spec §3 with no covering test, add a characterization test that passes at the baseline. Record the coverage before and after for each function.
   - Evidence: coverage with `uv run --with coverage` (`uv.lock` unchanged). Lines and branches before → after:
       - `pagination_cleanup` 98%/93% → 99%/95%
@@ -58,22 +59,59 @@
 
 ## Phase LF1 — Pure functions
 
-- [ ] LF1.01 Split `pagination_cleanup` (S1).
-  - [ ] LF1.01a Extract the steps in spec §3 S1, including a named predicate for each fail-closed rule. The orchestrator and every step are at most 100 lines.
-  - [ ] LF1.01b Remove it from the length allowlist. The full suite, the golden snapshot and the characterization tests pass unchanged.
-- [ ] LF1.02 Split `propose_chapters` (S2).
-  - [ ] LF1.02a Extract the steps in spec §3 S2. The orchestrator and every step are at most 100 lines.
-  - [ ] LF1.02b Remove it from the length allowlist. The full suite, the golden snapshot and the characterization tests pass unchanged.
+- [x] LF1.01 Split `pagination_cleanup` (S1).
+  - [x] LF1.01a Extract the steps in spec §3 S1, including a named predicate for each fail-closed rule. The orchestrator and every step are at most 100 lines.
+    - Evidence: commit 4b761474e0c1c0bff4a30f8ca843c9a8e1b9e9ea. The orchestrator is 62 lines (was 437) and the longest step, `_find_sequences`, is 61. The steps, in order:
+      - page geometry: `_page_geometry`, which builds `_PageGeometry` with `valid_page`, `positions` and `label_matches`;
+      - running heads: `_running_heads`;
+      - candidates: `_collect_candidates` and `_record_candidate`, with one named predicate per fail-closed rule (`_continuous_with_body`, `_protected_kind`, `_quoted_or_dialogue`, `_speaker_label_or_reference`, `_body_phrase`, `_extended_prose`, `_list_label`, `_unconfirmed_numeral`);
+      - ranking and ties: `_rank_band_numerals`, `_find_sequences` and `_select_sequences`;
+      - the label check: `_labels_disagree`;
+      - edits, warnings and reasons: `_flag_ambiguity` and `_removal_reason`, with `_confirmed_number` and `_repeated_in_margin`.
+    - Evidence: a differential run of the old and new functions on 7,000 generated inputs found no mismatch in edits, warnings or review reasons. 1,823 inputs produced edits and 1,499 produced warnings, covering all three removal reasons.
+  - [x] LF1.01b Remove it from the length allowlist. The full suite, the golden snapshot and the characterization tests pass unchanged.
+    - Evidence: allowlist entry removed in 4b761474e0c1c0bff4a30f8ca843c9a8e1b9e9ea. `/verify` passed: 2036 passed, 1 skipped (Kitten smoke, opt-in), with mypy on 3.11, 3.12 and 3.13. Python CI run 43371719157 passed.
+- [x] LF1.02 Split `propose_chapters` (S2).
+  - [x] LF1.02a Extract the steps in spec §3 S2. The orchestrator and every step are at most 100 lines.
+    - Evidence: commit b0beee3b161fe8a25d256493698aa956f603c0eb. The orchestrator is 46 lines (was 448) and the longest step, `_heading_name_confidence_evidence`, is 55. State is shared through the private `_HeadingEvidence` dataclass. The steps, in order:
+      - typography: `_typical_body_size` and `_is_typographic_heading`;
+      - contents pages: `_listing_pages`, including the single-page gap fill;
+      - numbered and Roman candidates: `_text_headings`;
+      - bookmarks: `_valid_bookmarks`, `_inferred_bookmark_offset`, `_bookmark_match` and `_anchor_bookmarks`;
+      - ordering, merging and confidence: `_drop_crowded_typography`, `_corroborate_numerals`, `_drop_listed_labels`, `_drop_weak_candidates`, `_drop_subtitles`, `_chapter_starts`, `_heading_name_confidence_evidence` and `_build_chapters`.
+    - Evidence: a pytest plugin compared the old and new functions on all 255 `propose_chapters` calls the suite makes. Chapters, warnings, review reasons and exceptions matched on every call.
+  - [x] LF1.02b Remove it from the length allowlist. The full suite, the golden snapshot and the characterization tests pass unchanged.
+    - Evidence: allowlist entry removed in b0beee3b161fe8a25d256493698aa956f603c0eb. `/verify` passed (2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13), and Python CI run 43372183567 passed.
 
 ## Phase LF2 — Pipeline orchestrators
 
-- [ ] LF2.01 Split `_analyze_book_locked` (S3).
-  - [ ] LF2.01a Extract the steps in spec §3 S3 inside `pipeline.py`, passing shared state through a private run dataclass. Turn the nested `queue_change` and `map_boundary` into named functions.
-  - [ ] LF2.01b Confirm that every `pipeline.*` name tests patch still takes effect. Grep the tests' `monkeypatch.setattr` targets for `pipeline`, and record that the targeted tests pass unchanged.
-  - [ ] LF2.01c Remove it from the length allowlist. The full suite, the golden snapshot and the characterization tests pass unchanged.
-- [ ] LF2.02 Split `_convert_analyzed_book` (S4).
-  - [ ] LF2.02a Extract the steps in spec §3 S4. Keep the keyword parameters, and gather them into a private run dataclass inside `conversion.py`. Keep calling dependencies through `ConversionServices`.
-  - [ ] LF2.02b Remove it from the length allowlist. The full suite (including the FFmpeg-gated conversion tests) and the characterization tests pass unchanged.
+- [x] LF2.01 Split `_analyze_book_locked` (S3).
+  - [x] LF2.01a Extract the steps in spec §3 S3 inside `pipeline.py`, passing shared state through a private run dataclass. Turn the nested `queue_change` and `map_boundary` into named functions.
+    - Evidence: commit 64125110cb030b02abee26117a05ff670ae582d4. The orchestrator is 31 lines (was 553) and the longest step, `_run_llm_tasks`, is 90. Run state lives in `_AnalysisRun`, step output in `_AnalysisState`, and the merge in `_HandEditMerge`. Every step stays in `pipeline.py`. The steps, in order:
+      - load, validate and resume: `_start_analysis`, then `_reuse_existing_analysis` with `_switch_footnote_policy`;
+      - extraction: `_extract`;
+      - deterministic cleanup: `_deterministic_cleanup`;
+      - LLM proposals: `_llm_proposals`, with `_llm_analysis_requested`, `_cached_llm_worker`, `_run_llm_tasks` and `_deterministic_fallback`;
+      - `propose_chapters`, called from the orchestrator;
+      - the hand-edit merge: `_merge_hand_edits`, with `_match_old_chapters`, `_queue_hand_edits`, `_queue_moved_boundary`, `_apply_hand_edits`, and `_queue_change` and `_map_boundary` (the former nested `queue_change` and `map_boundary`);
+      - warnings and review reasons: `_chapter_review`;
+      - writing: `_write_analysis`.
+  - [x] LF2.01b Confirm that every `pipeline.*` name tests patch still takes effect. Grep the tests' `monkeypatch.setattr` targets for `pipeline`, and record that the targeted tests pass unchanged.
+    - Evidence: the grep found 21 patched names. The analysis steps look these up as `pipeline` module globals at call time: `read_manifest`, `render_chapter_texts`, `create_provider`, `propose_chapters`, `extract_pdf`, `pagination_cleanup`, `write_json`, `propose_llm_cleanup`, `digest_file`, `_analysis_stage_fingerprints` and `CachedLLMProvider`. All 46 test files that patch `pipeline` passed unchanged: 263 tests.
+  - [x] LF2.01c Remove it from the length allowlist. The full suite, the golden snapshot and the characterization tests pass unchanged.
+    - Evidence: allowlist entry removed in 64125110cb030b02abee26117a05ff670ae582d4. `/verify` passed (2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13), including all 11 hand-edit merge characterization tests. Python CI run 43372579420 passed.
+- [x] LF2.02 Split `_convert_analyzed_book` (S4).
+  - [x] LF2.02a Extract the steps in spec §3 S4. Keep the keyword parameters, and gather them into a private run dataclass inside `conversion.py`. Keep calling dependencies through `ConversionServices`.
+    - Evidence: commit d28c9b99ff5664c53fdb9bb30b96eff723f06cb2. The signature is unchanged. The orchestrator is 86 lines (was 421), and the parameters are gathered into the private `_ConversionRun` dataclass. Every dependency is still called through `run.services`. The steps, in order:
+      - loading the manifest and applying review acknowledgements: after `_remove_stale_temporary_audio`, the orchestrator calls `services.read_manifest`, `services.prepare_chapter_selection(..., acknowledge=accept_review)` and `services.render_chapter_texts`;
+      - chapter selection and the voice-marker preflight: `_read_voice_markers`, `_preflight_voice_markers` and `_initial_status`;
+      - audio identities and reuse, with the MP3 tag check: `_plan_synthesis`, `_chapter_identity`, `_cache_files_ready` and `_reusable_audio`;
+      - synthesizing one chapter: `_convert_chapter`, `_synthesize_and_encode` and `_fail_chapter`;
+      - publishing and cleanup: `_publish_chapter` and `_remove_obsolete_audio`;
+      - status: `_write_conversion_status`.
+    - Note: two closures stay nested inside `_convert_chapter`: the progress callback `on_chunk` and `settle`. They bind per-chapter progress state, and the task names only the spec §3 steps. The model and voice lookups (`_tts_model_identity`, `tts_selection`) still run outside the synthesis `try`, as they did before, so an `AudioError` from them is still not a chapter failure.
+  - [x] LF2.02b Remove it from the length allowlist. The full suite (including the FFmpeg-gated conversion tests) and the characterization tests pass unchanged.
+    - Evidence: allowlist entry removed in d28c9b99ff5664c53fdb9bb30b96eff723f06cb2. FFmpeg, Tesseract and Node are installed, so the only skip is the opt-in Kitten smoke. `/verify` passed (2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13), and Python CI run 43372876736 passed.
 
 ## Phase LF3 — Audio and LLM
 
@@ -120,3 +158,8 @@ Bugs or questionable behaviour noticed while reading, for a separate fix round (
 | --- | --- | --- | --- | --- |
 | 2026-11-13 | Not committed | Spec and TODO drafted; no work started. Baseline line counts: `_analyze_book_locked` 553, `propose_chapters` 448, `pagination_cleanup` 437, `_convert_analyzed_book` 421, `synthesize_chunks` 308, `_complete_json_call` 264, `_complete_json_request` 262, `extract_pdf` 225, `convert` 205 (140-line body) | Not run | LF0 safety net |
 | 2026-11-13 | f64e335a9820724c6c4afefb0b92f4dbba0e7b95 | LF0.01 (length guard), LF0.02a (golden snapshot), LF0.03 (coverage and 21 characterization tests). LF0.02b open (CI) | Guard e83a8c00e34ae41cde9974f4915aea3810577b29: fails on growth (438) and on a new 102-line function. Snapshot dd5f149926dd187e6c83dfe50e2abf92f513c32e: passes twice locally and on 3.12/3.13 offline. Local `/verify` at f64e335: ruff, format (367 files), mypy (46 files, also 3.12 and 3.13), pytest 2036 passed and 1 skipped (Kitten smoke, opt-in), CLI smoke. CI not run (not pushed) | LF0.02b CI and the checkpoint need a push; scope question for `propose_llm_contents_boundaries` |
+| 2026-11-13 | 27d950a04e38f312033792036ab5d59c125c398b | LF0.02b: golden snapshot and characterization tests confirmed in CI on 3.11, 3.12 and 3.13; checkpoint met | Exact-head Python CI [43371140000](https://github.com/ekkus93/pdf2audiobook/actions/runs/43371140000) passed (tests 3.11, 3.12, 3.13) | None |
+| 2026-11-13 | 4b761474e0c1c0bff4a30f8ca843c9a8e1b9e9ea | LF1.01: `pagination_cleanup` 437 → 62 lines (longest step 61) | `/verify` 2036 passed, 1 skipped (Kitten smoke, opt-in); mypy on 3.11, 3.12 and 3.13; old and new matched on 7,000 generated inputs; exact-head Python CI [43371719157](https://github.com/ekkus93/pdf2audiobook/actions/runs/43371719157) passed | None |
+| 2026-11-13 | b0beee3b161fe8a25d256493698aa956f603c0eb | LF1.02: `propose_chapters` 448 → 46 lines (longest step 55) | `/verify` 2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13; old and new matched on all 255 calls the suite makes; exact-head Python CI [43372183567](https://github.com/ekkus93/pdf2audiobook/actions/runs/43372183567) passed | None |
+| 2026-11-13 | 64125110cb030b02abee26117a05ff670ae582d4 | LF2.01: `_analyze_book_locked` 553 → 31 lines (longest step 90); the 21 patched `pipeline` names still take effect | `/verify` 2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13; the 46 test files that patch `pipeline` pass (263 tests); exact-head Python CI [43372579420](https://github.com/ekkus93/pdf2audiobook/actions/runs/43372579420) passed | None |
+| 2026-11-13 | d28c9b99ff5664c53fdb9bb30b96eff723f06cb2 | LF2.02: `conversion._convert_analyzed_book` 421 → 86 lines | `/verify` 2036 passed, 1 skipped (FFmpeg-gated tests ran); mypy on 3.11, 3.12 and 3.13; exact-head Python CI [43372876736](https://github.com/ekkus93/pdf2audiobook/actions/runs/43372876736) passed | None |
