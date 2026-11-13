@@ -172,6 +172,70 @@ def test_cost_budget_without_prices_refuses_before_sending(tmp_path):
     assert sent == []
 
 
+class _CapacityProvider:
+    """A provider whose request and served-context checks can be made to fail."""
+
+    model = "stub"
+    max_output_tokens = 64
+    max_context_tokens = 4096
+
+    def __init__(self):
+        self.total_usage: dict = {}
+        self.request_limit: int | None = None
+        self.served_error = False
+        self.sent: list[str] = []
+
+    def validate_request_capacity(self, *, instructions, document_text):
+        if self.request_limit is not None and len(document_text) > self.request_limit:
+            raise LLMError("LLM request exceeds the context window")
+
+    def validate_served_capacity(self, *, instructions, document_text):
+        if self.served_error:
+            raise LLMError("Served context window is too small")
+
+    def complete_json(self, *, instructions, document_text):
+        self.sent.append(document_text)
+        return {"answer": "synthetic"}
+
+
+def test_oversized_request_is_rejected_even_when_its_reply_is_cached(tmp_path):
+    """S6: the oversized-request check runs before the cache lookup."""
+    provider = _CapacityProvider()
+    cached = CachedLLMProvider(provider, cache_dir=tmp_path, identity="stub")
+    request = {"instructions": "Return JSON.", "document_text": "Synthetic text."}
+    assert cached.complete_json(**request) == {"answer": "synthetic"}
+
+    provider.request_limit = 3
+    with pytest.raises(LLMError, match="LLM request exceeds the context window"):
+        cached.complete_json(**request)
+
+    assert cached.hits == 0
+    assert provider.sent == ["Synthetic text."]
+
+
+def test_served_capacity_is_checked_before_the_budget_is_reserved(tmp_path):
+    """S6: a served-context rejection on a miss leaves no ledger reservation."""
+    from pdf2audiobook.llm.budget import BookLLMBudgetLedger
+
+    provider = _CapacityProvider()
+    provider.served_error = True
+    ledger_path = tmp_path / "llm_budget.sqlite3"
+    cached = CachedLLMProvider(
+        provider,
+        cache_dir=tmp_path / "cache",
+        identity="stub",
+        max_requests=5,
+        ledger_path=ledger_path,
+    )
+
+    with pytest.raises(LLMError, match="Served context window is too small"):
+        cached.complete_json(instructions="Return JSON.", document_text="Synthetic text.")
+
+    assert cached.requests_started == 0
+    assert provider.sent == []
+    assert BookLLMBudgetLedger(ledger_path).rows() == []
+
+
 def test_extraction_of_a_book_with_no_pages_is_refused(tmp_path, monkeypatch):
     """S8: an empty document stops before any page work."""
     from pdf2audiobook import pdf
