@@ -25,11 +25,7 @@ def _write_chapter_wav(samples: np.ndarray, sample_rate: int, target: Path) -> N
     Chapter audio may legitimately exceed 128 MiB. A fixed-size conversion
     buffer prevents a second chapter-sized PCM allocation during encoding.
     """
-    if (
-        isinstance(sample_rate, bool)
-        or not isinstance(sample_rate, int)
-        or not 8000 <= sample_rate <= 192000
-    ):
+    if not isinstance(sample_rate, int) or not 8000 <= sample_rate <= 192000:
         raise AudioError("Audio sample_rate must be an integer from 8000 to 192000")
     try:
         audio = np.asarray(samples, dtype=np.float32)
