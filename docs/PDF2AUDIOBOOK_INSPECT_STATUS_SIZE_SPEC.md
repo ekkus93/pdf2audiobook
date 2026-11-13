@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size Specification
 
-**Status:** Complete; R1–R2 in 19dc01b, R4–R5 in 5581cb4, R3 and R6–R8 in 86faa00 (R6 as amended by the §8 decision), all verified by exact-head CI
+**Status:** Complete; R1–R2 in 19dc01b (CI on 16e98a5, which adds only a TODO change), R4–R5 in 5581cb4 and R3, R6–R8 in 86faa00 (both exact-head CI; R6 as amended by the §8 decision)
 **Date:** 2026-11-13
 **Scope:** Close the `inspect` race found in the fourth-review TODO audit.
 **Companion:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_TODO.md`

@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size TODO
 
-**Status:** Complete; R1–R2 (19dc01b), R4–R5 (5581cb4), R3 and R6–R8 (86faa00, R6 as amended by the spec §8 decision), each verified by exact-head CI
+**Status:** Complete; R1–R2 (19dc01b, verified by CI run 43350264347 on 16e98a5, which adds only a TODO change), R4–R5 (5581cb4, exact-head CI 43352750100), R3 and R6–R8 (86faa00, exact-head CI 43355049360; R6 as amended by the spec §8 decision)
 **Date:** 2026-11-13
 **Specification:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_SPEC.md` (R1–R2)
 **Review source:** Fourth-review audit of `docs/PDF2AUDIOBOOK_FOURTH_REVIEW_TODO.md`, finding FX10.27b's remaining `inspect` size-check race.
