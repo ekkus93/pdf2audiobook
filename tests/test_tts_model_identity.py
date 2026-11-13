@@ -182,3 +182,16 @@ def test_explicit_provider_overrides_the_profile_provider():
         ).tts.provider
         == "kitten"
     )
+
+
+def test_kitten_profile_sets_the_kitten_model_voice_and_speed():
+    """T6.a: a Kitten profile writes Kitten's own fields, not Piper's."""
+    settings = _profiled(TTSProfile(kitten_model="synthetic-model", voice="Bella", speed=1.2))
+    piper_before = settings.tts.piper.model_copy()
+
+    selected = selection.settings_for_book_tts(settings, "book")
+
+    assert selected.tts.kitten.model == "synthetic-model"
+    assert selected.tts.kitten.voice == "Bella"
+    assert selected.tts.kitten.speed == 1.2
+    assert selected.tts.piper == piper_before

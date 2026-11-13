@@ -367,3 +367,60 @@ def test_unopenable_book_fails_with_a_fixed_message(tmp_path):
 
     with pytest.raises(LLMError, match="^Could not open book for visual review$"):
         review_visual_pages(source, _RecordingVisionProvider())
+
+
+class _Pixmap:
+    def __init__(self, width, height, data=b"\x89PNG small"):
+        self.width, self.height, self._data = width, height, data
+
+    def tobytes(self, _kind):
+        return self._data
+
+
+class _RenderPage:
+    """A page whose renders follow a script of pixmaps or errors."""
+
+    def __init__(self, renders, width=600, height=800):
+        self.rect = pymupdf.Rect(0, 0, width, height)
+        self.renders = list(renders)
+        self.scales = []
+
+    def get_pixmap(self, *, matrix, alpha, colorspace):
+        self.scales.append(matrix.a)
+        render = self.renders.pop(0)
+        if isinstance(render, Exception):
+            raise render
+        return render
+
+
+def test_render_of_a_zero_area_page_is_refused():
+    """T2.d: a page with no area is never rendered or sent."""
+    with pytest.raises(LLMError, match="^Cannot render page for visual review$"):
+        vision._render_png(_RenderPage([], width=0))
+
+
+def test_oversized_render_is_retried_at_half_scale():
+    """T2.d: a render over the pixel limit is redone smaller before upload."""
+    page = _RenderPage([_Pixmap(10_000, 10_000), _Pixmap(100, 100, b"\x89PNG ok")])
+
+    assert vision._render_png(page) == b"\x89PNG ok"
+    assert page.scales[1] == page.scales[0] / 2
+
+
+def test_render_failure_gives_a_fixed_message():
+    """T2.d: a PyMuPDF render error never reaches the user as raw text."""
+    page = _RenderPage([RuntimeError("private parser detail")])
+
+    with pytest.raises(LLMError, match="^Could not render a page for visual review$"):
+        vision._render_png(page)
+
+
+def test_render_that_stays_too_large_is_never_sent():
+    """T2.d: after four smaller attempts, an image over 4 MiB is refused."""
+    huge = b"\x89PNG" + b"x" * (4 * 1024 * 1024)
+    page = _RenderPage([_Pixmap(100, 100, huge) for _ in range(4)])
+
+    with pytest.raises(LLMError, match="^Rendered page exceeds the visual review image limit$"):
+        vision._render_png(page)
+
+    assert len(page.scales) == 4
