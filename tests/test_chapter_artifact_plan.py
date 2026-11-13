@@ -188,3 +188,313 @@ def test_changed_file_after_planning_cannot_be_published(tmp_path):
             commit_artifacts(tmp_path, plan)
     assert target.read_text() == "User edit during planning."
     assert not (tmp_path / JOURNAL).exists()
+
+
+# --- Hand-edit protection (test coverage round 2, U2) --------------------------
+
+_INSPECT = "Cannot inspect chapter text; check workspace files"
+_INVALID_METADATA = "Chapter artifact metadata is invalid; restore it from a backup"
+
+
+def _two_chapters() -> BookManifest:
+    manifest = _manifest()
+    manifest.blocks.append(DocumentBlock(id="b2", page_index=1, text="Second."))
+    manifest.chapters.append(
+        Chapter(id="c2", number=2, title="Two", start_block=1, end_block=2, confidence=1)
+    )
+    return manifest
+
+
+def _files(folder):
+    return {
+        str(path.relative_to(folder)): path.read_bytes()
+        for path in sorted(folder.rglob("*"))
+        if path.is_file() and not path.is_symlink()
+    }
+
+
+@pytest.mark.parametrize("kind", ["symlink", "directory"])
+def test_chapter_path_that_is_not_a_regular_file_is_refused(tmp_path, kind):
+    """U2.a: a symlink or directory in a chapter's place is never read or written."""
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    manifest = _manifest()
+    render_chapter_texts(manifest, tmp_path)
+    chapter = tmp_path / "chapters" / "001.txt"
+    chapter.unlink()
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.txt"
+    outside.write_text("Private text elsewhere.", encoding="utf-8")
+    if kind == "symlink":
+        chapter.symlink_to(outside)
+    else:
+        chapter.mkdir()
+
+    with pytest.raises(ExtractionError) as error:
+        plan_chapter_artifacts(manifest, tmp_path, "warn")
+
+    assert str(error.value) == _INSPECT
+    assert str(tmp_path) not in str(error.value)
+    assert outside.read_text(encoding="utf-8") == "Private text elsewhere."
+
+
+def _state(**changes):
+    record = {"number": 1, "generated": "a" * 64, "identity": "b" * 64, "edited": False}
+    state = {"version": 1, "footnotes": "warn", "chapters": {"c": record}}
+    for key, value in changes.items():
+        if key.startswith("record_"):
+            field = key.removeprefix("record_")
+            if value is _DROP:
+                del record[field]
+            else:
+                record[field] = value
+        elif value is _DROP:
+            del state[key]
+        else:
+            state[key] = value
+    return state
+
+
+_DROP = object()
+
+
+@pytest.mark.parametrize(
+    "state",
+    [
+        ["not", "an", "object"],
+        _state(extra=True),
+        _state(version=_DROP),
+        _state(version=2),
+        _state(footnotes=7),
+        _state(footnotes="aside"),
+        _state(chapters=[]),
+        _state(chapters={"c": "not a record"}),
+        # A list of exactly the key names passes the key-set check; only the
+        # type check stops it before record.get().
+        _state(chapters={"c": ["number", "generated", "identity", "edited"]}),
+        _state(record_extra=1),
+        _state(record_number=_DROP),
+        _state(record_number=True),
+        _state(record_number="1"),
+        _state(record_number=0),
+        _state(chapters={"c": _state()["chapters"]["c"], "d": _state()["chapters"]["c"]}),
+        _state(record_generated=7),
+        _state(record_generated="A" * 64),
+        _state(record_identity=None),
+        _state(record_identity="b" * 63),
+        _state(record_edited="no"),
+    ],
+    ids=[
+        "not-an-object",
+        "extra-key",
+        "missing-version",
+        "wrong-version",
+        "policy-not-a-string",
+        "unknown-policy",
+        "chapters-not-a-mapping",
+        "record-not-an-object",
+        "record-is-a-list-of-the-keys",
+        "record-extra-key",
+        "record-missing-number",
+        "number-bool",
+        "number-string",
+        "number-zero",
+        "duplicate-number",
+        "generated-not-a-string",
+        "generated-not-a-digest",
+        "identity-not-a-string",
+        "identity-short",
+        "edited-not-a-bool",
+    ],
+)
+def test_invalid_chapter_metadata_is_refused_with_files_unchanged(tmp_path, state):
+    """U2.b: any malformed metadata is refused before planning, never repaired."""
+    (tmp_path / STATE_NAME).write_text(json.dumps(state), encoding="utf-8")
+    before = _files(tmp_path)
+
+    with pytest.raises(ExtractionError) as error:
+        plan_chapter_artifacts(_manifest(), tmp_path, "warn")
+
+    assert str(error.value) == _INVALID_METADATA
+    assert _files(tmp_path) == before
+
+
+def test_valid_metadata_control_case_is_accepted(tmp_path):
+    """U2.b control: the record shape the cases above corrupt is accepted."""
+    from pdf2audiobook.chapter_artifacts import load_artifact_state
+
+    (tmp_path / STATE_NAME).write_text(json.dumps(_state()), encoding="utf-8")
+
+    assert load_artifact_state(tmp_path) == _state()
+
+
+def test_unknown_footnote_policy_is_refused(tmp_path):
+    """U2.c: planning refuses a policy it doesn't know before reading anything."""
+    with pytest.raises(ExtractionError, match="^Chapter footnote policy is invalid$"):
+        plan_chapter_artifacts(_manifest(), tmp_path, "aside")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_metadata_changed_while_planning_is_refused(tmp_path, monkeypatch):
+    """U2.c: metadata rewritten between its two reads stops planning."""
+    from pdf2audiobook import chapter_artifacts
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    manifest = _manifest()
+    render_chapter_texts(manifest, tmp_path)
+    real_load = chapter_artifacts.load_artifact_state
+
+    def load_then_rewrite(folder):
+        state = real_load(folder)
+        (folder / STATE_NAME).write_text(json.dumps(state) + "\n", encoding="utf-8")
+        return state
+
+    monkeypatch.setattr(chapter_artifacts, "load_artifact_state", load_then_rewrite)
+
+    with pytest.raises(
+        ExtractionError, match="^Chapter artifact metadata changed during planning; retry$"
+    ):
+        plan_chapter_artifacts(manifest, tmp_path, "warn")
+
+
+def test_duplicate_chapter_ids_are_refused(tmp_path):
+    """U2.c: two chapters with one ID can't both own a file."""
+    manifest = _two_chapters()
+    manifest.chapters[1].id = "c"
+
+    with pytest.raises(ExtractionError, match="^Duplicate chapter IDs in manifest$"):
+        plan_chapter_artifacts(manifest, tmp_path, "warn")
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def _edited_and_recorded(folder, manifest, number, text):
+    """Edit a chapter file and record the edit in metadata, as a later run would."""
+    (folder / "chapters" / f"{number:03d}.txt").write_text(text, encoding="utf-8")
+    _publish_plan(folder, plan_chapter_artifacts(manifest, folder, "warn"))
+
+
+def test_new_chapter_number_with_a_different_file_conflicts(tmp_path):
+    """U2.d: a new chapter never overwrites an untracked file at its number."""
+    from pdf2audiobook.chapter_artifacts import find_chapter_conflicts
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    render_chapter_texts(_manifest(), tmp_path)
+    target = tmp_path / "chapters" / "002.txt"
+    target.write_text("Private notes.", encoding="utf-8")
+    manifest = _two_chapters()
+
+    with pytest.raises(ExtractionError, match="^Chapter 2 text conflicts"):
+        plan_chapter_artifacts(manifest, tmp_path, "warn")
+    assert find_chapter_conflicts(manifest, tmp_path, "warn") == [2]
+    assert target.read_text(encoding="utf-8") == "Private notes."
+
+
+def test_deleted_hand_edited_chapter_conflicts(tmp_path):
+    """U2.d: a hand-edited chapter whose file was deleted is not silently regenerated."""
+    from pdf2audiobook.chapter_artifacts import find_chapter_conflicts
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    manifest = _manifest()
+    render_chapter_texts(manifest, tmp_path)
+    _edited_and_recorded(tmp_path, manifest, 1, "Edited.\n")
+    assert json.loads((tmp_path / STATE_NAME).read_text())["chapters"]["c"]["edited"] is True
+    (tmp_path / "chapters" / "001.txt").unlink()
+
+    with pytest.raises(ExtractionError, match="^Chapter 1 text conflicts"):
+        plan_chapter_artifacts(manifest, tmp_path, "warn")
+    assert find_chapter_conflicts(manifest, tmp_path, "warn") == [1]
+    assert not (tmp_path / "chapters" / "001.txt").exists()
+
+
+def test_all_conflicts_are_collected_once_each_and_files_survive(tmp_path):
+    """U2.d: collect mode reports every conflicting number once, in order."""
+    from pdf2audiobook.chapter_artifacts import find_chapter_conflicts
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    manifest = _two_chapters()
+    manifest.blocks.append(DocumentBlock(id="b3", page_index=2, text="Third."))
+    manifest.chapters.append(
+        Chapter(id="c3", number=3, title="Three", start_block=2, end_block=3, confidence=1)
+    )
+    render_chapter_texts(manifest, tmp_path)
+    _edited_and_recorded(tmp_path, manifest, 1, "Edited one.\n")
+    chapters = tmp_path / "chapters"
+    (chapters / "001.txt").unlink()  # 1: deleted after its edit was recorded
+    (chapters / "002.txt").write_text("Edited two.\n", encoding="utf-8")  # 2: range changes
+    (chapters / "003.txt").write_text("Edited three.\n", encoding="utf-8")  # 3: removed
+    (chapters / "005.txt").write_text("Untracked notes.\n", encoding="utf-8")  # 5: unknown
+    manifest.chapters.pop()
+    manifest.chapters[1].end_block = 3
+    before = _files(tmp_path)
+
+    assert find_chapter_conflicts(manifest, tmp_path, "warn") == [1, 2, 3, 5]
+    # Raise mode stops at the first: chapters no longer in the manifest are checked first.
+    with pytest.raises(ExtractionError, match="^Chapter 3 text conflicts"):
+        plan_chapter_artifacts(manifest, tmp_path, "warn")
+    assert _files(tmp_path) == before
+
+
+def _swap_ids(manifest):
+    manifest.chapters[0].id, manifest.chapters[1].id = "c2", "c"
+
+
+def test_chapter_moved_onto_an_edited_occupant_conflicts(tmp_path):
+    """U2.d: a chapter moved onto a slot whose old owner was edited conflicts."""
+    from pdf2audiobook.chapter_artifacts import find_chapter_conflicts
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    manifest = _two_chapters()
+    render_chapter_texts(manifest, tmp_path)
+    target = tmp_path / "chapters" / "002.txt"
+    target.write_text("Edited two.\n", encoding="utf-8")
+    _swap_ids(manifest)  # c now numbers 2, onto c2's edited file
+
+    assert find_chapter_conflicts(manifest, tmp_path, "warn") == [2]
+    with pytest.raises(ExtractionError, match="^Chapter 2 text conflicts"):
+        plan_chapter_artifacts(manifest, tmp_path, "warn")
+    assert target.read_text(encoding="utf-8") == "Edited two.\n"
+
+
+def test_forced_number_skips_the_edit_check_and_is_regenerated(tmp_path):
+    """U2.d: a number named in force (already backed up) is replaced, not a conflict."""
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    manifest = _two_chapters()
+    render_chapter_texts(manifest, tmp_path)
+    (tmp_path / "chapters" / "002.txt").write_text("Edited two.\n", encoding="utf-8")
+    _swap_ids(manifest)
+
+    plan = plan_chapter_artifacts(manifest, tmp_path, "warn", force=frozenset({2}))
+
+    # IDs swap but block ranges stay, so only slot 2's edited file is replaced.
+    assert set(plan.writes) == {"002.txt"}
+    assert plan.writes["002.txt"].decode("utf-8").startswith("Second.")
+    assert plan.state["chapters"]["c"]["edited"] is False
+    assert plan.deletes == ()
+
+
+def test_anchor_edits_rule_out_the_warn_policy(tmp_path):
+    """U2.d (line 127): footnote anchor edits mean the legacy policy isn't warn."""
+    from pdf2audiobook.chapter_artifacts import resolve_footnote_policy
+    from pdf2audiobook.errors import FootnotePolicyUnknownError
+    from pdf2audiobook.models import CleanupEdit
+
+    manifest = _manifest()
+    manifest.edits.append(
+        CleanupEdit(
+            block_id="b",
+            original="1",
+            replacement="",
+            reason="footnote anchor marker 1 (note handled)",
+            confidence=1,
+            accepted=True,
+            provider="deterministic",
+        )
+    )
+
+    # No chapter files: without anchor edits this would resolve to warn.
+    with pytest.raises(FootnotePolicyUnknownError):
+        resolve_footnote_policy(manifest, tmp_path)
+    manifest.edits.clear()
+    assert resolve_footnote_policy(manifest, tmp_path) == "warn"
