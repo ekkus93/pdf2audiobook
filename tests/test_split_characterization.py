@@ -358,3 +358,19 @@ def test_repeated_contents_entry_and_boundary_are_rejected_as_duplicates():
         "LLM contents entry references an unknown/duplicate block entry",
         "LLM boundary references an unknown/duplicate block body",
     ]
+
+
+def test_cost_budget_with_an_output_cap_but_no_prices_refuses_before_sending(tmp_path):
+    """Cache: a cost budget cannot bound a request without prices, even with an output cap."""
+    provider = _CapacityProvider()
+    cached = CachedLLMProvider(
+        provider, cache_dir=tmp_path, identity="stub", max_estimated_cost_usd=1.0
+    )
+
+    with pytest.raises(
+        LLMError, match="A bounded output token cap is required under an LLM budget"
+    ):
+        cached.complete_json(instructions="Return JSON.", document_text="Synthetic.")
+
+    assert provider.sent == []
+    assert cached.requests_started == 0
