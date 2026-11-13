@@ -120,23 +120,40 @@ def test_edited_owner_of_a_match_shared_with_an_unedited_chapter_is_named(tmp_pa
     assert message.startswith("Chapter 1 was edited but cannot be aligned")
 
 
-def test_unedited_chapter_without_a_match_is_skipped(tmp_path, monkeypatch):
+def test_unedited_chapter_without_a_match_is_skipped(tmp_path):
     source, manifest_path, manifest, reanalysis = _setup(tmp_path)
-    second_start = manifest.chapters[1].start_block
     manifest.chapters[1].title = "Second edit"
+    # The old first chapter's heading block no longer exists in the new
+    # extraction, so that unedited chapter has no match and is skipped.
+    manifest.blocks[0].id = "heading-from-an-older-extraction"
     write_manifest(manifest_path, manifest)
-    monkeypatch.setattr(
-        pipeline,
-        "propose_chapters",
-        lambda blocks, *_a, **_k: ([_chapter(1, "Second only", second_start, len(blocks))], []),
+
+    result = read_manifest(pipeline.analyze_book(source, reanalysis))
+
+    assert [chapter.title for chapter in result.chapters] == ["Chapter 1", "Second edit"]
+    assert "Preserved user-edited chapter numbers: 2" in result.warnings
+
+
+def test_merge_range_guard_rejects_an_edited_chapter_outside_the_old_blocks(tmp_path):
+    """The guard behind manifest validation: an out-of-range edit is a conflict."""
+    _, _, manifest, _ = _setup(tmp_path)
+    total = len(manifest.blocks)
+    edited = manifest.chapters[1].model_copy(update={"title": "Edit", "start_block": total})
+    merge = pipeline._HandEditMerge(
+        existing_manifest=manifest,
+        new_positions={block.id: i for i, block in enumerate(manifest.blocks)},
+        new_block_count=total,
+        old_chapters=[manifest.chapters[0], edited],
+        edited_by_id={edited.id: edited},
+        matches={chapter.id: chapter for chapter in manifest.chapters},
+        changed_chapter_numbers={edited.number},
     )
 
-    # The unmatched, unedited first chapter is skipped. Today the title-only edit
-    # then fails as a boundary conflict; this is recorded in the split TODO's
-    # "Found during split" list for a separate fix, not changed here.
-    message = _conflict(source, reanalysis)
+    with pytest.raises(ExtractionError) as error:
+        pipeline._queue_hand_edits(merge)
 
-    assert message.startswith("Edited boundaries conflict for chapter(s) 2")
+    assert str(error.value).startswith("Chapter 2 was edited but cannot be aligned")
+    assert merge.field_changes == {}
 
 
 def test_inconsistent_edits_to_a_shared_boundary_conflict(tmp_path):
@@ -157,7 +174,7 @@ def test_edited_start_beyond_the_old_blocks_is_rejected_when_the_manifest_is_rea
     write_manifest(manifest_path, manifest)
 
     # Manifest validation rejects the range before the merge's own range guard
-    # (pipeline.py, "was edited but cannot be aligned") can run.
+    # runs; that guard is tested directly above.
     message = _conflict(source, reanalysis)
 
     assert message == (
