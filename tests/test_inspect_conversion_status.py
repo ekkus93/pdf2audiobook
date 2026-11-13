@@ -313,3 +313,144 @@ def test_unavailable_synthesis_progress_uses_null_report_fields():
 
     assert _progress_report_fields(None) == (None, None)
     assert _progress_report_fields({"mapping": None}) == (None, None)
+
+
+# Literal sizes, so a change to the shared constant cannot move both sides of a
+# boundary test at once (spec R1: exactly 1 MiB).
+_ONE_MIB = 1_048_576
+
+
+def test_the_status_limit_is_exactly_one_mebibyte(tmp_path):
+    body = json.dumps({"chapters": [{"number": 1, "status": "complete"}]}).encode()
+    at_limit = body + b" " * (_ONE_MIB - len(body))
+    assert len(at_limit) == _ONE_MIB
+    included = CliRunner().invoke(
+        app, ["inspect", str(_status_workspace(tmp_path / "at", at_limit)), "--json"]
+    )
+    over = CliRunner().invoke(
+        app, ["inspect", str(_status_workspace(tmp_path / "over", at_limit + b" ")), "--json"]
+    )
+
+    assert included.exit_code == 0, included.stderr
+    assert json.loads(included.stdout)["conversion_status"]["chapters"][0]["number"] == 1
+    assert over.exit_code == 3
+    assert json.loads(over.stderr)["error"]["message"] == (
+        "Conversion status file exceeds safe size limit"
+    )
+
+
+class _ReplacedRead:
+    """Delegates to the real handle but returns `payload` from the first read, then
+    runs `after_read`, so the bytes read and the file on disk can disagree."""
+
+    def __init__(self, handle, payload, after_read=None):
+        self._handle = handle
+        self._payload = payload
+        self._after_read = after_read
+
+    def read(self, size=-1):
+        data = self._payload if size < 0 else self._payload[:size]
+        if self._after_read is not None:
+            self._after_read()
+        return data
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self._handle.close()
+
+    def __getattr__(self, name):
+        return getattr(self._handle, name)
+
+
+def _replace_status_read(monkeypatch, payload, after_read=None):
+    real_open = Path.open
+
+    def replaced_open(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "r")
+        handle = real_open(self, *args, **kwargs)
+        if self.name == "conversion_status.json" and "r" in mode:
+            return _ReplacedRead(handle, payload, after_read)
+        return handle
+
+    monkeypatch.setattr(Path, "open", replaced_open)
+
+
+def test_oversize_is_decided_by_the_bytes_read_not_the_file_on_disk(tmp_path, monkeypatch):
+    manifest_path = _status_workspace(tmp_path, b"{}")
+    _replace_status_read(monkeypatch, _OVERSIZED_STATUS)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path), "--json"])
+
+    # The file on disk is two bytes; only the read shows it oversized.
+    assert result.exit_code == 3
+    assert json.loads(result.stderr)["error"]["message"] == (
+        "Conversion status file exceeds safe size limit"
+    )
+    _assert_content_free(result.stderr, tmp_path)
+
+
+def test_a_file_replaced_after_a_small_read_is_judged_by_what_was_read(tmp_path, monkeypatch):
+    manifest_path = _status_workspace(tmp_path, b"{not json")
+    status_path = tmp_path / "reports" / "conversion_status.json"
+
+    def replace_with_a_large_file():
+        status_path.write_bytes(_OVERSIZED_STATUS)
+
+    _replace_status_read(monkeypatch, b"{not json", replace_with_a_large_file)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path), "--json"])
+
+    # The bytes read were small and malformed: omitted, never reported oversized.
+    assert result.exit_code == 0, result.stderr
+    assert "conversion_status" not in json.loads(result.stdout)
+    assert "exceeds safe size limit" not in result.stderr
+
+
+def test_status_is_read_in_binary_and_bounded_in_bytes(tmp_path, monkeypatch):
+    manifest_path = _status_workspace(tmp_path, b"{}")
+    real_open = Path.open
+    reads = []
+
+    def recording_open(self, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if self.name == "conversion_status.json" and "r" in mode:
+            reads.append(mode)
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", recording_open)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path), "--json"])
+
+    assert result.exit_code == 0, result.stderr
+    # A text-mode read of limit + 1 characters could pull in about 4 MiB.
+    assert reads == ["rb"]
+
+
+def test_status_nested_exactly_sixteen_deep_is_included(tmp_path):
+    status = b'{"a":' * 15 + b"{}" + b"}" * 15
+    manifest_path = _status_workspace(tmp_path, status)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path), "--json"])
+
+    assert result.exit_code == 0, result.stderr
+    assert "a" in json.loads(result.stdout)["conversion_status"]
+
+
+def test_unreadable_conversion_status_is_omitted_in_human_mode(tmp_path, monkeypatch):
+    manifest_path = _status_workspace(tmp_path, b"{}")
+    real_open = Path.open
+
+    def denied_open(self, *args, **kwargs):
+        if self.name == "conversion_status.json":
+            raise PermissionError(13, "Permission denied", str(self))
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", denied_open)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path)])
+
+    assert result.exit_code == 0, result.stderr
+    assert "Permission denied" not in result.output
+    _assert_content_free(result.output, tmp_path)
