@@ -293,3 +293,68 @@ def test_convert_cli_routes_model_and_password_overrides(tmp_path, monkeypatch):
     settings = captured["settings"]
     assert settings.llm.openai.model == "synthetic-model"
     assert settings.pdf.password_env == "BOOK_PASSWORD"
+
+
+class _ContentsStub:
+    """Returns one fixed contents/boundary response for every window."""
+
+    model = "stub"
+
+    def __init__(self, response):
+        self.response = response
+
+    def complete_json(self, *, instructions, document_text):
+        return self.response
+
+
+def _entry(block_id, title="Chapter Two", page="9"):
+    return {"block_id": block_id, "title": title, "page_reference": page, "confidence": 0.9}
+
+
+def test_contents_entry_maps_only_to_a_unique_later_title():
+    """Contents: only later blocks count, and a title that appears twice maps to neither."""
+    from pdf2audiobook.llm import propose_llm_contents_boundaries
+
+    blocks = [
+        DocumentBlock(id="preface-heading", page_index=0, text="Chapter One"),
+        DocumentBlock(id="unique", page_index=0, text="Chapter One ..... 3"),
+        DocumentBlock(id="twice", page_index=0, text="Chapter Two ..... 9"),
+        DocumentBlock(id="one", page_index=1, text="Chapter One"),
+        DocumentBlock(id="two-a", page_index=2, text="Chapter Two"),
+        DocumentBlock(id="two-b", page_index=3, text="Chapter Two"),
+    ]
+    response = {"entries": [_entry("unique", "Chapter One", "3"), _entry("twice")]}
+
+    ids, warnings = propose_llm_contents_boundaries(blocks, _ContentsStub(response))
+
+    assert ids == {"one"}
+    assert warnings == []
+
+
+def test_repeated_contents_entry_and_boundary_are_rejected_as_duplicates():
+    """Contents: a block proposed twice is verified once, then rejected."""
+    from pdf2audiobook.llm import propose_llm_contents_boundaries
+
+    blocks = [
+        DocumentBlock(id="entry", page_index=0, text="Chapter Two ..... 9"),
+        DocumentBlock(id="body", page_index=2, text="Chapter Two"),
+    ]
+    boundary = {"block_id": "body", "title": "Chapter Two", "confidence": 0.9}
+    response = {"entries": [_entry("entry")] * 2, "boundaries": [boundary] * 2}
+    decisions = []
+
+    ids, warnings = propose_llm_contents_boundaries(
+        blocks, _ContentsStub(response), decisions=decisions
+    )
+
+    assert ids == {"body"}
+    assert [(d.block_id, d.status, d.reason_code) for d in decisions] == [
+        ("entry", "accepted", "verified_contents_entry"),
+        ("entry", "rejected", "unknown_or_duplicate_contents_block"),
+        ("body", "accepted", "verified_boundary_candidate"),
+        ("body", "rejected", "unknown_or_duplicate_boundary_block"),
+    ]
+    assert warnings == [
+        "LLM contents entry references an unknown/duplicate block entry",
+        "LLM boundary references an unknown/duplicate block body",
+    ]
