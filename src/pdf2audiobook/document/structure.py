@@ -47,6 +47,9 @@ from pdf2audiobook.document.pagination import (
     _ROMAN_TITLE as _ROMAN_TITLE,
 )
 from pdf2audiobook.document.pagination import (
+    PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT as PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT,
+)
+from pdf2audiobook.document.pagination import (
     _number_value as _number_value,
 )
 from pdf2audiobook.document.pagination import (
@@ -99,7 +102,6 @@ PAGE_REFERENCE_END = re.compile(r"[^\W\d_][\s.…·]*\s\d{1,4}$")
 CHAPTER_TEXT_NAME = re.compile(r"\d{3,}\.txt")
 WRAPPED_LINE_END = re.compile(r"[^\W\d_]-$")
 PAGE_NUMBER = re.compile(r"^(?:\d{1,5}|[ivxlcdm]{1,10})$", re.IGNORECASE)
-PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT = 2.0
 
 CANONICAL_ROMAN = re.compile(
     r"^M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})"

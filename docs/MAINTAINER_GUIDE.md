@@ -379,7 +379,7 @@ The opt-in real Kitten smoke test requires both the `kitten` extra and
 ## Architecture and extension points
 
 Page-number candidate ranking uses `PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT = 2.0` in
-`document/structure.py`: competing edge distances less than 2pt apart are tied
+`document/pagination.py` (re-exported by `document/structure.py`): competing edge distances less than 2pt apart are tied
 and retained for review. A difference of exactly 2pt is sufficient to select
 the nearer candidate.
 
