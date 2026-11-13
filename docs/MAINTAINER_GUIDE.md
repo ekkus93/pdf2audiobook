@@ -344,8 +344,9 @@ Failed chapter details stay in `reports/conversion_status.json` and are shown
 by `inspect`; transient provider errors alone are retried. `inspect` reads that
 file through one handle, at most `CONVERSION_STATUS_MAX_BYTES` (1 MiB, in
 `cli.py`) plus one byte, and fails with "Conversion status file exceeds safe
-size limit" (exit 3) when the read goes over the limit, even if the file grew
-after an earlier size check. A missing, unreadable, malformed or over-depth
+size limit" (exit 3) when the read goes over the limit. The decision is made
+from the bytes read, so a file that grows or is replaced before it is read is
+still reported. A missing, unreadable, malformed, non-object or over-depth
 status file is left out of the output. Known limitation: if the status path is
 a FIFO or another non-regular file, opening or reading it can block, so
 `inspect` can hang. A reviewed manifest

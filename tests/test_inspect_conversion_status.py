@@ -200,6 +200,41 @@ def test_status_that_grows_after_a_size_observation_is_reported_oversized(tmp_pa
     _assert_content_free(result.stderr, tmp_path)
 
 
+def test_status_that_grows_before_it_is_read_is_reported_oversized(tmp_path, monkeypatch):
+    manifest_path = _status_workspace(tmp_path, b'{"chapters": []}')
+    real_open = Path.open
+
+    def growing_open(self, *args, **kwargs):
+        # The file is small for any size check made before this point and
+        # grows past the limit just before the reading handle is opened.
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if self.name == "conversion_status.json" and "r" in mode:
+            with real_open(self, "wb") as stream:
+                stream.write(_OVERSIZED_STATUS)
+        return real_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", growing_open)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path), "--json"])
+
+    assert result.exit_code == 3, "an oversized status read must not be silently omitted"
+    error = json.loads(result.stderr)
+    assert error["error"]["message"] == "Conversion status file exceeds safe size limit"
+    _assert_content_free(result.stderr, tmp_path)
+
+
+def test_status_one_byte_over_the_limit_is_a_fixed_error_in_human_mode(tmp_path):
+    status = b"{}" + b" " * (_STATUS_LIMIT - 1)
+    assert len(status) == _STATUS_LIMIT + 1
+    manifest_path = _status_workspace(tmp_path, status)
+
+    result = CliRunner().invoke(app, ["inspect", str(manifest_path)])
+
+    assert result.exit_code == 3
+    assert result.stderr.lstrip().startswith("Error:")
+    assert "Conversion status file exceeds safe size limit" in result.stderr
+
+
 def test_unavailable_synthesis_progress_uses_null_report_fields():
     from pdf2audiobook.pipeline import _progress_report_fields
 
