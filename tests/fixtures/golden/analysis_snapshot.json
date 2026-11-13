@@ -1,0 +1,204 @@
+{
+ "golden_book.pdf": {
+  "files": {
+   "chapter-artifacts.json": "568db6294769f4d8eb8767fc11fe01a49a8d039c82b9970720b4093834e49ce2",
+   "chapters/001.txt": "e75730a06a6519fb0f5370e55d5e46c8154b4a8d61cf6a5596e9a2332e417199",
+   "chapters/002.txt": "d8eb11c8c38b52942fc7c5bde4d644add2312f41c42eb30f03316ddff2f46ff6",
+   "chapters/003.txt": "5e7e7751f594d6d7175ad38fe0b8a320dcd454ba336cf3298f0e0e667b862b2c",
+   "coverage.json": "8e0761870bb2a052b77438524db617d9c7738c347a71d443cb3fd3df9a523806",
+   "manifest.json": "6e010394efac26928eeab0bcf72c8e455a9a5573f4d4354ff1fca778b812b035",
+   "reports/analysis_fingerprints.json": "5afdbe9254b9824750b8c9b2aaee88607549587b3b7821ed2b05efafe348e88f",
+   "reports/llm_cleanup_audit.json": "8e44692c18d4c22a7b93130a73868920e259a48d0c08f6bf85f09e4d5e3eaad6",
+   "reports/llm_decisions.json": "34ddf07d20261179dfecdf675da10b63b7ef64b4bb19a76774e3753f37ea27cb"
+  },
+  "manifest_sections": {
+   "analysis_fingerprint": "d0dd125dd15feafc3251d3d2c671366cd55c10b75dadd33704a6b98a36d22f35",
+   "approved": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+   "author": "f5defb7d8a17154e98e771f5f7645b0bf67d1400bafa961dcf38ed3a92beecc8",
+   "blocks": "891b4e1decc9517f9ea837f4ccb1747063f0f549b263f963042b49ed164eb479",
+   "chapters": "9f0d5520360129ae242c36372d295e0678a57027f23f122d104d05aca4b4e415",
+   "chunks": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "edits": "a739e690d1bba882bf376b1dffc99d4bf9ee0f866683e422eb35cb7efdb7b8c9",
+   "input_sha256": "ab3aeb3096280e082ad34463149419f32116d357f01b21daba6d3b3cd069b51a",
+   "review_acknowledged": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "review_required": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "schema_version": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+   "source_path": "2b701d5cdca1993a673b63e89649ebe1eed486e5d4bd3a1210af301cac89fcc3",
+   "spans": "0d03f67e5ef66042a4c584b102d1b4cd6308cf71b28a53fef845e05129adb8b9",
+   "title": "43d190d7b1d41fc21568fa55119a1d11c18e08e31c310bdc2718e7bcae7955ec",
+   "warnings": "bc5d70c2b013e6a76f91daaeced4946b3bac3ff9911d6da10a91a2aea1aec5a0"
+  },
+  "summary": {
+   "analysis_fingerprint": "4975b72426319edc65b359a03ce2a4a94023219d8de02795b7feea70aabc1df4",
+   "block_kinds": [
+    "footnote",
+    "heading",
+    "list",
+    "unknown"
+   ],
+   "chapters": [
+    [
+     1,
+     "Front Matter",
+     0,
+     6,
+     0.7
+    ],
+    [
+     2,
+     "I. THE STORM",
+     6,
+     29,
+     0.9
+    ],
+    [
+     3,
+     "II. THE HARBOUR",
+     29,
+     40,
+     0.9
+    ]
+   ],
+   "edit_count": 4,
+   "review_required": [],
+   "warnings": [
+    "Page 3: possible small-font footnote or endnote; preserved verbatim for review",
+    "Page 3: 1 likely footnote anchor(s)/continuation line(s) classified; verify against PDF",
+    "Ignored 1 font-size-only heading candidate(s) not in the PDF outline, printed contents or numbered chapter labels; verify chapter boundaries",
+    "Pre-chapter material retained in its own front-matter chapter"
+   ]
+  }
+ },
+ "novel.epub": {
+  "files": {
+   "chapter-artifacts.json": "e0a94bab1a3ea04f240f458afdd1d4ccd305079930195a9af1eb1bcbf8274ea2",
+   "chapters/001.txt": "8db3d4d1d6f83a3757a853ba74b05c06bfbe9c2fd2d5540ebaa90faf58adeb96",
+   "chapters/002.txt": "bed122b93c896f06e3d234a35991caa425ad917e5e734af1f6d7b8fd53837ac9",
+   "chapters/003.txt": "f72ba35f58eea3afd8a8f9c546e65970b2cca5c31977d81c8ab031db8a1bb707",
+   "chapters/004.txt": "fd1e2acbdf4ac668706edfc28e34d69f6875e6510a31117946b6ad011aab5d62",
+   "chapters/005.txt": "a85a9552feb7bac6d4fdaaec1a8158380a508ffa8048d21e83e7a6e87557ff5e",
+   "chapters/006.txt": "c78451c8923d3f00bea7c0b3d87c0d2a0afa201932c60e0e9974fc596d7fe09d",
+   "chapters/007.txt": "f75484712da25511825949d827915ec7464e9cd912b1fb6bf51f04a68e092098",
+   "chapters/008.txt": "67e4bcf31d21990fffb735f3660398a4f6241165896d6cea2002543ee411790c",
+   "chapters/009.txt": "e213550e373f853abb365a6525477cb678ef660f80af80a2172f756e29f46d76",
+   "chapters/010.txt": "aa0d7594f287dcd9cec1cc37d877564c64b8aa2626dd54bace3454e7ef16767e",
+   "coverage.json": "da8ede5488cbea6ffa042db4bbaedd7d7074d151f1823cbeeae363e6394231e2",
+   "manifest.json": "d6833e1d3960acee7a86b49395105ff965ee0db77e82c660a0b6cb1671535488",
+   "reports/analysis_fingerprints.json": "4b9ef242dd21dbc55472c4158fabafbcde87ae0660ccba248081105ac0fcbe0e",
+   "reports/llm_cleanup_audit.json": "8e44692c18d4c22a7b93130a73868920e259a48d0c08f6bf85f09e4d5e3eaad6",
+   "reports/llm_decisions.json": "34ddf07d20261179dfecdf675da10b63b7ef64b4bb19a76774e3753f37ea27cb"
+  },
+  "manifest_sections": {
+   "analysis_fingerprint": "897f7db7323d01390fbe0790fabcce041faa5bd114bde72ee58b27575d69e71d",
+   "approved": "fcbcf165908dd18a9e49f7ff27810176db8e9f63b4352213741664245224f8aa",
+   "author": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+   "blocks": "dffe9b24d2db23894bcd9ba5591062730c06519cd174dae1325bcd9b4583a6c8",
+   "chapters": "20ec316a1303b4e4e23d84326147debd18dd00453a296f84c7c147134b2e31a0",
+   "chunks": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "edits": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "input_sha256": "d1aad013d3d18aaa0e8474421b7ce8acb0b6a2a539a107df9cf6a5e6a3976214",
+   "review_acknowledged": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "review_required": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "schema_version": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+   "source_path": "2b701d5cdca1993a673b63e89649ebe1eed486e5d4bd3a1210af301cac89fcc3",
+   "spans": "9ceae87fee990a612794404024efde9ff7b79663135245dbb3f466f0392fb03a",
+   "title": "126069af9c929e19327adbc84e31e1b88fdacc26b7778af0cde61e1d04befe34",
+   "warnings": "0e04754473c6a66226630af260317cc5af30509174cebe19bdc0df07bdbd5866"
+  },
+  "summary": {
+   "analysis_fingerprint": "a71e6d34ab3cb6a57235e8091506d8f7f48272041d4fe3baa8f86e56aabb4f9d",
+   "block_kinds": [
+    "heading",
+    "unknown"
+   ],
+   "chapters": [
+    [
+     1,
+     "Front Matter",
+     0,
+     8,
+     0.7
+    ],
+    [
+     2,
+     "Chapter 4",
+     8,
+     9,
+     0.9
+    ],
+    [
+     3,
+     "Chapter 5",
+     9,
+     10,
+     0.9
+    ],
+    [
+     4,
+     "Chapter 6",
+     10,
+     11,
+     0.9
+    ],
+    [
+     5,
+     "Chapter 1",
+     11,
+     62,
+     0.95
+    ],
+    [
+     6,
+     "Chapter 2",
+     62,
+     97,
+     0.95
+    ],
+    [
+     7,
+     "Chapter 3",
+     97,
+     116,
+     0.95
+    ],
+    [
+     8,
+     "Chapter 4",
+     116,
+     175,
+     0.95
+    ],
+    [
+     9,
+     "Chapter 5",
+     175,
+     218,
+     0.95
+    ],
+    [
+     10,
+     "Chapter 6",
+     218,
+     245,
+     0.95
+    ]
+   ],
+   "edit_count": 0,
+   "review_required": [],
+   "warnings": [
+    "EPUB pages use generated reflowable layout; page numbers can vary by renderer",
+    "Page 1: no readable text (image-only page; the image is not narrated)",
+    "Page 1: embedded image detected; OCR does not describe figures or diagrams; review manually",
+    "EPUB pages have no printed page labels; physical page numbers are used",
+    "Ignored 2 font-size-only heading candidate(s) not in the PDF outline, printed contents or numbered chapter labels; verify chapter boundaries",
+    "Pre-chapter material retained in its own front-matter chapter"
+   ]
+  }
+ },
+ "outlined_text.pdf": {
+  "error": {
+   "message": "No text found in PDF; no chapters can be created",
+   "type": "ExtractionError"
+  }
+ }
+}
