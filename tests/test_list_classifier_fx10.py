@@ -2,6 +2,7 @@
 
 import pytest
 
+from pdf2audiobook.document.listing import is_list_line
 from pdf2audiobook.document.structure import (
     footnote_anchor_edits,
     footnote_omit_edits,
@@ -87,3 +88,63 @@ def test_body_line_at_list_marker_margin_starts_a_new_paragraph():
 
     narration = reflow_narration_lines(blocks)
     assert "2. Second item.\n\nThe body paragraph begins here." in narration
+
+
+# --- Marker rules (test coverage spec T6.b) ------------------------------------
+
+
+PROSE = "An ordinary line of prose."
+
+
+@pytest.mark.parametrize(
+    ("previous", "line", "expected"),
+    [
+        ("a) first", "b) second", True),
+        ("a) first", "c) third", False),
+        ("B. first", "c. second", True),
+        pytest.param(
+            "• first",
+            "• second",
+            True,
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="listing.py:19 strips a bullet marker to an empty string, so the "
+                "bullet rule at listing.py:34 never matches (test coverage TODO, "
+                "Found while testing)",
+            ),
+        ),
+        ("* first", "• second", False),
+        ("1. first", "• second", False),
+        ("i) first", "ii) second", True),
+        ("iv) fourth", "v) fifth", True),
+        ("ii) second", "iv) fourth", False),
+        ("9. ninth", "10. tenth", True),
+        ("9. ninth", "11. eleventh", False),
+    ],
+    ids=[
+        "letters",
+        "letters-skip",
+        "letters-mixed-case",
+        "bullets",
+        "different-bullets",
+        "number-then-bullet",
+        "roman",
+        "roman-iv-v",
+        "roman-skip",
+        "numbers",
+        "numbers-skip",
+    ],
+)
+def test_list_runs_need_sequential_markers(previous, line, expected):
+    """T6.b: with neighbours present, only a continuing marker makes a list line."""
+    assert is_list_line(line, previous_text=previous, next_text=PROSE) is expected
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [("25) items were counted", True), ("250) items were counted", False), ("250. Next", True)],
+    ids=["two-digit-paren", "three-digit-paren", "three-digit-period"],
+)
+def test_three_digit_parenthesised_number_is_prose(line, expected):
+    """T6.b: "250)" reads as a closing parenthesis after a number, not a list marker."""
+    assert is_list_line(line) is expected
