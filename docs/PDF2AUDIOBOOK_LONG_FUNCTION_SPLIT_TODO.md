@@ -1,6 +1,6 @@
 # PDF2Audiobook — Long Function Split TODO
 
-**Status:** Open; LF0–LF4, LF5.01 and LF5.02 done with exact-head CI; LF5.03 waits on the user (the scope of `propose_llm_contents_boundaries` and a review of the "Found during split" list)
+**Status:** Open; LF0–LF4 (including LF4.03, added at the user's request), LF5.01 and LF5.02 done with exact-head CI; LF5.03 waits only on the user's review of the "Found during split" list
 **Date:** 2026-11-13
 **Baseline:** master at 18681585b45a02b0e697b64c03ac38c513a28247
 **Specification:** `docs/PDF2AUDIOBOOK_LONG_FUNCTION_SPLIT_SPEC.md` (S1–S12)
@@ -159,6 +159,11 @@
     The `KeyboardInterrupt`, `typer.Exit`/`ClickExit` re-raise and `fail()` handling stay in `convert`. Lazy imports still resolve at call time, so patching `pdf2audiobook.pipeline.convert_book` and `pdf2audiobook.audio.read_cover_image` still works.
   - Evidence: `convert --help` is byte-identical. 600 differential runs through `CliRunner` used random option combinations and configs (openai, llama-server, piper, none). Exit code, stdout, stderr and the settings passed to `convert_book` were identical in every run (377 exited 0, 223 exited 2). Allowlist entry removed. `/verify` passed (2038 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13). Python CI run 43375191668 passed.
 
+- [x] LF4.03 Split `llm/structure.py::propose_llm_contents_boundaries` (234 lines). Added 2026-11-13: it is over the 200-line threshold but not in spec §1, and the user asked for it to be split too. Remove it from the allowlist; the suite passes unchanged.
+  - Evidence: commit c48e552216f00f76c049d92525fc9f007075e147. The function is 36 lines (was 234). State is in `_ContentsReview` (with a `record` method for each decision and its warning). The steps are `_review_contents_window` (45 lines), `_check_contents_entry` (51), `_check_boundary` (63) and `_entry_targets` (12), plus the module-level `_title_key` and `_parse_contents_line`, which were nested functions. The unused nested `exact_text_key` was dropped. The lazy `is_heading_line` import still resolves at call time. Allowlist entry removed, so the allowlist now holds only the 13 functions under 200 lines.
+  - Evidence: 3,000 random differential cases (random blocks, window sizes, chunk budgets and model replies, including invalid and oversized ones) gave identical boundary IDs, warnings and decision records on old and new code, 0 mismatches. All twelve decision reasons were reached.
+  - Evidence: mutation testing found four changes the suite missed (a non-unique entry target, a match before the contents line, and duplicate entries or boundaries accepted). Two characterization tests in commit 9ccb72ed9dd8325d2796d17eea08a2d8885a70b2 (S11) now pin them; they pass on the old and the new code and fail against each change. One further mutant (`>` to `>=` in the later-block check) is equivalent, because a contents line's own text keeps its page number. `/verify` passed: ruff, format, mypy on 3.11, 3.12 and 3.13, pytest 2040 passed and 1 skipped (Kitten smoke, opt-in), CLI smoke. Python CI run 43383581931 passed.
+
 ## Phase LF5 — Documentation and closure
 
 - [x] LF5.01 Update `docs/MAINTAINER_GUIDE.md` (S12): the analysis and conversion orchestrators and their steps, and how to use the length-guard allowlist.
@@ -170,9 +175,7 @@
   - exact-head CI passes for every refactor commit;
   - the allowlist holds only out-of-scope functions, each with its reason;
   - the "Found during split" list is reviewed with the user.
-  - Note: not checked. `/verify` passes, with mypy on 3.11, 3.12 and 3.13, and every refactor commit has passing exact-head CI. Two clauses need the user:
-    - The allowlist holds the 13 out-of-scope functions under 200 lines, each with its reason, plus `llm/structure.py::propose_llm_contents_boundaries` (234 lines). That one is over the 200-line threshold but isn't in spec §1, and the user hasn't decided its scope.
-    - The "Found during split" list hasn't been reviewed with the user yet.
+  - Note: not checked. `/verify` passes, with mypy on 3.11, 3.12 and 3.13, and every refactor commit has passing exact-head CI. The allowlist now holds only the 13 out-of-scope functions under 200 lines, each with its reason (`propose_llm_contents_boundaries` was split in LF4.03). One clause remains: the "Found during split" list hasn't been reviewed with the user yet.
 
 ## Acceptance gate
 

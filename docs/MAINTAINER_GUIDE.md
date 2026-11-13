@@ -453,6 +453,9 @@ before anything is reserved, sent or written.
   - `OpenAICompatibleProvider._complete_json_request`: each attempt is an
     explicit `_Attempt` that is settled exactly once;
   - `pdf.extract_pdf`: state in `_ExtractionRun`;
+  - `llm.structure.propose_llm_contents_boundaries`: state in `_ContentsReview`;
+    each window's entries, then its boundaries, are verified against their
+    exact source lines before any entry is mapped to a later heading;
   - the CLI `convert` command, through `_run_convert` and `_dry_run_convert`.
 
 **Change safety:** Preserve raw spans/blocks and the one-time prose-coverage
