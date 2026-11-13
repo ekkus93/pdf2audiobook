@@ -4,13 +4,13 @@ import numpy as np
 import pytest
 
 from pdf2audiobook.audio import (
-    _NARRATION_TRANSLATION,
     chunk_source_ranges,
     normalize_narration_text,
     read_synthesis_progress,
     split_sentences,
     synthesize_chunks,
 )
+from pdf2audiobook.audio.speech_text import _NARRATION_TRANSLATION
 
 
 @pytest.mark.parametrize(
