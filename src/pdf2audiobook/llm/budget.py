@@ -15,7 +15,6 @@ from typing import cast
 
 from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm.usage import (
-    MAX_SIGNED_TOKEN_COUNT,
     valid_usage_count,
     verified_usage,
 )
@@ -48,8 +47,6 @@ class BookLLMBudgetLedger:
             if version not in (0, 1, 2, 3):
                 raise LLMError("Unsupported LLM budget ledger schema version")
             if readonly:
-                if version not in (0, 1, 2, 3):
-                    raise LLMError("Unsupported LLM budget ledger schema version")
                 return connection
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS calls ("
@@ -295,10 +292,8 @@ class BookLLMBudgetLedger:
                     "VALUES (?, ?, 'pending', ?, ?)",
                     (request_hash, provider_hash, upper_bound_tokens, upper_bound_usd),
                 )
-                reservation_id = cursor.lastrowid
-                if reservation_id is None:
-                    raise LLMError("LLM budget reservation did not return a row ID")
-                return reservation_id
+                # An INSERT into a rowid table always sets lastrowid.
+                return cast(int, cursor.lastrowid)
         except (sqlite3.Error, InvalidOperation):
             raise LLMError("Cannot reserve per-book LLM budget") from None
 
@@ -446,19 +441,6 @@ class BookLLMBudgetLedger:
                 total = cast(int, total)
                 if total < prompt + completion:
                     raise LLMError("Verified token counts exceed supported totals")
-                limit = MAX_SIGNED_TOKEN_COUNT
-                prior = connection.execute(
-                    "SELECT prompt_tokens, completion_tokens, total_tokens, estimated_usd "
-                    "FROM calls WHERE id != ? AND status='complete'",
-                    (call_id,),
-                ).fetchall()
-                for column in range(3):
-                    if (
-                        sum(int(item[column]) for item in prior)
-                        + (prompt, completion, total)[column]
-                        > limit
-                    ):
-                        raise LLMError("Cumulative token totals exceed supported range")
                 price = None
                 if input_rate is not None and output_rate is not None:
                     input_price = Decimal(str(input_rate))
