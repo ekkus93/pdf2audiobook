@@ -1,6 +1,6 @@
 # PDF2Audiobook — Test Coverage Specification
 
-**Status:** Draft; T1–T9 not implemented
+**Status:** Implemented; T1–T9 done (see the TODO for evidence; the bullet bug and flaky test from §5 were fixed afterwards at the user's request)
 **Date:** 2026-11-13
 **Baseline:** master at 7ca1b3907f965372fd5ebb80ee88755fb2278bf8
 **Parent specification:** `docs/PDF2AUDIOBOOK_SPEC.md` (§12 engineering principles)
