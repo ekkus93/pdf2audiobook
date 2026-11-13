@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size Specification
 
-**Status:** R1–R2 implemented in 19dc01b and R4–R5 in 5581cb4, both verified by CI; R3 not met; second review follow-up R6–R8 (§8) not implemented
+**Status:** Complete; R1–R2 in 19dc01b, R4–R5 in 5581cb4, R3 and R6–R8 in 86faa00 (R6 as amended by the §8 decision), all verified by exact-head CI
 **Date:** 2026-11-13
 **Scope:** Close the `inspect` race found in the fourth-review TODO audit.
 **Companion:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_TODO.md`
@@ -254,6 +254,8 @@ R6–R8 below close these gaps. They change tests and records only; no runtime b
 - Keep the existing tests unchanged, including the R3 test.
 - The new test must fail against mutants A, D and E and at d4c0aae, and pass at HEAD.
 - No sleeps or timing.
+
+*Decision (user, 2026-11-13): the companion `tests/test_inspect_conversion_status.py::test_valid_status_is_read_through_a_single_handle` is accepted in place of the R6 race test failing against mutant E. E opens its second handle only for an in-limit file, so no test that grows the file past the limit can catch it. The R6 race test is still required to fail against mutants A and D and at d4c0aae.*
 
 ### R7 — A unit test enforces the bounded read
 
