@@ -108,6 +108,8 @@ def test_piper_model_files_that_disappear_change_the_identity(tmp_path):
 
 def test_kitten_identity_records_a_missing_engine(monkeypatch):
     """T6.a: without kittenml installed the identity still exists and differs."""
+    # Stub both sides: CI runs without the optional kitten extra installed.
+    monkeypatch.setattr(selection, "package_version", lambda _name: "0.1.0")
     installed = _tts_model_identity(Settings())
 
     def not_installed(_name):
