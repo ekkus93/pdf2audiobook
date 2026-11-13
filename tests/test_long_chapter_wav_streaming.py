@@ -1,5 +1,6 @@
 """Long chapter encoding must not inherit the short TTS cache WAV limit."""
 
+import gc
 import shutil
 import tracemalloc
 import wave
@@ -177,3 +178,103 @@ def test_chapter_size_limit_leaves_no_temporary_wav(monkeypatch, tmp_path):
 
     assert not (tmp_path / "chapter.mp3").exists()
     assert list(tmp_path.iterdir()) == []
+
+
+# --- Writer refusals (test coverage round 2, U7) -------------------------------
+
+
+@pytest.mark.parametrize(
+    "blocker",
+    [
+        "file-as-folder",
+        # wave.open fails inside Wave_write.__init__, and the half-built writer's
+        # __del__ then raises AttributeError during garbage collection (a CPython
+        # wave quirk, recorded in the round 2 TODO). The refusal itself is correct.
+        pytest.param(
+            "folder-as-file",
+            marks=pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning"),
+        ),
+    ],
+)
+def test_chapter_wav_that_cannot_be_created_is_a_fixed_error(tmp_path, blocker):
+    """U7.a: a file where the folder should be, or a folder where the WAV should be."""
+    if blocker == "file-as-folder":
+        (tmp_path / "work").write_text("not a folder", encoding="utf-8")
+        target = tmp_path / "work" / "chapter.wav"
+    else:
+        target = tmp_path / "chapter.wav"
+        target.mkdir()
+
+    with pytest.raises(AudioError) as error:
+        audio_wav._open_streaming_wav(target, 24000)
+    message = str(error.value)
+    del error
+    gc.collect()  # release the half-built writer while this test's filter applies
+
+    assert message == "Could not create temporary chapter WAV"
+    assert str(tmp_path) not in message
+
+
+def _frames(path):
+    with wave.open(str(path), "rb") as wav:
+        return wav.getnframes(), wav.getframerate(), wav.getnchannels(), wav.getsampwidth()
+
+
+@pytest.mark.parametrize(
+    ("samples", "message"),
+    [
+        (["not", "audio"], "TTS returned invalid audio sample data"),
+        (object(), "TTS returned invalid audio sample data"),
+        (np.zeros((2, 4), dtype=np.float32), "TTS returned invalid mono audio samples"),
+        (np.zeros(0, dtype=np.float32), "TTS returned invalid mono audio samples"),
+        (np.array([0.1, np.nan], dtype=np.float32), "TTS returned invalid mono audio samples"),
+        (np.array([0.1, np.inf], dtype=np.float32), "TTS returned invalid mono audio samples"),
+    ],
+    ids=["strings", "object", "two-dimensional", "empty", "nan", "infinite"],
+)
+def test_invalid_sample_chunk_is_refused_without_writing(tmp_path, samples, message):
+    """U7.b: a bad chunk is refused before any frame is written."""
+    target = tmp_path / "chapter.wav"
+    writer = audio_wav._open_streaming_wav(target, 24000)
+    try:
+        with pytest.raises(AudioError) as error:
+            audio_wav._write_pcm_chunk(writer, samples)
+        assert writer.bytes_written == 0
+    finally:
+        writer.close()
+
+    assert str(error.value) == message
+    assert _frames(target) == (0, 24000, 1, 2)
+
+
+def test_valid_chunk_control_case_is_written(tmp_path):
+    """U7.b control: a finite mono chunk is written as 16-bit PCM."""
+    target = tmp_path / "chapter.wav"
+    writer = audio_wav._open_streaming_wav(target, 24000)
+    try:
+        audio_wav._write_pcm_chunk(writer, np.array([0.0, 0.5, -0.5], dtype=np.float32))
+        assert writer.bytes_written == 6
+    finally:
+        writer.close()
+
+    assert _frames(target) == (3, 24000, 1, 2)
+
+
+_RIFF_LIMIT = 0xFFFFFFFF - 36
+
+
+@pytest.mark.parametrize(("count", "allowed"), [(1, True), (2, False)])
+def test_silence_past_the_riff_limit_is_refused_without_writing(tmp_path, count, allowed):
+    """U7.c: silence that would pass the RIFF size limit is refused before writing."""
+    writer = audio_wav._open_streaming_wav(tmp_path / "chapter.wav", 24000)
+    try:
+        writer.bytes_written = _RIFF_LIMIT - 2  # pretend the chapter is almost full
+        if allowed:
+            audio_wav._write_silence(writer, count)
+            assert writer.bytes_written == _RIFF_LIMIT
+        else:
+            with pytest.raises(AudioError, match="^Chapter audio exceeds the WAV RIFF size limit$"):
+                audio_wav._write_silence(writer, count)
+            assert writer.bytes_written == _RIFF_LIMIT - 2
+    finally:
+        writer.close()
