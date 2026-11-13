@@ -686,6 +686,190 @@ def parse_chapter_range(value: str) -> tuple[int, int]:
     return first, last
 
 
+def _convert_overrides(
+    preliminary: Settings,
+    *,
+    output: Path | None,
+    ocr: str | None,
+    pdf_password_env: str | None,
+    llm_provider: str | None,
+    llm_model: str | None,
+    llm_url: str | None,
+    llm_context_tokens: int | None,
+    llm_output_tokens: int | None,
+    process_citations: bool | None,
+    process_equations: bool | None,
+    allow_remote_content: bool | None,
+    llm: bool | None,
+    vision: bool | None,
+    tts_provider: str | None,
+    tts_model: str | None,
+    voice: str | None,
+    bitrate: str | None,
+    speed: float | None,
+    sample_rate: int | None,
+    cover: Path | None,
+    resume: bool | None,
+    allow_single_chapter: bool | None,
+) -> dict[str, Any]:
+    """Turn `convert` options into settings overrides.
+
+    `--llm-model` and `--llm-url` apply to the configured provider, and TTS
+    model, voice and speed to the effective TTS provider.
+    """
+    provider = llm_provider or preliminary.llm.provider
+    overrides = _overrides(
+        output,
+        ocr,
+        llm is False,
+        llm_provider,
+        llm_model,
+        llm_url,
+        allow_remote_content,
+        tts_model,
+        voice,
+        bitrate,
+        resume,
+        allow_single_chapter,
+    )
+    if llm_model is not None or llm_url is not None:
+        selected = provider.replace("-", "_")
+        if selected != "ollama" and llm_provider is None:
+            overrides["llm"][selected] = overrides["llm"].pop("ollama")
+    from pdf2audiobook.pipeline import tts_selection
+
+    effective_tts_provider, _effective_voice, _effective_speed = tts_selection(
+        preliminary, provider=tts_provider
+    )
+    tts_values = overrides.setdefault("tts", {})
+    if tts_provider is not None:
+        tts_values["provider"] = tts_provider
+    if tts_model is not None:
+        key = "model_path" if effective_tts_provider == "piper" else "model"
+        section = "piper" if effective_tts_provider == "piper" else "kitten"
+        tts_values.setdefault(section, {})[key] = tts_model
+    if voice is not None:
+        tts_values.setdefault(effective_tts_provider, {})["voice"] = voice
+    if pdf_password_env is not None:
+        overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
+    if llm is True:
+        overrides.setdefault("llm", {})["enabled"] = True
+    if llm_context_tokens is not None:
+        overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
+    if llm_output_tokens is not None:
+        overrides.setdefault("llm", {})["max_output_tokens"] = llm_output_tokens
+    if process_citations is not None:
+        overrides.setdefault("reading", {})["process_citations"] = process_citations
+    if process_equations is not None:
+        overrides.setdefault("reading", {})["process_equations"] = process_equations
+    if vision is not None:
+        overrides.setdefault("llm", {})["vision"] = vision
+    if speed is not None:
+        overrides.setdefault("tts", {}).setdefault(effective_tts_provider, {})["speed"] = speed
+    if sample_rate is not None:
+        overrides.setdefault("tts", {})["sample_rate"] = sample_rate
+    if cover is not None:
+        overrides.setdefault("audio", {})["cover_image"] = str(cover)
+    return overrides
+
+
+def _check_accept_review(accept_review: list[str]) -> None:
+    """Allow only book-wide review reasons to be acknowledged from the command line."""
+    from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
+
+    if "empty_chapter" in accept_review:
+        raise ConfigError(
+            "empty_chapter cannot be accepted globally; approve the chapter in the review UI"
+        )
+    if not set(accept_review) <= set(BOOK_WIDE_REVIEW_REASON_CODES):
+        raise ConfigError(
+            "Unknown --accept-review reason; choose from "
+            + ", ".join(BOOK_WIDE_REVIEW_REASON_CODES)
+        )
+
+
+def _dry_run_convert(
+    source: Path,
+    settings: Settings,
+    reporter: Any,
+    *,
+    chapter: int | None,
+    chapter_range: tuple[int, int] | None,
+    accept_review: tuple[str, ...],
+    json_output: bool,
+) -> None:
+    """Analyze the book and report the MP3 files a conversion would write."""
+    from pdf2audiobook.audio import audio_output_path
+    from pdf2audiobook.pipeline import analyze_book, prepare_chapter_selection
+    from pdf2audiobook.workspace import read_manifest, workspace_lock
+
+    try:
+        with use_reporter(reporter):
+            manifest_path = analyze_book(source, settings)
+    finally:
+        reporter.close()
+    with workspace_lock(manifest_path.parent):
+        manifest = read_manifest(manifest_path)
+        selection = prepare_chapter_selection(
+            manifest_path,
+            manifest,
+            settings,
+            chapter=chapter,
+            chapter_range=chapter_range,
+            acknowledge=accept_review,
+        )
+        skipped_ids = {item.id for item in selection.skipped}
+        chapters = [item for item in selection.chapters if item.id not in skipped_ids]
+        output_files = [
+            str(audio_output_path(manifest, item, manifest_path.parent)) for item in chapters
+        ]
+        emit(
+            {
+                "dry_run": True,
+                "chapters": len(chapters),
+                "mp3_files": output_files,
+                "skipped_chapters": sorted(item.number for item in selection.skipped),
+                "would_acknowledge": selection.would_acknowledge,
+            },
+            json_output,
+        )
+
+
+def _run_convert(
+    source: Path,
+    settings: Settings,
+    reporter: Any,
+    *,
+    chapter: int | None,
+    chapter_range: tuple[int, int] | None,
+    force: bool,
+    accept_review: tuple[str, ...],
+    json_output: bool,
+    started: float,
+) -> None:
+    """Convert the book and report its MP3 files and elapsed time."""
+    from pdf2audiobook.pipeline import convert_book
+
+    try:
+        with use_reporter(reporter):
+            outputs = convert_book(
+                source,
+                settings,
+                chapter=chapter,
+                chapter_range=chapter_range,
+                force=force,
+                accept_review=accept_review,
+            )
+    except OSError:
+        raise WorkspaceError("Cannot create the output workspace") from None
+    finally:
+        reporter.close()
+    emit({"mp3_files": [str(path) for path in outputs]}, json_output)
+    reporter.summary(
+        f"Finished {len(outputs)} chapter(s) in {format_elapsed(time.monotonic() - started)}"
+    )
+
+
 @app.command(
     epilog="Example: pdf2audiobook convert ./book.pdf --no-llm --cover ./cover.jpg --allow-single-chapter"
 )
@@ -757,136 +941,63 @@ def convert(
     set_output_mode(json_output)
     try:
         preliminary, _ = load_settings(config, no_config=no_config)
-        provider = llm_provider or preliminary.llm.provider
-        overrides = _overrides(
-            output,
-            ocr,
-            llm is False,
-            llm_provider,
-            llm_model,
-            llm_url,
-            allow_remote_content,
-            tts_model,
-            voice,
-            bitrate,
-            resume,
-            allow_single_chapter,
+        overrides = _convert_overrides(
+            preliminary,
+            output=output,
+            ocr=ocr,
+            pdf_password_env=pdf_password_env,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            llm_url=llm_url,
+            llm_context_tokens=llm_context_tokens,
+            llm_output_tokens=llm_output_tokens,
+            process_citations=process_citations,
+            process_equations=process_equations,
+            allow_remote_content=allow_remote_content,
+            llm=llm,
+            vision=vision,
+            tts_provider=tts_provider,
+            tts_model=tts_model,
+            voice=voice,
+            bitrate=bitrate,
+            speed=speed,
+            sample_rate=sample_rate,
+            cover=cover,
+            resume=resume,
+            allow_single_chapter=allow_single_chapter,
         )
-        if llm_model is not None or llm_url is not None:
-            selected = provider.replace("-", "_")
-            if selected != "ollama" and llm_provider is None:
-                overrides["llm"][selected] = overrides["llm"].pop("ollama")
-        from pdf2audiobook.pipeline import tts_selection
-
-        effective_tts_provider, _effective_voice, _effective_speed = tts_selection(
-            preliminary, provider=tts_provider
-        )
-        tts_values = overrides.setdefault("tts", {})
-        if tts_provider is not None:
-            tts_values["provider"] = tts_provider
-        if tts_model is not None:
-            key = "model_path" if effective_tts_provider == "piper" else "model"
-            section = "piper" if effective_tts_provider == "piper" else "kitten"
-            tts_values.setdefault(section, {})[key] = tts_model
-        if voice is not None:
-            tts_values.setdefault(effective_tts_provider, {})["voice"] = voice
-        if pdf_password_env is not None:
-            overrides.setdefault("pdf", {})["password_env"] = pdf_password_env
-        if llm is True:
-            overrides.setdefault("llm", {})["enabled"] = True
-        if llm_context_tokens is not None:
-            overrides.setdefault("llm", {})["max_context_tokens"] = llm_context_tokens
-        if llm_output_tokens is not None:
-            overrides.setdefault("llm", {})["max_output_tokens"] = llm_output_tokens
-        if process_citations is not None:
-            overrides.setdefault("reading", {})["process_citations"] = process_citations
-        if process_equations is not None:
-            overrides.setdefault("reading", {})["process_equations"] = process_equations
-        if vision is not None:
-            overrides.setdefault("llm", {})["vision"] = vision
-        if speed is not None:
-            overrides.setdefault("tts", {}).setdefault(effective_tts_provider, {})["speed"] = speed
-        if sample_rate is not None:
-            overrides.setdefault("tts", {})["sample_rate"] = sample_rate
-        if cover is not None:
-            overrides.setdefault("audio", {})["cover_image"] = str(cover)
         if chapter is not None and chapter_range is not None:
             raise ConfigError("--chapter and --chapter-range cannot be combined")
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
-        from pdf2audiobook.review_reasons import BOOK_WIDE_REVIEW_REASON_CODES
-
-        if "empty_chapter" in accept_review:
-            raise ConfigError(
-                "empty_chapter cannot be accepted globally; approve the chapter in the review UI"
-            )
-        if not set(accept_review) <= set(BOOK_WIDE_REVIEW_REASON_CODES):
-            raise ConfigError(
-                "Unknown --accept-review reason; choose from "
-                + ", ".join(BOOK_WIDE_REVIEW_REASON_CODES)
-            )
+        _check_accept_review(accept_review)
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
         configure_effective_logging(settings, origins)
-        from pdf2audiobook.audio import audio_output_path, read_cover_image
-        from pdf2audiobook.pipeline import (
-            analyze_book,
-            convert_book,
-            prepare_chapter_selection,
-        )
-        from pdf2audiobook.workspace import read_manifest, workspace_lock
+        from pdf2audiobook.audio import read_cover_image
 
         read_cover_image(settings.audio.cover_image)
         reporter = _progress_reporter(settings, json_output, "convert")
         started = time.monotonic()
         if dry_run:
-            try:
-                with use_reporter(reporter):
-                    manifest_path = analyze_book(source, settings)
-            finally:
-                reporter.close()
-            with workspace_lock(manifest_path.parent):
-                manifest = read_manifest(manifest_path)
-                selection = prepare_chapter_selection(
-                    manifest_path,
-                    manifest,
-                    settings,
-                    chapter=chapter,
-                    chapter_range=selected_range,
-                    acknowledge=tuple(accept_review),
-                )
-                skipped_ids = {item.id for item in selection.skipped}
-                chapters = [item for item in selection.chapters if item.id not in skipped_ids]
-                output_files = [
-                    str(audio_output_path(manifest, item, manifest_path.parent))
-                    for item in chapters
-                ]
-                emit(
-                    {
-                        "dry_run": True,
-                        "chapters": len(chapters),
-                        "mp3_files": output_files,
-                        "skipped_chapters": sorted(item.number for item in selection.skipped),
-                        "would_acknowledge": selection.would_acknowledge,
-                    },
-                    json_output,
-                )
+            _dry_run_convert(
+                source,
+                settings,
+                reporter,
+                chapter=chapter,
+                chapter_range=selected_range,
+                accept_review=tuple(accept_review),
+                json_output=json_output,
+            )
         else:
-            try:
-                with use_reporter(reporter):
-                    outputs = convert_book(
-                        source,
-                        settings,
-                        chapter=chapter,
-                        chapter_range=selected_range,
-                        force=force,
-                        accept_review=tuple(accept_review),
-                    )
-            except OSError:
-                raise WorkspaceError("Cannot create the output workspace") from None
-            finally:
-                reporter.close()
-            emit({"mp3_files": [str(path) for path in outputs]}, json_output)
-            reporter.summary(
-                f"Finished {len(outputs)} chapter(s) in {format_elapsed(time.monotonic() - started)}"
+            _run_convert(
+                source,
+                settings,
+                reporter,
+                chapter=chapter,
+                chapter_range=selected_range,
+                force=force,
+                accept_review=tuple(accept_review),
+                json_output=json_output,
+                started=started,
             )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)

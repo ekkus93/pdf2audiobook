@@ -11,7 +11,6 @@ MAX_FUNCTION_LINES = 100
 # "<path under src>::<qualified name>".
 ALLOWLIST = {
     # Split by docs/PDF2AUDIOBOOK_LONG_FUNCTION_SPLIT_TODO.md (spec §1).
-    "pdf2audiobook/cli.py::convert": 140,
     # Not in the split spec's scope; see the TODO's notes.
     "pdf2audiobook/llm/structure.py::propose_llm_contents_boundaries": 234,
     "pdf2audiobook/review_ui.py::create_review_server": 163,
