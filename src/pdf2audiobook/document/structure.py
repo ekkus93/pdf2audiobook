@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterator
 
 from pdf2audiobook.config import Chapters as ChapterSettings
@@ -383,16 +383,31 @@ def _space_above(blocks: list[DocumentBlock], index: int, omitted: set[str]) -> 
     return "gap" if block.bbox[1] - previous.bbox[3] >= 0.5 * height else "tight"
 
 
-def propose_chapters(
-    blocks: list[DocumentBlock],
-    omitted: set[str],
-    toc: list[list],
-    settings: ChapterSettings,
-    extra_heading_ids: set[str] | None = None,
-) -> ChapterProposal:
-    """Segment by marked or formatted headings; require review if insufficient evidence."""
-    warnings: list[str] = []
-    heading_indices = []
+@dataclass
+class _HeadingEvidence:
+    """Heading candidates and their evidence, shared by the chapter steps.
+
+    Indices are positions in `blocks`. Each step adds to or narrows
+    `heading_indices` in the order `propose_chapters` calls it, and appends
+    its warnings to `warnings` in that order too.
+    """
+
+    blocks: list[DocumentBlock]
+    omitted: set[str]
+    contents_titles: dict[int, str]
+    heading_indices: list[int]
+    typography_ids: set[int]
+    warnings: list[str]
+    listing_pages: set[int] = field(default_factory=set)
+    bookmark_titles: dict[int, str] = field(default_factory=dict)
+    numeral_anchored: set[int] = field(default_factory=set)
+    first_on_page: dict[int, int] = field(default_factory=dict)
+    numeral_titles: dict[int, str] = field(default_factory=dict)
+    llm_only: set[int] = field(default_factory=set)
+
+
+def _typical_body_size(blocks: list[DocumentBlock], omitted: set[str]) -> float | None:
+    """The median plausible font size, or None with fewer than three sizes."""
     # Typography is supporting evidence for unlabeled prose headings. Require
     # substantial size contrast with the body and reject sentence-like prose.
     body_sizes = sorted(
@@ -402,8 +417,53 @@ def propose_chapters(
         and block.font_size is not None
         and 5 <= float(block.font_size) <= 40
     )
-    typical_size = body_sizes[(len(body_sizes) - 1) // 2] if len(body_sizes) >= 3 else None
-    contents_lines, contents_titles = _printed_contents(blocks, omitted, typical_size)
+    return body_sizes[(len(body_sizes) - 1) // 2] if len(body_sizes) >= 3 else None
+
+
+def _is_typographic_heading(
+    blocks: list[DocumentBlock], i: int, omitted: set[str], typical_size: float | None
+) -> bool:
+    """Whether a short, title-like line is set in clearly larger type than the body."""
+    block = blocks[i]
+    text = block.text.strip()
+    return (
+        typical_size is not None
+        and block.font_size is not None
+        and math.isfinite(float(block.font_size))
+        and float(block.font_size) >= max(typical_size * 1.35, typical_size + 3)
+        and 1 <= len(text.split()) <= 9
+        and len(text) <= 90
+        and not text.endswith((".", "?", "!", ",", ";", ":"))
+        # A hyphenated line break or lowercase start marks a wrapped
+        # large-font line (e.g. catalogue entries), not a heading.
+        and not WRAPPED_LINE_END.search(text)
+        and not text[:1].islower()
+        and not text.isdecimal()
+        and not PAGE_REFERENCE_END.search(text)
+        and (_wordlike(text) or text in {"I", "V", "X"})
+        # A display line packed against the text above it (advert copy,
+        # a drop-cap line) does not open a chapter; whitespace or a new
+        # page does.
+        and _space_above(blocks, i, omitted) != "tight"
+        and block.kind not in {"table", "footnote", "caption", "equation", "list"}
+    )
+
+
+def _text_headings(
+    blocks: list[DocumentBlock],
+    omitted: set[str],
+    contents_lines: set[int],
+    contents_titles: dict[int, str],
+    typical_size: float | None,
+    extra_heading_ids: set[str] | None,
+) -> tuple[list[int], set[int]]:
+    """Collect labelled, Roman, LLM, typographic and contents-listed headings.
+
+    Returns the heading indices in book order and the subset supported by
+    typography. Lone one-letter numerals are dropped unless longer Roman
+    numerals stand beside them.
+    """
+    heading_indices = []
     typography_ids: set[int] = set()
     roman_sequence = roman_sequence_heading_indices(
         blocks, {j for j, item in enumerate(blocks) if item.id in omitted} | set(contents_lines)
@@ -413,27 +473,7 @@ def propose_chapters(
             # Entries on a printed contents page are references, not headings.
             continue
         text = block.text.strip()
-        is_typographic_heading = (
-            typical_size is not None
-            and block.font_size is not None
-            and math.isfinite(float(block.font_size))
-            and float(block.font_size) >= max(typical_size * 1.35, typical_size + 3)
-            and 1 <= len(text.split()) <= 9
-            and len(text) <= 90
-            and not text.endswith((".", "?", "!", ",", ";", ":"))
-            # A hyphenated line break or lowercase start marks a wrapped
-            # large-font line (e.g. catalogue entries), not a heading.
-            and not WRAPPED_LINE_END.search(text)
-            and not text[:1].islower()
-            and not text.isdecimal()
-            and not PAGE_REFERENCE_END.search(text)
-            and (_wordlike(text) or text in {"I", "V", "X"})
-            # A display line packed against the text above it (advert copy,
-            # a drop-cap line) does not open a chapter; whitespace or a new
-            # page does.
-            and _space_above(blocks, i, omitted) != "tight"
-            and block.kind not in {"table", "footnote", "caption", "equation", "list"}
-        )
+        is_typographic_heading = _is_typographic_heading(blocks, i, omitted, typical_size)
         if is_typographic_heading:
             typography_ids.add(i)
         if (
@@ -457,6 +497,11 @@ def propose_chapters(
             for i in heading_indices
             if i not in lone or is_heading_line(blocks[i].text) or i in contents_titles
         ]
+    return heading_indices, typography_ids
+
+
+def _listing_pages(blocks: list[DocumentBlock], omitted: set[str]) -> set[int]:
+    """Pages that list chapters (a contents run), with single-page gaps filled."""
     # Pages that list chapters (a contents run) name chapters; they do not open them.
     lines_on_page: dict[int, list[str]] = defaultdict(list)
     for block in blocks:
@@ -478,11 +523,14 @@ def propose_chapters(
         for page in listing_pages
         if page + 2 in listing_pages and page + 1 in lines_on_page
     }
-    # Combine confirmed bookmark anchors with textual headings. Some books mix
-    # numbered headings and ornamental titles; do not discard the TOC merely
-    # because a subset of chapters matched the regular expression.
-    bookmark_titles: dict[int, str] = {}
-    numeral_anchored: set[int] = set()
+    return listing_pages
+
+
+def _valid_bookmarks(toc: list[list]) -> tuple[list[tuple[str, int]], int]:
+    """Keep well-formed outline entries at depth one or two.
+
+    Returns their (title, page number) pairs and the count of malformed records.
+    """
     malformed_bookmarks = 0
     valid_bookmarks: list[tuple[str, int]] = []
     for entry in toc:
@@ -506,14 +554,21 @@ def propose_chapters(
         if depth > 2:
             continue
         valid_bookmarks.append((title, page_num))
+    return valid_bookmarks, malformed_bookmarks
 
+
+def _inferred_bookmark_offset(
+    evidence: _HeadingEvidence, valid_bookmarks: list[tuple[str, int]]
+) -> int | None:
+    """Infer a printed-to-physical page offset for the outline, warning when used."""
+    blocks = evidence.blocks
     # A printed TOC can be offset from physical PDF pages by front matter.
     # Infer a nontrivial offset only from at least two distinct, uniquely
     # matched textual headings and no conflicting unique heading evidence.
     offset_evidence: dict[int, set[str]] = defaultdict(set)
     headings_by_title: dict[str, list[int]] = defaultdict(list)
-    for i in heading_indices:
-        if blocks[i].id not in omitted:
+    for i in evidence.heading_indices:
+        if blocks[i].id not in evidence.omitted:
             headings_by_title[_title_key(blocks[i].text)].append(i)
     for title, page_num in valid_bookmarks:
         normalized = _title_key(title)
@@ -527,100 +582,141 @@ def propose_chapters(
         offset, titles = next(iter(offset_evidence.items()))
         if abs(offset) > 2 and len(titles) >= 2:
             inferred_offset = offset
-            warnings.append(
+            evidence.warnings.append(
                 f"PDF bookmark page offset {offset:+d} inferred from "
                 f"{len(titles)} unique headings; verify chapter alignment"
             )
+    return inferred_offset
+
+
+def _bookmark_match(
+    evidence: _HeadingEvidence,
+    blocks_by_title: dict[str, list[int]],
+    title: str,
+    page_num: int,
+    inferred_offset: int | None,
+) -> int | None:
+    """The block an outline entry opens, or None when no unique match exists."""
+    blocks = evidence.blocks
+    listing_pages = evidence.listing_pages
+    page_index = page_num - 1
+    title_normalized = _title_key(title)
+    if not title_normalized:
+        return None
+    matching = blocks_by_title.get(title_normalized, [])
+    exact = [i for i in matching if blocks[i].page_index == page_index]
+    # A TOC page number may refer to printed rather than physical pages.
+    # Correct only a unique nearby title, never a duplicated phrase. A page that
+    # lists chapters never opens one, so it is not a candidate.
+    nearby = [
+        i
+        for i in matching
+        if abs(blocks[i].page_index - page_index) <= 2 and blocks[i].page_index not in listing_pages
+    ]
+    match = exact[0] if len(exact) == 1 else None
+    wanted = label_number(title)
+    if match is None and wanted is not None:
+        # Many books open a chapter with only its numeral ("12") while the outline
+        # says "Chapter 12". The outline's page is authoritative: take the first
+        # line there when it is that chapter's numeral. When the outline uses
+        # printed page numbers, the inferred offset locates the physical page.
+        candidate_pages = [page_index]
+        if inferred_offset is not None:
+            candidate_pages.append(page_index + inferred_offset)
+        for candidate_page in candidate_pages:
+            if candidate_page in listing_pages:
+                continue
+            first = evidence.first_on_page.get(candidate_page)
+            if first is not None and bare_number(blocks[first].text) == wanted:
+                match = first
+                evidence.numeral_anchored.add(first)
+                break
+    if match is None and not exact and len(nearby) == 1:
+        match = nearby[0]
+    if match is None and not exact and not nearby and inferred_offset is not None:
+        shifted = [
+            i
+            for i in matching
+            if blocks[i].page_index == page_index + inferred_offset
+            and blocks[i].page_index not in listing_pages
+        ]
+        if len(shifted) == 1:
+            match = shifted[0]
+    return match
+
+
+def _anchor_bookmarks(evidence: _HeadingEvidence, toc: list[list]) -> None:
+    """Add a heading for each outline entry that uniquely matches the text.
+
+    Fills `bookmark_titles`, `numeral_anchored` and `first_on_page`, and warns
+    about entries matched off their page and about malformed records.
+    """
+    blocks = evidence.blocks
+    # Combine confirmed bookmark anchors with textual headings. Some books mix
+    # numbered headings and ornamental titles; do not discard the TOC merely
+    # because a subset of chapters matched the regular expression.
+    valid_bookmarks, malformed_bookmarks = _valid_bookmarks(toc)
+    inferred_offset = _inferred_bookmark_offset(evidence, valid_bookmarks)
 
     # One pass indexes every block by title and every page by its first line, so each
     # outline entry is matched without rescanning the book.
     blocks_by_title: dict[str, list[int]] = defaultdict(list)
-    first_on_page: dict[int, int] = {}
     for i, block in enumerate(blocks):
-        if block.id in omitted:
+        if block.id in evidence.omitted:
             continue
         blocks_by_title[_title_key(block.text)].append(i)
         if block.text.strip():
-            first_on_page.setdefault(block.page_index, i)
+            evidence.first_on_page.setdefault(block.page_index, i)
     for title, page_num in valid_bookmarks:
-        page_index = page_num - 1
-        title_normalized = _title_key(title)
-        if not title_normalized:
-            continue
-        matching = blocks_by_title.get(title_normalized, [])
-        exact = [i for i in matching if blocks[i].page_index == page_index]
-        # A TOC page number may refer to printed rather than physical pages.
-        # Correct only a unique nearby title, never a duplicated phrase. A page that
-        # lists chapters never opens one, so it is not a candidate.
-        nearby = [
-            i
-            for i in matching
-            if abs(blocks[i].page_index - page_index) <= 2
-            and blocks[i].page_index not in listing_pages
-        ]
-        match = exact[0] if len(exact) == 1 else None
-        wanted = label_number(title)
-        if match is None and wanted is not None:
-            # Many books open a chapter with only its numeral ("12") while the outline
-            # says "Chapter 12". The outline's page is authoritative: take the first
-            # line there when it is that chapter's numeral. When the outline uses
-            # printed page numbers, the inferred offset locates the physical page.
-            candidate_pages = [page_index]
-            if inferred_offset is not None:
-                candidate_pages.append(page_index + inferred_offset)
-            for candidate_page in candidate_pages:
-                if candidate_page in listing_pages:
-                    continue
-                first = first_on_page.get(candidate_page)
-                if first is not None and bare_number(blocks[first].text) == wanted:
-                    match = first
-                    numeral_anchored.add(first)
-                    break
-        if match is None and not exact and len(nearby) == 1:
-            match = nearby[0]
-        if match is None and not exact and not nearby and inferred_offset is not None:
-            shifted = [
-                i
-                for i in matching
-                if blocks[i].page_index == page_index + inferred_offset
-                and blocks[i].page_index not in listing_pages
-            ]
-            if len(shifted) == 1:
-                match = shifted[0]
+        match = _bookmark_match(evidence, blocks_by_title, title, page_num, inferred_offset)
         if match is not None:
-            heading_indices.append(match)
-            bookmark_titles[match] = title.strip()
-            if blocks[match].page_index != page_index:
-                warnings.append(
+            evidence.heading_indices.append(match)
+            evidence.bookmark_titles[match] = title.strip()
+            if blocks[match].page_index != page_num - 1:
+                evidence.warnings.append(
                     f"TOC entry {title!r} points to PDF page {page_num}; "
                     f"matched unique title on page {blocks[match].page_index + 1}"
                 )
     if malformed_bookmarks:
-        warnings.append(
+        evidence.warnings.append(
             f"Skipped {malformed_bookmarks} malformed PDF bookmark "
             "record(s); verify chapter boundaries manually"
         )
+
+
+def _drop_crowded_typography(evidence: _HeadingEvidence) -> None:
+    """Drop large-type candidates when four or more crowd one page."""
+    blocks = evidence.blocks
     # Large type crowding one page (a contents listing, an advert, a scanned
     # cover read as text) is layout, not a run of chapter openings.
     per_page: dict[int, list[int]] = defaultdict(list)
-    for i in typography_ids:
+    for i in evidence.typography_ids:
         per_page[blocks[i].page_index].append(i)
     crowded = {i for ids in per_page.values() if len(ids) >= 4 for i in ids}
     if crowded:
-        typography_ids -= crowded
-        heading_indices = [
+        evidence.typography_ids -= crowded
+        evidence.heading_indices = [
             i
-            for i in heading_indices
-            if i not in crowded or is_heading_line(blocks[i].text) or i in contents_titles
+            for i in evidence.heading_indices
+            if i not in crowded or is_heading_line(blocks[i].text) or i in evidence.contents_titles
         ]
+
+
+def _corroborate_numerals(evidence: _HeadingEvidence) -> set[tuple[str, int]]:
+    """Promote bare page-opening numerals that the printed contents names.
+
+    Fills `numeral_titles` and adds those headings. Returns the (kind, number)
+    labels that open a chapter outside the contents pages.
+    """
+    blocks = evidence.blocks
+    listing_pages = evidence.listing_pages
     # Books often open a chapter with only its numeral. When the printed contents names
     # "Chapter N" and numerals then open pages in order, those numerals are the chapter
     # headings and the contents labels are references to them. Parts and chapters are
     # numbered separately, so labels are keyed by (kind, number).
-    numeral_titles: dict[int, str] = {}
     listed_by_kind: dict[str, dict[int, int]] = defaultdict(dict)
     for i, block in enumerate(blocks):
-        if block.id in omitted or block.page_index not in listing_pages:
+        if block.id in evidence.omitted or block.page_index not in listing_pages:
             continue
         key = label_key(block.text)
         if key is not None and NUMBERED_LABEL.match(block.text.strip()):
@@ -629,9 +725,9 @@ def propose_chapters(
     listed_labels = listed_by_kind.get(numeral_kind, {})
     corroborated: dict[int, int] = {}
     last_number = 0
-    for page in sorted(first_on_page):
-        i = first_on_page[page]
-        if page in listing_pages or i in bookmark_titles:
+    for page in sorted(evidence.first_on_page):
+        i = evidence.first_on_page[page]
+        if page in listing_pages or i in evidence.bookmark_titles:
             continue
         number = bare_number(blocks[i].text)
         if number is not None and number > last_number and number in listed_labels:
@@ -648,85 +744,116 @@ def propose_chapters(
     page_numbers = bool(pairs) and 2 * lockstep >= len(pairs)
     if not page_numbers and len(corroborated) >= 3 and 2 * len(corroborated) >= len(listed_labels):
         for i, number in corroborated.items():
-            numeral_titles[i] = contents_label_title(blocks[listed_labels[number]].text)
-            if i not in heading_indices:
-                heading_indices.append(i)
-    anchored_keys = {
+            evidence.numeral_titles[i] = contents_label_title(blocks[listed_labels[number]].text)
+            if i not in evidence.heading_indices:
+                evidence.heading_indices.append(i)
+    return {
         key
-        for i, title in bookmark_titles.items()
+        for i, title in evidence.bookmark_titles.items()
         if blocks[i].page_index not in listing_pages and (key := label_key(title)) is not None
-    } | {(numeral_kind, number) for number in (corroborated.values() if numeral_titles else ())}
+    } | {
+        (numeral_kind, number)
+        for number in (corroborated.values() if evidence.numeral_titles else ())
+    }
+
+
+def _drop_listed_labels(evidence: _HeadingEvidence, anchored_keys: set[tuple[str, int]]) -> None:
+    """Drop chapter labels on contents pages that are references, not headings."""
+    blocks = evidence.blocks
+    listing_pages = evidence.listing_pages
     # A chapter label on a contents-style page (most lines end in a page
     # reference) is a listing when the same label opens a chapter later.
     label_positions: dict[str, list[int]] = defaultdict(list)
-    for i in heading_indices:
+    for i in evidence.heading_indices:
         if NUMBERED_LABEL.match(blocks[i].text.strip()):
             label_positions[_label_key(blocks[i].text)].append(i)
     listed = {
         i
         for positions in label_positions.values()
         for i in positions[:-1]
-        if blocks[i].page_index in listing_pages and i not in bookmark_titles
+        if blocks[i].page_index in listing_pages and i not in evidence.bookmark_titles
     }
     # A listed label whose chapter opens elsewhere is a reference to it, not a heading.
     listed |= {
         i
-        for i in heading_indices
+        for i in evidence.heading_indices
         if blocks[i].page_index in listing_pages
-        and i not in bookmark_titles
+        and i not in evidence.bookmark_titles
         and label_key(blocks[i].text) in anchored_keys
     }
-    heading_indices = [i for i in heading_indices if i not in listed]
+    evidence.heading_indices = [i for i in evidence.heading_indices if i not in listed]
+
+
+def _drop_weak_candidates(evidence: _HeadingEvidence, extra_heading_ids: set[str] | None) -> None:
+    """Drop font-size-only and LLM-only candidates when stronger evidence exists.
+
+    Sets `llm_only` and warns about each kind of candidate it ignores.
+    """
+    blocks = evidence.blocks
     numbered_labels = sum(
-        1 for i in heading_indices if NUMBERED_LABEL.match(blocks[i].text.strip())
+        1 for i in evidence.heading_indices if NUMBERED_LABEL.match(blocks[i].text.strip())
     )
     # Candidates supported only by font size or by LLM classification.
     llm_ids = extra_heading_ids or set()
     weak = {
         i
-        for i in heading_indices
-        if (i in typography_ids or blocks[i].id in llm_ids)
-        and i not in bookmark_titles
-        and i not in contents_titles
-        and i not in numeral_titles
+        for i in evidence.heading_indices
+        if (i in evidence.typography_ids or blocks[i].id in llm_ids)
+        and i not in evidence.bookmark_titles
+        and i not in evidence.contents_titles
+        and i not in evidence.numeral_titles
         and not is_heading_line(blocks[i].text)
     }
-    llm_only = {i for i in weak if i not in typography_ids}
+    llm_only = {i for i in weak if i not in evidence.typography_ids}
+    evidence.llm_only = llm_only
     if (
-        len(bookmark_titles) >= 2
-        or contents_titles
+        len(evidence.bookmark_titles) >= 2
+        or evidence.contents_titles
         or numbered_labels >= 3
-        or len(numeral_titles) >= 3
+        or len(evidence.numeral_titles) >= 3
     ):
         # A PDF outline or printed contents that matches the text is stronger
         # evidence than font size or LLM classification. Do not let material
         # it omits (catalogue entries, scene breaks, stray running heads)
         # split the book into spurious chapters.
         if weak:
-            heading_indices = [i for i in heading_indices if i not in weak]
+            evidence.heading_indices = [i for i in evidence.heading_indices if i not in weak]
             if weak - llm_only:
-                warnings.append(
+                evidence.warnings.append(
                     f"Ignored {len(weak - llm_only)} font-size-only heading candidate(s) "
                     "not in the PDF outline, printed contents or numbered chapter labels; "
                     "verify chapter boundaries"
                 )
             if llm_only:
-                warnings.append(
+                evidence.warnings.append(
                     f"Ignored {len(llm_only)} LLM-proposed heading(s) not in the PDF "
                     "outline, printed contents or numbered chapter labels; "
                     "verify chapter boundaries"
                 )
+
+
+def _drop_subtitles(evidence: _HeadingEvidence) -> None:
+    """Drop contents entries that title the line right after another heading."""
+    blocks = evidence.blocks
     # A contents entry naming the line right after another heading is that
     # chapter's subtitle ("CHAPTER III." / "ON RELATIVE GROWINGS."), not a
     # new boundary.
-    detected = set(heading_indices)
+    detected = set(evidence.heading_indices)
     subtitles = set()
-    for i in contents_titles:
-        previous = next((j for j in range(i - 1, -1, -1) if blocks[j].id not in omitted), None)
-        if previous in detected and previous not in contents_titles:
+    for i in evidence.contents_titles:
+        previous = next(
+            (j for j in range(i - 1, -1, -1) if blocks[j].id not in evidence.omitted), None
+        )
+        if previous in detected and previous not in evidence.contents_titles:
             subtitles.add(i)
-    heading_indices = [i for i in heading_indices if i not in subtitles]
-    heading_indices = sorted(set(heading_indices))
+    heading_indices = [i for i in evidence.heading_indices if i not in subtitles]
+    evidence.heading_indices = sorted(set(heading_indices))
+
+
+def _chapter_starts(evidence: _HeadingEvidence, settings: ChapterSettings) -> list[int]:
+    """The first block of each chapter, refusing a book with no usable boundary."""
+    blocks = evidence.blocks
+    heading_indices = evidence.heading_indices
     if not blocks:
         raise ExtractionError("No text found in PDF; no chapters can be created")
     if not heading_indices and not settings.allow_single_chapter:
@@ -740,69 +867,90 @@ def propose_chapters(
     noise_prefix = (
         bool(heading_indices)
         and heading_indices[0] != 0
-        and all(block.id in omitted for block in blocks[: heading_indices[0]])
+        and all(block.id in evidence.omitted for block in blocks[: heading_indices[0]])
     )
     starts = ([0] if 0 not in heading_indices and not noise_prefix else []) + heading_indices
     if not heading_indices:
-        warnings.append("Single-chapter mode explicitly requested")
+        evidence.warnings.append("Single-chapter mode explicitly requested")
     elif starts[0] == 0 and heading_indices[0] != 0:
-        warnings.append("Pre-chapter material retained in its own front-matter chapter")
+        evidence.warnings.append("Pre-chapter material retained in its own front-matter chapter")
+    return starts
+
+
+def _heading_name_confidence_evidence(
+    evidence: _HeadingEvidence, start: int
+) -> tuple[str, float, list[str]]:
+    """The title, confidence and evidence list for a chapter opened by a heading."""
+    blocks = evidence.blocks
+    bookmark_titles = evidence.bookmark_titles
+    numeral_titles = evidence.numeral_titles
+    contents_titles = evidence.contents_titles
+    typography_ids = evidence.typography_ids
+    llm_only = evidence.llm_only
+    name = (
+        bookmark_titles.get(start)
+        or numeral_titles.get(start)
+        or contents_titles.get(start, blocks[start].text.strip())
+    )
+    confidence = (
+        0.95
+        if start in bookmark_titles
+        and not any(
+            f"TOC entry {bookmark_titles[start]!r} points" in warning
+            for warning in evidence.warnings
+        )
+        else 0.85
+        if start in bookmark_titles
+        else 0.9
+        if start in numeral_titles
+        else 0.9
+        if start in contents_titles
+        else 0.82
+        if start in typography_ids
+        else 0.8
+        if start in llm_only
+        else 0.9
+    )
+    chapter_evidence = (
+        ["PDF bookmark matched the numbered chapter heading on its page"]
+        if start in evidence.numeral_anchored
+        else ["PDF bookmark/TOC matched unique source title"]
+        if start in bookmark_titles
+        else ["numeral heading corroborated by the printed contents"]
+        if start in numeral_titles
+        else ["printed contents entry matched unique later heading"]
+        if start in contents_titles
+        else ["typographic size contrast with body text"]
+        if start in typography_ids
+        else ["LLM structure classification (advisory)"]
+        if start in llm_only
+        else ["explicit heading text"]
+    )
+    space = _space_above(blocks, start, evidence.omitted)
+    if space == "page":
+        chapter_evidence = [*chapter_evidence, "opens a new page"]
+    elif space == "gap":
+        chapter_evidence = [*chapter_evidence, "vertical whitespace above"]
+    return name, confidence, chapter_evidence
+
+
+def _build_chapters(evidence: _HeadingEvidence, starts: list[int]) -> list[Chapter]:
+    """Build one generated chapter per start, recording its generated fields."""
+    blocks = evidence.blocks
+    heading_indices = evidence.heading_indices
     chapters = []
     for number, start in enumerate(starts, 1):
         end = starts[number] if number < len(starts) else len(blocks)
         if start == 0 and heading_indices and start != heading_indices[0]:
             name = "Front Matter"
             confidence = 0.7
-            evidence = ["unassigned material before chapter heading"]
+            chapter_evidence = ["unassigned material before chapter heading"]
         elif start in heading_indices:
-            name = (
-                bookmark_titles.get(start)
-                or numeral_titles.get(start)
-                or contents_titles.get(start, blocks[start].text.strip())
-            )
-            confidence = (
-                0.95
-                if start in bookmark_titles
-                and not any(
-                    f"TOC entry {bookmark_titles[start]!r} points" in warning
-                    for warning in warnings
-                )
-                else 0.85
-                if start in bookmark_titles
-                else 0.9
-                if start in numeral_titles
-                else 0.9
-                if start in contents_titles
-                else 0.82
-                if start in typography_ids
-                else 0.8
-                if start in llm_only
-                else 0.9
-            )
-            evidence = (
-                ["PDF bookmark matched the numbered chapter heading on its page"]
-                if start in numeral_anchored
-                else ["PDF bookmark/TOC matched unique source title"]
-                if start in bookmark_titles
-                else ["numeral heading corroborated by the printed contents"]
-                if start in numeral_titles
-                else ["printed contents entry matched unique later heading"]
-                if start in contents_titles
-                else ["typographic size contrast with body text"]
-                if start in typography_ids
-                else ["LLM structure classification (advisory)"]
-                if start in llm_only
-                else ["explicit heading text"]
-            )
-            space = _space_above(blocks, start, omitted)
-            if space == "page":
-                evidence = [*evidence, "opens a new page"]
-            elif space == "gap":
-                evidence = [*evidence, "vertical whitespace above"]
+            name, confidence, chapter_evidence = _heading_name_confidence_evidence(evidence, start)
         else:
             name = "Full Book"
             confidence = 0.5
-            evidence = ["explicit single chapter override"]
+            chapter_evidence = ["explicit single chapter override"]
         chapter = Chapter(
             id=f"c{number:04d}",
             number=number,
@@ -810,7 +958,7 @@ def propose_chapters(
             start_block=0 if number == 1 else start,
             end_block=end,
             confidence=confidence,
-            evidence=evidence,
+            evidence=chapter_evidence,
         )
         if confidence < 0.85:
             chapter.warnings.append("Chapter boundary has low confidence; verify manually")
@@ -820,6 +968,44 @@ def propose_chapters(
         chapter.generated_end_block = chapter.end_block
         chapter.generated_voice_id = chapter.voice_id
         chapters.append(chapter)
+    return chapters
+
+
+def propose_chapters(
+    blocks: list[DocumentBlock],
+    omitted: set[str],
+    toc: list[list],
+    settings: ChapterSettings,
+    extra_heading_ids: set[str] | None = None,
+) -> ChapterProposal:
+    """Segment by marked or formatted headings; require review if insufficient evidence.
+
+    Steps, in order: typography evidence, the printed contents, text headings,
+    contents-run pages, bookmark anchors, crowded large type, numerals named by
+    the contents, listed labels, weak candidates, subtitles, then the chapters.
+    """
+    typical_size = _typical_body_size(blocks, omitted)
+    contents_lines, contents_titles = _printed_contents(blocks, omitted, typical_size)
+    heading_indices, typography_ids = _text_headings(
+        blocks, omitted, contents_lines, contents_titles, typical_size, extra_heading_ids
+    )
+    evidence = _HeadingEvidence(
+        blocks=blocks,
+        omitted=omitted,
+        contents_titles=contents_titles,
+        heading_indices=heading_indices,
+        typography_ids=typography_ids,
+        warnings=[],
+    )
+    evidence.listing_pages = _listing_pages(blocks, omitted)
+    _anchor_bookmarks(evidence, toc)
+    _drop_crowded_typography(evidence)
+    anchored_keys = _corroborate_numerals(evidence)
+    _drop_listed_labels(evidence, anchored_keys)
+    _drop_weak_candidates(evidence, extra_heading_ids)
+    _drop_subtitles(evidence)
+    starts = _chapter_starts(evidence, settings)
+    chapters = _build_chapters(evidence, starts)
     empty_chapter = any(
         not chapter_has_speakable_text(
             blocks, chapter.start_block, chapter.end_block, {block_id: "" for block_id in omitted}
@@ -828,6 +1014,6 @@ def propose_chapters(
     )
     return ChapterProposal(
         chapters=chapters,
-        warnings=warnings,
+        warnings=evidence.warnings,
         review_reasons={"empty_chapter"} if empty_chapter else set(),
     )
