@@ -81,11 +81,15 @@ def test_heartbeat_prints_content_free_lines_only_when_enabled(tmp_path: Path) -
     reporter = StatusReporter(
         NullReporter(), command="convert", heartbeat_seconds=0.05, stream=stream
     )
-    reporter.bind_workspace(tmp_path)
+    # Set the stage up before bind_workspace starts the heartbeat thread, so
+    # the first line can never show the stage half set up ("0/40").
     handle = reporter.stage("Analyzing with the LLM", 40, "request")
     handle.set_detail("cleanup")
     handle.advance(7)
-    time.sleep(0.4)
+    reporter.bind_workspace(tmp_path)
+    deadline = time.monotonic() + 5
+    while not stream.getvalue() and time.monotonic() < deadline:
+        time.sleep(0.01)
     reporter.close()
     lines = [line for line in stream.getvalue().splitlines() if line]
     assert lines and "Analyzing with the LLM, cleanup: 7/40 request" in lines[0]
