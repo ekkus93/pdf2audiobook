@@ -3,6 +3,7 @@
 import json
 
 import fitz
+import pytest
 
 from pdf2audiobook.config import LLM, Chapters, General, Pdf, Settings
 from pdf2audiobook.llm import propose_llm_contents_boundaries
@@ -241,3 +242,173 @@ def test_contents_toggle_changes_analysis_fingerprint():
         _analysis_stage_fingerprints("book", settings, None)["llm-analysis"]
         != (_analysis_stage_fingerprints("book", enabled, None)["llm-analysis"])
     )
+
+
+# --- Rejections (test coverage round 2, U4) ------------------------------------
+
+
+def _entry(block_id="entry", title="Chapter Two", page="9", confidence=0.95):
+    return {"block_id": block_id, "title": title, "page_reference": page, "confidence": confidence}
+
+
+def _contents(entries=(), boundaries=(), blocks=None):
+    decisions = []
+    ids, warnings = propose_llm_contents_boundaries(
+        blocks or source_blocks(),
+        Stub({"entries": list(entries), "boundaries": list(boundaries)}),
+        decisions=decisions,
+    )
+    return ids, warnings, decisions
+
+
+def _codes(decisions):
+    return [(item.block_id, item.status, item.reason_code) for item in decisions]
+
+
+def test_contents_line_without_a_page_number_is_rejected():
+    """U4.a: a line that doesn't end in a page number can't be a contents entry."""
+    blocks = source_blocks()
+    blocks[1] = DocumentBlock(id="entry", page_index=0, text="Chapter Two")
+
+    ids, warnings, decisions = _contents([_entry()], blocks=blocks)
+
+    assert ids == set()
+    assert _codes(decisions) == [("entry", "rejected", "contents_title_mismatch")]
+    assert warnings == ["LLM contents entry did not match its source line"]
+
+
+def test_contents_line_that_is_only_a_page_number_is_rejected():
+    """U4.a: leaders with no title before the number don't make an entry."""
+    blocks = source_blocks()
+    blocks[1] = DocumentBlock(id="entry", page_index=0, text="........ 9")
+
+    ids, _, decisions = _contents([_entry()], blocks=blocks)
+
+    assert ids == set()
+    assert _codes(decisions) == [("entry", "rejected", "contents_title_mismatch")]
+
+
+def test_contents_entry_with_a_different_page_is_rejected():
+    """U4.a: the page the model reports must be the page printed on the line."""
+    ids, warnings, decisions = _contents([_entry(page="19")])
+
+    assert ids == set()
+    assert _codes(decisions) == [("entry", "rejected", "contents_page_reference_mismatch")]
+    assert warnings == ["LLM contents page reference did not match its source line"]
+
+
+@pytest.mark.parametrize(("confidence", "accepted"), [(0.74, False), (0.75, True)])
+def test_contents_entry_needs_confidence_of_at_least_three_quarters(confidence, accepted):
+    """U4.a: a verified line with low confidence is rejected without a warning."""
+    ids, warnings, decisions = _contents([_entry(confidence=confidence)])
+
+    assert ids == ({"body"} if accepted else set())
+    assert warnings == []
+    expected = "verified_contents_entry" if accepted else "low_confidence"
+    assert _codes(decisions) == [("entry", "accepted" if accepted else "rejected", expected)]
+
+
+@pytest.mark.parametrize(("confidence", "accepted"), [(0.74, False), (0.75, True)])
+def test_boundary_needs_confidence_of_at_least_three_quarters(confidence, accepted):
+    """U4.b: a heading-like boundary with low confidence adds no evidence."""
+    boundary = {"block_id": "body", "title": "Chapter Two", "confidence": confidence}
+
+    ids, warnings, decisions = _contents(boundaries=[boundary])
+
+    assert ids == ({"body"} if accepted else set())
+    assert warnings == []
+    expected = "verified_boundary_candidate" if accepted else "low_confidence"
+    assert _codes(decisions) == [("body", "accepted" if accepted else "rejected", expected)]
+
+
+class _Script:
+    """Return one scripted answer per window, recording what each window held."""
+
+    def __init__(self, *answers):
+        self.answers = list(answers)
+        self.snippets = []
+
+    def complete_json(self, *, instructions, document_text):
+        self.snippets.append(document_text)
+        return self.answers.pop(0)
+
+
+def test_oversized_block_window_is_skipped_and_the_next_window_runs():
+    """U4.c: a block too large for any window is recorded; later windows still run."""
+    blocks = [
+        DocumentBlock(id="huge", page_index=0, text="x" * 5000),
+        DocumentBlock(id="body", page_index=1, text="Chapter Two"),
+    ]
+    provider = _Script(
+        {
+            "entries": [],
+            "boundaries": [{"block_id": "body", "title": "Chapter Two", "confidence": 0.9}],
+        }
+    )
+    decisions = []
+
+    ids, warnings = propose_llm_contents_boundaries(
+        blocks, provider, window_size=1, chunk_tokens=400, decisions=decisions
+    )
+
+    assert ids == {"body"}
+    assert ("window:0", "rejected", "oversized_source_block") in _codes(decisions)
+    assert warnings == ["LLM contents analysis skipped oversized block at index 0"]
+    assert len(provider.snippets) == 1
+    assert "x" * 100 not in provider.snippets[0]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"entries": "none"},
+        {"entries": [], "boundaries": [], "extra": 1},
+        {"entries": [{"block_id": "entry"}], "boundaries": []},
+        ["not", "an", "object"],
+    ],
+    ids=["entries-not-a-list", "extra-key", "entry-missing-fields", "not-an-object"],
+)
+def test_schema_invalid_answer_is_recorded_and_the_next_window_runs(answer):
+    """U4.c: an answer that fails the schema is recorded against its window."""
+    provider = _Script(
+        answer,
+        {
+            "entries": [],
+            "boundaries": [{"block_id": "body", "title": "Chapter Two", "confidence": 0.9}],
+        },
+    )
+    decisions = []
+
+    ids, warnings = propose_llm_contents_boundaries(
+        source_blocks(), provider, window_size=2, decisions=decisions
+    )
+
+    assert ids == {"body"}
+    assert _codes(decisions)[0] == ("window:0", "rejected", "invalid_response_schema")
+    assert warnings == ["LLM contents response rejected at block window 0"]
+    assert len(provider.snippets) == 2
+
+
+@pytest.mark.parametrize(("confidence", "approved"), [(0.74, False), (0.75, True)])
+def test_low_confidence_heading_is_not_approved(confidence, approved):
+    """U4.d: a heading that names its line still needs confidence of at least 0.75."""
+    from pdf2audiobook.llm import detect_llm_headings
+
+    decisions = []
+    ids, warnings = detect_llm_headings(
+        source_blocks(),
+        _Script(
+            {"headings": [{"block_id": "body", "title": "Chapter Two", "confidence": confidence}]}
+        ),
+        decisions=decisions,
+    )
+
+    assert ids == ({"body"} if approved else set())
+    assert warnings == []
+    assert [(d.block_id, d.status, d.reason_code) for d in decisions] == [
+        (
+            "body",
+            "accepted" if approved else "rejected",
+            "verified_heading" if approved else "low_confidence",
+        )
+    ]
