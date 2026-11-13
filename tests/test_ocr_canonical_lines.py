@@ -6,7 +6,7 @@ from pathlib import Path
 import fitz
 
 from pdf2audiobook.config import Pdf
-from pdf2audiobook.pdf import _cached_ocr_lines
+from pdf2audiobook.pdf_ocr import _cached_ocr_lines
 
 
 def test_ocr_cache_hit_miss_and_disabled_cache_share_allowlisted_schema(
@@ -28,7 +28,7 @@ def test_ocr_cache_hit_miss_and_disabled_cache_share_allowlisted_schema(
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", fake_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", fake_ocr)
     settings = Pdf(ocr="always")
     cache = tmp_path / "ocr-cache"
     try:

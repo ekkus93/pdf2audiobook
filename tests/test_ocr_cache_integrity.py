@@ -10,7 +10,8 @@ import pytest
 
 from pdf2audiobook.config import Pdf
 from pdf2audiobook.errors import ExtractionError
-from pdf2audiobook.pdf import _valid_cached_lines, extract_pdf
+from pdf2audiobook.pdf import extract_pdf
+from pdf2audiobook.pdf_ocr import _valid_cached_lines
 
 
 def _line(bbox=(40, 50, 120, 64)):
@@ -55,7 +56,7 @@ def test_degenerate_cached_geometry_triggers_fresh_recognition(monkeypatch, tmp_
         calls.append(page.number)
         return [_line()]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", recognize)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", recognize)
     cache = tmp_path / "cache"
     extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
     (entry,) = cache.glob("*.json")
@@ -72,7 +73,7 @@ def test_invalid_fresh_ocr_fails_without_poisoning_cache(monkeypatch, tmp_path: 
     source = tmp_path / "scan.pdf"
     _blank_pdf(source)
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_page_lines",
+        "pdf2audiobook.pdf_ocr._ocr_page_lines",
         lambda page, settings: [_line((40, 50, 40, 64))],
     )
     cache = tmp_path / "cache"

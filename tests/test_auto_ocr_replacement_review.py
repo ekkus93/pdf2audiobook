@@ -47,7 +47,7 @@ def test_auto_ocr_flags_missing_selectable_headings_without_mixing_layers(
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", recognized)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", recognized)
     extracted = extract_pdf(source, Pdf(ocr=mode))
     assert len(extracted.spans) == len(extracted.blocks) == 1
     assert extracted.spans[0].text == recognized_text
@@ -71,7 +71,7 @@ def test_auto_ocr_on_image_only_page_does_not_claim_missing_selectable_text(
         page.insert_image(page.rect, stream=blank.tobytes("png"))
         doc.save(source)
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._cached_ocr_lines",
+        "pdf2audiobook.pdf_ocr._cached_ocr_lines",
         lambda *args, **kwargs: [
             {
                 "text": "A scanned line without a selectable counterpart.",

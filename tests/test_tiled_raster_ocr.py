@@ -7,7 +7,8 @@ import fitz
 import pytest
 
 from pdf2audiobook.config import Pdf
-from pdf2audiobook.pdf import _page_has_dominant_raster, extract_pdf
+from pdf2audiobook.pdf import extract_pdf
+from pdf2audiobook.pdf_ocr import _page_has_dominant_raster
 
 HEADING = "An unusually long selectable heading for this page"
 RECOGNIZED = "Synthetic scanned prose recovered from the raster tiles."
@@ -90,7 +91,7 @@ def test_tiled_scan_auto_ocr_does_not_discard_valid_embedded_prose(
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", fake_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", fake_ocr)
     result = extract_pdf(source, Pdf(ocr="auto"))
     assert bool(calls) is should_ocr
     if should_ocr:
@@ -175,7 +176,7 @@ def test_rotated_wide_scans_use_unrotated_raster_coverage(
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", fake_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", fake_ocr)
     result = extract_pdf(source, Pdf(ocr="auto"))
     assert calls == [1]
     assert len(result.spans) == 1

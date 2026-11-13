@@ -43,7 +43,7 @@ def test_auto_ocr_mixed_pdf_does_not_duplicate_embedded_text(monkeypatch, tmp_pa
     source = tmp_path / "mixed.pdf"
     _mixed_pdf(source)
     calls = []
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", _fake_ocr(calls))
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", _fake_ocr(calls))
     extracted = extract_pdf(source, Pdf(ocr="auto"))
     assert calls == [1]
     assert [span.origin for span in extracted.spans] == ["embedded", "ocr"]
@@ -59,7 +59,7 @@ def test_always_ocr_replaces_embedded_layer_instead_of_appending(monkeypatch, tm
     source = tmp_path / "always.pdf"
     _mixed_pdf(source)
     calls = []
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", _fake_ocr(calls))
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", _fake_ocr(calls))
     extracted = extract_pdf(source, Pdf(ocr="always"))
     assert calls == [0, 1]
     assert len(extracted.spans) == 2
@@ -71,7 +71,7 @@ def test_never_ocr_keeps_embedded_page_and_reports_scan(monkeypatch, tmp_path: P
     source = tmp_path / "never.pdf"
     _mixed_pdf(source)
     calls = []
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", _fake_ocr(calls))
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", _fake_ocr(calls))
     extracted = extract_pdf(source, Pdf(ocr="never"))
     assert calls == []
     assert len(extracted.spans) == 1

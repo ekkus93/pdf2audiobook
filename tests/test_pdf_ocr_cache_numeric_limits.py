@@ -6,7 +6,7 @@ import fitz
 import pytest
 
 from pdf2audiobook.config import Pdf
-from pdf2audiobook.pdf import _cached_ocr_lines, _valid_cached_lines
+from pdf2audiobook.pdf_ocr import _cached_ocr_lines, _valid_cached_lines
 from pdf2audiobook.workspace import fingerprint
 
 
@@ -39,10 +39,10 @@ def test_oversized_or_nonfinite_cached_font_size_is_rejected(size):
 
 
 def test_invalid_oversized_cache_refreshes_with_verified_ocr(tmp_path, monkeypatch):
-    from pdf2audiobook import pdf
+    from pdf2audiobook import pdf_ocr
 
     settings = Pdf(ocr="auto")
-    monkeypatch.setattr(pdf, "_ocr_engine_version", lambda: "synthetic-test-version")
+    monkeypatch.setattr(pdf_ocr, "_ocr_engine_version", lambda: "synthetic-test-version")
     valid = entry()
     calls = []
 
@@ -50,7 +50,7 @@ def test_invalid_oversized_cache_refreshes_with_verified_ocr(tmp_path, monkeypat
         calls.append(True)
         return [valid]
 
-    monkeypatch.setattr(pdf, "_ocr_page_lines", fresh_ocr)
+    monkeypatch.setattr(pdf_ocr, "_ocr_page_lines", fresh_ocr)
     key = fingerprint(
         "ocr-lines-v1",
         "a" * 64,

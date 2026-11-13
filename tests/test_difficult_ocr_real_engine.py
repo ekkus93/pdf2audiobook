@@ -12,7 +12,8 @@ import fitz
 import pytest
 
 from pdf2audiobook.config import Pdf
-from pdf2audiobook.pdf import _ocr_page_lines, extract_pdf
+from pdf2audiobook.pdf import extract_pdf
+from pdf2audiobook.pdf_ocr import _ocr_page_lines
 
 
 @pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract unavailable")

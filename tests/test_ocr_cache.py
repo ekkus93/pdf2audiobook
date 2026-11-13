@@ -43,7 +43,7 @@ def test_ocr_cache_reuses_only_scanned_pages(monkeypatch, tmp_path: Path):
     pdf_path = tmp_path / "mixed.pdf"
     make_pdf(pdf_path, text_page=True)
     calls = []
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", ocr_stub(calls))
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", ocr_stub(calls))
     cache = tmp_path / "ocr-cache"
     settings = Pdf(ocr="auto")
     first = extract_pdf(pdf_path, settings, ocr_cache_dir=cache)
@@ -61,7 +61,7 @@ def test_ocr_cache_invalidation_and_corruption(monkeypatch, tmp_path: Path):
     source = tmp_path / "book.pdf"
     make_pdf(source)
     calls = []
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", ocr_stub(calls))
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", ocr_stub(calls))
     cache = tmp_path / "ocr"
     cfg = Pdf(ocr="always")
     extract_pdf(source, cfg, ocr_cache_dir=cache)
@@ -102,7 +102,7 @@ def test_deeply_nested_ocr_cache_is_a_miss_and_regenerates(monkeypatch, tmp_path
     source = tmp_path / "book.pdf"
     make_pdf(source)
     calls = []
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", ocr_stub(calls))
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", ocr_stub(calls))
     cache = tmp_path / "ocr"
     extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
     entry = next(cache.glob("*.json"))
@@ -130,7 +130,7 @@ def test_empty_ocr_is_retried_not_cached(monkeypatch, tmp_path: Path):
             },
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", transient_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", transient_ocr)
     first = extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache)
     assert not first.spans
     assert not list(cache.glob("*.json"))

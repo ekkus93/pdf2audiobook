@@ -64,7 +64,7 @@ def test_dominant_raster_with_selectable_heading(
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", fake_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", fake_ocr)
     extracted = extract_pdf(source, Pdf(ocr=mode))
     assert bool(calls) is should_ocr
     if should_ocr:
@@ -92,7 +92,7 @@ def test_dominant_raster_with_substantial_selectable_text_stays_embedded(
     def unexpected_ocr(*args: object, **kwargs: object) -> list[dict]:
         pytest.fail("substantial valid selectable text must not be replaced by OCR")
 
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", unexpected_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", unexpected_ocr)
     extracted = extract_pdf(source, Pdf(ocr="auto"))
     assert len(extracted.spans) >= 5
     assert all(span.origin == "embedded" for span in extracted.spans)
@@ -154,7 +154,7 @@ def test_hybrid_raster_ocr_only_selectable_overlay_requires_specific_review(
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", heading_only_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", heading_only_ocr)
     result = extract_pdf(source, Pdf(ocr="auto"))
     assert len(result.spans) == 1
     assert result.spans[0].text == HEADING

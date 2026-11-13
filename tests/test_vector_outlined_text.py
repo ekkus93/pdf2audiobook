@@ -6,7 +6,7 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from pdf2audiobook import pdf
+from pdf2audiobook import pdf, pdf_ocr
 from pdf2audiobook.config import Pdf
 
 # Four lines of prose converted to outlines with Ghostscript -dNoOutputFonts:
@@ -30,7 +30,7 @@ def test_fixture_is_outlined_text_below_the_old_coverage_threshold():
 
 def test_outlined_text_page_selects_ocr_in_auto_mode():
     with pymupdf.open(FIXTURE) as document:
-        usable, _issue, should_ocr, warnings = pdf._page_ocr_strategy(
+        usable, _issue, should_ocr, warnings = pdf_ocr._page_ocr_strategy(
             document[0], [], Pdf(ocr="auto"), 1
         )
     assert not usable
@@ -81,9 +81,9 @@ def test_short_embedded_heading_with_ornament_does_not_require_tesseract(
             page.draw_rect(pymupdf.Rect(x, y, x + 3, y + 3), fill=(0, 0, 0), color=None)
         document.save(source)
 
-    monkeypatch.setattr(pdf.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(pdf_ocr.shutil, "which", lambda _name: None)
     monkeypatch.setattr(
-        pdf,
+        pdf_ocr,
         "_cached_ocr_lines",
         lambda *args, **kwargs: pytest.fail("OCR ran despite a valid embedded heading"),
     )

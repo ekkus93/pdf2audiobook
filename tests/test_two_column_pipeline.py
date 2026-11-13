@@ -60,7 +60,7 @@ def test_ocr_columns_share_ordering_and_provenance(monkeypatch, tmp_path: Path) 
                 }
             )
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_page_lines",
+        "pdf2audiobook.pdf_ocr._ocr_page_lines",
         lambda page, settings: list(rows),
     )
     result = extract_pdf(source, Pdf(ocr="always"))

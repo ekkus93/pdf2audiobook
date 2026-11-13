@@ -7,7 +7,8 @@ import fitz
 import pytest
 
 from pdf2audiobook.config import Pdf
-from pdf2audiobook.pdf import _ocr_engine_version, extract_pdf
+from pdf2audiobook.pdf import extract_pdf
+from pdf2audiobook.pdf_ocr import _ocr_engine_version
 
 
 @pytest.mark.parametrize(
@@ -19,9 +20,9 @@ from pdf2audiobook.pdf import _ocr_engine_version, extract_pdf
     ],
 )
 def test_empty_and_whitespace_engine_version(monkeypatch, stdout, stderr, expected):
-    monkeypatch.setattr("pdf2audiobook.pdf.shutil.which", lambda _: "/bin/tesseract")
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr.shutil.which", lambda _: "/bin/tesseract")
     monkeypatch.setattr(
-        "pdf2audiobook.pdf.subprocess.run",
+        "pdf2audiobook.pdf_ocr.subprocess.run",
         lambda *a, **k: SimpleNamespace(returncode=0, stdout=stdout, stderr=stderr),
     )
     _ocr_engine_version.cache_clear()
@@ -60,7 +61,7 @@ def test_invalid_ocr_cache_lines_trigger_recognition(monkeypatch, tmp_path: Path
             },
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", fake_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", fake_ocr)
     cache_dir = tmp_path / "ocr"
     extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=cache_dir)
     (entry,) = list(cache_dir.glob("*.json"))

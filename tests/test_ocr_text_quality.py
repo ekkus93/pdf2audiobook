@@ -38,7 +38,7 @@ def test_auto_ocr_on_damaged_selectable_text(monkeypatch, tmp_path: Path):
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", fake_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", fake_ocr)
     result = extract_pdf(path, Pdf(ocr="auto"))
     assert calls == [0]
     assert len(result.spans) == 1
@@ -58,7 +58,7 @@ def test_never_mode_preserves_damaged_source_for_review(monkeypatch, tmp_path: P
         ],
     )
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_page_lines",
+        "pdf2audiobook.pdf_ocr._ocr_page_lines",
         lambda *args: (_ for _ in ()).throw(AssertionError("OCR not allowed")),
     )
     result = extract_pdf(path, Pdf(ocr="never"))
@@ -71,7 +71,7 @@ def test_auto_preserves_valid_embedded_text(monkeypatch, tmp_path: Path):
     path = tmp_path / "good.pdf"
     pdf_file(path)
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_page_lines",
+        "pdf2audiobook.pdf_ocr._ocr_page_lines",
         lambda *args: (_ for _ in ()).throw(AssertionError("unneeded OCR")),
     )
     result = extract_pdf(path, Pdf(ocr="auto"))

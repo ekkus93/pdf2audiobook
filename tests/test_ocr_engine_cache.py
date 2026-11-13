@@ -18,7 +18,7 @@ def test_tesseract_version_invalidates_page_ocr_cache(monkeypatch, tmp_path: Pat
     doc.close()
     calls = []
     version = {"value": "tesseract 5.4.0"}
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_engine_version", lambda: version["value"])
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_engine_version", lambda: version["value"])
 
     def fake_ocr(page, settings):
         calls.append((page.number, settings.ocr_dpi))
@@ -31,7 +31,7 @@ def test_tesseract_version_invalidates_page_ocr_cache(monkeypatch, tmp_path: Pat
             }
         ]
 
-    monkeypatch.setattr("pdf2audiobook.pdf._ocr_page_lines", fake_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._ocr_page_lines", fake_ocr)
     cache = tmp_path / "ocr"
     settings = Pdf(ocr="always")
     first = extract_pdf(source, settings, ocr_cache_dir=cache)

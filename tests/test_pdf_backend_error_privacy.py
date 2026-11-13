@@ -4,6 +4,7 @@ import fitz
 import pytest
 
 import pdf2audiobook.pdf as pdf
+from pdf2audiobook import pdf_ocr
 from pdf2audiobook.config import Pdf
 from pdf2audiobook.errors import ExtractionError, InputError
 
@@ -55,7 +56,7 @@ def test_ocr_failure_redacts_backend_diagnostics(monkeypatch, tmp_path):
     def fail_ocr(*args, **kwargs):
         raise RuntimeError(f"OCR returned {PRIVATE} from private path")
 
-    monkeypatch.setattr(pdf, "_cached_ocr_lines", fail_ocr)
+    monkeypatch.setattr(pdf_ocr, "_cached_ocr_lines", fail_ocr)
     with pytest.raises(ExtractionError) as raised:
         pdf.extract_pdf(source, Pdf(ocr="always"))
     assert "OCR failed on PDF page 1" in str(raised.value)
@@ -69,7 +70,7 @@ def test_backend_cannot_spoof_trusted_ocr_validation(monkeypatch, tmp_path):
     def fail_ocr(*args, **kwargs):
         raise ValueError(f"invalid OCR line geometry or metadata; {PRIVATE}")
 
-    monkeypatch.setattr(pdf, "_cached_ocr_lines", fail_ocr)
+    monkeypatch.setattr(pdf_ocr, "_cached_ocr_lines", fail_ocr)
     with pytest.raises(ExtractionError) as raised:
         pdf.extract_pdf(source, Pdf(ocr="always"))
     assert "OCR failed on PDF page 1" in str(raised.value)

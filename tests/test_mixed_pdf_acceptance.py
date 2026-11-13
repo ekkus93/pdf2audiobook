@@ -15,7 +15,7 @@ from pdf2audiobook.workspace import read_manifest
 def test_auto_ocr_skips_image_free_blank_and_short_valid_text_without_tesseract(
     tmp_path, monkeypatch
 ):
-    import pdf2audiobook.pdf as pdf
+    import pdf2audiobook.pdf_ocr as pdf_ocr
 
     source = tmp_path / "born-digital.pdf"
     document = fitz.open()
@@ -25,12 +25,14 @@ def test_auto_ocr_skips_image_free_blank_and_short_valid_text_without_tesseract(
     document.save(source)
     document.close()
 
-    monkeypatch.setattr(pdf.shutil, "which", lambda name: None if name == "tesseract" else "/bin")
+    monkeypatch.setattr(
+        pdf_ocr.shutil, "which", lambda name: None if name == "tesseract" else "/bin"
+    )
 
     def fail_if_called(_page, _settings):
         raise AssertionError("auto OCR should not run on image-free pages")
 
-    monkeypatch.setattr(pdf, "_ocr_page_lines", fail_if_called)
+    monkeypatch.setattr(pdf_ocr, "_ocr_page_lines", fail_if_called)
     manifest_path = analyze_book(
         source,
         Settings(
@@ -58,7 +60,7 @@ class FakeVoice:
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg unavailable")
 def test_auto_ocr_mixed_pdf_without_duplicates_and_with_clean_folios(tmp_path, monkeypatch):
-    import pdf2audiobook.pdf as pdf
+    import pdf2audiobook.pdf_ocr as pdf_ocr
     import pdf2audiobook.pipeline as pipeline
 
     source = tmp_path / "mixed.pdf"
@@ -99,7 +101,7 @@ def test_auto_ocr_mixed_pdf_without_duplicates_and_with_clean_folios(tmp_path, m
             {"text": "2", "bbox": (294, 766, 304, 781), "font": "FakeOCR", "size": 10},
         ]
 
-    monkeypatch.setattr(pdf, "_ocr_page_lines", offline_ocr)
+    monkeypatch.setattr(pdf_ocr, "_ocr_page_lines", offline_ocr)
     monkeypatch.setattr(pipeline, "KittenProvider", FakeVoice)
     settings = Settings(
         general=General(output_dir=str(tmp_path / "output")),
@@ -126,7 +128,7 @@ def test_auto_ocr_mixed_pdf_without_duplicates_and_with_clean_folios(tmp_path, m
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg unavailable")
 def test_image_only_scanned_book_uses_ocr_auto(tmp_path, monkeypatch):
-    import pdf2audiobook.pdf as pdf
+    import pdf2audiobook.pdf_ocr as pdf_ocr
     import pdf2audiobook.pipeline as pipeline
 
     source = tmp_path / "scan.pdf"
@@ -156,7 +158,7 @@ def test_image_only_scanned_book_uses_ocr_auto(tmp_path, monkeypatch):
             },
         ]
 
-    monkeypatch.setattr(pdf, "_ocr_page_lines", stub_ocr)
+    monkeypatch.setattr(pdf_ocr, "_ocr_page_lines", stub_ocr)
     monkeypatch.setattr(pipeline, "KittenProvider", FakeVoice)
     settings = Settings(
         general=General(output_dir=str(tmp_path / "out")),

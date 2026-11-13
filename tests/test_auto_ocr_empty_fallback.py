@@ -35,7 +35,7 @@ def test_empty_ocr_preserves_short_embedded_prose_only_in_auto_mode(
         calls.append(True)
         return []
 
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", empty_ocr)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", empty_ocr)
     result = extract_pdf(source, Pdf(ocr=mode))
     assert bool(calls) is (mode != "never")
     if mode == "always":
@@ -64,7 +64,7 @@ def test_auto_ocr_empty_on_scanned_page_still_reports_no_text(
         blank = page.get_pixmap()
         page.insert_image(page.rect, stream=blank.tobytes("png"))
         doc.save(source)
-    monkeypatch.setattr("pdf2audiobook.pdf._cached_ocr_lines", lambda *a, **k: [])
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr._cached_ocr_lines", lambda *a, **k: [])
     result = extract_pdf(source, Pdf(ocr="auto"))
     assert not result.spans
     assert any("OCR produced no text" in warning for warning in result.warnings)
@@ -88,7 +88,7 @@ def test_dense_vector_drawing_page_triggers_auto_ocr():
 
 @pytest.mark.skipif(shutil.which("tesseract") is None, reason="Tesseract is not installed")
 def test_dense_vector_page_reaches_the_ocr_engine(monkeypatch, tmp_path):
-    from pdf2audiobook import pdf
+    from pdf2audiobook import pdf, pdf_ocr
 
     source = tmp_path / "vector-outline.pdf"
     with fitz.open() as document:
@@ -98,14 +98,14 @@ def test_dense_vector_page_reaches_the_ocr_engine(monkeypatch, tmp_path):
                 x, y = 30 + column * 50, 30 + row * 60
                 page.draw_rect(fitz.Rect(x, y, x + 24, y + 28), color=(0, 0, 0))
         document.save(source)
-    original = pdf._cached_ocr_lines
+    original = pdf_ocr._cached_ocr_lines
     called = []
 
     def track_ocr(*args, **kwargs):
         called.append(True)
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(pdf, "_cached_ocr_lines", track_ocr)
+    monkeypatch.setattr(pdf_ocr, "_cached_ocr_lines", track_ocr)
     result = pdf.extract_pdf(source, Pdf(ocr="auto"))
     assert called
     assert any("OCR" in warning for warning in result.warnings)

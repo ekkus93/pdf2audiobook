@@ -73,6 +73,7 @@ files = [
     "src/pdf2audiobook/llm/smoke.py",
     "src/pdf2audiobook/pdf.py",
     "src/pdf2audiobook/pdf_layout.py",
+    "src/pdf2audiobook/pdf_ocr.py",
     "src/pdf2audiobook/pipeline.py",
     "src/pdf2audiobook/cli.py",
     "src/pdf2audiobook/llm/vision.py",

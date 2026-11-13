@@ -27,13 +27,13 @@ def test_page_labels_in_provenance(tmp_path: Path):
 
 
 def test_tesseract_languages_and_missing_language(monkeypatch):
-    monkeypatch.setattr("pdf2audiobook.pdf.shutil.which", lambda name: "/bin/tesseract")
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr.shutil.which", lambda name: "/bin/tesseract")
     fake = SimpleNamespace(
         returncode=0,
         stdout="List of available languages in /usr/share/tessdata (2):\neng\nfra\n",
         stderr="",
     )
-    monkeypatch.setattr("pdf2audiobook.pdf.subprocess.run", lambda *a, **k: fake)
+    monkeypatch.setattr("pdf2audiobook.pdf_ocr.subprocess.run", lambda *a, **k: fake)
     assert tesseract_languages() == ["eng", "fra"]
     assert missing_ocr_languages("eng+spa", ["eng", "fra"]) == ["spa"]
     assert missing_ocr_languages("eng", None) == ["eng"]

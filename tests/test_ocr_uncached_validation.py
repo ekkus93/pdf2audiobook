@@ -46,7 +46,7 @@ def test_uncached_ocr_rejects_malformed_fresh_lines(monkeypatch, tmp_path: Path,
     source = tmp_path / "scan.pdf"
     _blank_pdf(source)
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_page_lines",
+        "pdf2audiobook.pdf_ocr._ocr_page_lines",
         lambda page, settings: [invalid],
     )
     with pytest.raises(ExtractionError, match="invalid OCR line geometry or metadata"):
@@ -57,7 +57,7 @@ def test_uncached_valid_ocr_retains_original_provenance(monkeypatch, tmp_path: P
     source = tmp_path / "scan.pdf"
     _blank_pdf(source)
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_page_lines",
+        "pdf2audiobook.pdf_ocr._ocr_page_lines",
         lambda page, settings: [_line()],
     )
     result = extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=None)
@@ -72,7 +72,7 @@ def test_uncached_empty_ocr_is_reviewable_not_an_error(monkeypatch, tmp_path: Pa
     source = tmp_path / "scan.pdf"
     _blank_pdf(source)
     monkeypatch.setattr(
-        "pdf2audiobook.pdf._ocr_page_lines",
+        "pdf2audiobook.pdf_ocr._ocr_page_lines",
         lambda page, settings: [],
     )
     result = extract_pdf(source, Pdf(ocr="always"), ocr_cache_dir=None)
