@@ -66,6 +66,7 @@ files = [
     "src/pdf2audiobook/special_material.py",
     "src/pdf2audiobook/narration.py",
     "src/pdf2audiobook/audio/__init__.py",
+    "src/pdf2audiobook/audio/wav.py",
     "src/pdf2audiobook/audio/freshness.py",
     "src/pdf2audiobook/audio/encoding.py",
     "src/pdf2audiobook/audio/citations.py",
