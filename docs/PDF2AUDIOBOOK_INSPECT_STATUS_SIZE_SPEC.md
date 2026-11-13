@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size Specification
 
-**Status:** Draft; R1–R2 are not implemented
+**Status:** R1–R2 implemented in 19dc01b and verified by CI; review follow-up R3–R5 (§7) not implemented
 **Date:** 2026-11-13
 **Scope:** Close the `inspect` race found in the fourth-review TODO audit.
 **Companion:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_TODO.md`
@@ -143,3 +143,69 @@ limitation and leave it for a separate change.
 - `load_bounded_json()` behavior is unchanged for all existing callers.
 - No unrelated runtime behavior or files are changed, apart from the
   MAINTAINER_GUIDE.md limitation note.
+
+## 7. Post-implementation review (2026-11-13)
+
+An independent review of the fix commit 19dc01be16ee10a479434fe407733cb8c2167ca6, at master 904f4c04a73bf4b1378e2e50daaa2c3c63315552, found the implementation correct:
+
+- R1 and R2 are met, and `load_bounded_json()` behaves identically for all 11 other callers under `src/`. Old and new versions were compared on 15 edge cases, each under two limit settings.
+- The race and unreadable-file tests fail at the parent d4c0aae, as recorded.
+
+It found two weaknesses in the tests and some documentation drift. R3–R5 below address them. They change tests and docs only; no runtime behaviour changes.
+
+### R3 — The race test must catch any check-then-read design
+
+*Problem:* `test_status_that_grows_after_a_size_observation_is_reported_oversized` (tests/test_inspect_conversion_status.py:180-201) fakes a small size only for `Path.stat`. The reviewer built a still-racy version of `inspect` that:
+
+- pre-checks the size with `os.stat(status_path).st_size`, catching `OSError`;
+- silently omits the status when the read reports oversize (`except JSONTooLargeError: conversion_status = None`).
+
+That version passes all 13 tests in the file, and the 57 tests selected by `-k "inspect or status or jsonio"`. Any size check that doesn't go through `Path.stat` (`os.stat`, `os.path.getsize`, or `fstat` before reading) sees the real large size, so the test can't tell such a check from the fix.
+
+*Required:*
+
+- Add a CLI test that starts with a small status file on disk (a valid JSON object well under the limit). Wrap the open boundary (`Path.open`, filtered to the status file name as the existing tests do) so the file grows past `CONVERSION_STATUS_MAX_BYTES` immediately before the handle is returned.
+- Assert exit 3, the fixed message and content-free output in `--json` mode. Assert that `conversion_status` is not silently omitted with exit 0.
+- Keep the existing race test unchanged.
+- Show the new test fails against the reviewer's mutant described above, applied in a scratch worktree, and record that in the ledger. Also show it fails at d4c0aae.
+- No sleeps or timing.
+
+### R4 — Test the exact one-byte-over boundary at the CLI
+
+*Problem:* Spec §4.1 asks for a status file one byte above 1 MiB. `_OVERSIZED_STATUS = b"{}" + b" " * _STATUS_LIMIT` (tests/test_inspect_conversion_status.py:67) is 1 MiB plus **two** bytes. The exact limit+1 boundary is tested only in `tests/test_jsonio.py`, with a 7-byte file and `max_bytes=6`.
+
+*Required:*
+
+- Add a CLI test in human mode with a status file of exactly `CONVERSION_STATUS_MAX_BYTES + 1` bytes. Assert that length in the test.
+- Expect exit 3 and the fixed message.
+- Keep the existing tests and `_OVERSIZED_STATUS` unchanged.
+
+### R5 — Documentation accuracy
+
+*Problem:*
+
+- `docs/MAINTAINER_GUIDE.md:347` says the error is raised "even if the file grew after an earlier size check". There is no earlier size check any more, so the wording suggests one exists.
+- The list of cases where the status is left out (`:349`) misses the non-object case.
+- This spec's status line said "Draft; R1–R2 are not implemented" after the TODO was marked complete.
+
+*Required:*
+
+- Reword the guide: the decision is made from the bytes read, so a file that grows or is replaced before it is read is still reported.
+- Add "non-object" to the list of cases where the status is left out.
+- Keep this spec's status line in step with the TODO.
+
+### Accepted as is
+
+These were also reviewed and need no change:
+
+- If an `OSError` happens partway through reading an oversized file, the status is omitted rather than reported as too large. R2 classes this as an unreadable file.
+- The handle-closing test in `tests/test_jsonio.py` can't fail against the old code, which also used `with`. It stays as a guard for future changes.
+- `_assert_content_free`'s content check is trivial for the `{}`-and-spaces payload. Assertions on paths and errno still apply.
+- CI ran on 16e98a5, not on 19dc01b alone, because the three commits were pushed together. The ledger records this, and the trees differ only in the TODO file.
+
+### Acceptance criteria for §7
+
+- The R3 test fails against the reviewer's mutant and at d4c0aae, and passes at HEAD.
+- The R4 test passes and asserts the exact length `CONVERSION_STATUS_MAX_BYTES + 1`.
+- Existing tests are unchanged.
+- `/verify` passes, and exact-head CI passes for the fix commit.
