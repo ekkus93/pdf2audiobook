@@ -1,6 +1,6 @@
 # PDF2Audiobook — Long Function Split TODO
 
-**Status:** Open; LF0, LF1 and LF2 done with exact-head CI; LF3–LF5 open
+**Status:** Open; LF0–LF4, LF5.01 and LF5.02 done with exact-head CI; LF5.03 waits on the user (the scope of `propose_llm_contents_boundaries` and a review of the "Found during split" list)
 **Date:** 2026-11-13
 **Baseline:** master at 18681585b45a02b0e697b64c03ac38c513a28247
 **Specification:** `docs/PDF2AUDIOBOOK_LONG_FUNCTION_SPLIT_SPEC.md` (S1–S12)
@@ -115,24 +115,64 @@
 
 ## Phase LF3 — Audio and LLM
 
-- [ ] LF3.01 Split `synthesize_chunks` (S5). Keep validation that today runs before any engine call or cache replay in that position. Remove it from the allowlist; the suite passes unchanged.
-- [ ] LF3.02 Split `_complete_json_call` (S6). The fail-closed order is unchanged: no reservation before the bounds check, and no cache hit that skips the oversized-request rejection. Remove it from the allowlist; the budget and cache tests pass unchanged.
-- [ ] LF3.03 Split `_complete_json_request` (S7). Turn the nested settle closures into named functions or methods with an explicit attempt context, and the loop into a dispatcher over typed outcomes. Remove it from the allowlist; the provider matrix and budget tests pass unchanged.
+- [x] LF3.01 Split `synthesize_chunks` (S5). Keep validation that today runs before any engine call or cache replay in that position. Remove it from the allowlist; the suite passes unchanged.
+  - Evidence: commit ea53f56a8bf5115d8c9d24bda3ef8faa87f6d59d. The function is 95 lines (was 308). The steps, in order:
+    - validation: `_validate_synthesis_inputs`, still first, before any engine call or cache replay;
+    - the chunk plan and cache keys: `_chunk_plan`, `_chunk_voices` and `_chunk_identities`;
+    - the progress ledger: `_initial_progress`;
+    - per chunk: `_replay_cached_chunk`, or `_synthesize_new_chunk` (`_generate_with_retries`, `_store_generated_chunk`), then `_record_chunk_failure` or `_record_chunk_completion`;
+    - output: `_emit_silence`, streaming or collecting;
+    - finishing: `_finish_progress`.
+  - Evidence: 1,500 differential trials compared the old and new functions with fake engines, including transient and permanent failures, warm and corrupted caches, streaming and voice markers. Results, engine calls, `on_chunk` calls, cache files and progress files were identical in every trial (846 succeeded, 654 raised). The callback order is unchanged: `on_chunk` runs before the progress stream is updated. Allowlist entry removed. `/verify` passed (2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13). Python CI run 43373362904 passed.
+- [x] LF3.02 Split `_complete_json_call` (S6). The fail-closed order is unchanged: no reservation before the bounds check, and no cache hit that skips the oversized-request rejection. Remove it from the allowlist; the budget and cache tests pass unchanged.
+  - Evidence: commit 55603b1bac28145f1b393ad0635af19e0b71134e. The function is 35 lines (was 264). The steps, in order:
+    - request bounds: `_resolve_served_identity`, `_check_request_bounds`, then `_request_key`;
+    - cache lookup: `_cached_response`;
+    - server-side limits, on a miss: `_request_upper_bounds`, then `_check_served_capacity`;
+    - reservation: `_reserve_budget`, with `_check_remaining_budget`, `_reserve_ledger_call` and `_install_attempt_accounting`, which holds the former `start_attempt` and `settle_attempt`;
+    - the request: `_prepare_provider` and `_send_request`;
+    - verified usage: `_check_verified_usage`.
+  - Note: before the split, neither fail-closed order had a test. Both of these mutants passed the whole suite (2036 passed): moving `_check_request_bounds` after the cache lookup, and moving `_check_served_capacity` after `_reserve_budget`. Commit 876dbe2cb0db67b996a51a153d7ff729fa96863e adds two characterization tests to `tests/test_split_characterization.py`: `test_oversized_request_is_rejected_even_when_its_reply_is_cached` and `test_served_capacity_is_checked_before_the_budget_is_reserved`. They pass at the pre-split code and after the split, and each fails against its mutant. That commit was pushed together with 55603b1, so it has no CI run of its own.
+  - Evidence: allowlist entry removed. The 426 budget, cache and LLM tests pass unchanged. `/verify` passed (2038 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13). Python CI run 43374161163 passed.
+- [x] LF3.03 Split `_complete_json_request` (S7). Turn the nested settle closures into named functions or methods with an explicit attempt context, and the loop into a dispatcher over typed outcomes. Remove it from the allowlist; the provider matrix and budget tests pass unchanged.
+  - Evidence: commit 819d364a055f3fa7c8666fe0fa2aecfea146e9d5. The function is 56 lines (was 262). Each attempt is an explicit `_Attempt`, settled at most once by `_finish_attempt`. The 9 closures became these methods:
+    - `_finish_attempt`, `_prepare_usage` and `_aggregate_usage`;
+    - `_settle_error_usage`, shared by the JSON-mode fallback and final client errors;
+    - `_settle_non_retryable`, `_fall_back_from_json_mode`, `_drop_rejected_parameter` and `_back_off`;
+    - `_accept_response` and `_handle_transport_error`.
+    The loop dispatches on the typed `_ResponseAction` that `_classify_response` returns: `json_mode_fallback`, `rejected_parameter`, `retry` or `final`. Retry state lives in `_RequestState`. Payload building is in `_build_payload`, and the remote-upload warning in `_warn_remote_upload`.
+  - Evidence: 4,000 differential trials over random response sequences compared the old and new providers. The sequences covered success, malformed JSON, JSON-mode rejection, parameter rejection, retryable and final statuses, connect, timeout and read errors, missing choices, vision, and usage present or invalid, with and without attempt accounting. Results, settle calls (ids, usage and outcome), sent payloads, `last_usage`, `total_usage`, unsupported parameters, the JSON-mode flag, `request_count` and stderr were identical in every trial (732 succeeded, 3,268 raised). Allowlist entry removed. `/verify` passed (2038 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13). Python CI run 43374666980 passed.
 
 ## Phase LF4 — Extraction and CLI
 
-- [ ] LF4.01 Split `extract_pdf` (S8). Every `pdf.*` name tests patch (`_open`, `_ocr_page_lines`, `_cached_ocr_lines`) still takes effect. Remove it from the allowlist; the suite passes unchanged, including the Tesseract-gated tests.
-- [ ] LF4.02 Split the `convert` CLI command body (S9) into a `_run_convert` helper and a dry-run helper. Error handling stays in the command. Remove it from the allowlist; CLI and JSON error tests pass unchanged.
+- [x] LF4.01 Split `extract_pdf` (S8). Every `pdf.*` name tests patch (`_open`, `_ocr_page_lines`, `_cached_ocr_lines`) still takes effect. Remove it from the allowlist; the suite passes unchanged, including the Tesseract-gated tests.
+  - Evidence: commit f9a8c3a0f2bae2b48afccaa17c13b0d670b30973. The function is 41 lines (was 225). Every step stays in `pdf.py`, so the patched names are still module globals looked up at call time: `_open`, `_lines`, `_ocr_page_lines`, `_cached_ocr_lines` and `_ocr_engine_version`. The steps, in order:
+    - opening and validation: `_start_extraction`, which fills `_ExtractionRun`;
+    - per page: `_extract_page`, which calls `_load_page`, `_page_size`, `_page_text_lines` (the strategy, the OCR fallback and `_no_text_reason`), `_annotate_page` (tables, artwork, special material, reading order, captions, notes and equations, giving `_PageAnnotations`), `_page_label` and `_build_page_blocks`.
+  - Evidence: on every fixture and generated document, old and new returned identical `ExtractedDocument`s, with `--ocr never` and with `auto` (real Tesseract). Tesseract is installed, so the Tesseract-gated tests ran. Allowlist entry removed. `/verify` passed (2038 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13). Python CI run 43374927081 passed.
+- [x] LF4.02 Split the `convert` CLI command body (S9) into a `_run_convert` helper and a dry-run helper. Error handling stays in the command. Remove it from the allowlist; CLI and JSON error tests pass unchanged.
+  - Evidence: commit f2a90664866141238481ecffdbe1137cf490947b. The body is 67 lines (was 140), and the steps are:
+    - `_convert_overrides` (85 lines): builds the overrides;
+    - `_check_accept_review`;
+    - `_dry_run_convert` (45 lines);
+    - `_run_convert` (33 lines).
+    The `KeyboardInterrupt`, `typer.Exit`/`ClickExit` re-raise and `fail()` handling stay in `convert`. Lazy imports still resolve at call time, so patching `pdf2audiobook.pipeline.convert_book` and `pdf2audiobook.audio.read_cover_image` still works.
+  - Evidence: `convert --help` is byte-identical. 600 differential runs through `CliRunner` used random option combinations and configs (openai, llama-server, piper, none). Exit code, stdout, stderr and the settings passed to `convert_book` were identical in every run (377 exited 0, 223 exited 2). Allowlist entry removed. `/verify` passed (2038 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13). Python CI run 43375191668 passed.
 
 ## Phase LF5 — Documentation and closure
 
-- [ ] LF5.01 Update `docs/MAINTAINER_GUIDE.md` (S12): the analysis and conversion orchestrators and their steps, and how to use the length-guard allowlist.
-- [ ] LF5.02 Confirm with `git diff 18681585b45a02b0e697b64c03ac38c513a28247 -- src` that no fingerprint, schema, cache-identity or sidecar constant changed. Record the check in the ledger.
+- [x] LF5.01 Update `docs/MAINTAINER_GUIDE.md` (S12): the analysis and conversion orchestrators and their steps, and how to use the length-guard allowlist.
+  - Evidence: commit 2cb1f1f42b585fb4782d4659f9ec57ff597b80c8. "Architecture and extension points" gains an "Orchestrators and their steps" paragraph. It lists the analysis and conversion steps in order and the lower-level orchestrators. "Development, CI and troubleshooting" explains the length guard and its shrink-only `ALLOWLIST`. The same commit gives each remaining allowlist entry its reason. No upgrade note was added: nothing persisted changed. Python CI run 43375326880 passed.
+- [x] LF5.02 Confirm with `git diff 18681585b45a02b0e697b64c03ac38c513a28247 -- src` that no fingerprint, schema, cache-identity or sidecar constant changed. Record the check in the ledger.
+  - Evidence: the diff to 2cb1f1f42b585fb4782d4659f9ec57ff597b80c8 covers 9 files, +3326/−2016 lines. Inside it, the version-like literals on removed lines and on added lines are the same multiset (11 each: `llm-json-cache-v1`, `llm-json-image-cache-v1`, `tts-wav-v3`, `visual-review-v1`, `sidecar_version: 3` and six `schema_version: 1`), so they only moved. Across the whole `src` tree, all 44 such literals are identical at the baseline and at HEAD (identical md5 of the sorted inventory). These include the `*-vN` fingerprint tags, `schema_version`, `sidecar_version` and every `*VERSION*` constant.
 - [ ] LF5.03 Final gate:
   - `/verify` passes, with mypy on 3.11, 3.12 and 3.13;
   - exact-head CI passes for every refactor commit;
   - the allowlist holds only out-of-scope functions, each with its reason;
   - the "Found during split" list is reviewed with the user.
+  - Note: not checked. `/verify` passes, with mypy on 3.11, 3.12 and 3.13, and every refactor commit has passing exact-head CI. Two clauses need the user:
+    - The allowlist holds the 13 out-of-scope functions under 200 lines, each with its reason, plus `llm/structure.py::propose_llm_contents_boundaries` (234 lines). That one is over the 200-line threshold but isn't in spec §1, and the user hasn't decided its scope.
+    - The "Found during split" list hasn't been reviewed with the user yet.
 
 ## Acceptance gate
 
@@ -150,7 +190,9 @@ Bugs or questionable behaviour noticed while reading, for a separate fix round (
 - `tests/fixtures/golden/novel.epub` (the synthetic EPUB from `tests/epub_book.py`): analysis yields three one-block chapters titled "Chapter 4", "Chapter 5" and "Chapter 6" before the real chapters 1–6. Those look like contents entries opening chapters. Pinned by the golden snapshot.
 - `src/pdf2audiobook/llm/cache.py:384-402`: dead code. The no-ledger budget checks can't run, because any budget creates a temporary ledger (`cache.py:52-57`).
 - `src/pdf2audiobook/llm/cache.py:376`: shadowed. An earlier check raises "A bounded output token cap is required under an LLM budget" first.
-- `src/pdf2audiobook/pipeline.py:640`: the merge's own range guard can't be reached through a saved manifest, because `read_manifest` rejects the range first.
+- `src/pdf2audiobook/pipeline.py:640`: the merge's own range guard can't be reached through a saved manifest, because `read_manifest` rejects the range first. After the split it is in `_queue_hand_edits`.
+- `src/pdf2audiobook/llm/cache.py` (`_complete_json_call`): neither fail-closed order had a test (see LF3.02). This is a coverage gap, not a bug; characterization tests now pin both orders (876dbe2cb0db67b996a51a153d7ff729fa96863e).
+- `docs/MAINTAINER_GUIDE.md` ("Architecture and extension points"): it says `PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT` is in `document/structure.py`. The tie-break that uses it is in `document/pagination.py`, which defines its own copy of the constant; `structure.py` has a second, unused copy.
 
 ## Progress ledger
 
@@ -163,3 +205,9 @@ Bugs or questionable behaviour noticed while reading, for a separate fix round (
 | 2026-11-13 | b0beee3b161fe8a25d256493698aa956f603c0eb | LF1.02: `propose_chapters` 448 → 46 lines (longest step 55) | `/verify` 2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13; old and new matched on all 255 calls the suite makes; exact-head Python CI [43372183567](https://github.com/ekkus93/pdf2audiobook/actions/runs/43372183567) passed | None |
 | 2026-11-13 | 64125110cb030b02abee26117a05ff670ae582d4 | LF2.01: `_analyze_book_locked` 553 → 31 lines (longest step 90); the 21 patched `pipeline` names still take effect | `/verify` 2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13; the 46 test files that patch `pipeline` pass (263 tests); exact-head Python CI [43372579420](https://github.com/ekkus93/pdf2audiobook/actions/runs/43372579420) passed | None |
 | 2026-11-13 | d28c9b99ff5664c53fdb9bb30b96eff723f06cb2 | LF2.02: `conversion._convert_analyzed_book` 421 → 86 lines | `/verify` 2036 passed, 1 skipped (FFmpeg-gated tests ran); mypy on 3.11, 3.12 and 3.13; exact-head Python CI [43372876736](https://github.com/ekkus93/pdf2audiobook/actions/runs/43372876736) passed | None |
+| 2026-11-13 | ea53f56a8bf5115d8c9d24bda3ef8faa87f6d59d | LF3.01: `synthesize_chunks` 308 → 95 lines | `/verify` 2036 passed, 1 skipped; mypy on 3.11, 3.12 and 3.13; 1,500 differential trials matched; exact-head Python CI [43373362904](https://github.com/ekkus93/pdf2audiobook/actions/runs/43373362904) passed | LF5.03 needs the user |
+| 2026-11-13 | 55603b1bac28145f1b393ad0635af19e0b71134e | LF3.02: `_complete_json_call` 264 → 35 lines; plus 876dbe2cb0db67b996a51a153d7ff729fa96863e, 2 characterization tests of the fail-closed order (pushed with it, no run of its own) | `/verify` 2038 passed, 1 skipped; each new test fails against its mutant; exact-head Python CI [43374161163](https://github.com/ekkus93/pdf2audiobook/actions/runs/43374161163) passed | LF5.03 needs the user |
+| 2026-11-13 | 819d364a055f3fa7c8666fe0fa2aecfea146e9d5 | LF3.03: `_complete_json_request` 262 → 56 lines; explicit `_Attempt`, typed dispatcher | `/verify` 2038 passed, 1 skipped; 4,000 differential trials matched; exact-head Python CI [43374666980](https://github.com/ekkus93/pdf2audiobook/actions/runs/43374666980) passed | LF5.03 needs the user |
+| 2026-11-13 | f9a8c3a0f2bae2b48afccaa17c13b0d670b30973 | LF4.01: `extract_pdf` 225 → 41 lines | `/verify` 2038 passed, 1 skipped (Tesseract tests ran); old and new matched on every fixture and generated document; exact-head Python CI [43374927081](https://github.com/ekkus93/pdf2audiobook/actions/runs/43374927081) passed | LF5.03 needs the user |
+| 2026-11-13 | f2a90664866141238481ecffdbe1137cf490947b | LF4.02: `convert` body 140 → 67 lines | `/verify` 2038 passed, 1 skipped; `--help` identical; 600 differential CLI runs matched; exact-head Python CI [43375191668](https://github.com/ekkus93/pdf2audiobook/actions/runs/43375191668) passed | LF5.03 needs the user |
+| 2026-11-13 | 2cb1f1f42b585fb4782d4659f9ec57ff597b80c8 | LF5.01: MAINTAINER_GUIDE orchestrators and length guard; allowlist reasons. LF5.02: all 44 version, schema and sidecar literals unchanged since the baseline | Docs and test comment only; exact-head Python CI [43375326880](https://github.com/ekkus93/pdf2audiobook/actions/runs/43375326880) passed | LF5.03 needs the user |
