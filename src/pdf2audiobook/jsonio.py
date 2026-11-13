@@ -60,12 +60,11 @@ def json_within_depth(value: Any, max_depth: int) -> bool:
     return True
 
 
-def load_bounded_json(path: Path, *, max_bytes: int, max_depth: int) -> Any | None:
-    """Read and parse a bounded JSON cache entry; malformed files are cache misses.
+class JSONTooLargeError(Exception):
+    """A bounded read found more bytes than the caller allows."""
 
-    The limits are checked before decoding. File and decoding errors intentionally
-    return ``None`` so cache callers can regenerate the artifact.
-    """
+
+def _check_bounds(max_bytes: int, max_depth: int) -> None:
     if (
         isinstance(max_bytes, bool)
         or not isinstance(max_bytes, int)
@@ -75,10 +74,24 @@ def load_bounded_json(path: Path, *, max_bytes: int, max_depth: int) -> Any | No
         or max_depth < 0
     ):
         raise ValueError("JSON bounds must be non-negative integers")
+
+
+def _read_at_most(path: Path, max_bytes: int) -> bytes | None:
+    """Read up to ``max_bytes + 1`` bytes through one handle; unreadable is ``None``.
+
+    The extra byte lets callers tell an over-limit file from one exactly at the
+    limit using the bytes actually read, not a separate size check.
+    """
     try:
         with path.open("rb") as stream:
-            payload = stream.read(max_bytes + 1)
-        if len(payload) > max_bytes or not _within_depth(payload, max_depth):
+            return stream.read(max_bytes + 1)
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _decode_bounded(payload: bytes, max_depth: int) -> Any | None:
+    try:
+        if not _within_depth(payload, max_depth):
             return None
         parsed = json.loads(
             payload,
@@ -86,5 +99,34 @@ def load_bounded_json(path: Path, *, max_bytes: int, max_depth: int) -> Any | No
             parse_float=_finite_float,
         )
         return parsed if json_within_depth(parsed, max_depth) else None
-    except (OSError, UnicodeError, ValueError, TypeError, RecursionError):
+    except (UnicodeError, ValueError, TypeError, RecursionError):
         return None
+
+
+def load_bounded_json(path: Path, *, max_bytes: int, max_depth: int) -> Any | None:
+    """Read and parse a bounded JSON cache entry; malformed files are cache misses.
+
+    The limits are checked before decoding. File and decoding errors intentionally
+    return ``None`` so cache callers can regenerate the artifact.
+    """
+    _check_bounds(max_bytes, max_depth)
+    payload = _read_at_most(path, max_bytes)
+    if payload is None or len(payload) > max_bytes:
+        return None
+    return _decode_bounded(payload, max_depth)
+
+
+def load_size_checked_json(path: Path, *, max_bytes: int, max_depth: int) -> Any | None:
+    """Like ``load_bounded_json``, but an over-limit file raises ``JSONTooLargeError``.
+
+    The size decision comes from the bytes read through the same open handle, so a
+    file that grows or is replaced after any earlier size check is still detected.
+    Missing, unreadable, malformed and over-depth files return ``None``.
+    """
+    _check_bounds(max_bytes, max_depth)
+    payload = _read_at_most(path, max_bytes)
+    if payload is None:
+        return None
+    if len(payload) > max_bytes:
+        raise JSONTooLargeError
+    return _decode_bounded(payload, max_depth)

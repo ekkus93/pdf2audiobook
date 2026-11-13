@@ -341,7 +341,14 @@ available as `PDF2AUDIOBOOK_TTS_MAX_RETRIES`; chapters still failing after
 retries are reported individually and conversion exits 7 after processing
 remaining chapters. Voice markers are honored only in approved chapters.
 Failed chapter details stay in `reports/conversion_status.json` and are shown
-by `inspect`; transient provider errors alone are retried. A reviewed manifest
+by `inspect`; transient provider errors alone are retried. `inspect` reads that
+file through one handle, at most `CONVERSION_STATUS_MAX_BYTES` (1 MiB, in
+`cli.py`) plus one byte, and fails with "Conversion status file exceeds safe
+size limit" (exit 3) when the read goes over the limit, even if the file grew
+after an earlier size check. A missing, unreadable, malformed or over-depth
+status file is left out of the output. Known limitation: if the status path is
+a FIFO or another non-regular file, opening or reading it can block, so
+`inspect` can hang. A reviewed manifest
 reason can be acknowledged with `convert --accept-review damaged_source`.
 `--accept-review` accepts only the book-wide codes `damaged_source` and
 `ambiguous_page_numbers`; it validates them before analysis (exit 2), logs a

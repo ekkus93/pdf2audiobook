@@ -73,6 +73,8 @@ edits_app = typer.Typer(
 )
 app.add_typer(edits_app, name="edits")
 console = Console(stderr=True)
+# Largest reports/conversion_status.json that `inspect` will read.
+CONVERSION_STATUS_MAX_BYTES = 1024 * 1024
 
 
 def fail(exc: Exception, *, json_output: bool = False) -> None:
@@ -500,19 +502,17 @@ def inspect(
                 "warnings": manifest.warnings,
                 "coverage": chapter_coverage_report(manifest),
             }
-            from pdf2audiobook.jsonio import load_bounded_json
+            from pdf2audiobook.jsonio import JSONTooLargeError, load_size_checked_json
 
             status_path = source.parent / "reports" / "conversion_status.json"
             try:
-                if status_path.stat().st_size > 1024 * 1024:
-                    raise InputError("Conversion status file exceeds safe size limit")
-            except FileNotFoundError:
-                pass
-            conversion_status = load_bounded_json(
-                status_path,
-                max_bytes=1024 * 1024,
-                max_depth=16,
-            )
+                conversion_status = load_size_checked_json(
+                    status_path,
+                    max_bytes=CONVERSION_STATUS_MAX_BYTES,
+                    max_depth=16,
+                )
+            except JSONTooLargeError:
+                raise InputError("Conversion status file exceeds safe size limit") from None
             if isinstance(conversion_status, dict):
                 payload["conversion_status"] = conversion_status
         else:
