@@ -7,6 +7,7 @@ reaches, so splitting the function cannot change it unnoticed.
 import fitz
 import pytest
 
+import pdf2audiobook.analysis as analysis
 import pdf2audiobook.pipeline as pipeline
 from pdf2audiobook.config import LLM, General, Settings
 from pdf2audiobook.errors import ExtractionError
@@ -139,7 +140,7 @@ def test_merge_range_guard_rejects_an_edited_chapter_outside_the_old_blocks(tmp_
     _, _, manifest, _ = _setup(tmp_path)
     total = len(manifest.blocks)
     edited = manifest.chapters[1].model_copy(update={"title": "Edit", "start_block": total})
-    merge = pipeline._HandEditMerge(
+    merge = analysis._HandEditMerge(
         existing_manifest=manifest,
         new_positions={block.id: i for i, block in enumerate(manifest.blocks)},
         new_block_count=total,
@@ -150,7 +151,7 @@ def test_merge_range_guard_rejects_an_edited_chapter_outside_the_old_blocks(tmp_
     )
 
     with pytest.raises(ExtractionError) as error:
-        pipeline._queue_hand_edits(merge)
+        analysis._queue_hand_edits(merge)
 
     assert str(error.value).startswith("Chapter 2 was edited but cannot be aligned")
     assert merge.field_changes == {}

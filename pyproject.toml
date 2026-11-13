@@ -78,6 +78,7 @@ files = [
     "src/pdf2audiobook/pdf_layout.py",
     "src/pdf2audiobook/pdf_ocr.py",
     "src/pdf2audiobook/pipeline.py",
+    "src/pdf2audiobook/analysis.py",
     "src/pdf2audiobook/cli.py",
     "src/pdf2audiobook/llm/vision.py",
     "src/pdf2audiobook/llm/provider.py",
