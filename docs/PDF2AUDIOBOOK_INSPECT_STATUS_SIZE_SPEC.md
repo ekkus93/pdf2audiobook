@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size Specification
 
-**Status:** Complete; R1–R2 implemented in 19dc01b, review follow-up R3–R5 (§7) in 5581cb4; both verified by CI
+**Status:** R1–R2 implemented in 19dc01b and R4–R5 in 5581cb4, both verified by CI; R3 not met; second review follow-up R6–R8 (§8) not implemented
 **Date:** 2026-11-13
 **Scope:** Close the `inspect` race found in the fourth-review TODO audit.
 **Companion:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_TODO.md`
@@ -208,4 +208,80 @@ These were also reviewed and need no change:
 - The R3 test fails against the reviewer's mutant and at d4c0aae, and passes at HEAD.
 - The R4 test passes and asserts the exact length `CONVERSION_STATUS_MAX_BYTES + 1`.
 - Existing tests are unchanged.
+- `/verify` passes, and exact-head CI passes for the fix commit.
+
+## 8. Second post-implementation review (2026-11-13)
+
+A second independent review covered the whole FX11 change (`bd7f3be..a998581f0826a9e5badda9bcb16df435eaa5b7c6`), including the R3–R5 follow-up in 5581cb4c61ea26229a97f078ec7fe0b3ba020d53.
+
+**The runtime code is correct.**
+
+- R1, R2, R4 and R5 are met.
+- The 19 tests in `tests/test_inspect_conversion_status.py` and `tests/test_jsonio.py` pass on Python 3.11, 3.12 and 3.13.
+- The CI runs recorded in the TODO are for the SHAs claimed, and all succeeded.
+
+**R3 is not met.** The review built six mutants (deliberately broken versions of the code). Their results against those 19 tests, re-run independently for A and D:
+
+| Mutant | What it does | Result |
+| --- | --- | --- |
+| `os.stat` pre-check (recorded in FX11.05c) | `os.stat` size check in `inspect`, then omit on `JSONTooLargeError` | caught only by the R3 test |
+| A | `fstat` on the open handle before reading, then return `None` for an over-limit read | **all 19 pass** |
+| B | unbounded `stream.read()` instead of `read(max_bytes + 1)` | **all 19 pass** |
+| C | read `max_bytes`, then decide from `fstat` instead of the bytes read | **all 19 pass** |
+| D | separate `Path.open` + `seek(0, 2)` size pre-check in `inspect`, then omit on `JSONTooLargeError` | **all 19 pass** |
+| E | bounded decision on one handle, then parse on a second handle with `load_bounded_json` | caught only incidentally, by the handle-count assertion in `tests/test_jsonio.py::test_size_checked_json_closes_its_handle_on_every_path` |
+
+**Why the R3 test misses them.**
+
+- `test_status_that_grows_before_it_is_read_is_reported_oversized` (tests/test_inspect_conversion_status.py:203-224) grows the file inside the first read-mode `Path.open`.
+- A check that goes through `Path.open` (D) therefore already sees the large file.
+- Growth between open and read (A) is never simulated.
+- Nothing asserts the read is bounded (B), or that the decision comes from the bytes read (C).
+
+The mutant script used is kept in the session scratchpad. Mutants A–E are described above in enough detail to rebuild them.
+
+**Evidence gap.** The new test file can't be collected at d4c0aae: `ImportError` for `CONVERSION_STATUS_MAX_BYTES`, which doesn't exist there. Every run "at d4c0aae" replaced that import with the literal `1024 * 1024` first. The FX11.01g, FX11.05c and ledger evidence don't say so.
+
+R6–R8 below close these gaps. They change tests and records only; no runtime behaviour changes.
+
+### R6 — The race test simulates growth between open and read
+
+*Required:*
+
+- Add a CLI test that starts with a small valid status file. Wrap `Path.open` (filtered to the status file name and read modes) so it returns the real handle wrapped. The file grows past `CONVERSION_STATUS_MAX_BYTES` on that handle's first `read()` call, before delegating, so the read sees the grown file.
+- Assert exit 3, the fixed message and content-free `--json` output.
+- Assert exactly one read-mode open of the status file, which also rules out mutant E's second handle.
+- Keep the existing tests unchanged, including the R3 test.
+- The new test must fail against mutants A, D and E and at d4c0aae, and pass at HEAD.
+- No sleeps or timing.
+
+### R7 — A unit test enforces the bounded read
+
+*Required:*
+
+- Add a `tests/test_jsonio.py` test that wraps the handle opened by `load_size_checked_json`. Assert that a read requests exactly `max_bytes + 1` bytes, and that no unbounded or larger read is made, for an over-limit file and for a valid one.
+- Assert the over-limit decision follows the bytes returned: a wrapped handle that returns `max_bytes + 1` bytes from a file whose `fstat` size is small must still raise `JSONTooLargeError`.
+- The test must fail against mutants B and C, and pass at HEAD.
+
+### R8 — Correct the record
+
+*Required:*
+
+- In the TODO, append new `Note:` and `Evidence:` lines; don't edit the existing ones.
+  - Under FX11.01g and FX11.05c: the import of `CONVERSION_STATUS_MAX_BYTES` was replaced with a literal to run the tests at d4c0aae.
+  - Under FX11.05c: the `os.stat` mutant result is true, but it doesn't show R3 is met (mutants A and D).
+- Append a ledger row recording this review's mutant results, and later the R6/R7 results against each mutant.
+- Add `_assert_content_free` to `test_status_one_byte_over_the_limit_is_a_fixed_error_in_human_mode`. This is a nit; the R4 assertions are unchanged.
+- Re-check R3's TODO items only when R6 is met.
+
+### Accepted as is
+
+- The unreadable-file and race tests depend on the implementation reading through `Path.open`. A correct implementation using `open()` or `os.open` would fail them. That errs on the strict side, never the permissive one. Record it in a comment on those tests if they are touched, but don't change them.
+
+### Acceptance criteria for §8
+
+- The R6 test fails against mutants A, D and E and at d4c0aae.
+- The R7 test fails against mutants B and C.
+- Both pass at HEAD, and every existing test is unchanged.
+- Each result is recorded in the ledger, with the d4c0aae import workaround stated.
 - `/verify` passes, and exact-head CI passes for the fix commit.
