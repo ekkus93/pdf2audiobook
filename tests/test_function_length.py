@@ -19,7 +19,7 @@ ALLOWLIST = {
     "pdf2audiobook/audio/encoding.py::encode_m4b": 132,
     "pdf2audiobook/llm/__init__.py::propose_llm_cleanup": 126,
     "pdf2audiobook/llm/structure.py::detect_llm_headings": 116,
-    "pdf2audiobook/pdf.py::_footnote_line_indices": 112,
+    "pdf2audiobook/pdf_layout.py::_footnote_line_indices": 112,
     "pdf2audiobook/document/structure.py::_printed_contents": 110,
     "pdf2audiobook/llm/__init__.py::propose_llm_classification": 109,
     "pdf2audiobook/reading_order.py::order_two_columns": 108,
