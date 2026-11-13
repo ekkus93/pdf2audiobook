@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import pdf2audiobook.audio as audio
+import pdf2audiobook.audio.synthesis as audio_synthesis
 from pdf2audiobook.audio import read_synthesis_progress
 from pdf2audiobook.errors import AudioError
 
@@ -40,7 +41,7 @@ def _synthesize(provider, tmp_path, max_retries=2):
 
 
 def test_transient_tts_failure_retries_and_completes(monkeypatch, tmp_path):
-    monkeypatch.setattr(audio.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(audio_synthesis.time, "sleep", lambda _seconds: None)
     provider = FlakyProvider(failures=1)
     result = _synthesize(provider, tmp_path)
     assert provider.calls == 2
@@ -49,7 +50,7 @@ def test_transient_tts_failure_retries_and_completes(monkeypatch, tmp_path):
 
 
 def test_persistent_tts_failure_stops_after_configured_retries(monkeypatch, tmp_path):
-    monkeypatch.setattr(audio.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(audio_synthesis.time, "sleep", lambda _seconds: None)
     provider = FlakyProvider(failures=9)
     with pytest.raises(AudioError, match="TTS synthesis failed") as raised:
         _synthesize(provider, tmp_path, max_retries=2)
@@ -61,7 +62,7 @@ def test_persistent_tts_failure_stops_after_configured_retries(monkeypatch, tmp_
 
 
 def test_nontransient_tts_failure_is_not_retried(monkeypatch, tmp_path):
-    monkeypatch.setattr(audio.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(audio_synthesis.time, "sleep", lambda _seconds: None)
 
     class InvalidProvider(FlakyProvider):
         def generate(self, text, *, voice, speed):

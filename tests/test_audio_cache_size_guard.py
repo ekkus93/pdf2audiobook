@@ -34,7 +34,9 @@ def test_wav_rejects_unbounded_frame_count_before_read(monkeypatch) -> None:
         def readframes(self, _count):
             pytest.fail("Unbounded WAV frames were read")
 
-    monkeypatch.setattr("pdf2audiobook.audio.wave.open", lambda *_args, **_kw: OversizedWav())
+    monkeypatch.setattr(
+        "pdf2audiobook.audio.synthesis.wave.open", lambda *_args, **_kw: OversizedWav()
+    )
     with pytest.raises(AudioError, match="excessive audio frames"):
         read_wav(b"RIFF synthetic", 24000)
 

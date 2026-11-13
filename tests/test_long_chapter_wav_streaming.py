@@ -9,6 +9,9 @@ import pytest
 
 from pdf2audiobook import audio as audio_module
 from pdf2audiobook.audio import encode_mp3, synthesize_chunks, wav_bytes
+from pdf2audiobook.audio import encoding as audio_encoding
+from pdf2audiobook.audio import synthesis as audio_synthesis
+from pdf2audiobook.audio import wav as audio_wav
 from pdf2audiobook.errors import AudioError
 
 
@@ -77,7 +80,7 @@ def test_streaming_peak_memory_does_not_grow_with_chapter_length(tmp_path):
 
 
 def test_chapter_wav_streaming_exceeds_chunk_cache_limit(monkeypatch, tmp_path):
-    monkeypatch.setattr(audio_module, "_MAX_CACHED_WAV_BYTES", 512)
+    monkeypatch.setattr(audio_synthesis, "_MAX_CACHED_WAV_BYTES", 512)
     samples = np.full(1200, 0.1, dtype=np.float32)
     with pytest.raises(AudioError, match="cache limit"):
         wav_bytes(samples, 24000)
@@ -92,7 +95,7 @@ def test_chapter_wav_streaming_exceeds_chunk_cache_limit(monkeypatch, tmp_path):
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="FFmpeg not installed")
 def test_mp3_chapter_encode_is_not_limited_by_wav_chunk_cache(monkeypatch, tmp_path):
-    monkeypatch.setattr(audio_module, "_MAX_CACHED_WAV_BYTES", 512)
+    monkeypatch.setattr(audio_synthesis, "_MAX_CACHED_WAV_BYTES", 512)
     result = encode_mp3(
         np.full(24000, 0.05, dtype=np.float32),
         24000,
@@ -123,13 +126,13 @@ def test_streaming_wav_checks_riff_limit_before_writing(monkeypatch):
             raise AssertionError("oversized PCM must not be written")
 
     with pytest.raises(AudioError, match="RIFF size limit"):
-        audio_module._write_pcm_chunk(NearLimitWriter(), np.ones(1, dtype=np.float32))
+        audio_wav._write_pcm_chunk(NearLimitWriter(), np.ones(1, dtype=np.float32))
 
 
 def test_oserror_while_writing_chapter_wav_leaves_no_temporary_wav(monkeypatch, tmp_path):
     monkeypatch.setattr(audio_module.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
     monkeypatch.setattr(
-        audio_module.wave,
+        audio_encoding.wave,
         "open",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("private path detail")),
     )
@@ -157,7 +160,7 @@ def test_chapter_size_limit_leaves_no_temporary_wav(monkeypatch, tmp_path):
         size = (0xFFFFFFFF - 36) // 2 + 1
 
     monkeypatch.setattr(audio_module.shutil, "which", lambda _name: "/usr/bin/ffmpeg")
-    monkeypatch.setattr(audio_module.np, "asarray", lambda *_args, **_kwargs: HugeSamples())
+    monkeypatch.setattr(audio_encoding.np, "asarray", lambda *_args, **_kwargs: HugeSamples())
 
     with pytest.raises(AudioError, match="RIFF size limit"):
         encode_mp3(

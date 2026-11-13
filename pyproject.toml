@@ -68,6 +68,7 @@ files = [
     "src/pdf2audiobook/audio/__init__.py",
     "src/pdf2audiobook/audio/wav.py",
     "src/pdf2audiobook/audio/speech_text.py",
+    "src/pdf2audiobook/audio/synthesis.py",
     "src/pdf2audiobook/audio/freshness.py",
     "src/pdf2audiobook/audio/encoding.py",
     "src/pdf2audiobook/audio/citations.py",

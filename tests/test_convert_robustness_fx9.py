@@ -113,7 +113,7 @@ def test_piper_timeout_is_transient_and_the_chunk_is_retried(tmp_path, monkeypat
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr("pdf2audiobook.tts.subprocess.run", fake_run)
-    monkeypatch.setattr("pdf2audiobook.audio.time.sleep", lambda _s: None)
+    monkeypatch.setattr("pdf2audiobook.audio.synthesis.time.sleep", lambda _s: None)
     samples = synthesize_chunks(
         "Hello there.",
         provider,
@@ -137,7 +137,7 @@ def test_piper_non_timeout_failure_is_not_retried(tmp_path, monkeypatch):
         raise subprocess.CalledProcessError(1, args)
 
     monkeypatch.setattr("pdf2audiobook.tts.subprocess.run", fake_run)
-    monkeypatch.setattr("pdf2audiobook.audio.time.sleep", lambda _s: None)
+    monkeypatch.setattr("pdf2audiobook.audio.synthesis.time.sleep", lambda _s: None)
     with pytest.raises(AudioError):
         synthesize_chunks(
             "Hello there.",

@@ -73,7 +73,7 @@ def test_oversized_wav_is_rejected_before_cache_replay(monkeypatch, tmp_path):
     _synthesize(tmp_path, voice)
     wav_path = next(tmp_path.glob("*.wav"))
     wav_path.write_bytes(b"x" * 2048)
-    monkeypatch.setattr("pdf2audiobook.audio._MAX_CACHED_WAV_BYTES", 512)
+    monkeypatch.setattr("pdf2audiobook.audio.synthesis._MAX_CACHED_WAV_BYTES", 512)
     _synthesize(tmp_path, voice)
     assert voice.calls == 2
 
@@ -89,7 +89,7 @@ def test_deeply_nested_wav_metadata_is_a_miss_and_regenerates(tmp_path):
 
 
 def test_generated_chunk_exceeding_cache_bound_fails_with_progress(monkeypatch, tmp_path):
-    monkeypatch.setattr("pdf2audiobook.audio._MAX_CACHED_WAV_BYTES", 256)
+    monkeypatch.setattr("pdf2audiobook.audio.synthesis._MAX_CACHED_WAV_BYTES", 256)
     voice = StubVoice(size=200)
     progress = tmp_path / "progress.json"
     with pytest.raises(AudioError, match="TTS chunk exceeds safe WAV cache limit"):
@@ -117,7 +117,7 @@ def test_wave_parser_error_does_not_chain_untrusted_diagnostics(monkeypatch):
     def broken_open(*args, **kwargs):
         raise wave.Error(marker)
 
-    monkeypatch.setattr("pdf2audiobook.audio.wave.open", broken_open)
+    monkeypatch.setattr("pdf2audiobook.audio.synthesis.wave.open", broken_open)
     with pytest.raises(AudioError, match="Cached WAV is invalid or unsupported") as raised:
         read_wav(b"RIFFbad", 24000)
     assert marker not in str(raised.value)
