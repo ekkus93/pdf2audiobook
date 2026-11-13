@@ -94,8 +94,6 @@ def _page_has_dominant_raster(page: pymupdf.Page, visuals: _PageVisuals | None =
         # reflects a 90/270-degree viewer rotation. Compare in one frame.
         page_bounds = pymupdf.Rect(0, 0, page.cropbox.width, page.cropbox.height)
         page_area = float(page_bounds.get_area())
-        if page_area <= 0:
-            return False
         images = visuals.images if visuals is not None else page.get_image_info()
         # Bound worst-case geometric work on adversarial image-heavy PDFs.
         if (visuals.image_count if visuals is not None else len(images)) > 256:
@@ -106,9 +104,6 @@ def _page_has_dominant_raster(page: pymupdf.Page, visuals: _PageVisuals | None =
             if width < 250 or height < 250:
                 continue
             bounds = pymupdf.Rect(image["bbox"])
-            corners = (bounds.x0, bounds.y0, bounds.x1, bounds.y1)
-            if not all(math.isfinite(float(value)) for value in corners):
-                continue
             if bounds.width <= 0 or bounds.height <= 0:
                 continue
             if width / bounds.width < 1.0 or height / bounds.height < 1.0:
