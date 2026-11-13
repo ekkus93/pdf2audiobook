@@ -468,11 +468,7 @@ class CachedLLMProvider:
             self._check_usage_budget()
             self._check_remaining_budget(upper_bound_tokens, upper_bound_usd)
         if self.ledger is None:
-            self._check_usage_budget()
-            if self.max_requests is not None and self.requests_started >= self.max_requests:
-                self._write_usage()
-                raise LLMError("LLM request budget exhausted; increase llm.max_requests")
-            self._check_remaining_budget(upper_bound_tokens, upper_bound_usd)
+            # No ledger means no limit is set: any limit creates a temporary ledger.
             return None, False
         set_accounting = getattr(self.provider, "set_attempt_accounting", None)
         if callable(set_accounting):
