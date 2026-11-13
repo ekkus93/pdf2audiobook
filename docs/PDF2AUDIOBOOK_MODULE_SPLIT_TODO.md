@@ -1,6 +1,6 @@
 # PDF2Audiobook — Module Split TODO
 
-**Status:** Open; MS0–MS4.02 done with exact-head CI; MS4.03 waits on the user's review of the "Found during split" list
+**Status:** Complete; MS0–MS4 done with exact-head CI, and every "Found during split" item is resolved or reviewed
 **Date:** 2026-11-13
 **Baseline:** master at 676abc50eff5cc8bb9bb8c201277d5cfbc7e023b
 **Specification:** `docs/PDF2AUDIOBOOK_MODULE_SPLIT_SPEC.md` (M1–M8)
@@ -53,14 +53,17 @@
   - Evidence: `pyproject.toml` lists the six new modules for mypy (52 files, clean on 3.11, 3.12 and 3.13). The `_footnote_line_indices` allowlist key moved to `pdf_layout.py`.
 - [x] MS4.02 M8: `docs/MAINTAINER_GUIDE.md` and `CLAUDE.md` updated.
   - Evidence: commit 94d4417dcb636aa1130a06ca956b785b7935102a. `docs/MAINTAINER_GUIDE.md` covers the module map, the analysis steps in `analysis.py` with `AnalysisServices` and the guard, `pdf_ocr.py` in the outlined-text note, and the audio package layout. The `CLAUDE.md` facade rule now covers `pdf`, the no-re-export rule for private names and the services records. Python CI run [43394134458](https://github.com/ekkus93/pdf2audiobook/actions/runs/43394134458) passed.
-- [ ] MS4.03 Final gate: `/verify` passes with mypy on 3.11, 3.12 and 3.13; exact-head CI passes for every move commit; the "Found during split" list is reviewed with the user.
-  - Note: not checked. `/verify` passes, with mypy on 3.11, 3.12 and 3.13, and every move commit has passing exact-head CI. The golden snapshot is unchanged: no commit touched `tests/fixtures/golden/`. One clause remains: the user's review of the "Found during split" list.
+- [x] MS4.03 Final gate: `/verify` passes with mypy on 3.11, 3.12 and 3.13; exact-head CI passes for every move commit; the "Found during split" list is reviewed with the user.
+  - Evidence: `/verify` passes at 6c891cc9a02e06c1849d9cf96887e170026a9d71: ruff, format, mypy on 3.11, 3.12 and 3.13, pytest 2060 passed and 1 skipped (Kitten smoke, opt-in), CLI smoke. Every move commit has passing exact-head CI (ledger). The golden snapshot is unchanged. The user reviewed the "Found during split" list on 2026-11-13: they asked for the test-sensitivity item to be fixed (done in 6c891cc9a02e06c1849d9cf96887e170026a9d71, exact-head CI [43395316314](https://github.com/ekkus93/pdf2audiobook/actions/runs/43395316314)) and kept the other two as recorded.
 
 ## Found during split
 
 - Test sensitivity, not a bug (`tests/test_pipeline_footnote_warning_preservation.py`, `tests/test_pipeline_private_source_errors.py`): these tests patch `pipeline.CachedLLMProvider`, `pipeline.digest_file` and `pipeline.write_json`, but their assertions pass even when analysis gets the real objects. The patches reach analysis (the services mapping and the guard prove it); the tests just don't depend on them. It was the same before the move.
+  - Resolved: commit 6c891cc9a02e06c1849d9cf96887e170026a9d71 adds `tests/test_analysis_services.py`. Each test wraps a `pipeline` name with a recorder, runs `analyze_book`, and asserts that code in `pdf2audiobook.analysis` called the patched object. It covers `CachedLLMProvider`, `digest_file`, `write_json`, `render_chapter_texts`, and `read_manifest` on a reused analysis. Each of the five bypass mutants that survived MS3.01 now fails it, so all 13 patched names are covered. Python CI run [43395316314](https://github.com/ekkus93/pdf2audiobook/actions/runs/43395316314) passed.
 - Spec M2 vs code: `wav_bytes` and `read_wav` stay with synthesis, not in `audio/wav.py`, so the patched `_MAX_CACHED_WAV_BYTES` keeps one home (see MS2.01).
+  - Reviewed with the user on 2026-11-13; kept as is.
 - Facade names dropped: incidental imports that `pdf` and `audio` no longer need. These are stdlib modules such as `shutil`, `time` and `numpy`, and helpers that belong to other modules, such as `fingerprint` and `AudioError`. No caller used them through these modules; the tests that patched `pdf.shutil`, `pdf.subprocess`, `audio.time`, `audio.wave` and `audio.np` were retargeted. `pipeline` keeps every public name except the stdlib `dataclass` and `field`.
+  - Reviewed with the user on 2026-11-13; kept as is.
 
 ## Progress ledger
 
@@ -74,3 +77,4 @@
 | 2026-11-13 | 891f284b5d33c87b4b604fb17253f92517467a09 | MS2.01: synthesis and the chunk-cache codecs into `audio/synthesis.py`; `audio/__init__.py` 945 → 99 lines | `/verify` 2055 passed, 1 skipped; M4: 69 moved, 0 differences; exact-head Python CI [43392763651](https://github.com/ekkus93/pdf2audiobook/actions/runs/43392763651) passed | MS4.03 needs the user's review |
 | 2026-11-13 | 0792bf2f069127990c560d1cf7efb2110a333941 | MS3.01: analysis into `analysis.py` behind `AnalysisServices`; `pipeline.py` 1,204 → 471 lines | `/verify` 2055 passed, 1 skipped; 23 definitions equal the baseline once services are undone; 8 of 13 bypass mutants fail their tests; the other 5 don't run analysis with the patch or don't depend on it; exact-head Python CI [43394065316](https://github.com/ekkus93/pdf2audiobook/actions/runs/43394065316) passed | MS4.03 needs the user's review |
 | 2026-11-13 | 94d4417dcb636aa1130a06ca956b785b7935102a | MS4.01–MS4.02: maintainer guide, CLAUDE.md, mypy list | Docs only; exact-head Python CI [43394134458](https://github.com/ekkus93/pdf2audiobook/actions/runs/43394134458) passed | MS4.03 needs the user's review |
+| 2026-11-13 | 6c891cc9a02e06c1849d9cf96887e170026a9d71 | Found during split: `tests/test_analysis_services.py` proves the 5 remaining patched names reach analysis. MS4.03 closed | `/verify` 2060 passed, 1 skipped; the 5 bypass mutants that survived MS3.01 each fail the new tests; exact-head Python CI [43395316314](https://github.com/ekkus93/pdf2audiobook/actions/runs/43395316314) passed | None |

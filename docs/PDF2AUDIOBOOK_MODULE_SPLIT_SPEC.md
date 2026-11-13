@@ -1,6 +1,6 @@
 # PDF2Audiobook — Module Split Specification
 
-**Status:** Draft; M1–M8 not implemented
+**Status:** Implemented; M1–M8 done (see the TODO for evidence and the MS2.01 deviation)
 **Date:** 2026-11-13
 **Baseline:** master at 676abc50eff5cc8bb9bb8c201277d5cfbc7e023b
 **Parent specification:** `docs/PDF2AUDIOBOOK_SPEC.md` (§12 engineering principles)
