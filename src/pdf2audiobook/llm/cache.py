@@ -262,9 +262,8 @@ class CachedLLMProvider:
             instructions=instructions, document_text=document_text, image_data=image_data
         )
 
-    def _complete_json_call(
-        self, *, instructions: str, document_text: str, image_data: bytes | None
-    ) -> dict[str, Any]:
+    def _resolve_served_identity(self) -> None:
+        """Key the cache by the served model when the provider resolves one."""
         resolve_model = getattr(self.provider, "resolve_model", None)
         if callable(resolve_model):
             resolved_model = resolve_model()
@@ -273,6 +272,11 @@ class CachedLLMProvider:
             if self._resolved_model != resolved_model:
                 self.identity = fingerprint(self._base_identity, "served-model", resolved_model)
                 self._resolved_model = resolved_model
+
+    def _check_request_bounds(
+        self, instructions: str, document_text: str, image_data: bytes | None
+    ) -> None:
+        """Reject an oversized request, or an unsupported image, before anything else."""
         # Reject known oversized requests before reserving a book-budget call.
         # Such requests cannot incur a charge and must not poison the ledger
         # with a false "unknown" charge. Apply this to cache hits as well.
@@ -289,34 +293,48 @@ class CachedLLMProvider:
                 )
             elif not callable(getattr(self.provider, "complete_json_with_image", None)):
                 raise LLMError("LLM provider does not support image requests")
+
+    def _request_key(self, instructions: str, document_text: str, image_data: bytes | None) -> str:
+        """The content-addressed cache key of one request."""
         if image_data is None:
-            key = fingerprint("llm-json-cache-v1", self.identity, instructions, document_text)
-        else:
-            key = fingerprint(
-                "llm-json-image-cache-v1",
-                self.identity,
-                instructions,
-                document_text,
-                digest_bytes(image_data),
-            )
-        target = self.cache_dir / f"{key}.json"
-        if self.enabled:
-            entry = load_bounded_json(
-                target,
-                max_bytes=_MAX_CACHED_LLM_JSON_BYTES,
-                max_depth=_MAX_CACHED_LLM_JSON_DEPTH,
-            )
-            if (
-                isinstance(entry, dict)
-                and entry.get("schema_version") == 1
-                and entry.get("fingerprint") == key
-                and isinstance(entry.get("response"), dict)
-            ):
-                self.hits += 1
-                self._write_usage()
-                self._note_request(cached=True)
-                return entry["response"]
-        self.misses += 1
+            return fingerprint("llm-json-cache-v1", self.identity, instructions, document_text)
+        return fingerprint(
+            "llm-json-image-cache-v1",
+            self.identity,
+            instructions,
+            document_text,
+            digest_bytes(image_data),
+        )
+
+    def _cached_response(self, key: str, target: Path) -> dict[str, Any] | None:
+        """Return a valid cached response and count the hit, or None on a miss."""
+        if not self.enabled:
+            return None
+        entry = load_bounded_json(
+            target,
+            max_bytes=_MAX_CACHED_LLM_JSON_BYTES,
+            max_depth=_MAX_CACHED_LLM_JSON_DEPTH,
+        )
+        if (
+            isinstance(entry, dict)
+            and entry.get("schema_version") == 1
+            and entry.get("fingerprint") == key
+            and isinstance(entry.get("response"), dict)
+        ):
+            self.hits += 1
+            self._write_usage()
+            self._note_request(cached=True)
+            response: dict[str, Any] = entry["response"]
+            return response
+        return None
+
+    def _request_upper_bounds(
+        self, instructions: str, document_text: str, image_data: bytes | None
+    ) -> tuple[int, str | None]:
+        """Bound a request's tokens, and its cost when prices are set.
+
+        A budget requires a provider output cap; it is switched on here.
+        """
         prompt_bound = len(instructions.encode("utf-8")) + len(document_text.encode("utf-8")) + 128
         if image_data is not None:
             # Compressed PNG bytes say nothing about vision cost: bound by the
@@ -351,6 +369,12 @@ class CachedLLMProvider:
                 )
                 / Decimal(1_000_000)
             )
+        return upper_bound_tokens, upper_bound_usd
+
+    def _check_served_capacity(
+        self, instructions: str, document_text: str, image_data: bytes | None
+    ) -> None:
+        """Check server-side limits; called only on a cache miss."""
         # Server-side limits need the server, so check them only on a miss:
         # a fully cached rerun must not require a running provider.
         served = getattr(self.provider, "validate_served_capacity", None)
@@ -363,98 +387,103 @@ class CachedLLMProvider:
             )
         elif callable(served):
             served(instructions=instructions, document_text=document_text)
+
+    def _check_remaining_budget(self, upper_bound_tokens: int, upper_bound_usd: str | None) -> None:
+        """Refuse a request whose upper bound the remaining token or cost budget can't cover."""
+        usage = getattr(self.provider, "total_usage", {})
+        reported = usage.get("total_tokens", 0) if isinstance(usage, dict) else 0
+        if self.max_reported_tokens is not None and reported + upper_bound_tokens > (
+            self.max_reported_tokens
+        ):
+            raise LLMError("Per-book LLM token budget cannot cover the next request")
+        if self.max_estimated_cost_usd is not None:
+            if upper_bound_usd is None:
+                raise LLMError("A bounded output token cap is required under an LLM budget")
+            current_cost = self._reported_cost_usd() or 0.0
+            if Decimal(str(current_cost)) + Decimal(upper_bound_usd) > Decimal(
+                str(self.max_estimated_cost_usd)
+            ):
+                raise LLMError("Per-book LLM cost budget cannot cover the next request")
+
+    def _reserve_ledger_call(
+        self, key: str, upper_bound_tokens: int, upper_bound_usd: str | None
+    ) -> int:
+        """Reserve one call in the book ledger, recording usage if it is refused."""
+        assert self.ledger is not None
+        try:
+            return self.ledger.reserve(
+                request_hash=key,
+                provider_hash=self.identity,
+                max_requests=self.max_requests,
+                max_tokens=self.max_reported_tokens,
+                max_usd=self.max_estimated_cost_usd,
+                upper_bound_tokens=upper_bound_tokens,
+                upper_bound_usd=upper_bound_usd,
+            )
+        except LLMError:
+            self._write_usage()
+            raise
+
+    def _install_attempt_accounting(
+        self,
+        set_accounting: Any,
+        key: str,
+        upper_bound_tokens: int,
+        upper_bound_usd: str | None,
+    ) -> None:
+        """Let the provider reserve and settle the ledger once per attempt."""
+
+        def start_attempt() -> int:
+            call_id = self._reserve_ledger_call(key, upper_bound_tokens, upper_bound_usd)
+            self.requests_started += 1
+            self._write_usage()
+            return call_id
+
+        def settle_attempt(call_id: int, usage: dict | None, outcome: AttemptOutcome) -> None:
+            assert self.ledger is not None
+            if outcome == "unbilled":
+                self.ledger.settle_unbilled(call_id)
+            else:
+                self.ledger.settle(
+                    call_id,
+                    usage=usage,
+                    input_rate=self.input_cost_usd_per_million_tokens,
+                    output_rate=self.output_cost_usd_per_million_tokens,
+                    rejected=outcome == "rejected",
+                )
+            self._write_usage()
+
+        set_accounting(start_attempt, settle_attempt)
+
+    def _reserve_budget(
+        self, key: str, upper_bound_tokens: int, upper_bound_usd: str | None
+    ) -> tuple[int | None, bool]:
+        """Check and reserve the budget for a request about to be sent.
+
+        Returns the ledger reservation to settle after the call (None when the
+        provider settles per attempt or there is no ledger) and whether the
+        provider does its own per-attempt accounting.
+        """
         if self._temporary_ledger is not None:
             self._check_usage_budget()
-            usage = getattr(self.provider, "total_usage", {})
-            reported = usage.get("total_tokens", 0) if isinstance(usage, dict) else 0
-            if self.max_reported_tokens is not None and reported + upper_bound_tokens > (
-                self.max_reported_tokens
-            ):
-                raise LLMError("Per-book LLM token budget cannot cover the next request")
-            if self.max_estimated_cost_usd is not None:
-                if upper_bound_usd is None:
-                    raise LLMError("A bounded output token cap is required under an LLM budget")
-                current_cost = self._reported_cost_usd() or 0.0
-                if Decimal(str(current_cost)) + Decimal(upper_bound_usd) > Decimal(
-                    str(self.max_estimated_cost_usd)
-                ):
-                    raise LLMError("Per-book LLM cost budget cannot cover the next request")
-        reservation = None
-        attempt_accounting = False
+            self._check_remaining_budget(upper_bound_tokens, upper_bound_usd)
         if self.ledger is None:
             self._check_usage_budget()
             if self.max_requests is not None and self.requests_started >= self.max_requests:
                 self._write_usage()
                 raise LLMError("LLM request budget exhausted; increase llm.max_requests")
-            usage = getattr(self.provider, "total_usage", {})
-            reported = usage.get("total_tokens", 0) if isinstance(usage, dict) else 0
-            if self.max_reported_tokens is not None and reported + upper_bound_tokens > (
-                self.max_reported_tokens
-            ):
-                raise LLMError("Per-book LLM token budget cannot cover the next request")
-            if self.max_estimated_cost_usd is not None:
-                if upper_bound_usd is None:
-                    raise LLMError("A bounded output token cap is required under an LLM budget")
-                current_cost = self._reported_cost_usd() or 0.0
-                if Decimal(str(current_cost)) + Decimal(upper_bound_usd) > Decimal(
-                    str(self.max_estimated_cost_usd)
-                ):
-                    raise LLMError("Per-book LLM cost budget cannot cover the next request")
-        else:
-            set_accounting = getattr(self.provider, "set_attempt_accounting", None)
-            if callable(set_accounting):
-                attempt_accounting = True
+            self._check_remaining_budget(upper_bound_tokens, upper_bound_usd)
+            return None, False
+        set_accounting = getattr(self.provider, "set_attempt_accounting", None)
+        if callable(set_accounting):
+            self._install_attempt_accounting(
+                set_accounting, key, upper_bound_tokens, upper_bound_usd
+            )
+            return None, True
+        return self._reserve_ledger_call(key, upper_bound_tokens, upper_bound_usd), False
 
-                def start_attempt() -> int:
-                    assert self.ledger is not None
-                    try:
-                        call_id = self.ledger.reserve(
-                            request_hash=key,
-                            provider_hash=self.identity,
-                            max_requests=self.max_requests,
-                            max_tokens=self.max_reported_tokens,
-                            max_usd=self.max_estimated_cost_usd,
-                            upper_bound_tokens=upper_bound_tokens,
-                            upper_bound_usd=upper_bound_usd,
-                        )
-                    except LLMError:
-                        self._write_usage()
-                        raise
-                    self.requests_started += 1
-                    self._write_usage()
-                    return call_id
-
-                def settle_attempt(
-                    call_id: int, usage: dict | None, outcome: AttemptOutcome
-                ) -> None:
-                    assert self.ledger is not None
-                    if outcome == "unbilled":
-                        self.ledger.settle_unbilled(call_id)
-                    else:
-                        self.ledger.settle(
-                            call_id,
-                            usage=usage,
-                            input_rate=self.input_cost_usd_per_million_tokens,
-                            output_rate=self.output_cost_usd_per_million_tokens,
-                            rejected=outcome == "rejected",
-                        )
-                    self._write_usage()
-
-                set_accounting(start_attempt, settle_attempt)
-            else:
-                try:
-                    reservation = self.ledger.reserve(
-                        request_hash=key,
-                        provider_hash=self.identity,
-                        max_requests=self.max_requests,
-                        max_tokens=self.max_reported_tokens,
-                        max_usd=self.max_estimated_cost_usd,
-                        upper_bound_tokens=upper_bound_tokens,
-                        upper_bound_usd=upper_bound_usd,
-                    )
-                except LLMError:
-                    self._write_usage()
-                    raise
+    def _prepare_provider(self, attempt_accounting: bool) -> None:
+        """Clear stale usage, restore known capability limits and count the request."""
         # A failed response can still incur charges. Never reuse stale usage.
         if hasattr(self.provider, "last_usage"):
             self.provider.last_usage = {}
@@ -470,6 +499,18 @@ class CachedLLMProvider:
         if not attempt_accounting:
             self.requests_started += 1
         self._write_usage()
+
+    def _send_request(
+        self,
+        instructions: str,
+        document_text: str,
+        image_data: bytes | None,
+        reservation: int | None,
+    ) -> tuple[Any, float]:
+        """Send the request, then always record usage and settle any reservation.
+
+        Returns the reply and the monotonic time the request started.
+        """
         request_error: Exception | None = None
         request_started = time.monotonic()
         try:
@@ -506,6 +547,10 @@ class CachedLLMProvider:
                         output_rate=self.output_cost_usd_per_million_tokens,
                     )
             self._write_usage()
+        return reply, request_started
+
+    def _check_verified_usage(self, reply: Any) -> dict[str, Any]:
+        """Validate the reply's shape and depth, then the spend after the call."""
         if not isinstance(reply, dict):
             raise ValueError("LLM cache requires a JSON-object response")
         if not json_within_depth(reply, _MAX_CACHED_LLM_JSON_DEPTH):
@@ -521,6 +566,38 @@ class CachedLLMProvider:
             self._check_usage_budget(postflight=True)
         elif self.ledger is None:
             self._check_usage_budget(postflight=True)
+        return reply
+
+    def _complete_json_call(
+        self, *, instructions: str, document_text: str, image_data: bytes | None
+    ) -> dict[str, Any]:
+        """Serve a request from the cache, or send it under the book's budget.
+
+        Fail-closed order: request bounds before the cache lookup (so a hit
+        never skips the oversized-request rejection), then on a miss the
+        budget bounds, server limits and reservation before the request, and
+        verified usage after it.
+        """
+        self._resolve_served_identity()
+        self._check_request_bounds(instructions, document_text, image_data)
+        key = self._request_key(instructions, document_text, image_data)
+        target = self.cache_dir / f"{key}.json"
+        cached = self._cached_response(key, target)
+        if cached is not None:
+            return cached
+        self.misses += 1
+        upper_bound_tokens, upper_bound_usd = self._request_upper_bounds(
+            instructions, document_text, image_data
+        )
+        self._check_served_capacity(instructions, document_text, image_data)
+        reservation, attempt_accounting = self._reserve_budget(
+            key, upper_bound_tokens, upper_bound_usd
+        )
+        self._prepare_provider(attempt_accounting)
+        reply, request_started = self._send_request(
+            instructions, document_text, image_data, reservation
+        )
+        reply = self._check_verified_usage(reply)
         if self.enabled:
             write_json(target, {"schema_version": 1, "fingerprint": key, "response": reply})
         self._observe(time.monotonic() - request_started)
