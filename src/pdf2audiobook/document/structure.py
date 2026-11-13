@@ -326,6 +326,47 @@ def _printed_contents(
     return lines, titles if len(titles) >= 2 else {}
 
 
+def _continued_contents_page(
+    blocks: list[DocumentBlock], omitted: set[str], contents_lines: set[int]
+) -> set[int]:
+    """Lines of the page after a printed contents page that only continue its labels.
+
+    A contents list split over two pages ("Chapter 1" to "Chapter 3", then
+    "Chapter 4" to "Chapter 6") names chapters on both. The second page counts
+    only when every line on it is the next numbered label of the same kind, so
+    a page that opens a chapter is never taken for contents.
+    """
+    if not contents_lines:
+        return set()
+    contents_page = blocks[min(contents_lines)].page_index
+    listed = [
+        key
+        for i in sorted(contents_lines)
+        if blocks[i].page_index == contents_page
+        and NUMBERED_LABEL.match(blocks[i].text.strip())
+        and (key := label_key(blocks[i].text)) is not None
+    ]
+    if not listed:
+        return set()
+    kind, number = listed[-1]
+    following = [
+        i
+        for i, block in enumerate(blocks)
+        if block.page_index == contents_page + 1
+        and block.id not in omitted
+        and block.text.strip()
+        and i not in contents_lines
+    ]
+    for i in following:
+        number += 1
+        if not NUMBERED_LABEL.match(blocks[i].text.strip()) or label_key(blocks[i].text) != (
+            kind,
+            number,
+        ):
+            return set()
+    return set(following)
+
+
 def labelled_heading(text: str) -> bool:
     """A chapter/part/prologue label line, not prose that cites one."""
     stripped = text.strip()
@@ -988,6 +1029,7 @@ def propose_chapters(
     """
     typical_size = _typical_body_size(blocks, omitted)
     contents_lines, contents_titles = _printed_contents(blocks, omitted, typical_size)
+    contents_lines |= _continued_contents_page(blocks, omitted, contents_lines)
     heading_indices, typography_ids = _text_headings(
         blocks, omitted, contents_lines, contents_titles, typical_size, extra_heading_ids
     )

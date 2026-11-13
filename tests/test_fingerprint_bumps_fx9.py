@@ -44,7 +44,9 @@ def test_extraction_fingerprint_is_the_epub_chapters_generation():
     assert stages["extraction"] == fingerprint(
         "analysis-v23", "a" * 64, Settings().pdf.model_dump()
     )
+    # chapter-detection-v5: a contents list continued on the next page no longer
+    # opens chapters, so older chapter boundaries are re-planned.
     assert stages["chapter-boundaries"] == fingerprint(
-        "chapter-detection-v4",
+        "chapter-detection-v5",
         Settings().chapters.model_dump(exclude={"allow_single_chapter", "min_boundary_confidence"}),
     )

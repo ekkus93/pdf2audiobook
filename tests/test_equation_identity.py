@@ -13,10 +13,11 @@ from pdf2audiobook.config import Settings
 from pdf2audiobook.pipeline import _analysis_stage_fingerprints, analyze_book
 from pdf2audiobook.workspace import read_manifest, write_manifest
 
-# Computed from the code as it was before equation processing existed.
+# Computed from the code as it was before equation processing existed; the
+# chapter-boundaries value was recomputed for the chapter-detection-v5 bump.
 GOLDEN = {
     "extraction": "db2c8c85be9eb7d708f6885142d3eb8793c6f6c73ae01acb5277153eccdaf29b",
-    "chapter-boundaries": "b452f3c85d651719242df88e15ade6f3793837d1b1675d2c6eb589389c447795",
+    "chapter-boundaries": "5184449e1f2a1ff36f1d4d7adcfdae2ab33fa0c710d5cdeb227b6f7bc6830ab1",
     "llm-analysis": "957aaebace1e9521bc8bc48912039c98866995432d32f5a26c8f9b3caeaa3ac8",
 }
 GOLDEN_LLM_DISABLED = "9982c77107fc84c3a01ffcc418fc63bcfc463fc1806f5642ef9ef912679d5773"

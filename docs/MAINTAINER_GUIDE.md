@@ -306,7 +306,7 @@ once on the next `convert`; chapter text, analysis and audio made with the setti
 unchanged. `tests/test_citation_identity.py` pins the old on-state values to prove the change.
 
 Upgrade note (EPUB chapters): analysis uses `analysis-v23` and the chapter-boundaries stage
-carries `chapter-detection-v4` (v4 anchors numeral chapters through an inferred page offset and lets corroborated numerals suppress font-size-only headings; v3 stripped contents leaders and page references from corroborated titles, rejects running page numbers even when an unnumbered page shifts their offset, and keys parts and chapters separately). Outline entries now anchor to the numeral that opens a chapter
+carries `chapter-detection-v5` (v5 treats the page after a printed contents page as contents when every line on it is the next numbered label, so a contents list split over two pages no longer opens chapters; v4 anchors numeral chapters through an inferred page offset and lets corroborated numerals suppress font-size-only headings; v3 stripped contents leaders and page references from corroborated titles, rejects running page numbers even when an unnumbered page shifts their offset, and keys parts and chapters separately). Outline entries now anchor to the numeral that opens a chapter
 on their own page ("Chapter 12" pairs with a line reading "12"), contents-page labels no
 longer open chapters, numerals corroborated by a printed contents are headings, an EPUB cover
 image on a page-sized background is not `damaged_source`, and a book's many manifest warnings
