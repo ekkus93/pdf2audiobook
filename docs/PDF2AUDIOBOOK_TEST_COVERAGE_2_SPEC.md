@@ -1,6 +1,6 @@
 # PDF2Audiobook — Test Coverage Specification, Round 2
 
-**Status:** Draft; U1–U10 not implemented
+**Status:** Implemented; U1–U10 done (see the TODO for evidence); the final gate waits on the user's review of §5
 **Date:** 2026-11-13
 **Baseline:** master at 59e64c71fd076f295973474eafbc98cb781f1316
 **Parent specification:** `docs/PDF2AUDIOBOOK_SPEC.md` (§12 engineering principles)

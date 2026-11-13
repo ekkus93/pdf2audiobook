@@ -1,6 +1,6 @@
 # PDF2Audiobook — Test Coverage TODO, Round 2
 
-**Status:** Open; nothing started
+**Status:** Open; TU0–TU7.02 done with exact-head CI; TU7.03 waits on the user's review of "Found while testing" (no bugs; one unreachable branch, eight equivalent mutants, one CPython quirk)
 **Date:** 2026-11-13
 **Baseline:** master at 59e64c71fd076f295973474eafbc98cb781f1316
 **Specification:** `docs/PDF2AUDIOBOOK_TEST_COVERAGE_2_SPEC.md` (U1–U10)
@@ -16,68 +16,137 @@
 
 ## Phase TU0 — Baseline
 
-- [ ] TU0.01 Run the U9 coverage command at the baseline and record each target module's statements missed / total, partial branches / total and combined coverage.
+- [x] TU0.01 Run the U9 coverage command at the baseline and record each target module's statements missed / total, partial branches / total and combined coverage.
+  - Evidence: Coverage at 26b8adba3856176e14cbd22713281862d5fb7591, whose `src/` and `tests/` are identical to the baseline (`git diff 26b8adb 59e64c7 -- src tests` is empty); 2246 passed, 1 skipped. Statements missed / total, partial branches / total, combined cover:
+    - `review_ui.py`: 15/182, 6/50, 91%
+    - `chapter_artifacts.py`: 15/167, 10/74, 90%
+    - `tts/__init__.py`: 17/170, 9/48, 88%
+    - `llm/structure.py`: 13/139, 6/50, 90%
+    - `analysis_state.py`: 5/76, 6/30, 90%
+    - `jsonio.py`: 4/79, 4/38, 93%
+    - `audio/wav.py`: 6/46, 2/10, 86%
 
 ## Phase TU1 — Review server (U1)
 
-- [ ] TU1.01 U1.a: show whether `_authorized` (`review_ui.py:245-246`) can receive a header that isn't Latin-1 encodable over HTTP; test it if so, otherwise record it as unreachable in "Found while testing".
-- [ ] TU1.02 U1.b: unknown `/api/` route returns 401 without a token and 404 with one; no book text in either body.
-- [ ] TU1.03 U1.c: a non-integer `Content-Length` returns 413 with the fixed message; the manifest is unchanged.
-- [ ] TU1.04 U1.d: `save_chapter_updates` refuses a manifest changed between digests, a non-object or mismatched-ID entry, and an invalid voice ID; the manifest is unchanged.
-- [ ] TU1.05 U1.e: `create_review_server` accepts `LOCALHOST`, refuses a non-IP host name and refuses `::1`, each with its fixed message.
-- [ ] TU1.06 U8 mutation results for TU1.01–TU1.05.
+- [x] TU1.01 U1.a: show whether `_authorized` (`review_ui.py:245-246`) can receive a header that isn't Latin-1 encodable over HTTP; test it if so, otherwise record it as unreachable in "Found while testing".
+  - Evidence: Lines 245–246 can't be reached over HTTP: `http.server` parses headers with `http.client.parse_headers`, which decodes them as ISO-8859-1, so every header value is a `str` that encodes back to Latin-1 (checked on Python 3.11 for every byte 0x20–0xFF). Recorded under "Found while testing". `tests/test_review_ui.py::test_every_header_byte_gives_a_clean_401` sends bytes 0x80–0xFF and UTF-8 in the token over a raw socket and gets a fixed 401. Commit 505bcdeeed4687c5e704ae91abb9bc693a0de518, Python CI run [43528536668](https://github.com/ekkus93/pdf2audiobook/actions/runs/43528536668) passed.
+- [x] TU1.02 U1.b: unknown `/api/` route returns 401 without a token and 404 with one; no book text in either body.
+  - Evidence: `tests/test_review_ui.py::test_unknown_api_route_needs_a_token_and_then_is_not_found` (401 `Unauthorized` without a token, 404 `Not found` with one; the bodies are exactly the fixed JSON). Also `test_unreadable_manifest_gives_a_fixed_error` (line 296, not named in the spec: a corrupt manifest is a fixed 400 with no path or text). Commit 505bcdeeed4687c5e704ae91abb9bc693a0de518, Python CI run [43528536668](https://github.com/ekkus93/pdf2audiobook/actions/runs/43528536668) passed.
+- [x] TU1.03 U1.c: a non-integer `Content-Length` returns 413 with the fixed message; the manifest is unchanged.
+  - Evidence: `tests/test_review_ui.py::test_post_with_an_invalid_content_length_is_refused` (`abc`, `-5`, `1.5`: 413 with the fixed message, manifest bytes unchanged). Also `test_post_whose_body_is_not_an_object_is_refused` (line 323, not named in the spec: `[]`, a string, a number and `null` are a fixed 400 with nothing saved). Commit 505bcdeeed4687c5e704ae91abb9bc693a0de518, Python CI run [43528536668](https://github.com/ekkus93/pdf2audiobook/actions/runs/43528536668) passed.
+- [x] TU1.04 U1.d: `save_chapter_updates` refuses a manifest changed between digests, a non-object or mismatched-ID entry, and an invalid voice ID; the manifest is unchanged.
+  - Evidence: `tests/test_review_ui.py::test_manifest_changed_during_review_is_refused` (the second digest read differs; manifest bytes unchanged), `test_invalid_chapter_update_is_refused_without_saving` (entry not an object, IDs swapped, voice ID not a string, voice ID of 129 characters) and the control `test_voice_id_at_the_limit_is_accepted` (128 characters). Commit 505bcdeeed4687c5e704ae91abb9bc693a0de518, Python CI run [43528536668](https://github.com/ekkus93/pdf2audiobook/actions/runs/43528536668) passed.
+- [x] TU1.05 U1.e: `create_review_server` accepts `LOCALHOST`, refuses a non-IP host name and refuses `::1`, each with its fixed message.
+  - Evidence: `tests/test_review_ui.py::test_review_server_accepts_localhost_in_any_case` (`LOCALHOST` and `LocalHost`: a request with `Host: localhost:<port>` gets 200 and one with the original casing gets 421, so the bind host was normalised) and `test_review_server_refuses_other_hosts` (`example.com`, `localhost.example`: loopback message; `::1`: IPv6 message). Commit 505bcdeeed4687c5e704ae91abb9bc693a0de518, Python CI run [43528536668](https://github.com/ekkus93/pdf2audiobook/actions/runs/43528536668) passed.
+- [x] TU1.06 U8 mutation results for TU1.01–TU1.05.
+  - Evidence: 16 mutants of `review_ui.py`; 15 fail the new tests. The survivor is equivalent: removing the non-object check at line 322 changes nothing, because `payload.get` then raises `AttributeError` and the same handler returns the same fixed 400 (confirmed against the whole of `tests/test_review_ui.py`; recorded under "Found while testing"). Lines 245–246 are recorded as unreachable, so they have no mutant.
 
 ## Phase TU2 — Hand-edit protection (U2)
 
-- [ ] TU2.01 U2.a: a symlinked or directory chapter path raises the fixed "Cannot inspect chapter text" error; nothing outside the workspace is touched.
-- [ ] TU2.02 U2.b: malformed metadata top level, and each malformed chapter record field (parametrized), raise the fixed metadata error with files unchanged.
-- [ ] TU2.03 U2.c: unknown footnote policy, metadata changed during planning and duplicate chapter IDs raise their fixed errors before anything is written.
-- [ ] TU2.04 U2.d: renumbered chapter onto an edited occupant, new number with a differing file, deleted edited file, and edited stale file are each a conflict and the user's file survives; `force` skips the edit check; policy resolution drops `warn` when anchor edits exist.
-- [ ] TU2.05 U8 mutation results for TU2.01–TU2.04.
+- [x] TU2.01 U2.a: a symlinked or directory chapter path raises the fixed "Cannot inspect chapter text" error; nothing outside the workspace is touched.
+  - Evidence: `tests/test_chapter_artifact_plan.py::test_chapter_path_that_is_not_a_regular_file_is_refused` (symlink to a file outside the workspace, and a directory): the fixed message, no path, and the outside file unchanged. Commit b49d2dd1dfb397fb3d46678923914368bcb4026a, Python CI run [43529100117](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529100117) passed.
+- [x] TU2.02 U2.b: malformed metadata top level, and each malformed chapter record field (parametrized), raise the fixed metadata error with files unchanged.
+  - Evidence: `tests/test_chapter_artifact_plan.py::test_invalid_chapter_metadata_is_refused_with_files_unchanged` (20 cases: top level not an object, extra or missing key, wrong version, policy not a string or unknown, chapters not a mapping, record not an object or a list of exactly the key names, extra or missing record key, number `bool`, string or zero, duplicate number, generated or identity not a string or not a digest, edited not a bool) and the control `test_valid_metadata_control_case_is_accepted`. Every case leaves the files unchanged. Commit b49d2dd1dfb397fb3d46678923914368bcb4026a, Python CI run [43529100117](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529100117) passed.
+- [x] TU2.03 U2.c: unknown footnote policy, metadata changed during planning and duplicate chapter IDs raise their fixed errors before anything is written.
+  - Evidence: `tests/test_chapter_artifact_plan.py::test_unknown_footnote_policy_is_refused`, `test_metadata_changed_while_planning_is_refused` (the metadata is rewritten between its two reads) and `test_duplicate_chapter_ids_are_refused`; the first and third leave the folder empty. Commit b49d2dd1dfb397fb3d46678923914368bcb4026a, Python CI run [43529100117](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529100117) passed.
+- [x] TU2.04 U2.d: renumbered chapter onto an edited occupant, new number with a differing file, deleted edited file, and edited stale file are each a conflict and the user's file survives; `force` skips the edit check; policy resolution drops `warn` when anchor edits exist.
+  - Evidence: `tests/test_chapter_artifact_plan.py`: `test_new_chapter_number_with_a_different_file_conflicts`, `test_deleted_hand_edited_chapter_conflicts`, `test_all_conflicts_are_collected_once_each_and_files_survive` (collect mode returns `[1, 2, 3, 5]`, each once, files byte-identical; raise mode stops at chapter 3), `test_chapter_moved_onto_an_edited_occupant_conflicts`, `test_forced_number_skips_the_edit_check_and_is_regenerated` and `test_anchor_edits_rule_out_the_warn_policy`. Chapter numbers must stay consecutive, so a move is made by swapping chapter IDs. Commit b49d2dd1dfb397fb3d46678923914368bcb4026a, Python CI run [43529100117](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529100117) passed.
+- [x] TU2.05 U8 mutation results for TU2.01–TU2.04.
+  - Evidence: 26 mutants of `chapter_artifacts.py`. The first run caught 21. The record-type check survived because a string record already fails the key-set check; a record that is a list of exactly the four key names was added and catches it (22). Four are equivalent, confirmed against all seven chapter-artifact test files and recorded under "Found while testing": the directory half of line 43, the occupant check at line 231, the stale-file edit check at line 267, and the `continue` after `_flag` in collect mode.
 
 ## Phase TU3 — Piper adapter (U3)
 
-- [ ] TU3.01 U3.a: missing model, missing executable, oversized config, config without a valid rate, and invalid rate values each raise their fixed `AudioError`.
-- [ ] TU3.02 U3.b: invalid text, speed and speaker ID each raise their fixed `AudioError`, and the subprocess stand-in is never called.
-- [ ] TU3.03 U3.c: missing, oversized, wrong-format, empty and truncated output WAVs each raise their fixed `AudioError`; the temporary directory is removed.
-- [ ] TU3.04 U3.d: `list_models`, `list_voices` and `health` with and without the model and executable.
-- [ ] TU3.05 U8 mutation results for TU3.01–TU3.04.
+- [x] TU3.01 U3.a: missing model, missing executable, oversized config, config without a valid rate, and invalid rate values each raise their fixed `AudioError`.
+  - Evidence: `tests/test_piper_provider.py`: `test_missing_model_file_is_refused` (absent file and a directory), `test_missing_executable_is_refused`, `test_invalid_voice_configuration_is_refused` (missing, not JSON, not an object, no rate, audio not an object, over 1 MiB, and rates 22050.0, "22050", 7999 and 192001) and the control `test_voice_configuration_at_the_size_limit_is_read` (exactly 1 MiB). The existing test already covered a `bool` rate. Commit 35b967d2ec9b3a1cbbef0206f94974a7e6d496c3, Python CI run [43529422242](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529422242) passed.
+- [x] TU3.02 U3.b: invalid text, speed and speaker ID each raise their fixed `AudioError`, and the subprocess stand-in is never called.
+  - Evidence: `tests/test_piper_provider.py::test_invalid_input_is_refused_before_piper_runs` (15 cases: empty, whitespace, `None`, bytes and 351-character text; speed `bool`, string, infinite, zero, negative and 3.01; speaker "-1", "1.5", 11 digits and a non-string). Each asserts the exact message and that the subprocess stand-in was never called. Commit 35b967d2ec9b3a1cbbef0206f94974a7e6d496c3, Python CI run [43529422242](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529422242) passed.
+- [x] TU3.03 U3.c: missing, oversized, wrong-format, empty and truncated output WAVs each raise their fixed `AudioError`; the temporary directory is removed.
+  - Evidence: `tests/test_piper_provider.py::test_bad_piper_output_is_refused_and_cleaned_up` (missing file, a sparse file of 128 MiB + 1, wrong rate, stereo, 8-bit, no frames, a header claiming 64 Mi + 1 frames, truncated data). Each asserts the exact message and that the temporary folder is gone. Commit 35b967d2ec9b3a1cbbef0206f94974a7e6d496c3, Python CI run [43529422242](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529422242) passed.
+- [x] TU3.04 U3.d: `list_models`, `list_voices` and `health` with and without the model and executable.
+  - Evidence: `tests/test_piper_provider.py::test_piper_listing_and_health`: `list_models` returns the model path, `list_voices` is empty, and `health` is False without the CLI or without the model. Commit 35b967d2ec9b3a1cbbef0206f94974a7e6d496c3, Python CI run [43529422242](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529422242) passed.
+- [x] TU3.05 U8 mutation results for TU3.01–TU3.04.
+  - Evidence: 33 mutants of the Piper adapter in `tts/__init__.py`; 32 fail the new tests. The text-type check first survived (`None` already fails `not text`); a bytes case catches it. Five speed mutants first matched the Kitten copy of the same check, so they were rerun on the Piper occurrence. One is equivalent: the `isfinite` check at line 224, because `0 < speed <= 3` already rejects infinity and NaN (recorded under "Found while testing").
 
 ## Phase TU4 — LLM contents review (U4)
 
-- [ ] TU4.01 U4.a: a source line without a page number (`contents_title_mismatch`), a page-reference mismatch (with its warning) and a low-confidence entry are rejected and not verified.
-- [ ] TU4.02 U4.b: a low-confidence boundary is rejected and adds no boundary evidence.
-- [ ] TU4.03 U4.c: an oversized-block window and a schema-invalid answer are recorded against `window:<start>` with their warnings, and the next window still runs.
-- [ ] TU4.04 U4.d: a low-confidence heading in `detect_llm_headings` is rejected with `low_confidence` and not approved.
-- [ ] TU4.05 U8 mutation results for TU4.01–TU4.04.
+- [x] TU4.01 U4.a: a source line without a page number (`contents_title_mismatch`), a page-reference mismatch (with its warning) and a low-confidence entry are rejected and not verified.
+  - Evidence: `tests/test_llm_contents_boundaries.py`: `test_contents_line_without_a_page_number_is_rejected` and `test_contents_line_that_is_only_a_page_number_is_rejected` (`contents_title_mismatch`), `test_contents_entry_with_a_different_page_is_rejected` (`contents_page_reference_mismatch` with its fixed warning) and `test_contents_entry_needs_confidence_of_at_least_three_quarters` (0.74 rejected with `low_confidence` and no warning; 0.75 accepted). Commit bb0086f04dd238c7519328c084e5292b570901fa, Python CI run [43529846849](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529846849) passed.
+- [x] TU4.02 U4.b: a low-confidence boundary is rejected and adds no boundary evidence.
+  - Evidence: `tests/test_llm_contents_boundaries.py::test_boundary_needs_confidence_of_at_least_three_quarters` (0.74 rejected with `low_confidence` and no boundary; 0.75 accepted). Commit bb0086f04dd238c7519328c084e5292b570901fa, Python CI run [43529846849](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529846849) passed.
+- [x] TU4.03 U4.c: an oversized-block window and a schema-invalid answer are recorded against `window:<start>` with their warnings, and the next window still runs.
+  - Evidence: `tests/test_llm_contents_boundaries.py::test_oversized_block_window_is_skipped_and_the_next_window_runs` (the oversized block is recorded against `window:0` with its warning and never sent; the next window's boundary is accepted) and `test_schema_invalid_answer_is_recorded_and_the_next_window_runs` (four invalid answers, each recorded against `window:0` with its warning, and the second window still runs). Commit bb0086f04dd238c7519328c084e5292b570901fa, Python CI run [43529846849](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529846849) passed.
+- [x] TU4.04 U4.d: a low-confidence heading in `detect_llm_headings` is rejected with `low_confidence` and not approved.
+  - Evidence: `tests/test_llm_contents_boundaries.py::test_low_confidence_heading_is_not_approved` (0.74 rejected with `low_confidence`; 0.75 approved as `verified_heading`). Commit bb0086f04dd238c7519328c084e5292b570901fa, Python CI run [43529846849](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529846849) passed.
+- [x] TU4.05 U8 mutation results for TU4.01–TU4.04.
+  - Evidence: 15 mutants of `llm/structure.py`; all 15 fail the new tests. With the full suite the module is at 100%.
 
 ## Phase TU5 — Analysis state (U5)
 
-- [ ] TU5.01 U5.a: both footnote-policy conflict errors, with the manifest on disk unchanged.
-- [ ] TU5.02 U5.b: switching to `end` adds the moved-footnotes warning with the right count.
-- [ ] TU5.03 U5.c: missing or malformed fingerprint report means every stage changed; the rejected-edit branch at line 38.
-- [ ] TU5.04 U5.d: a hand-edited chapter with a missing or out-of-range generated start is unmatched and reported as a hand-edit conflict.
-- [ ] TU5.05 U8 mutation results for TU5.01–TU5.04.
+- [x] TU5.01 U5.a: both footnote-policy conflict errors, with the manifest on disk unchanged.
+  - Evidence: `tests/test_analysis_state_guards.py::test_omit_setting_refuses_to_override_an_approved_cleanup_edit` and `test_footnote_edits_the_old_setting_did_not_make_are_protected`. Both run real `analyze_book` calls on an approved workspace built from a PDF with one footnote, assert the exact message, and check the manifest bytes on disk are unchanged. Commit 17926a67bbd31d1db0ea7aac8414964d9012b4f6, Python CI run [43530190958](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530190958) passed.
+- [x] TU5.02 U5.b: switching to `end` adds the moved-footnotes warning with the right count.
+  - Evidence: `tests/test_analysis_state_guards.py::test_switching_to_end_reports_how_many_footnotes_moved`: "Narrating 1 classified footnote(s) at the end of their chapter; source blocks are unchanged", no inline warning, and the chapter text ends with the footnote. Commit 17926a67bbd31d1db0ea7aac8414964d9012b4f6, Python CI run [43530190958](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530190958) passed.
+- [x] TU5.03 U5.c: missing or malformed fingerprint report means every stage changed; the rejected-edit branch at line 38.
+  - Evidence: `tests/test_analysis_state_guards.py::test_changed_stages_fall_back_to_the_whole_analysis` (missing, not JSON, not an object, stages not a mapping, a non-string stage, changed plus missing, unchanged) and `test_rejected_edit_that_cannot_be_aligned_names_its_chapter` (the branch at line 38: a block in chapter 2 names chapter 2, and a block no longer present names chapter 1). Commit 17926a67bbd31d1db0ea7aac8414964d9012b4f6, Python CI run [43530190958](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530190958) passed.
+- [x] TU5.04 U5.d: a hand-edited chapter with a missing or out-of-range generated start is unmatched and reported as a hand-edit conflict.
+  - Evidence: `tests/test_analysis_state_guards.py::test_edited_chapter_without_a_usable_generated_start_is_a_conflict` (no start, start equal to the block count, start past it: `_match_edited_chapter` returns `None`, and `analysis._match_old_chapters` raises the exact hand-edit conflict for an edited chapter and skips an unedited one) and the control `test_edited_chapter_with_a_valid_generated_start_matches`. Commit 17926a67bbd31d1db0ea7aac8414964d9012b4f6, Python CI run [43530190958](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530190958) passed.
+- [x] TU5.05 U8 mutation results for TU5.01–TU5.04.
+  - Evidence: 14 mutants of `analysis_state.py`; 13 fail the new tests. One is equivalent: the `str` type check at line 65, because current stage fingerprints are always strings, so a non-string stored value can never compare equal (recorded under "Found while testing").
 
 ## Phase TU6 — Bounded JSON and WAV writer (U6, U7)
 
-- [ ] TU6.01 U6.a: escaped quotes and backslashes don't change the counted depth; exactly at the limit loads, one past it is a miss.
-- [ ] TU6.02 U6.b: a closing bracket before any opener is a miss.
-- [ ] TU6.03 U6.c: invalid `max_bytes` and `max_depth` values raise the fixed bounds error from both loaders.
-- [ ] TU6.04 U7.a–U7.c: WAV creation failure, invalid sample chunks and the silence size limit each raise their fixed `AudioError` without writing.
-- [ ] TU6.05 U8 mutation results for TU6.01–TU6.04.
+- [x] TU6.01 U6.a: escaped quotes and backslashes don't change the counted depth; exactly at the limit loads, one past it is a miss.
+  - Evidence: `tests/test_jsonio.py::test_escapes_in_strings_do_not_change_the_counted_depth` (five payloads with escaped quotes and backslashes next to brackets; each loads at its exact depth and is a miss one level lower). Commit 2ebe2cd716037337dab4c7189879d312032e4f3e, Python CI run [43530517710](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530517710) passed.
+- [x] TU6.02 U6.b: a closing bracket before any opener is a miss.
+  - Evidence: `tests/test_jsonio.py::test_closing_bracket_before_its_opener_is_a_miss` (`]`, `[]]`, `{"a": 1}}`, `}{`; both loaders return `None`). Commit 2ebe2cd716037337dab4c7189879d312032e4f3e, Python CI run [43530517710](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530517710) passed.
+- [x] TU6.03 U6.c: invalid `max_bytes` and `max_depth` values raise the fixed bounds error from both loaders.
+  - Evidence: `tests/test_jsonio.py::test_invalid_bounds_are_a_programming_error` (nine bad bounds, each with both loaders) and the control `test_smallest_valid_bounds_are_accepted` (one byte, depth zero). Commit 2ebe2cd716037337dab4c7189879d312032e4f3e, Python CI run [43530517710](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530517710) passed.
+- [x] TU6.04 U7.a–U7.c: WAV creation failure, invalid sample chunks and the silence size limit each raise their fixed `AudioError` without writing.
+  - Evidence: `tests/test_long_chapter_wav_streaming.py`: `test_chapter_wav_that_cannot_be_created_is_a_fixed_error` (a file in place of the folder, and a folder in place of the WAV), `test_invalid_sample_chunk_is_refused_without_writing` (strings, an object, 2-D, empty, NaN, infinity; `bytes_written` stays 0 and the WAV has 0 frames), the control `test_valid_chunk_control_case_is_written`, and `test_silence_past_the_riff_limit_is_refused_without_writing` (with `bytes_written` set 2 bytes below the limit, one sample is written and two are refused). The folder-as-WAV case triggers a CPython `wave` warning, handled in the test and recorded under "Found while testing". Commit 2ebe2cd716037337dab4c7189879d312032e4f3e, Python CI run [43530517710](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530517710) passed.
+- [x] TU6.05 U8 mutation results for TU6.01–TU6.04.
+  - Evidence: `jsonio.py`: 13 mutants, 12 fail the new tests. One is equivalent: the negative-depth check at line 44, because a closer before any opener is never valid JSON and `json.loads` rejects it at the first character (recorded under "Found while testing"). `audio/wav.py`: 9 mutants, all caught.
 
 ## Phase TU7 — Closure
 
-- [ ] TU7.01 U9: rerun coverage; record each module's coverage against the 95% target, and list any shortfall in "Found while testing".
-- [ ] TU7.02 U10: the full suite, golden snapshot and patch-target guard pass; `git diff` of `src/` against the baseline is empty; no existing test edited except to add cases.
+- [x] TU7.01 U9: rerun coverage; record each module's coverage against the 95% target, and list any shortfall in "Found while testing".
+  - Evidence: Coverage at 2ebe2cd716037337dab4c7189879d312032e4f3e (2407 passed, 1 skipped). Statements missed / total, partial branches / total, combined cover (target 95%):
+    - `review_ui.py`: 2/182, 0/50, 99% (lines 245–246, recorded as unreachable)
+    - `chapter_artifacts.py`: 0/167, 0/74, 100%
+    - `tts/__init__.py`: 3/170, 1/48, 98% (lines 61–62 and 126 are in the Kitten and text-splitting code, outside U3)
+    - `llm/structure.py`: 0/139, 0/50, 100%
+    - `analysis_state.py`: 0/76, 0/30, 100%
+    - `jsonio.py`: 0/79, 0/38, 100%
+    - `audio/wav.py`: 0/46, 0/10, 100%
+    - Project total: 96% (was 95%)
+    No target falls short.
+- [x] TU7.02 U10: the full suite, golden snapshot and patch-target guard pass; `git diff` of `src/` against the baseline is empty; no existing test edited except to add cases.
+  - Evidence: `git diff 59e64c71fd076f295973474eafbc98cb781f1316 HEAD -- src` is empty. The test diff adds 1,440 lines across seven files (one new: `tests/test_analysis_state_guards.py`) and removes none. The golden snapshot and `tests/test_patch_targets.py` pass. Full suite at 2ebe2cd716037337dab4c7189879d312032e4f3e: 2407 passed, 1 skipped (the opt-in Kitten smoke).
 - [ ] TU7.03 Final gate: `/verify` passes with mypy on 3.11, 3.12 and 3.13; exact-head CI passes for every commit; "Found while testing" is reviewed with the user.
+  - Note: not checked. `/verify` passes with mypy on 3.11, 3.12 and 3.13, and every commit has passing exact-head CI (see the ledger). One clause remains: the user's review of "Found while testing".
 
 ## Found while testing
 
-None yet.
+No bugs. Everything below is either unreachable, redundant (an equivalent mutant), or outside this code.
+
+- **Unreachable** `src/pdf2audiobook/review_ui.py:245-246` (the `except` in `_authorized`): `http.server` decodes every header as ISO-8859-1, so the value is always a `str` that encodes to Latin-1. Shown with every byte 0x20–0xFF; `tests/test_review_ui.py::test_every_header_byte_gives_a_clean_401` pins the observable behaviour.
+- **Redundant checks** (equivalent mutants; removing one changes nothing a test, or any input, can see):
+  - `review_ui.py:322`: the non-object body check; `payload.get` raises `AttributeError` and the same handler returns the same fixed 400.
+  - `chapter_artifacts.py:43`: the "not a regular file" half for directories; `digest_file` on a directory raises `OSError`, which gives the same message. (The symlink half is not redundant.)
+  - `chapter_artifacts.py:231`: the occupant check; when it fires, the earlier loop over old records (line 210) has already flagged the same number for the same reason.
+  - `chapter_artifacts.py:267`: the `edited` and digest parts of the stale-file check; the same loop at line 210 has already flagged that number.
+  - `chapter_artifacts.py:234, 238, 243, 247, 270`: the `continue` after `_flag`; in raise mode `_flag` raises first, and in collect mode the plan it would change is discarded. Shown by mutation for line 270; the other four follow from the same reasoning and were not mutated separately.
+  - `tts/__init__.py:224`: Piper's `isfinite(speed)`; `0 < speed <= 3` already rejects infinity and NaN.
+  - `analysis_state.py:65`: the `str` check on a stored stage; current fingerprints are strings, so a non-string never compares equal.
+  - `jsonio.py:44`: the negative-depth check in the pre-scan; a closer before any opener is invalid JSON, which `json.loads` rejects at the first character.
+- **CPython quirk** `src/pdf2audiobook/audio/wav.py:31`: when `wave.open(path, "wb")` can't open the file (for example, a folder at that path), the half-built `Wave_write` raises `AttributeError` in `__del__` during garbage collection, which pytest reports as an unraisable-exception warning. The refusal itself is correct and content-free. The test collects garbage inside itself and filters that one warning. Opening the file first and passing the handle to `wave.open` would avoid it; that is a source change for a separate round.
 
 ## Progress ledger
 
 | Date | Commit SHA | Completed tasks | Tests/CI evidence | Blockers |
 | --- | --- | --- | --- | --- |
+| 2026-11-13 | 505bcdeeed4687c5e704ae91abb9bc693a0de518 | TU0.01, TU1: review server refusals. Tests only | `/verify` 2268 passed, 1 skipped; 16 mutants, 15 caught, 1 equivalent; exact-head Python CI [43528536668](https://github.com/ekkus93/pdf2audiobook/actions/runs/43528536668) passed | TU7.03 needs the user's review |
+| 2026-11-13 | b49d2dd1dfb397fb3d46678923914368bcb4026a | TU2: hand-edit protection and metadata guards. Tests only | `/verify` 2300 passed, 1 skipped; 26 mutants, 22 caught, 4 equivalent; exact-head Python CI [43529100117](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529100117) passed | TU7.03 needs the user's review |
+| 2026-11-13 | 35b967d2ec9b3a1cbbef0206f94974a7e6d496c3 | TU3: Piper construction, input and output checks. Tests only | `/verify` 2337 passed, 1 skipped; 33 mutants, 32 caught, 1 equivalent; exact-head Python CI [43529422242](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529422242) passed | TU7.03 needs the user's review |
+| 2026-11-13 | bb0086f04dd238c7519328c084e5292b570901fa | TU4: LLM contents review rejections. Tests only | `/verify` 2351 passed, 1 skipped; 15 mutants, all caught; exact-head Python CI [43529846849](https://github.com/ekkus93/pdf2audiobook/actions/runs/43529846849) passed | TU7.03 needs the user's review |
+| 2026-11-13 | 17926a67bbd31d1db0ea7aac8414964d9012b4f6 | TU5: footnote setting conflicts and chapter matching. Tests only | `/verify` 2367 passed, 1 skipped; 14 mutants, 13 caught, 1 equivalent; exact-head Python CI [43530190958](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530190958) passed | TU7.03 needs the user's review |
+| 2026-11-13 | 2ebe2cd716037337dab4c7189879d312032e4f3e | TU6, TU7.01–TU7.02: bounded JSON and chapter WAV writer; coverage targets met. Tests only | `/verify` 2407 passed, 1 skipped; 22 mutants, 21 caught, 1 equivalent; exact-head Python CI [43530517710](https://github.com/ekkus93/pdf2audiobook/actions/runs/43530517710) passed | TU7.03 needs the user's review |
