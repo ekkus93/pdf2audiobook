@@ -380,3 +380,260 @@ def test_missing_voice_id_is_unchanged_and_empty_clears(tmp_path):
     updates[0]["voice_id"] = ""
     save_chapter_updates(manifest_path, updates)
     assert read_manifest(manifest_path).chapters[0].voice_id is None
+
+
+# --- Server refusals (test coverage round 2, U1) -------------------------------
+
+PROSE = "First chapter prose"
+
+
+class _Server:
+    """Run a review server on a free loopback port and always shut it down."""
+
+    def __init__(self, manifest_path):
+        self.server = create_review_server(manifest_path, port=0)
+        self.port = self.server.server_address[1]
+        self.url = f"http://127.0.0.1:{self.port}"
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+    def __enter__(self):
+        self.thread.start()
+        return self
+
+    def __exit__(self, *_exc):
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=3)
+
+    def request(self, method, path, *, token=False, body=None, headers=None):
+        import http.client
+
+        sent = dict(headers or {})
+        if token:
+            sent["Authorization"] = f"Bearer {self.server.review_token}"
+        if method == "POST":
+            sent.setdefault("Origin", self.url)
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=3)
+        try:
+            connection.request(method, path, body=body, headers=sent)
+            response = connection.getresponse()
+            return response.status, response.read().decode("utf-8")
+        finally:
+            connection.close()
+
+
+@pytest.mark.parametrize(
+    ("token", "status", "error"),
+    [(False, 401, "Unauthorized"), (True, 404, "Not found")],
+    ids=["no-token", "token"],
+)
+def test_unknown_api_route_needs_a_token_and_then_is_not_found(tmp_path, token, status, error):
+    """U1.b: an unknown API route never reveals whether it exists without a token."""
+    with _Server(_manifest(tmp_path)) as server:
+        got, body = server.request("GET", "/api/chapters/1", token=token)
+
+    assert got == status
+    assert json.loads(body) == {"error": error}
+
+
+def test_unreadable_manifest_gives_a_fixed_error(tmp_path):
+    """U1 (line 296): a manifest that can't be parsed is a fixed 400, no file content."""
+    manifest_path = _manifest(tmp_path)
+    with _Server(manifest_path) as server:
+        manifest_path.write_text('{"title": "' + PROSE + '", "broken": ')
+        got, body = server.request("GET", "/api/manifest", token=True)
+
+    assert got == 400
+    assert json.loads(body) == {"error": "Could not read the chapter manifest"}
+    assert str(tmp_path) not in body
+
+
+@pytest.mark.parametrize("length", ["abc", "-5", "1.5"])
+def test_post_with_an_invalid_content_length_is_refused(tmp_path, length):
+    """U1.c: a Content-Length that isn't a non-negative integer is a 413; nothing is saved."""
+    manifest_path = _manifest(tmp_path)
+    before = manifest_path.read_bytes()
+    with _Server(manifest_path) as server:
+        got, body = server.request(
+            "POST",
+            "/api/chapters",
+            token=True,
+            body=b'{"chapters": []}',
+            headers={"Content-Length": length, "Content-Type": "application/json"},
+        )
+
+    assert got == 413
+    assert json.loads(body) == {"error": "Review update exceeds the request size limit"}
+    assert manifest_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("payload", [b"[]", b'"chapters"', b"7", b"null"])
+def test_post_whose_body_is_not_an_object_is_refused(tmp_path, payload):
+    """U1 (line 323): a JSON body that isn't an object is a fixed 400; nothing is saved."""
+    manifest_path = _manifest(tmp_path)
+    before = manifest_path.read_bytes()
+    with _Server(manifest_path) as server:
+        got, body = server.request(
+            "POST",
+            "/api/chapters",
+            token=True,
+            body=payload,
+            headers={"Content-Type": "application/json"},
+        )
+
+    assert got == 400
+    assert json.loads(body) == {"error": "Review update was invalid; no changes were saved"}
+    assert manifest_path.read_bytes() == before
+
+
+def _updates(manifest_path):
+    return [
+        {
+            "id": chapter.id,
+            "title": chapter.title,
+            "start_block": chapter.start_block,
+            "end_block": chapter.end_block,
+        }
+        for chapter in read_manifest(manifest_path).chapters
+    ]
+
+
+def test_manifest_changed_during_review_is_refused(tmp_path, monkeypatch):
+    """U1.d: the manifest digest is read twice; a change between them stops the save."""
+    from pdf2audiobook import chapter_artifacts
+    from pdf2audiobook.errors import ExtractionError
+
+    manifest_path = _manifest(tmp_path)
+    before = manifest_path.read_bytes()
+    real = chapter_artifacts._read_digest
+    reads = []
+
+    def changing(path):
+        reads.append(path)
+        return "0" * 64 if len(reads) == 2 else real(path)
+
+    monkeypatch.setattr(chapter_artifacts, "_read_digest", changing)
+
+    with pytest.raises(ExtractionError, match=r"^Manifest changed during review; retry$"):
+        save_chapter_updates(manifest_path, _updates(manifest_path))
+
+    assert manifest_path.read_bytes() == before
+
+
+def _identity_broken(updates):
+    updates[1] = ["not", "an", "object"]
+    return updates
+
+
+def _id_swapped(updates):
+    updates[0]["id"], updates[1]["id"] = updates[1]["id"], updates[0]["id"]
+    return updates
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (_identity_broken, "Review update chapter identity is invalid"),
+        (_id_swapped, "Review update chapter identity is invalid"),
+        (
+            lambda u: [{**u[0], "voice_id": 7}, u[1]],
+            "Review update has an invalid title or block range",
+        ),
+        (
+            lambda u: [{**u[0], "voice_id": "v" * 129}, u[1]],
+            "Review update has an invalid title or block range",
+        ),
+    ],
+    ids=["entry-not-an-object", "ids-swapped", "voice-id-not-a-string", "voice-id-too-long"],
+)
+def test_invalid_chapter_update_is_refused_without_saving(tmp_path, change, message):
+    """U1.d: identity and voice-ID checks refuse the whole update."""
+    from pdf2audiobook.errors import ExtractionError
+
+    manifest_path = _manifest(tmp_path)
+    assert len(read_manifest(manifest_path).chapters) == 2
+    before = manifest_path.read_bytes()
+
+    with pytest.raises(ExtractionError) as error:
+        save_chapter_updates(manifest_path, change(_updates(manifest_path)))
+
+    assert str(error.value) == message
+    assert manifest_path.read_bytes() == before
+
+
+def test_voice_id_at_the_limit_is_accepted(tmp_path):
+    """U1.d control: a 128-character voice ID is the longest accepted."""
+    manifest_path = _manifest(tmp_path)
+    updates = _updates(manifest_path)
+    updates[0]["voice_id"] = "v" * 128
+
+    save_chapter_updates(manifest_path, updates)
+
+    assert read_manifest(manifest_path).chapters[0].voice_id == "v" * 128
+
+
+@pytest.mark.parametrize("host", ["LOCALHOST", "LocalHost"])
+def test_review_server_accepts_localhost_in_any_case(tmp_path, host):
+    """U1.e: localhost in any case is bound and served as lowercase localhost."""
+    import http.client
+
+    server = create_review_server(_manifest(tmp_path), host=host, port=0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        statuses = {}
+        for authority in (f"localhost:{port}", f"{host}:{port}"):
+            connection = http.client.HTTPConnection(server.server_address[0], port, timeout=3)
+            connection.putrequest("GET", "/", skip_host=True)
+            connection.putheader("Host", authority)
+            connection.endheaders()
+            statuses[authority] = connection.getresponse().status
+            connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=3)
+
+    assert statuses == {f"localhost:{port}": 200, f"{host}:{port}": 421}
+
+
+@pytest.mark.parametrize(
+    ("host", "message"),
+    [
+        ("example.com", "Review UI can only bind to a loopback IP address or localhost"),
+        ("localhost.example", "Review UI can only bind to a loopback IP address or localhost"),
+        ("::1", "Review UI does not support IPv6 hosts"),
+    ],
+)
+def test_review_server_refuses_other_hosts(tmp_path, host, message):
+    """U1.e: a host name other than localhost, and IPv6 loopback, are refused."""
+    with pytest.raises(ValueError) as error:
+        create_review_server(_manifest(tmp_path), host=host, port=0)
+
+    assert str(error.value) == message
+
+
+def test_every_header_byte_gives_a_clean_401(tmp_path):
+    """U1.a: http.server decodes headers as ISO-8859-1, so any byte in the token
+    is still a Latin-1 string; it fails the comparison with a fixed 401."""
+    import socket
+
+    with _Server(_manifest(tmp_path)) as server:
+        token = bytes(range(0x80, 0x100)) + "é".encode()
+        request = (
+            b"GET /api/manifest HTTP/1.1\r\nHost: 127.0.0.1:"
+            + str(server.port).encode()
+            + b"\r\nAuthorization: Bearer "
+            + token
+            + b"\r\nConnection: close\r\n\r\n"
+        )
+        with socket.create_connection(("127.0.0.1", server.port), timeout=3) as sock:
+            sock.sendall(request)
+            reply = b""
+            while chunk := sock.recv(65536):
+                reply += chunk
+
+    head, _, body = reply.partition(b"\r\n\r\n")
+    assert head.startswith(b"HTTP/1.0 401") or head.startswith(b"HTTP/1.1 401")
+    assert json.loads(body) == {"error": "Unauthorized"}
