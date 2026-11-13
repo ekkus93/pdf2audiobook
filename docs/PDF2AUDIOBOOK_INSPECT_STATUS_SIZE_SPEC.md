@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size Specification
 
-**Status:** R1–R2 implemented in 19dc01b and verified by CI; review follow-up R3–R5 (§7) not implemented
+**Status:** Complete; R1–R2 implemented in 19dc01b, review follow-up R3–R5 (§7) in 5581cb4; both verified by CI
 **Date:** 2026-11-13
 **Scope:** Close the `inspect` race found in the fourth-review TODO audit.
 **Companion:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_TODO.md`

@@ -1,6 +1,6 @@
 # PDF2Audiobook — Inspect Conversion Status Size TODO
 
-**Status:** R1–R2 implemented in 19dc01b and verified by CI run 43350264347; reopened by the post-implementation review (spec §7): FX11.01a, FX11.01 and FX11.05 (R3–R5) are open
+**Status:** Complete; R1–R2 implemented in 19dc01b (CI run 43350264347) and review follow-up R3–R5 in 5581cb4 (exact-head CI run 43352750100)
 **Date:** 2026-11-13
 **Specification:** `docs/PDF2AUDIOBOOK_INSPECT_STATUS_SIZE_SPEC.md` (R1–R2)
 **Review source:** Fourth-review audit of `docs/PDF2AUDIOBOOK_FOURTH_REVIEW_TODO.md`, finding FX10.27b's remaining `inspect` size-check race.
@@ -25,11 +25,12 @@
 
 ### Regression tests
 
-- [ ] FX11.01 Add deterministic coverage for R1 and R2 (spec §4).
-  - [ ] FX11.01a Human mode: an oversized status file gives the fixed
+- [x] FX11.01 Add deterministic coverage for R1 and R2 (spec §4).
+  - [x] FX11.01a Human mode: an oversized status file gives the fixed
     message with exit 3.
     - Evidence: `tests/test_inspect_conversion_status.py::test_oversized_conversion_status_in_human_mode_is_a_fixed_error` (exit 3, stderr starts with "Error:", content-free).
     - Note: reopened by the post-implementation review. Spec §4.1 asks for a file one byte above 1 MiB, but `_OVERSIZED_STATUS` (tests/test_inspect_conversion_status.py:67) is 1 MiB plus two bytes; limit+1 is tested only in tests/test_jsonio.py. Closed by FX11.05b (spec R4).
+    - Evidence: re-checked after FX11.05b: `tests/test_inspect_conversion_status.py::test_status_one_byte_over_the_limit_is_a_fixed_error_in_human_mode` (exactly limit+1 bytes), commit 5581cb4c61ea26229a97f078ec7fe0b3ba020d53, CI run 43352750100.
   - [x] FX11.01b `--json` mode: keep the existing
     `test_inspect_rejects_oversized_conversion_status_file` unchanged. Add a
     test asserting stderr is exactly one JSON value with no path, file
@@ -106,7 +107,7 @@
 
 ### Review follow-up (spec §7)
 
-- [ ] FX11.05 Close the post-implementation review findings (R3–R5). Test and docs changes only; no runtime behaviour change.
+- [x] FX11.05 Close the post-implementation review findings (R3–R5). Test and docs changes only; no runtime behaviour change.
   - [x] FX11.05a R3: add a CLI test that starts with a small valid status file and wraps `Path.open` (filtered to the status file name) so the file grows past `CONVERSION_STATUS_MAX_BYTES` just before the handle is returned. Assert exit 3, the fixed message and content-free `--json` output. Keep the existing race test unchanged. No sleeps.
     - Evidence: `tests/test_inspect_conversion_status.py::test_status_that_grows_before_it_is_read_is_reported_oversized`: the file starts as `{"chapters": []}`, and a `Path.open` wrapper (status file only, read modes only) rewrites it to `_OVERSIZED_STATUS` just before the real open. Asserts exit 3, the fixed message and content-free JSON. The existing race test is unchanged. Commit 5581cb4c61ea26229a97f078ec7fe0b3ba020d53.
   - [x] FX11.05b R4: add a human-mode CLI test with a status file of exactly `CONVERSION_STATUS_MAX_BYTES + 1` bytes, asserting that length, exit 3 and the fixed message. Keep `_OVERSIZED_STATUS` and the existing tests unchanged.
@@ -115,7 +116,8 @@
     - Evidence: Ran in scratch worktrees. Against the reviewer's mutant (HEAD plus an `os.stat` pre-check catching `OSError`, and `except JSONTooLargeError: conversion_status = None`), only `test_status_that_grows_before_it_is_read_is_reported_oversized` failed (1 failed, 14 passed); the old race test passed there. At d4c0aae it failed with `assert 0 == 3` (status silently omitted), alongside the two FX11.01 regressions (3 failed, 12 passed). The limit+1 test passes at d4c0aae too, because that boundary was already handled.
   - [x] FX11.05d R5: in `docs/MAINTAINER_GUIDE.md`, reword "even if the file grew after an earlier size check" (around line 347) to say the decision comes from the bytes read. Add "non-object" to the list of cases where the status is left out (around line 349).
     - Evidence: `docs/MAINTAINER_GUIDE.md`: "The decision is made from the bytes read, so a file that grows or is replaced before it is read is still reported", and "non-object" added to the cases left out. Commit 5581cb4c61ea26229a97f078ec7fe0b3ba020d53.
-  - [ ] FX11.05e Run `/verify`, push, and record exact-head CI for the follow-up commit. Then re-check FX11.01a and FX11.01, citing FX11.05b, and set both status lines (this TODO and the spec) to complete.
+  - [x] FX11.05e Run `/verify`, push, and record exact-head CI for the follow-up commit. Then re-check FX11.01a and FX11.01, citing FX11.05b, and set both status lines (this TODO and the spec) to complete.
+    - Evidence: Exact-head Python CI [43352750100](https://github.com/ekkus93/pdf2audiobook/actions/runs/43352750100) on 5581cb4c61ea26229a97f078ec7fe0b3ba020d53 passed on Python 3.11, 3.12 and 3.13: 2008 passed and 1 skipped (the opt-in Kitten smoke) on each; Ruff, format, mypy, CLI smoke and wheel/sdist clean-environment smoke passed. FX11.01a and FX11.01 re-checked, citing FX11.05b; both status lines updated.
 
 ## Acceptance gate
 
@@ -146,3 +148,4 @@ Review follow-up gate (spec §7):
 | 2026-11-13 | 16e98a56bf85a4c0f9f50da9b3792970b2909624 | FX11.04d: CI evidence for the FX11 fix (19dc01be16ee10a479434fe407733cb8c2167ca6) | Python CI [43350264347](https://github.com/ekkus93/pdf2audiobook/actions/runs/43350264347) on head 16e98a56bf85a4c0f9f50da9b3792970b2909624 (the fix plus a TODO-only docs commit; no separate run exists for 19dc01b because the three commits were pushed together) passed on Python 3.11, 3.12 and 3.13: 2006 passed and 1 skipped (the opt-in Kitten smoke) on each, so the Tesseract-gated tests that skip locally ran in CI; Ruff, format, mypy, CLI smoke and wheel/sdist clean-environment smoke passed | None |
 | 2026-11-13 | 904f4c04a73bf4b1378e2e50daaa2c3c63315552 | Post-implementation review of 19dc01be16ee10a479434fe407733cb8c2167ca6 (spec §7). The fix is correct, and `load_bounded_json()` matched the old version on 15 edge cases. Reopened FX11.01a and FX11.01 (CLI boundary is limit+2, not limit+1). Added FX11.05 (R3 race-test strength, R4 limit+1 CLI test, R5 docs wording) | Reviewer reran the 17 inspect/jsonio tests at HEAD (all passed) and the new tests at d4c0aae (the race and unreadable tests failed as recorded). A racy mutant using `os.stat` passed all 13 inspect tests. CI run 43350723813 on 904f4c0 succeeded | FX11.05 |
 | 2026-11-13 | 5581cb4c61ea26229a97f078ec7fe0b3ba020d53 | FX11.05a–d: open-boundary growth race test, exact limit+1 CLI test, MAINTAINER_GUIDE wording (spec R3–R5) | The new race test fails against the reviewer's `os.stat` mutant (the only failure there) and at d4c0aae (`assert 0 == 3`). Local `/verify`: ruff, format (361 files), mypy (46 files, also 3.12 and 3.13), pytest 1997 passed and 12 skipped (11 Tesseract, 1 Kitten), CLI smoke. CI not yet run | FX11.05e: push and exact-head CI |
+| 2026-11-13 | 5581cb4c61ea26229a97f078ec7fe0b3ba020d53 | FX11.05e: CI evidence for the review follow-up; FX11.01a and FX11.01 re-checked | Exact-head Python CI [43352750100](https://github.com/ekkus93/pdf2audiobook/actions/runs/43352750100) on 5581cb4c61ea26229a97f078ec7fe0b3ba020d53 passed on Python 3.11, 3.12 and 3.13: 2008 passed and 1 skipped (the opt-in Kitten smoke) on each; Ruff, format, mypy, CLI smoke and wheel/sdist clean-environment smoke passed | None |
