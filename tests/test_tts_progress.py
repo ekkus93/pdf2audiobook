@@ -1,8 +1,12 @@
 """Atomic TTS chunk progress ledgers and interruption recovery."""
 
+import io
+import json
+
 import numpy as np
 import pytest
 
+from pdf2audiobook.audio import progress as progress_module
 from pdf2audiobook.audio import read_synthesis_progress, split_sentences, synthesize_chunks
 from pdf2audiobook.errors import AudioError
 from pdf2audiobook.workspace import digest_file
@@ -143,3 +147,155 @@ def test_oversized_progress_record_warns_and_is_unavailable(tmp_path, caplog):
         isinstance(record.msg, dict) and record.msg.get("event") == "progress_unavailable"
         for record in caplog.records
     )
+
+
+# --- Progress reader rejections (test coverage spec T4) ------------------------
+
+
+_HEADER = {
+    "event": "header",
+    "schema_version": 1,
+    "fingerprint": "f",
+    "total_chunks": 1,
+    "pause_count": 0,
+    "completed_chunks": 0,
+    "status": "in_progress",
+}
+_CHUNK = {
+    "event": "chunk",
+    "chunk": {"number": 1, "status": "pending"},
+    "mapping": {"number": 1, "source_start": 0, "source_end": 5},
+}
+_UPDATE = {"event": "chunk_update", "number": 1, "status": "completed", "completed_chunks": 1}
+_STATUS = {"event": "status", "status": "completed"}
+
+
+def _lines(*records):
+    return b"".join(
+        record if isinstance(record, bytes) else json.dumps(record).encode() + b"\n"
+        for record in records
+    )
+
+
+def _unavailable_warnings(caplog):
+    return [
+        record
+        for record in caplog.records
+        if isinstance(record.msg, dict) and record.msg.get("event") == "progress_unavailable"
+    ]
+
+
+def test_valid_progress_records_are_reconstructed(tmp_path, caplog):
+    """Control case for the rejection table below."""
+    path = tmp_path / "progress.jsonl"
+    path.write_bytes(_lines(_HEADER, _CHUNK, {**_UPDATE, "sha256": "a" * 64, "bytes": 3}, _STATUS))
+
+    with caplog.at_level("WARNING", logger="pdf2audiobook"):
+        progress = read_synthesis_progress(path)
+
+    assert progress["status"] == "completed"
+    assert progress["completed_chunks"] == 1
+    assert progress["chunks"] == [
+        {"number": 1, "status": "completed", "sha256": "a" * 64, "bytes": 3}
+    ]
+    assert _unavailable_warnings(caplog) == []
+
+
+_REJECTED = {
+    "no-trailing-newline": _lines(_HEADER)[:-1],
+    "record-too-long": _lines(_HEADER) + b"x" * (16 * 1024 + 10) + b"\n",
+    "non-object-record": _lines(_HEADER, [1, 2]),
+    "over-depth-record": _lines(
+        _HEADER, {"event": "mapping", "mapping": json.loads('{"a":' * 9 + "1" + "}" * 9)}
+    ),
+    "duplicate-header": _lines(_HEADER, _HEADER),
+    "chunk-not-an-object": _lines(_HEADER, {**_CHUNK, "chunk": [1]}),
+    "chunk-without-mapping": _lines(_HEADER, {**_CHUNK, "mapping": None}),
+    # dict() would accept key-value pairs; only the type check refuses them.
+    "chunk-mapping-as-pairs": _lines(_HEADER, {**_CHUNK, "mapping": [["number", 1]]}),
+    "chunk-number-not-an-integer": _lines(_HEADER, {**_CHUNK, "chunk": {"number": "1"}}),
+    "duplicate-chunk-number": _lines(_HEADER, _CHUNK, _CHUNK),
+    "mapping-not-an-object": _lines(_HEADER, {"event": "mapping", "mapping": "pause"}),
+    "update-for-unknown-chunk": _lines(_HEADER, {**_UPDATE, "number": 2}),
+    "update-number-not-an-integer": _lines(_HEADER, _CHUNK, {**_UPDATE, "number": "1"}),
+    "invalid-update-status": _lines(_HEADER, _CHUNK, {**_UPDATE, "status": "done"}),
+    "completed-count-before-header": _lines(_CHUNK, _UPDATE, _HEADER),
+    "status-before-header": _lines(_STATUS, _HEADER),
+    "invalid-status": _lines(_HEADER, {**_STATUS, "status": "paused"}),
+    "unknown-event": _lines(_HEADER, {"event": "rewind"}),
+    "malformed-json": _lines(_HEADER, b"{not json\n"),
+    "invalid-utf8": _lines(_HEADER, b'{"event": "\xff"}\n'),
+    "no-header": _lines(_CHUNK),
+    "empty-file": b"",
+}
+
+
+@pytest.mark.parametrize("payload", list(_REJECTED.values()), ids=list(_REJECTED))
+def test_malformed_progress_is_unavailable_with_one_warning(tmp_path, caplog, payload):
+    """T4.a: every rejection returns None and logs progress_unavailable once."""
+    path = tmp_path / "progress.jsonl"
+    path.write_bytes(payload)
+
+    with caplog.at_level("WARNING", logger="pdf2audiobook"):
+        assert read_synthesis_progress(path) is None
+
+    assert len(_unavailable_warnings(caplog)) == 1
+
+
+@pytest.mark.parametrize(
+    ("limit", "value"),
+    [("_MAX_PROGRESS_RECORDS", 2), ("_MAX_PROGRESS_FILE_BYTES", 200)],
+    ids=["too-many-records", "file-too-large"],
+)
+def test_progress_beyond_its_bounds_is_unavailable(tmp_path, caplog, monkeypatch, limit, value):
+    """T4.a: the record-count and file-size bounds also reject the file."""
+    monkeypatch.setattr(progress_module, limit, value)
+    path = tmp_path / "progress.jsonl"
+    path.write_bytes(_lines(_HEADER, _CHUNK, _UPDATE, _STATUS))
+
+    with caplog.at_level("WARNING", logger="pdf2audiobook"):
+        assert read_synthesis_progress(path) is None
+
+    assert len(_unavailable_warnings(caplog)) == 1
+
+
+def test_unreadable_progress_is_unavailable(tmp_path, caplog):
+    """T4.a: a path that can't be read as a file is unavailable, not an error."""
+    with caplog.at_level("WARNING", logger="pdf2audiobook"):
+        assert read_synthesis_progress(tmp_path) is None
+
+    assert len(_unavailable_warnings(caplog)) == 1
+
+
+def test_oversized_progress_record_is_never_written():
+    """T4.b: the writer refuses a record over the size limit and writes nothing."""
+    stream = io.BytesIO()
+
+    with pytest.raises(AudioError, match="^TTS progress record exceeds safe size limit$"):
+        progress_module._write_progress_record(stream, {"event": "x" * (16 * 1024)})
+
+    assert stream.getvalue() == b""
+
+
+def test_progress_that_cannot_be_created_fails_with_a_fixed_message(tmp_path):
+    """T4.b: a progress path under a regular file can't be opened; no path leaks."""
+    blocker = tmp_path / "not-a-directory"
+    blocker.write_bytes(b"")
+    target = blocker / "progress.jsonl"
+
+    with pytest.raises(AudioError, match="^Could not write TTS progress$") as error:
+        progress_module._start_progress_stream(
+            target,
+            {
+                "schema_version": 1,
+                "fingerprint": "f",
+                "total_chunks": 0,
+                "pause_count": 0,
+                "completed_chunks": 0,
+                "status": "in_progress",
+                "chunks": [],
+                "mapping": [],
+            },
+        )
+
+    assert str(tmp_path) not in str(error.value)
