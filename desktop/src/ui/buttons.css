@@ -1,0 +1,141 @@
+/* Accent styling for the app's buttons (spec D11.i): the main actions carry the palette's
+ * iris-to-amber gradient with a coloured glow; tonal buttons get a highlight edge and an amber
+ * icon. Everything is built from the generated --md-sys-color-* tokens. Labels stay on-primary
+ * across the whole gradient; contrast.test.ts checks both ends in both themes. */
+
+/* Dark themes end the gradient in amber; light themes in deep indigo, since a light-theme
+ * amber dark enough to carry white text turns brown beside the iris. */
+:root {
+  --app-accent-end: var(--md-sys-color-tertiary);
+}
+
+:root[data-theme="light"] {
+  --app-accent-end: var(--md-sys-color-on-primary-container);
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --app-accent-end: var(--md-sys-color-on-primary-container);
+  }
+}
+
+:root {
+  --app-accent-gradient: linear-gradient(
+    120deg,
+    var(--md-sys-color-primary) 0%,
+    var(--md-sys-color-primary) 40%,
+    var(--app-accent-end) 135%
+  );
+  --app-accent-glow: color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent);
+  --app-accent-glow-strong: color-mix(in srgb, var(--md-sys-color-primary) 60%, transparent);
+  --app-press-scale: 0.97;
+}
+
+/* Main actions: filled buttons and the FAB. The container is transparent, so the gradient on
+ * the element itself shows through; Material's own state layers and ripple still draw on top. */
+md-filled-button,
+md-fab {
+  --md-filled-button-container-color: transparent;
+  --md-filled-button-label-text-color: var(--md-sys-color-on-primary);
+  --md-filled-button-hover-label-text-color: var(--md-sys-color-on-primary);
+  --md-filled-button-focus-label-text-color: var(--md-sys-color-on-primary);
+  --md-filled-button-pressed-label-text-color: var(--md-sys-color-on-primary);
+  --md-filled-button-icon-color: var(--md-sys-color-on-primary);
+  --md-filled-button-hover-icon-color: var(--md-sys-color-on-primary);
+  --md-filled-button-focus-icon-color: var(--md-sys-color-on-primary);
+  --md-filled-button-pressed-icon-color: var(--md-sys-color-on-primary);
+  --md-filled-button-label-text-weight: 600;
+  --md-filled-button-container-elevation: 0;
+  --md-filled-button-hover-container-elevation: 0;
+  --md-filled-button-focus-container-elevation: 0;
+  --md-filled-button-pressed-container-elevation: 0;
+
+  --md-fab-container-color: transparent;
+  --md-fab-primary-container-color: transparent;
+  --md-fab-primary-icon-color: var(--md-sys-color-on-primary);
+  --md-fab-primary-label-text-color: var(--md-sys-color-on-primary);
+  --md-fab-primary-hover-icon-color: var(--md-sys-color-on-primary);
+  --md-fab-primary-hover-label-text-color: var(--md-sys-color-on-primary);
+  --md-fab-primary-focus-icon-color: var(--md-sys-color-on-primary);
+  --md-fab-primary-focus-label-text-color: var(--md-sys-color-on-primary);
+  --md-fab-primary-pressed-icon-color: var(--md-sys-color-on-primary);
+  --md-fab-primary-pressed-label-text-color: var(--md-sys-color-on-primary);
+  --md-fab-label-text-weight: 600;
+  --md-fab-container-shape: var(--md-sys-shape-corner-large);
+  --md-fab-container-elevation: 0;
+  --md-fab-hover-container-elevation: 0;
+  --md-fab-focus-container-elevation: 0;
+  --md-fab-pressed-container-elevation: 0;
+
+  background-image: var(--app-accent-gradient);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 30%),
+    0 6px 18px -4px var(--app-accent-glow);
+  transition:
+    transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
+}
+
+md-filled-button {
+  border-radius: var(--md-sys-shape-corner-full);
+}
+
+md-fab {
+  border-radius: var(--md-sys-shape-corner-large);
+}
+
+md-filled-button:hover,
+md-fab:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 30%),
+    0 12px 28px -6px var(--app-accent-glow-strong);
+}
+
+md-filled-button:active,
+md-fab:active {
+  transform: scale(var(--app-press-scale));
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 30%),
+    0 4px 10px -4px var(--app-accent-glow);
+}
+
+md-filled-button[disabled] {
+  background-image: none;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Tonal buttons: a soft highlight edge, an amber icon, and the same lift on hover. */
+md-filled-tonal-button {
+  --md-filled-tonal-button-label-text-weight: 600;
+  --md-filled-tonal-button-icon-color: var(--md-sys-color-tertiary);
+  --md-filled-tonal-button-hover-icon-color: var(--md-sys-color-tertiary);
+  --md-filled-tonal-button-focus-icon-color: var(--md-sys-color-tertiary);
+  --md-filled-tonal-button-pressed-icon-color: var(--md-sys-color-tertiary);
+
+  border-radius: var(--md-sys-shape-corner-full);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-secondary-container) 14%, transparent),
+    0 1px 2px rgb(0 0 0 / 20%);
+  transition:
+    transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
+    box-shadow var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
+}
+
+md-filled-tonal-button:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-secondary-container) 20%, transparent),
+    0 6px 16px -6px rgb(0 0 0 / 45%);
+}
+
+md-filled-tonal-button:active {
+  transform: scale(var(--app-press-scale));
+}
+
+/* Icon buttons tint toward the primary colour on hover. */
+md-icon-button {
+  --md-icon-button-hover-icon-color: var(--md-sys-color-primary);
+  --md-icon-button-hover-state-layer-color: var(--md-sys-color-primary);
+}

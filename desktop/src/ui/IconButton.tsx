@@ -1,6 +1,7 @@
 import "@material/web/iconbutton/icon-button.js";
 import "@material/web/iconbutton/filled-icon-button.js";
 import "@material/web/iconbutton/filled-tonal-icon-button.js";
+import "./buttons.css";
 import { useRef } from "react";
 import { Icon } from "./Icon";
 import type { IconName } from "../theme/icons.generated";

@@ -319,6 +319,13 @@ The app should look polished, modern and professional, built on Google's
 - **D11.h Review.** Before a screen counts as done, its screenshots in dark and light mode
   are attached to its TODO item, and the owner reviews the first two screens (Setup and
   Library) before the rest are built.
+- **D11.i Accent buttons.** At the owner's request (2026-11-14, after reviewing the first two
+  screens), the main actions are more striking than stock Material 3: filled buttons and the FAB
+  carry a gradient from `primary` to amber `tertiary` (dark themes) or to `onPrimaryContainer`
+  (light themes, where an amber dark enough for white text turns brown), with a soft coloured
+  glow, a 1 px lift on hover and a slight press-in. Tonal buttons get a highlight edge and an
+  amber icon. Labels stay `onPrimary`; the contrast test checks both gradient ends in both
+  themes. Material's own state layers, ripple and focus ring are kept.
 
 ## 14. Owner decisions
 

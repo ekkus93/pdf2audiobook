@@ -37,6 +37,10 @@ const TEXT: Array<[Role, Role]> = [
   ["onErrorContainer", "errorContainer"],
   ["inverseOnSurface", "inverseSurface"],
   ["onBackground", "background"],
+  // Accent buttons (buttons.css): the label sits on a gradient from primary to amber (dark
+  // themes) or deep indigo (light themes); both ends are checked in both themes.
+  ["onPrimary", "tertiary"],
+  ["onPrimary", "onPrimaryContainer"],
   ...SURFACES.flatMap((surface): Array<[Role, Role]> => [
     ["onSurface", surface],
     ["onSurfaceVariant", surface],
@@ -50,6 +54,8 @@ const GRAPHICS: Array<[Role, Role]> = [
   ...SURFACES.map((surface): [Role, Role] => ["tertiary", surface]),
   ...SURFACES.map((surface): [Role, Role] => ["error", surface]),
   ["inversePrimary", "inverseSurface"],
+  // Tonal buttons (buttons.css) draw their icon in amber.
+  ["tertiary", "secondaryContainer"],
 ];
 
 describe.each([
