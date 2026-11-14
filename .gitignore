@@ -8,6 +8,8 @@ build/
 .venv/
 .env
 *.mp3
+# README voice samples are the one exception.
+!docs/audio/voices/*.mp3
 *.wav
 .audiobook-cache/
 
