@@ -465,7 +465,10 @@ before anything is reserved, sent or written.
   - `audio.synthesis.synthesize_chunks`: validation runs before any engine call or cache
     replay;
   - `CachedLLMProvider._complete_json_call`: request bounds before the cache
-    lookup, and server limits before the reservation;
+    lookup, and server limits before the reservation. A wrapper given a limit but
+    no `ledger_path` owns a temporary ledger; `close()` (or `with`) removes it and
+    then refuses uncached requests. Analysis always passes the book's ledger, so it
+    never makes one; tests that do use the `closing` fixture in `tests/conftest.py`;
   - `OpenAICompatibleProvider._complete_json_request`: each attempt is an
     explicit `_Attempt` that is settled exactly once;
   - `pdf.extract_pdf`: state in `_ExtractionRun`;

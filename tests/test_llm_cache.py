@@ -1,6 +1,7 @@
 """Cache requests by full content, prompt schema and provider identity."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -86,18 +87,20 @@ def test_disabled_cache_and_failed_response_are_not_persisted(tmp_path):
     assert not list(tmp_path.glob("*.json"))
 
 
-def test_request_budget_counts_misses_but_allows_cache_hits(tmp_path):
+def test_request_budget_counts_misses_but_allows_cache_hits(tmp_path, closing):
     from pdf2audiobook.errors import LLMError
 
     source = "Private book passage"
     report = tmp_path / "reports" / "llm_usage.json"
     provider = Stub()
-    worker = CachedLLMProvider(
-        provider,
-        cache_dir=tmp_path / "cache",
-        identity="model",
-        max_requests=1,
-        usage_report=report,
+    worker = closing(
+        CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="model",
+            max_requests=1,
+            usage_report=report,
+        )
     )
     assert worker.complete_json(instructions="classify", document_text=source) == {"headings": []}
     assert worker.complete_json(instructions="classify", document_text=source) == {"headings": []}
@@ -131,7 +134,7 @@ def test_usage_report_records_the_resolved_model(tmp_path):
     assert json.loads(report.read_text(encoding="utf-8"))["resolved_model"] == "served-model-7b"
 
 
-def test_request_budget_counts_failed_provider_attempts(tmp_path):
+def test_request_budget_counts_failed_provider_attempts(tmp_path, closing):
     from pdf2audiobook.errors import LLMError
 
     class FailingProvider:
@@ -143,13 +146,15 @@ def test_request_budget_counts_failed_provider_attempts(tmp_path):
             raise LLMError("offline")
 
     provider = FailingProvider()
-    worker = CachedLLMProvider(
-        provider,
-        cache_dir=tmp_path / "cache",
-        identity="model",
-        enabled=False,
-        max_requests=1,
-        usage_report=tmp_path / "usage.json",
+    worker = closing(
+        CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="model",
+            enabled=False,
+            max_requests=1,
+            usage_report=tmp_path / "usage.json",
+        )
     )
     with pytest.raises(LLMError, match="offline"):
         worker.complete_json(instructions="x", document_text="secret")
@@ -203,3 +208,54 @@ def test_cached_provider_identity_invalidates_on_output_token_cap_change(tmp_pat
         identity=updated_identity,
     ).complete_json(instructions="schema", document_text="text")
     assert provider.calls == 2
+
+
+def test_close_removes_the_temporary_budget_ledger_and_refuses_later_requests(tmp_path):
+    """A wrapper with a limit but no ledger path owns a temporary ledger; close()
+    removes it, and a later uncached request is refused instead of starting a
+    fresh, empty budget. Cache hits still work."""
+    from pdf2audiobook.errors import LLMError
+
+    provider = Stub()
+    worker = CachedLLMProvider(
+        provider, cache_dir=tmp_path / "cache", identity="model", max_requests=5
+    )
+    assert worker.complete_json(instructions="a", document_text="one") == {"headings": []}
+    folder = Path(worker._temporary_ledger.name)
+    assert folder.is_dir()
+
+    worker.close()
+    worker.close()  # a second close does nothing
+
+    assert not folder.exists()
+    assert worker.complete_json(instructions="a", document_text="one") == {"headings": []}
+    with pytest.raises(LLMError) as error:
+        worker.complete_json(instructions="a", document_text="two")
+    assert str(error.value) == "LLM request budget is closed; create a new provider wrapper"
+    assert provider.calls == 1
+    assert not folder.exists()
+
+
+def test_context_manager_closes_and_a_ledger_path_is_left_alone(tmp_path):
+    """`with` closes the wrapper; a caller-supplied ledger is never removed, and
+    such a wrapper keeps working after close()."""
+    provider = Stub()
+    with CachedLLMProvider(
+        provider, cache_dir=tmp_path / "cache", identity="model", max_requests=5
+    ) as worker:
+        folder = Path(worker._temporary_ledger.name)
+        worker.complete_json(instructions="a", document_text="one")
+    assert not folder.exists()
+
+    ledger = tmp_path / "reports" / "llm_budget.sqlite3"
+    owned = CachedLLMProvider(
+        provider,
+        cache_dir=tmp_path / "cache2",
+        identity="model",
+        max_requests=5,
+        ledger_path=ledger,
+    )
+    owned.complete_json(instructions="a", document_text="one")
+    owned.close()
+    assert ledger.exists()
+    assert owned.complete_json(instructions="a", document_text="two") == {"headings": []}

@@ -27,3 +27,19 @@ def _default_event_policy():
 
     configure_logging()
     use_default_event_policy()
+
+
+@pytest.fixture
+def closing(request):
+    """Return a function that registers an object's ``close`` for test teardown.
+
+    Use it around a constructor that owns a resource, for example
+    ``worker = closing(CachedLLMProvider(...))``, so the resource is released
+    when the test ends instead of being left to the garbage collector.
+    """
+
+    def register(resource):
+        request.addfinalizer(resource.close)
+        return resource
+
+    return register

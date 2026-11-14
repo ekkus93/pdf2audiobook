@@ -49,6 +49,7 @@ class CachedLLMProvider:
         self.input_cost_usd_per_million_tokens = input_cost_usd_per_million_tokens
         self.output_cost_usd_per_million_tokens = output_cost_usd_per_million_tokens
         self._temporary_ledger: tempfile.TemporaryDirectory[str] | None = None
+        self._ledger_closed = False
         if ledger_path is None and any(
             limit is not None
             for limit in (max_requests, max_reported_tokens, max_estimated_cost_usd)
@@ -249,6 +250,24 @@ class CachedLLMProvider:
             value["json_mode_unsupported"] = True
         if current != value:
             write_json(path, value)
+
+    def close(self) -> None:
+        """Remove the temporary budget ledger, if this wrapper created one.
+
+        Only a wrapper given a limit but no ``ledger_path`` creates one. After
+        closing, a request that would need the budget is refused (a fresh ledger
+        would forget what was spent); cache hits still work. Calling it again
+        does nothing.
+        """
+        if self._temporary_ledger is not None:
+            self._ledger_closed = True
+            self._temporary_ledger.cleanup()
+
+    def __enter__(self) -> "CachedLLMProvider":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
         return self._complete_json_call(
@@ -464,6 +483,8 @@ class CachedLLMProvider:
         provider settles per attempt or there is no ledger) and whether the
         provider does its own per-attempt accounting.
         """
+        if self._ledger_closed:
+            raise LLMError("LLM request budget is closed; create a new provider wrapper")
         if self._temporary_ledger is not None:
             self._check_usage_budget()
             self._check_remaining_budget(upper_bound_tokens, upper_bound_usd)
