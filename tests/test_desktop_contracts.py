@@ -191,6 +191,9 @@ def test_edits_list(tmp_path: Path) -> None:
     payload = _ok("edits", "list", str(path), "--status", "all", "--json")
     _check("edits-list", payload)
     assert [edit["status"] for edit in payload["edits"]] == ["pending"]
+    with_text = _ok("edits", "list", str(path), "--status", "all", "--json", "--with-text")
+    _check("edits-list", with_text)
+    assert with_text["edits"][0]["replacement"] == "The text."
 
 
 def test_review_address(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

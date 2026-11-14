@@ -253,9 +253,14 @@ def show_config(
 def edits_list(
     manifest_path: Path = typer.Argument(..., help="A generated manifest.json."),
     status: str = typer.Option("pending", "--status", help="pending, accepted, rejected or all."),
+    with_text: bool = typer.Option(
+        False,
+        "--with-text",
+        help="With --json, also include each edit's original and proposed text and its reason.",
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """List edits. Book text appears in human output only; --json carries IDs and statuses."""
+    """List edits. --json carries IDs and statuses; book text only with --with-text."""
     set_output_mode(json_output)
     try:
         from pdf2audiobook.edit_review import list_edits
@@ -271,7 +276,18 @@ def edits_list(
                             "provider": row.provider,
                             "status": row.status,
                             # Model-written reasons can echo book text; fixed ones cannot.
-                            **({"reason": row.reason} if row.provider == "deterministic" else {}),
+                            **(
+                                {"reason": row.reason}
+                                if row.provider == "deterministic" or with_text
+                                else {}
+                            ),
+                            # Book text only when explicitly asked for (the desktop app's
+                            # pending-edits screen); never by default.
+                            **(
+                                {"original": row.original, "replacement": row.replacement}
+                                if with_text
+                                else {}
+                            ),
                         }
                         for row in rows
                     ]

@@ -45,6 +45,14 @@
           },
           "reason": {
             "type": "string"
+          },
+          "original": {
+            "type": "string",
+            "description": "Only with --with-text."
+          },
+          "replacement": {
+            "type": "string",
+            "description": "Only with --with-text."
           }
         },
         "additionalProperties": true

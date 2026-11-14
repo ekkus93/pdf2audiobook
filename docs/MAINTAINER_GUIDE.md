@@ -401,6 +401,9 @@ outputs, so treat their shapes as contracts: add fields, never rename or remove 
 - `review --json` prints one flushed stdout line, `{"url": "http://127.0.0.1:<port>/",
   "port": <port>}`, once the server listens, and nothing else; `--port 0` picks a free port.
 - SIGTERM stops any command like Ctrl+C (see the entry point below).
+- `edits list --json` carries IDs, chapter, provider and status only; `--with-text` adds
+  `original`, `replacement` and `reason` for the desktop app's pending-edits screen. Book text
+  never appears in JSON without that flag.
 - `voices [--tts-provider P] [--tts-model M] --json` prints `{"provider", "voices",
   "listable", "default_voice", "warnings"}`. Piper speakers are numbers inside the model, so
   Piper reports `"listable": false` and an empty list.
