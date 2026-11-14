@@ -318,9 +318,8 @@ def create_review_server(
                 self._json(413, {"error": "Review update exceeds the request size limit"})
                 return
             try:
+                # A body that isn't a JSON object fails on .get and is reported below.
                 payload = json.loads(self.rfile.read(size))
-                if not isinstance(payload, dict):
-                    raise ValueError
                 save_chapter_updates(
                     resolved_manifest, payload.get("chapters"), payload.get("acknowledge")
                 )
