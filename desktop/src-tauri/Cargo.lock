@@ -2560,6 +2560,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "jsonschema",
+ "libc",
  "serde",
  "serde_json",
  "tauri",

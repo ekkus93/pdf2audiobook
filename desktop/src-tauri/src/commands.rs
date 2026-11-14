@@ -9,6 +9,7 @@ use base64::Engine as _;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
+use crate::engine::live::{CANCEL_GRACE, LiveRuns, Progress};
 use crate::engine::locate::{CliSource, LocateError, LocateOptions, LocatedCli, locate};
 use crate::engine::process::{CliCommand, Runner, SystemRunner};
 use crate::engine::request::Request;
@@ -22,6 +23,7 @@ pub struct Engine {
     pub runner: Arc<dyn Runner>,
     pub cli: Mutex<Option<LocatedCli>>,
     pub runs: Arc<WorkspaceRuns>,
+    pub live: Arc<LiveRuns>,
 }
 
 impl Default for Engine {
@@ -30,6 +32,7 @@ impl Default for Engine {
             runner: Arc::new(SystemRunner),
             cli: Mutex::new(None),
             runs: WorkspaceRuns::new(),
+            live: Arc::new(LiveRuns::default()),
         }
     }
 }
@@ -233,6 +236,8 @@ pub struct LibraryBook {
     pub manifest: PathBuf,
     /// False for a book added in the app whose workspace doesn't exist yet.
     pub analyzed: bool,
+    /// True while a run this app started is working on the book (spec D5.b).
+    pub live: bool,
     /// The book file, for a book that isn't analyzed yet.
     pub source: Option<PathBuf>,
     /// `inspect MANIFEST --json`, or `None` when it failed (see `error`).
@@ -328,6 +333,7 @@ pub fn build_library(
                 workspace: dir.workspace,
                 manifest: dir.manifest,
                 analyzed: true,
+                live: false,
                 source: None,
                 inspect,
                 error,
@@ -355,6 +361,7 @@ pub fn build_library(
             thumbnail: thumbnail(cli, runner, book, &workspace, thumbnails),
             workspace,
             analyzed: false,
+            live: false,
             source: Some(book.clone()),
             inspect: None,
             error: None,
@@ -432,6 +439,7 @@ pub async fn library(app: AppHandle, engine: State<'_, Engine>) -> Result<Librar
         .map_err(|_| BridgeError::Start)?
         .join("thumbnails");
     let runner = Arc::clone(&engine.runner);
+    let live = Arc::clone(&engine.live);
     tauri::async_runtime::spawn_blocking(move || {
         build_library(
             &cli.command,
@@ -440,9 +448,71 @@ pub async fn library(app: AppHandle, engine: State<'_, Engine>) -> Result<Librar
             &settings.added_books,
             &thumbnails,
         )
+        .map(|mut library| {
+            for book in &mut library.books {
+                book.live = live.is_live(&book.workspace);
+            }
+            library
+        })
     })
     .await
     .map_err(|_| BridgeError::Start)?
+}
+
+/// Starts a long run (analyze or convert) for `workspace` and returns its ID at once (spec D5).
+#[tauri::command]
+pub fn start_run(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+    request: Request,
+    workspace: PathBuf,
+) -> Result<u64, BridgeError> {
+    let args = request.args().map_err(|error| BridgeError::Request {
+        message: error.to_string(),
+    })?;
+    let cli = located(&engine, &app)?;
+    let guard = engine
+        .runs
+        .try_start(&workspace, &request)
+        .map_err(|busy| BridgeError::Busy {
+            message: busy.to_string(),
+        })?;
+    engine
+        .live
+        .start(&cli.command, &args, &workspace, Some(guard))
+        .map_err(|_| BridgeError::Start)
+}
+
+#[tauri::command]
+pub fn run_progress(engine: State<'_, Engine>, id: u64) -> Result<Progress, BridgeError> {
+    engine
+        .live
+        .progress(id)
+        .map_err(|error| BridgeError::Request {
+            message: error.to_string(),
+        })
+}
+
+/// Asks a run to stop; it is killed if it hasn't stopped after 30 seconds (spec D5.c).
+#[tauri::command]
+pub fn cancel_run(engine: State<'_, Engine>, id: u64) -> Result<(), BridgeError> {
+    engine
+        .live
+        .cancel(id, CANCEL_GRACE)
+        .map_err(|error| BridgeError::Request {
+            message: error.to_string(),
+        })
+}
+
+/// Stops every run, then quits; the frontend calls it after the user confirms (spec D5.d).
+#[tauri::command]
+pub async fn quit_app(app: AppHandle, engine: State<'_, Engine>) -> Result<(), BridgeError> {
+    let live = Arc::clone(&engine.live);
+    tauri::async_runtime::spawn_blocking(move || live.shutdown(CANCEL_GRACE))
+        .await
+        .map_err(|_| BridgeError::Start)?;
+    app.exit(0);
+    Ok(())
 }
 
 /// Remembers a book the user picked, so the library shows it before it is analyzed.
