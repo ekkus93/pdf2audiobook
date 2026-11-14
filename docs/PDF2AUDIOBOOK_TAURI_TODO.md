@@ -66,22 +66,77 @@
     on 3.11/3.12/3.13, pytest 2415 passed, 1 skipped, CLI smoke passed. Commit
     c95255dd76663c3f3dff077157dc88312b3e1206, Python CI
     [43605569128](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605569128) passed.
-- [ ] TD1.02 D2.a: `pdf2audiobook workspace BOOK [--output DIR] --json` prints
+- [x] TD1.02 D2.a: `pdf2audiobook workspace BOOK [--output DIR] --json` prints
   `{"workspace", "exists"}` using the analysis rule. Tests: matches the folder `analyze`
   creates; `exists` false before and true after; missing book gives exit 3 and the existing
   message; nothing is written.
-- [ ] TD1.03 D2.b: add `reason` to JSON errors for each row of the spec table. Tests: one per
+  - Evidence: `pdf2audiobook workspace` (`src/pdf2audiobook/cli.py`) uses the new public
+    `pipeline.analysis_workspace_folder`, which wraps the analysis rule. Output is
+    `{"workspace", "exists", "warnings"}`: every `--json` result carries `warnings`.
+    `tests/test_cli_workspace.py`: `test_workspace_matches_the_folder_analyze_creates` (same folder
+    as `analyze`; `exists` false before and true after; the tree is unchanged by the command),
+    `test_workspace_uses_the_configured_output_folder`, and
+    `test_missing_book_gives_exit_3_and_the_existing_message` (exit 3, the existing message, no
+    path or name, nothing written). Full checks: Ruff and format clean, mypy clean on 3.11/3.12/3.13 (run as `uv run --isolated --extra dev mypy`, see "Found while"), pytest 2418 passed, 1 skipped. Commit
+    8fa1af7b3f1c93c955b7358efc84bad04f3287eb, Python CI [43605747057](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605747057) passed.
+- [x] TD1.03 D2.b: add `reason` to JSON errors for each row of the spec table. Tests: one per
   reason that triggers the real failure and checks `reason` with `type`, `code` and `message`
   unchanged; an error with no reason has no `reason` key.
-- [ ] TD1.04 D2.c: `review --json` prints `{"url", "port"}` once listening, then flushes;
+  - Evidence: `AudiobookError.error_reason` (`src/pdf2audiobook/errors.py`), set on
+    `WorkspaceLockedError`, `PendingRecoveryError` and `ChapterConflictError` and per raise for
+    the review gates (`chapter_selection.py`), LLM failures (`llm/provider.py`) and exhausted
+    budgets (`llm/budget.py`, `llm/cache.py`); `cli.fail` adds `reason` only when set. The
+    existing `LLMError.reason` log tag is unchanged. `tests/test_cli_error_reasons.py` (16 tests):
+    end to end through `--json` for low confidence and an unapproved empty chapter
+    (`review_required`), `damaged_source` and `ambiguous_page_numbers`
+    (`review_acknowledgement_required`), a held lock (`workspace_locked`), a blocked pending
+    update (`pending_recovery`); at the real source and through `cli.fail` for a conflicting
+    edited chapter (`chapter_conflict`), refused connections to llama-server and Ollama
+    (`llm_unreachable`), the configured and the served context (`llm_context_too_small`), both
+    output-cap failures (`llm_output_cap`) and a used-up request budget (`budget_exhausted`).
+    Each checks `type`, `code` and `message` too. `test_timeout_is_not_reported_as_unreachable`
+    and `test_error_without_a_reason_has_no_reason_key` check the absent key. Against the
+    unchanged source, 14 of 16 fail (the two that pass expect no reason). Full checks: Ruff and format clean, mypy clean on 3.11/3.12/3.13 (run as `uv run --isolated --extra dev mypy`, see "Found while"), pytest 2434 passed,
+    1 skipped. Commit 246571bcff17276f357332ed11d165c67a63ef71, Python CI
+    [43606260786](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606260786) passed.
+- [x] TD1.04 D2.c: `review --json` prints `{"url", "port"}` once listening, then flushes;
   `--port 0` works. Test: start with `--json --port 0`, read the line, fetch the URL, stop the
   server; human mode output unchanged.
-- [ ] TD1.05 D2.d: SIGTERM stops a run like Ctrl+C: `run_status.json` says `stopped`, the lock
+  - Evidence: with `--json`, `review` prints one flushed line `{"url", "port"}` and no human
+    lines. `tests/test_cli_review_json.py`:
+    `test_real_server_on_port_zero_reports_a_reachable_address` (a real `review --json --port 0`
+    process: reads the line, fetches the URL and gets the review page, stops it with SIGINT,
+    exit 0, nothing else on stdout), `test_json_mode_prints_only_the_address_line`, and
+    `test_human_mode_output_is_unchanged` (the three existing stderr lines, empty stdout). The
+    two JSON tests failed before the change. Full checks: Ruff and format clean, mypy clean on 3.11/3.12/3.13 (run as `uv run --isolated --extra dev mypy`, see "Found while"), pytest 2437 passed, 1 skipped. Commit
+    bbef731af2263514b2f15e4665eeb9550b804ca2, Python CI [43606481323](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606481323) passed.
+- [x] TD1.05 D2.d: SIGTERM stops a run like Ctrl+C: `run_status.json` says `stopped`, the lock
   is released, exit 130 with the `Interrupted` JSON error. Test with a slow fake TTS provider
   on POSIX. Windows `CTRL_BREAK_EVENT` handling waits for Windows support (O2).
-- [ ] TD1.06 D2.e: `pdf2audiobook voices --json` lists the provider's voices. Tests: fake Kitten
+  - Evidence: the console script is now `pdf2audiobook.cli:main`, which installs a SIGTERM
+    handler that raises `KeyboardInterrupt`, then runs `app`; Ctrl+C's existing path does the
+    rest. `tests/test_cli_sigterm.py::test_sigterm_during_synthesis_stops_like_ctrl_c` runs a
+    real `convert` whose Kitten is replaced by a voice that blocks in synthesis, sends SIGTERM,
+    and checks: exit 130 within 30 s, empty stdout, the `Interrupted` JSON error,
+    `run_status.json` `state` is `stopped`, and `workspace_lock` can be taken at once. It failed
+    before the change. `docs/MAINTAINER_GUIDE.md` names the new entry point. Full checks: Ruff and format clean, mypy clean on 3.11/3.12/3.13 (run as `uv run --isolated --extra dev mypy`, see "Found while"), pytest 2438 passed,
+    1 skipped; CLI smoke passed. Windows `CTRL_BREAK_EVENT` is not handled yet, as the item
+    allows (O2: Linux only). Commit 084afcce6f28f7fe8e52f19d69f50376a84da1d9, Python CI
+    [43606790093](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606790093) passed.
+- [x] TD1.06 D2.e: `pdf2audiobook voices --json` lists the provider's voices. Tests: fake Kitten
   and Piper providers; the Kitten list matches `KittenProvider.list_voices`; an unavailable
   provider gives the existing install message.
+  - Evidence: `pdf2audiobook voices` prints `{"provider", "voices", "listable",
+    "default_voice", "warnings"}`; `--tts-model` maps as in `convert`. Piper has no voice names
+    (its speakers are numbers in the model), so it reports `"listable": false` and an empty list
+    rather than an empty list that looks like "no voices". `tests/test_cli_voices.py`:
+    `test_kitten_voices_match_the_provider_listing` (fake `kittenml`; equals
+    `KittenProvider("mini").list_voices()`), `test_tts_model_selects_the_kitten_model`,
+    `test_piper_reports_that_its_speakers_cannot_be_listed` (no model path in the output),
+    `test_missing_kitten_gives_the_existing_install_message` and
+    `test_missing_piper_model_gives_the_existing_message`. With the real Kitten installed it lists
+    Bella, Jasper, Luna, Bruno, Rosie, Hugo, Kiki and Leo. Full checks: Ruff and format clean, mypy clean on 3.11/3.12/3.13 (run as `uv run --isolated --extra dev mypy`, see "Found while"), pytest 2443 passed, 1 skipped. Commit
+    c87c24a350b3044f2b7aed7b09b27ef5da2a9d47, Python CI [43606973444](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606973444) passed.
 - [ ] TD1.07 D2.g: `pdf2audiobook thumbnail BOOK --output FILE.png [--width N] --json` renders
   the first page (PDF) or cover (EPUB) and prints `{"thumbnail", "width", "height"}`. Tests:
   PDF and EPUB fixtures, the requested width, an unreadable book gives the existing exit 3
@@ -206,10 +261,16 @@ dark and light screenshots (spec D11.h).
   book with real Kitten speech, and record the result. Real LLM use with Ollama is recorded
   separately and stays optional.
 
-## Found while writing the spec
+## Found while writing the spec and working
 
 - `pdf2audiobook --version` exits 2 with "Missing command" unless a command follows it
   (master at 05ca4c37685325ced177cf06d21de2506fe18cd2). Tracked as TD1.01.
+- Local mypy is not clean when the `kitten` extra is installed: `tts/__init__.py:59` reports
+  `import-untyped` for `kittenml`, which its `type: ignore[import-not-found]` doesn't cover.
+  CI installs only the `dev` extra, where the import is not found and the ignore applies, so CI
+  is clean. The TD0.01 baseline result came from mypy's cache. Checks in this TODO therefore run
+  mypy as CI does, in an isolated environment without Kitten:
+  `uv run --isolated --extra dev mypy --no-incremental --python-version X`. Not fixed here.
 
 ## Progress ledger
 
@@ -217,3 +278,8 @@ dark and light screenshots (spec D11.h).
 | --- | --- | --- | --- | --- |
 | 2026-11-14 | fc65d442887297608f60d97cd0ba4f7457e2ced0 | Tauri TD0.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Python CI runs on pushes to the `tauri` branch | `ci.yml` cross-check tests pass; Exact-head Python CI #790 [43605414647](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605414647) passed on attempt 1 | None |
 | 2026-11-14 | c95255dd76663c3f3dff077157dc88312b3e1206 | Tauri TD1.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `pdf2audiobook --version` works without a command | /verify-equivalent checks: pytest 2415 passed, 1 skipped; mypy 3.11/3.12/3.13 clean; Exact-head Python CI #791 [43605569128](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605569128) passed on attempt 1 | None |
+| 2026-11-14 | 8fa1af7b3f1c93c955b7358efc84bad04f3287eb | Tauri TD1.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `workspace` command shows a book's workspace folder | pytest 2418 passed, 1 skipped; Exact-head Python CI #792 [43605747057](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605747057) passed on attempt 1 | None |
+| 2026-11-14 | 246571bcff17276f357332ed11d165c67a63ef71 | Tauri TD1.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): stable `reason` codes on JSON errors | pytest 2434 passed, 1 skipped; 14 of 16 new tests fail without the change; Exact-head Python CI #794 [43606260786](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606260786) passed on attempt 1 | None |
+| 2026-11-14 | bbef731af2263514b2f15e4665eeb9550b804ca2 | Tauri TD1.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `review --json` prints its address as one JSON line | pytest 2437 passed, 1 skipped; Exact-head Python CI #795 [43606481323](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606481323) passed on attempt 1 | None |
+| 2026-11-14 | 084afcce6f28f7fe8e52f19d69f50376a84da1d9 | Tauri TD1.05 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): SIGTERM stops a run like Ctrl+C (new `cli:main` entry point) | pytest 2438 passed, 1 skipped; real-process SIGTERM test; Exact-head Python CI #796 [43606790093](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606790093) passed on attempt 1 | Windows CTRL_BREAK_EVENT not handled (Linux only, O2) |
+| 2026-11-14 | c87c24a350b3044f2b7aed7b09b27ef5da2a9d47 | Tauri TD1.06 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `voices` command lists the provider's voices | pytest 2443 passed, 1 skipped; Exact-head Python CI #797 [43606973444](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606973444) passed on attempt 1 | None |
