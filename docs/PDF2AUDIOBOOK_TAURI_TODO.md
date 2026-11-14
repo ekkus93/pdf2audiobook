@@ -721,19 +721,84 @@ dark and light screenshots (spec D11.h).
 
 ## Phase TD10 — End to end, CI and packaging (D9.d, D10)
 
-- [ ] TD10.01 D9.d: `tauri-driver` WebDriver test on Linux: add the demo book, analyze with
+- [x] TD10.01 D9.d: `tauri-driver` WebDriver test on Linux: add the demo book, analyze with
   `--no-llm`, review (retitle chapter 1 and save), convert with `--dry-run`.
-- [ ] TD10.02 D10.c: CI job for `desktop/` (fmt, clippy, tests, frontend checks, Linux
+  - Evidence: `desktop/e2e/walkthrough.mjs` (`npm run e2e`) drives a release build through `tauri-
+    driver` and WebKitWebDriver with plain W3C WebDriver calls: the library starts empty; Add book
+    opens the native file dialog, where `xdotool` types the README demo book's path
+    (`scripts/readme_screenshots/make_demo_pdf.py`); the book is analyzed with the LLM switched
+    off; Review chapters opens the review window, chapter 1 is retitled and saved ("Saved and
+    approved"), and the window is closed as a user would (`e2e/close_window.py`,
+    WM_DELETE_WINDOW); then Convert runs with `--dry-run` (the app's CLI location points at a
+    wrapper that adds it to the real CLI from the checkout). It then reads the manifest: chapter 1
+    has the new title and is approved. Screenshots go to an artifacts folder (ImageMagick;
+    WebKitWebDriver's own screenshot command doesn't answer under Xvfb), and the temporary home is
+    removed. It found a bug: after a run, Back to the book showed the book as it was before the
+    run, so an analyzed book had no review panel; fixed in
+    b99e4bb852e5d3e4d032caba1f0e699c2ab14ff4 (`App.test.tsx` fails without the fix; Python CI #845
+    [43637832735](https://github.com/ekkus93/pdf2audiobook/actions/runs/43637832735) passed).
+    Locally it passed twice against the release binary; in CI it passes against the release binary
+    and against the AppImage. Commit a3e270843871d0267793c57b95fa1eadad7fb66f; CI:
+    9b03d4eefe28463bc3dffe6a5d5b4c9245cad451, Desktop CI #4
+    [43638534169](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534169) passed
+    (Python CI #849
+    [43638534189](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534189) passed).
+- [x] TD10.02 D10.c: CI job for `desktop/` (fmt, clippy, tests, frontend checks, Linux
   `tauri build`, the end-to-end test). Depends on TD0.03.
-- [ ] TD10.03 D10.b: Linux AppImage and `.deb` from CI as build artifacts. macOS and Windows
+  - Evidence: `.github/workflows/desktop.yml` ("Desktop CI") runs on pushes to master and tauri,
+    on pull requests and by hand, on Ubuntu 22.04: apt packages for WebKitGTK, its WebDriver and
+    the X tools (time-bounded, retried, cached), Node 22 with `npm ci`, stable Rust with clippy
+    and rustfmt, uv 0.12.9 with the locked CLI; then frontend lint, type check, tests and build,
+    `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, `tauri build
+    --bundles appimage,deb`, and the walkthrough under Xvfb against the release binary and against
+    the AppImage. `tests/test_desktop_ci.py` (5 tests) checks the triggers, every check, the uv
+    pin shared with `ci.yml`, Node 22, the AppImage walkthrough and the unsigned artifacts.
+    Attempts: Desktop CI #1
+    [43637961235](https://github.com/ekkus93/pdf2audiobook/actions/runs/43637961235) (a3e2708)
+    failed at `npm ci`: the lock file written by npm 11 lacked optional packages npm 10 expects;
+    rewritten with npm 10 in 66f09811d1ce6a625578219a20e1800314f88663. #2
+    [43638257820](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638257820) (66f0981) and
+    #3 [43638448307](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638448307) (f443007)
+    failed in two frontend tests whose fetch stubs passed jsdom's Blob to Node 22's Response;
+    fixed in 9b03d4e. 9b03d4eefe28463bc3dffe6a5d5b4c9245cad451, Desktop CI #4
+    [43638534169](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534169) passed
+    (Python CI #849
+    [43638534189](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534189) passed):
+    every step, about 10 minutes.
+- [x] TD10.03 D10.b: Linux AppImage and `.deb` from CI as build artifacts. macOS and Windows
   wait for O2.
-- [ ] TD10.04 **[OWNER DECISION]** D10.d signing and notarization (O4). Unsigned builds are
+  - Evidence: Desktop CI builds the AppImage and `.deb` and uploads them as the `pdf2audiobook-
+    desktop-linux-unsigned` artifact (`if-no-files-found: error`). Desktop CI #4
+    [43638534169](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534169)
+    (9b03d4eefe28463bc3dffe6a5d5b4c9245cad451): `pdf2audiobook_0.1.0_amd64-unsigned.AppImage`
+    (82,143,736 bytes) and `pdf2audiobook_0.1.0_amd64-unsigned.deb` (3,608,282 bytes), artifact
+    85,070,981 bytes; the AppImage then passed the walkthrough in the same run. macOS and Windows
+    wait for O2.
+- [x] TD10.04 **[OWNER DECISION]** D10.d signing and notarization (O4). Unsigned builds are
   labelled as unsigned until then.
+  - Evidence: The owner chose unsigned builds for now (spec §14, O4). Installers are labelled in
+    their file names: CI renames them to `*-unsigned.AppImage` and `*-unsigned.deb` before
+    uploading (`tests/test_desktop_ci.py::test_installers_are_uploaded_and_named_unsigned`), as in
+    Desktop CI #4
+    [43638534169](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534169). Signing and
+    notarization stay an owner decision for later.
   - Note: The owner chose unsigned builds for now (spec §14, O4). The item stays open until the
     build labels unsigned installers, which is part of TD10.03.
-- [ ] TD10.05 Manual acceptance on this machine: install the AppImage, convert the README demo
+- [x] TD10.05 Manual acceptance on this machine: install the AppImage, convert the README demo
   book with real Kitten speech, and record the result. Real LLM use with Ollama is recorded
   separately and stays optional.
+  - Evidence: On this machine (Ubuntu 22.04 container, WebKitGTK 2.50.4, no FUSE): the AppImage
+    built from f443007122faf2a76af80b7b90af58e4b5a4adb8's code (sha256
+    4af7ebcfff82d11fe14fabb17f140c8fdfd678e3b388cc8da034284634db0518, 82,086,392 bytes) was
+    installed by copying it into an Applications folder and run with `APPIMAGE_EXTRACT_AND_RUN=1`.
+    The README demo book was added through the file dialog, analyzed without the LLM, reviewed
+    (chapter 1 retitled and saved) and converted with real Kitten speech (`E2E_DRY_RUN=0`):
+    "Conversion finished in 8s" and four MP3s, 4.9 s, 33.6 s, 29.7 s and 24.1 s (ffprobe).
+    Screenshots: `docs/images/tauri/acceptance-appimage-added-dark.png`, `acceptance-appimage-
+    converted-dark.png`. The first attempt found that the AppImage's environment broke the CLI
+    (see "Found while"); fixed in f443007 before this run. Note: the run was driven by the
+    walkthrough under Xvfb rather than by hand, and nobody listened to the audio. Real LLM use
+    with Ollama was not run (optional).
 
 ## Found while writing the spec and working
 
@@ -757,6 +822,18 @@ dark and light screenshots (spec D11.h).
   fetch the file and play a `blob:` URL (TD8.01). In this container, with no sound device, the
   release build plays and advances through chapters; with a PipeWire null sink started by hand
   the web process stalled for some seconds while connecting.
+
+- The AppImage's launcher points `PATH`, `PYTHONHOME`, `PYTHONPATH`, `LD_LIBRARY_PATH`,
+  `XDG_DATA_DIRS` and GTK/GIO variables into the image, and the app's child processes inherited
+  them: the CLI's Python couldn't start ("The pdf2audiobook command-line tool did not respond as
+  expected"). Found in TD10.05's acceptance run; the release binary run directly was fine. The
+  bridge now gives every child (CLI, live runs, the review server, `xdg-open`) the host's
+  environment back: variables pointing into the image keep only their entries outside it or are
+  removed, and the launcher's own variables are dropped; everything else passes unchanged, so
+  spec D3.e still holds for what the user set (`engine::process::host_environment`). CI now also
+  walks through the AppImage itself.
+- `npm ci` on CI's Node 22 (npm 10) rejected a lock file written by npm 11 (optional
+  `@emnapi` packages left out). The lock is now written with npm 10; `desktop/README.md` says so.
 
 ## Progress ledger
 
@@ -800,3 +877,8 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | 27d434f6074b9749dafd29beddc8c4731e10ae47 | Tauri TD5.08 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): settings for the CLI, output folder, default voice and LLM | 274 frontend tests; real save and default voice checked; Exact-head Python CI #841 [43632382414](https://github.com/ekkus93/pdf2audiobook/actions/runs/43632382414) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 4512c39b8770f35e74f8b5a4c9d1aed516915544 | Tauri TD5.09 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): an action for each engine error reason | 300 frontend tests incl. every reason; budget-show contract; real lock wait checked; Exact-head Python CI #842 [43633181030](https://github.com/ekkus93/pdf2audiobook/actions/runs/43633181030) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 1c0ecc967e8fa63c5f16440bf82bc5e64b268260 | Tauri TD9.01-TD9.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): narrow permissions, CSP, content-free log, no network | pytest 2489 passed, 1 skipped; cargo test 101+7 passed; 303 frontend tests; release app run with IPv4/IPv6 refused; Exact-head Python CI #843 [43634551329](https://github.com/ekkus93/pdf2audiobook/actions/runs/43634551329) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | b99e4bb852e5d3e4d032caba1f0e699c2ab14ff4 | Tauri TD10.01 fix (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Back to the book shows the book as the run left it | 316 frontend tests; App test fails without the fix; Exact-head Python CI #845 [43637832735](https://github.com/ekkus93/pdf2audiobook/actions/runs/43637832735) passed on attempt 1 | None |
+| 2026-11-14 | a3e270843871d0267793c57b95fa1eadad7fb66f | Tauri TD10.01, TD10.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): end-to-end walkthrough and Desktop CI workflow | walkthrough passed locally twice; Desktop CI #1 [43637961235](https://github.com/ekkus93/pdf2audiobook/actions/runs/43637961235) failed at npm ci (npm 11 lock file); Exact-head Python CI #846 [43637961245](https://github.com/ekkus93/pdf2audiobook/actions/runs/43637961245) passed on attempt 1 | Desktop CI failing (fixed in later commits) |
+| 2026-11-14 | 66f09811d1ce6a625578219a20e1800314f88663 | Tauri TD10.02 fix (docs/PDF2AUDIOBOOK_TAURI_TODO.md): lock file written with npm 10 for CI | Desktop CI #2 [43638257820](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638257820) failed in two frontend tests on Node 22; Exact-head Python CI #847 [43638257842](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638257842) passed on attempt 1 | Desktop CI failing (fixed in 9b03d4e) |
+| 2026-11-14 | f443007122faf2a76af80b7b90af58e4b5a4adb8 | Tauri TD10.05 fix (docs/PDF2AUDIOBOOK_TAURI_TODO.md): child processes get the host environment inside an AppImage; CI walks through the AppImage | cargo test 104 passed; Desktop CI #3 [43638448307](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638448307) failed in the same two Node 22 tests; Exact-head Python CI #848 [43638448299](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638448299) passed on attempt 1 | Desktop CI failing (fixed in 9b03d4e) |
+| 2026-11-14 | 9b03d4eefe28463bc3dffe6a5d5b4c9245cad451 | Tauri TD10.01-TD10.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Desktop CI passes, unsigned AppImage and .deb artifacts | 316 frontend tests on Node 22 and 24; Desktop CI #4 [43638534169](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534169) passed every step incl. both walkthroughs; Exact-head Python CI #849 [43638534189](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534189) passed on attempt 1 | macOS and Windows installers wait for O2; signing waits for O4 |
