@@ -174,10 +174,19 @@ def configure_effective_logging(settings: Settings, origins: dict[str, str]) -> 
 _ROOT_OPTIONS: dict[str, Any] = {}
 
 
+def _show_version(value: bool) -> None:
+    """Print the version and stop, even when no command follows."""
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
 @app.callback()
 def entry(
     ctx: typer.Context,
-    version: bool = typer.Option(False, "--version", help="Show version."),
+    version: bool = typer.Option(
+        False, "--version", help="Show version.", is_eager=True, callback=_show_version
+    ),
     verbose: bool = typer.Option(
         False, "--verbose", help="Emit privacy-safe debug events to stderr."
     ),
@@ -205,9 +214,6 @@ def entry(
         use_default_event_policy()
     begin_cli_command()
     log_event("command_started", level=logging.DEBUG, command=ctx.invoked_subcommand or "root")
-    if version:
-        typer.echo(__version__)
-        raise typer.Exit()
 
 
 @config_app.command("show", epilog="Example: pdf2audiobook config show --sources")
