@@ -41,6 +41,9 @@ export type Request =
   | { command: "convert"; book: string; options: BookOptions; convert: ConvertOptions }
   | { command: "doctor"; check_llm?: boolean }
   | { command: "recover"; manifest: string; back_up_changed: boolean }
+  | { command: "edits_list"; manifest: string; status: "pending" | "accepted" | "rejected" | "all"; with_text?: boolean }
+  | { command: "edits_accept"; manifest: string; which: { kind: "all" } | { kind: "blocks"; ids: string[] } }
+  | { command: "edits_reject"; manifest: string; which: { kind: "all" } | { kind: "blocks"; ids: string[] } }
   | { command: "config_show" }
   | { command: "inspect"; source: string; pdf_password_env?: string | null }
   | { command: "workspace"; book: string; output?: string | null }
@@ -208,4 +211,15 @@ export interface Voices {
   voices: string[];
   listable: boolean;
   default_voice: string;
+}
+
+/** One row of `edits list --json --with-text`. */
+export interface PendingEdit {
+  block_id: string;
+  chapter: number | null;
+  provider: string;
+  status: "pending" | "accepted" | "rejected";
+  reason?: string;
+  original?: string;
+  replacement?: string;
 }

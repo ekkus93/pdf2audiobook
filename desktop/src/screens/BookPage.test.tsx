@@ -41,6 +41,7 @@ const BOOK: LibraryBook = {
 function respond() {
   vi.mocked(api.run).mockImplementation(async (request: Request) => {
     if (request.command === "config_show") return { outcome: "success", result: CONFIG };
+    if (request.command === "edits_list") return { outcome: "success", result: { edits: [] } };
     return {
       outcome: "success",
       result: { provider: "kitten", voices: ["Jasper", "Luna"], listable: true, default_voice: "Jasper" },
@@ -95,7 +96,8 @@ describe("BookPage", () => {
     });
     render(<BookPage book={BOOK} outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={vi.fn()} />);
     expect(await screen.findByText("The options couldn't be loaded")).toBeInTheDocument();
-    expect(screen.getByText("Invalid configuration")).toBeInTheDocument();
+    // Pending edits report the same engine failure in their own section.
+    expect(screen.getAllByText("Invalid configuration")).toHaveLength(2);
   });
 
   it("starts analysis and conversion with the chosen options", async () => {

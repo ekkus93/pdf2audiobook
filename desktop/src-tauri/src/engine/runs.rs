@@ -100,6 +100,7 @@ mod tests {
         Request::EditsList {
             manifest: manifest.join("manifest.json"),
             status: EditStatus::Pending,
+            with_text: false,
         }
     }
 

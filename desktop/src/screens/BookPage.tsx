@@ -11,6 +11,7 @@ import { Slider } from "../ui/Slider";
 import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
 import { defaults, modelFor, requests, validate, type OptionsForm } from "./bookOptions";
+import { PendingEdits } from "./PendingEdits";
 import { summarize } from "./bookState";
 import "./screens.css";
 import "./book.css";
@@ -19,6 +20,8 @@ interface BookPageProps {
   book: LibraryBook;
   /** True while this book's review window is open. */
   reviewing?: boolean;
+  /** Called after the book changed here (an edit accepted or rejected). */
+  onChanged?: () => void;
   onReviewOpened?: () => void;
   outputDir: string;
   minConfidence: number;
@@ -51,7 +54,7 @@ const PROVIDERS: ReadonlyArray<{ value: LlmProvider; label: string }> = [
 ];
 
 /** One book: its options (spec D4.3) and the actions that start analysis or conversion. */
-export function BookPage({ book, reviewing = false, onReviewOpened, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
+export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
   const summary = summarize(book, minConfidence);
   const source = book.inspect?.source_path ?? book.source ?? "";
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
@@ -92,6 +95,7 @@ export function BookPage({ book, reviewing = false, onReviewOpened, outputDir, m
           onOpened={onReviewOpened}
         />
       ) : null}
+      {book.analyzed ? <PendingEdits manifest={book.manifest} workspace={book.workspace} onChanged={onChanged} /> : null}
       {loaded.phase === "loading" ? (
         <div className="screen-loading">
           <CircularProgress label="Loading the options" />

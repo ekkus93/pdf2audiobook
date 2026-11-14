@@ -210,6 +210,9 @@ pub enum Request {
     EditsList {
         manifest: PathBuf,
         status: EditStatus,
+        /// Include each edit's original and proposed text (`--with-text`).
+        #[serde(default)]
+        with_text: bool,
     },
     EditsAccept {
         manifest: PathBuf,
@@ -326,9 +329,16 @@ impl Request {
                 args.value("--port", port.to_string());
                 args.positional(manifest, "The manifest")?;
             }
-            Request::EditsList { manifest, status } => {
+            Request::EditsList {
+                manifest,
+                status,
+                with_text,
+            } => {
                 args.command(&["edits", "list"]);
                 args.value("--status", edit_status_name(*status));
+                if *with_text {
+                    args.flag("--with-text");
+                }
                 args.positional(manifest, "The manifest")?;
             }
             Request::EditsAccept { manifest, which } | Request::EditsReject { manifest, which } => {
@@ -948,6 +958,7 @@ mod tests {
         let request = Request::EditsList {
             manifest: "/w/manifest.json".into(),
             status: EditStatus::All,
+            with_text: true,
         };
         assert_eq!(
             args_of(request),
@@ -956,11 +967,17 @@ mod tests {
                 "edits",
                 "list",
                 "--status=all",
+                "--with-text",
                 "--json",
                 "--",
                 "/w/manifest.json"
             ]
         );
+        let request: Request = serde_json::from_str(
+            r#"{"command": "edits_list", "manifest": "/m.json", "status": "pending"}"#,
+        )
+        .unwrap();
+        assert!(!args_of(request).contains(&"--with-text".to_string()));
     }
 
     #[test]
@@ -1122,7 +1139,8 @@ mod tests {
         assert!(
             !Request::EditsList {
                 manifest: manifest.clone(),
-                status: EditStatus::Pending
+                status: EditStatus::Pending,
+                with_text: false,
             }
             .is_write()
         );

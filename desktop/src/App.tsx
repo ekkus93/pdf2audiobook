@@ -50,19 +50,24 @@ export default function App() {
     return () => unsubscribe?.();
   }, []);
 
+  /** Re-reads the open book after something changed it (review, an edit decision). */
+  const refreshOpenBook = () => {
+    void library()
+      .then((data) =>
+        setOpen((current) => {
+          const book = current && data.books.find((item) => item.workspace === current.book.workspace);
+          return current && book ? { book, library: data } : current;
+        }),
+      )
+      .catch(() => undefined);
+  };
+
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     void onReviewClosed(() => {
       setReviewing(null);
       // Review may have changed the book: re-read it (spec D6.b).
-      void library()
-        .then((data) =>
-          setOpen((current) => {
-            const book = current && data.books.find((item) => item.workspace === current.book.workspace);
-            return current && book ? { book, library: data } : current;
-          }),
-        )
-        .catch(() => undefined);
+      refreshOpenBook();
     })
       .then((stop) => {
         unsubscribe = stop;
@@ -112,6 +117,7 @@ export default function App() {
             <BookPage
               book={open.book}
               reviewing={reviewing === open.book.workspace}
+              onChanged={refreshOpenBook}
               onReviewOpened={() => setReviewing(open.book.workspace)}
               outputDir={open.library.output_dir}
               minConfidence={open.library.min_boundary_confidence}
