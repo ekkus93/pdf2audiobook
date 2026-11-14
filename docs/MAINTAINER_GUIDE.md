@@ -388,8 +388,10 @@ Page-number candidate ranking uses `PAGE_NUMBER_EDGE_TIE_TOLERANCE_PT = 2.0` in
 and retained for review. A difference of exactly 2pt is sufficient to select
 the nearer candidate.
 
-The executable `pdf2audiobook` maps to `pdf2audiobook.cli:app`
-(`src/pdf2audiobook/cli.py`). Modules and their boundaries:
+The executable `pdf2audiobook` maps to `pdf2audiobook.cli:main`
+(`src/pdf2audiobook/cli.py`), which makes SIGTERM stop a run exactly as Ctrl+C does (exit 130,
+`run_status.json` left as `stopped`, the workspace lock released) and then runs the Typer
+`app`. Tests that call `app` in-process don't install that handler. Modules and their boundaries:
 
 1. `config.py`: strict Pydantic TOML/env/CLI settings, provenance and
    validation; `errors.py` and `logging.py` provide domain diagnostics and

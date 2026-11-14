@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import shutil
+import signal
 import sys
 import time
 from importlib import import_module
@@ -1450,3 +1451,15 @@ def review(
         raise
     except Exception as exc:
         fail(exc, json_output=json_output)
+
+
+def _stop_on_sigterm(_signum: int, _frame: object) -> None:
+    # Ctrl+C's path already stops at a safe point, records the run as stopped,
+    # releases the workspace lock and exits 130; SIGTERM takes the same path.
+    raise KeyboardInterrupt
+
+
+def main() -> None:
+    """Console entry point: SIGTERM stops a run the same way Ctrl+C does."""
+    signal.signal(signal.SIGTERM, _stop_on_sigterm)
+    app()
