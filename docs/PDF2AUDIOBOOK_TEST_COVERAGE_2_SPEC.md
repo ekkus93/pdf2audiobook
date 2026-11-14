@@ -1,6 +1,6 @@
 # PDF2Audiobook — Test Coverage Specification, Round 2
 
-**Status:** Implemented; U1–U10 done (see the TODO for evidence); the final gate waits on the user's review of §5
+**Status:** Implemented; U1–U10 done (see the TODO for evidence). After the user's review, the redundant checks were removed (one kept, as it guards named pipes) and the `wave` quirk was fixed
 **Date:** 2026-11-13
 **Baseline:** master at 59e64c71fd076f295973474eafbc98cb781f1316
 **Parent specification:** `docs/PDF2AUDIOBOOK_SPEC.md` (§12 engineering principles)
