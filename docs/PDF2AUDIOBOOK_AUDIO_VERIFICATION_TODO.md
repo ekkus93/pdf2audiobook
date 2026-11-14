@@ -4,7 +4,14 @@
 
 ## AV0 — Baseline and decisions
 
-- [ ] AV0.01 Record the current `convert --chapter N --force` behavior: output replacement, sidecar invalidation, backup behavior, interruption behavior, and JSON/progress contracts.
+- [x] AV0.01 Record the current `convert --chapter N --force` behavior: output replacement, sidecar invalidation, backup behavior, interruption behavior, and JSON/progress contracts.
+  - Evidence: Recorded in spec §11 from `conversion.py`, `audio/encoding.py` and
+    `audio/freshness.py`, and checked with real Kitten runs on a copy of the converted Harbour
+    demo book. A forced `--chapter 2` run replaced the MP3 (sha256 `63dbcbab2959` to
+    `a6fbf266bd91`) and sidecar in place, with no backup and no temporary files left. A forced
+    `--chapter 10` run sent SIGTERM at 291 of 1,427 characters exited 130 with the `Interrupted`
+    JSON error, left the MP3 and sidecar byte-identical (`396b68a424fc`, `fe3d8651508a`),
+    `run_status.json` `stopped`, and no temporary WAV. Gaps for AV4 listed in §11.
 - [ ] AV0.02 Decide report retention, default warning behavior, supported model revisions, language scope, and model-download UX; record decisions in the spec.
 - [ ] AV0.03 Benchmark the three ASR families on generated chapter audio and define normalization, alignment, mismatch thresholds, resource limits, and cancellation expectations.
 

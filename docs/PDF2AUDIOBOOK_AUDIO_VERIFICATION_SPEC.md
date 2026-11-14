@@ -96,3 +96,15 @@ Generate replacement audio and metadata in temporary files. Replace the current 
 - Whether verified/no-mismatch reports are retained by default or only mismatch summaries are retained; transcripts are sensitive, so prefer storing only flagged excerpts unless the user opts to retain full transcripts.
 - Exact comparison thresholds and resampling settings must be selected using a small set of clean, accented, short, noisy, and intentionally corrupted samples before release.
 - Whether CLI-only verification ships before desktop integration; recommended implementation order is CLI backend and report first, then desktop UI.
+
+## 11. Baseline: `convert --chapter N --force` today (AV0.01)
+
+Recorded on 2026-11-14 from the code (`conversion.py`, `audio/encoding.py`, `audio/freshness.py`) and real Kitten runs on a copy of a converted demo book.
+
+- **Selection and cache.** `--chapter N` / `--chapter-range` choose the chapters; `--force` skips reuse of a chapter's existing MP3 and of the chunk cache (`use_cache` off), so the chapter is synthesized again from the approved chapter text (`chapters/NNN.txt`) with the configured voice, speed and pronunciations.
+- **Output replacement.** Synthesis streams a WAV into `.cache/tts/chapters/`; `encode_mp3` encodes it in a temporary directory inside `audio/`, checks FFmpeg's exit code, a nonzero duration and the ID3 tags, then publishes with one `rename` over the chapter's MP3. The sidecar (`*.cache.json`: chapter ID, `text_sha256`, fingerprint, MP3 `sha256` and size) is then written atomically, and older MP3s of the same chapter ID under other file names are deleted.
+- **Sidecar invalidation.** A sidecar counts only if its `sha256` and size match the MP3 (`valid_mp3_sidecar`). If a run stops between the MP3 rename and the sidecar write, the old sidecar no longer matches, so the chapter is treated as stale: resume re-synthesizes it and `pack-m4b` refuses it.
+- **Backups.** None. A successful forced run overwrites the previous MP3 and sidecar in place. A failed synthesis or encode fails only that chapter before the rename, so the previous MP3 and sidecar stay valid and playable, but `conversion_status.json` marks the chapter `failed`.
+- **Interruption.** SIGTERM or Ctrl+C during synthesis (tested at 291 of 1,427 characters): exit 130 with the `Interrupted` JSON error, the previous MP3 and sidecar byte-identical, `run_status.json` `stopped`, no temporary WAV or directory left. A hard kill (SIGKILL) can leave a `.cache/tts/chapters/chapter-*.wav` (removed by the next conversion) and a `tmp*` directory in `audio/` (not removed by anything today).
+- **Contracts.** `convert --json` prints `{"mp3_files": [...], "warnings": [...]}` (`desktop/contracts/convert.schema.json`); progress is `reports/run_status.json` (stage "Synthesizing speech", unit `char`); per-chapter outcomes are `reports/conversion_status.json` (schema 1: `status`, `pause_count`, `chunk_mapping`, and `error_code`/`reason_code` on failure).
+- **Gaps for AV4.** No recoverable backup of the replaced MP3 and sidecar; the MP3 rename and the sidecar write are two steps; a hard kill can leave a temporary directory in `audio/`.
