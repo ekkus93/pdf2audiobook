@@ -1,0 +1,55 @@
+{
+  "title": "The Lighthouse at Gull Point",
+  "author": "pdf2audiobook demo",
+  "pages": 4,
+  "outline": [],
+  "page_label_rules": [],
+  "page_rotations": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "page_sizes": [
+    [
+      595.0,
+      842.0
+    ],
+    [
+      595.0,
+      842.0
+    ],
+    [
+      595.0,
+      842.0
+    ],
+    [
+      595.0,
+      842.0
+    ]
+  ],
+  "page_labels": [
+    "1",
+    "2",
+    "3",
+    "4"
+  ],
+  "embedded_text": {
+    "pages_with_text": 4,
+    "pages_without_text": 0,
+    "image_only_pages": 0,
+    "characters_per_page": [
+      39,
+      413,
+      355,
+      278
+    ],
+    "images_per_page": [
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "warnings": []
+}

@@ -1,0 +1,16 @@
+{
+  "provider": "kitten",
+  "voices": [
+    "Bella",
+    "Jasper",
+    "Luna",
+    "Bruno",
+    "Rosie",
+    "Hugo",
+    "Kiki",
+    "Leo"
+  ],
+  "listable": true,
+  "default_voice": "Jasper",
+  "warnings": []
+}

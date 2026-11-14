@@ -1,0 +1,18 @@
+{
+  "edits": [
+    {
+      "block_id": "p00003-l00012",
+      "chapter": 2,
+      "provider": "ollama",
+      "status": "pending"
+    },
+    {
+      "block_id": "p00004-l00001",
+      "chapter": 3,
+      "provider": "deterministic",
+      "status": "rejected",
+      "reason": "explicit footnotes=omit policy (conservative classification)"
+    }
+  ],
+  "warnings": []
+}

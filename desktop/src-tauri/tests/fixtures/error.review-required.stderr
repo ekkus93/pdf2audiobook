@@ -1,0 +1,2 @@
+Warning: Analysis recorded 2 warnings; see warnings in manifest.json.
+{"ok": false, "error": {"type": "AudioError", "code": 6, "message": "Chapter 1 has low boundary confidence; review the manifest before synthesis", "reason": "review_required"}, "warnings": []}

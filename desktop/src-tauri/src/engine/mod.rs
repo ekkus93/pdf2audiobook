@@ -8,3 +8,6 @@ pub mod runs;
 
 #[cfg(test)]
 pub(crate) mod testing;
+
+#[cfg(test)]
+mod contracts;

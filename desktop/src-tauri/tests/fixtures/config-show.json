@@ -1,0 +1,161 @@
+{
+  "general": {
+    "output_dir": "/home/user/books/audiobooks",
+    "resume": true,
+    "log_level": "INFO",
+    "progress": "auto",
+    "heartbeat_seconds": 0.0
+  },
+  "pdf": {
+    "ocr": "auto",
+    "ocr_language": "eng",
+    "password_env": null,
+    "ocr_dpi": 300,
+    "remove_page_numbers": true,
+    "remove_headers": true,
+    "remove_footers": true,
+    "footnotes": "warn"
+  },
+  "chapters": {
+    "min_boundary_confidence": 0.75,
+    "allow_single_chapter": false
+  },
+  "llm": {
+    "enabled": true,
+    "provider": "ollama",
+    "temperature": 0.1,
+    "max_context_tokens": 16384,
+    "max_output_tokens": 1024,
+    "chunk_tokens": 4000,
+    "max_retries": 3,
+    "max_requests": null,
+    "max_reported_tokens": null,
+    "max_estimated_cost_usd": null,
+    "input_cost_usd_per_million_tokens": null,
+    "output_cost_usd_per_million_tokens": null,
+    "structure": true,
+    "contents": false,
+    "cleanup": true,
+    "classification": true,
+    "narration": true,
+    "vision": false,
+    "allow_remote_content": false,
+    "fallback_to_deterministic": false,
+    "openai": {
+      "model": "gpt-4.1-mini",
+      "base_url": null,
+      "api_key_env": "OPENAI_API_KEY",
+      "timeout_seconds": 60.0
+    },
+    "ollama": {
+      "model": "qwen3.5:9b",
+      "base_url": "http://127.0.0.1:11434/v1",
+      "api_key_env": null,
+      "timeout_seconds": 300.0
+    },
+    "llama_server": {
+      "model": "auto",
+      "base_url": "http://127.0.0.1:8080/v1",
+      "api_key_env": "LLAMA_SERVER_API_KEY",
+      "timeout_seconds": 60.0
+    }
+  },
+  "tts": {
+    "provider": "kitten",
+    "output_format": "mp3",
+    "bitrate": "128k",
+    "sample_rate": 24000,
+    "pause_ms": 250,
+    "max_retries": 2,
+    "kitten": {
+      "model": "mini",
+      "voice": "Jasper",
+      "speed": 1.0
+    },
+    "piper": {
+      "model_path": "",
+      "voice": "",
+      "speed": 1.0
+    },
+    "profiles": {},
+    "pronunciations": {}
+  },
+  "cache": {
+    "enabled": true,
+    "directory": "~/.cache/pdf2audiobook"
+  },
+  "audio": {
+    "cover_image": null
+  },
+  "reading": {
+    "process_citations": true,
+    "process_equations": true
+  },
+  "_sources": {
+    "general.output_dir": "built-in",
+    "general.resume": "built-in",
+    "general.log_level": "built-in",
+    "general.progress": "built-in",
+    "general.heartbeat_seconds": "built-in",
+    "pdf.ocr": "built-in",
+    "pdf.ocr_language": "built-in",
+    "pdf.password_env": "built-in",
+    "pdf.ocr_dpi": "built-in",
+    "pdf.remove_page_numbers": "built-in",
+    "pdf.remove_headers": "built-in",
+    "pdf.remove_footers": "built-in",
+    "pdf.footnotes": "built-in",
+    "chapters.min_boundary_confidence": "built-in",
+    "chapters.allow_single_chapter": "built-in",
+    "llm.enabled": "built-in",
+    "llm.provider": "built-in",
+    "llm.temperature": "built-in",
+    "llm.max_context_tokens": "built-in",
+    "llm.max_output_tokens": "built-in",
+    "llm.chunk_tokens": "built-in",
+    "llm.max_retries": "built-in",
+    "llm.max_requests": "built-in",
+    "llm.max_reported_tokens": "built-in",
+    "llm.max_estimated_cost_usd": "built-in",
+    "llm.input_cost_usd_per_million_tokens": "built-in",
+    "llm.output_cost_usd_per_million_tokens": "built-in",
+    "llm.structure": "built-in",
+    "llm.contents": "built-in",
+    "llm.cleanup": "built-in",
+    "llm.classification": "built-in",
+    "llm.narration": "built-in",
+    "llm.vision": "built-in",
+    "llm.allow_remote_content": "built-in",
+    "llm.fallback_to_deterministic": "built-in",
+    "llm.openai.model": "built-in",
+    "llm.openai.base_url": "built-in",
+    "llm.openai.api_key_env": "built-in",
+    "llm.openai.timeout_seconds": "built-in",
+    "llm.ollama.model": "built-in",
+    "llm.ollama.base_url": "built-in",
+    "llm.ollama.api_key_env": "built-in",
+    "llm.ollama.timeout_seconds": "built-in",
+    "llm.llama_server.model": "built-in",
+    "llm.llama_server.base_url": "built-in",
+    "llm.llama_server.api_key_env": "built-in",
+    "llm.llama_server.timeout_seconds": "built-in",
+    "tts.provider": "built-in",
+    "tts.output_format": "built-in",
+    "tts.bitrate": "built-in",
+    "tts.sample_rate": "built-in",
+    "tts.pause_ms": "built-in",
+    "tts.max_retries": "built-in",
+    "tts.kitten.model": "built-in",
+    "tts.kitten.voice": "built-in",
+    "tts.kitten.speed": "built-in",
+    "tts.piper.model_path": "built-in",
+    "tts.piper.voice": "built-in",
+    "tts.piper.speed": "built-in",
+    "cache.enabled": "built-in",
+    "cache.directory": "built-in",
+    "audio.cover_image": "built-in",
+    "reading.process_citations": "built-in",
+    "reading.process_equations": "built-in"
+  },
+  "warnings": []
+}

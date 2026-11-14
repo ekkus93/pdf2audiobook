@@ -1,0 +1,226 @@
+{
+  "title": "The Lighthouse at Gull Point",
+  "chapters": [
+    {
+      "id": "c0001",
+      "number": 1,
+      "title": "Front Matter",
+      "start_block": 0,
+      "end_block": 2,
+      "confidence": 0.7,
+      "evidence": [
+        "unassigned material before chapter heading"
+      ],
+      "manually_approved": true,
+      "voice_id": null,
+      "generated_fingerprint": "3475e9c7181d5d959540f5061713cf93247f6729c710ea38cb3b2026e1a3ccbd",
+      "generated_title": "Front Matter",
+      "generated_start_block": 0,
+      "generated_end_block": 2,
+      "generated_voice_id": null,
+      "warnings": [
+        "Chapter boundary has low confidence; verify manually"
+      ]
+    },
+    {
+      "id": "c0002",
+      "number": 2,
+      "title": "Chapter 1: The Keeper",
+      "start_block": 2,
+      "end_block": 10,
+      "confidence": 0.82,
+      "evidence": [
+        "typographic size contrast with body text",
+        "opens a new page"
+      ],
+      "manually_approved": true,
+      "voice_id": null,
+      "generated_fingerprint": "832a40243b11824836e5f05ab663541b00a37f388442ce62eaf60bd2e1ff4168",
+      "generated_title": "Chapter 1: The Keeper",
+      "generated_start_block": 2,
+      "generated_end_block": 10,
+      "generated_voice_id": null,
+      "warnings": [
+        "Chapter boundary has low confidence; verify manually"
+      ]
+    },
+    {
+      "id": "c0003",
+      "number": 3,
+      "title": "Chapter 2: The Storm",
+      "start_block": 10,
+      "end_block": 17,
+      "confidence": 0.82,
+      "evidence": [
+        "typographic size contrast with body text",
+        "opens a new page"
+      ],
+      "manually_approved": true,
+      "voice_id": null,
+      "generated_fingerprint": "b1b2a694728b4f10db45a454b1c0b24b6ef317e23773e761b37de726f15d3a08",
+      "generated_title": "Chapter 2: The Storm",
+      "generated_start_block": 10,
+      "generated_end_block": 17,
+      "generated_voice_id": null,
+      "warnings": [
+        "Chapter boundary has low confidence; verify manually"
+      ]
+    },
+    {
+      "id": "c0004",
+      "number": 4,
+      "title": "Chapter 3: Morning",
+      "start_block": 17,
+      "end_block": 23,
+      "confidence": 0.82,
+      "evidence": [
+        "typographic size contrast with body text",
+        "opens a new page"
+      ],
+      "manually_approved": true,
+      "voice_id": null,
+      "generated_fingerprint": "3798d9cd7654230e355ce6563c5e1e9e59329d97a7479fad3a4d2b2b68e74733",
+      "generated_title": "Chapter 3: Morning",
+      "generated_start_block": 17,
+      "generated_end_block": 23,
+      "generated_voice_id": null,
+      "warnings": [
+        "Chapter boundary has low confidence; verify manually"
+      ]
+    }
+  ],
+  "warnings": [
+    "Ignored 1 font-size-only heading candidate(s) not in the PDF outline, printed contents or numbered chapter labels; verify chapter boundaries",
+    "Pre-chapter material retained in its own front-matter chapter"
+  ],
+  "coverage": {
+    "valid": true,
+    "source_blocks": 23,
+    "source_spans": 23,
+    "covered_blocks": 23,
+    "uncovered_blocks": 0,
+    "duplicate_blocks": 0,
+    "accepted_cleanup_blocks": 0,
+    "narrated_blocks": 23,
+    "chapters": 4,
+    "empty_chapters": []
+  },
+  "conversion_status": {
+    "schema_version": 1,
+    "pause_count": 0,
+    "chapters": [
+      {
+        "number": 1,
+        "status": "complete",
+        "pause_count": 0,
+        "chunk_mapping": [
+          {
+            "kind": "speech",
+            "number": 1,
+            "source_start": 0,
+            "source_end": 28
+          },
+          {
+            "kind": "speech",
+            "number": 2,
+            "source_start": 30,
+            "source_end": 48
+          }
+        ]
+      },
+      {
+        "number": 2,
+        "status": "complete",
+        "pause_count": 0,
+        "chunk_mapping": [
+          {
+            "kind": "speech",
+            "number": 1,
+            "source_start": 0,
+            "source_end": 21
+          },
+          {
+            "kind": "speech",
+            "number": 2,
+            "source_start": 23,
+            "source_end": 202
+          },
+          {
+            "kind": "speech",
+            "number": 3,
+            "source_start": 204,
+            "source_end": 358
+          },
+          {
+            "kind": "speech",
+            "number": 4,
+            "source_start": 360,
+            "source_end": 504
+          }
+        ]
+      },
+      {
+        "number": 3,
+        "status": "complete",
+        "pause_count": 0,
+        "chunk_mapping": [
+          {
+            "kind": "speech",
+            "number": 1,
+            "source_start": 0,
+            "source_end": 20
+          },
+          {
+            "kind": "speech",
+            "number": 2,
+            "source_start": 22,
+            "source_end": 152
+          },
+          {
+            "kind": "speech",
+            "number": 3,
+            "source_start": 154,
+            "source_end": 295
+          },
+          {
+            "kind": "speech",
+            "number": 4,
+            "source_start": 297,
+            "source_end": 440
+          }
+        ]
+      },
+      {
+        "number": 4,
+        "status": "complete",
+        "pause_count": 0,
+        "chunk_mapping": [
+          {
+            "kind": "speech",
+            "number": 1,
+            "source_start": 0,
+            "source_end": 18
+          },
+          {
+            "kind": "speech",
+            "number": 2,
+            "source_start": 20,
+            "source_end": 155
+          },
+          {
+            "kind": "speech",
+            "number": 3,
+            "source_start": 157,
+            "source_end": 268
+          },
+          {
+            "kind": "speech",
+            "number": 4,
+            "source_start": 270,
+            "source_end": 344
+          }
+        ]
+      }
+    ]
+  }
+}

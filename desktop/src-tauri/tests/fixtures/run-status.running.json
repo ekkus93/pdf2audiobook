@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "command": "convert",
+  "state": "running",
+  "started_at": "2026-11-14T11:19:43+00:00",
+  "updated_at": "2026-11-14T11:20:43+00:00",
+  "elapsed_seconds": 60,
+  "stage": {
+    "name": "Synthesizing speech",
+    "detail": "chapter 8/24",
+    "unit": "char",
+    "done": 10408,
+    "total": 40057,
+    "elapsed_seconds": 60,
+    "estimated_remaining_seconds": 175
+  },
+  "completed_stages": [
+    {
+      "name": "Analyzing with the LLM",
+      "seconds": 442
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "version": "0.1.0",
+  "ffmpeg": true,
+  "tesseract": true,
+  "ocr_requested_languages": "eng",
+  "ocr_installed_languages": [
+    "eng",
+    "osd"
+  ],
+  "ocr_missing_languages": [],
+  "kitten_installed": true,
+  "piper_installed": false,
+  "llm_provider": "ollama",
+  "process_citations": true,
+  "process_equations": true,
+  "llm_timeout_seconds": 300.0,
+  "warnings": []
+}
