@@ -117,6 +117,29 @@ describe("BookPage", () => {
     );
   });
 
+  it("a book analyzed without the LLM starts with it off and converts with --no-llm", async () => {
+    expect(CONFIG.llm.enabled).toBe(true);
+    const book = { ...BOOK, inspect: { ...(BOOK.inspect as InspectManifest), analyzed_with_llm: false } };
+    const onStart = await renderPage(vi.fn(), book);
+    const llm = document.querySelector("md-switch") as HTMLElement & { selected: boolean };
+    expect(llm.selected).toBeFalsy();
+    click(button("Convert to audio"));
+    expect(onStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: "convert", options: expect.objectContaining({ llm: false }) }),
+      "/out/lighthouse-1",
+    );
+  });
+
+  it("a book analyzed with the LLM keeps it on", async () => {
+    const book = { ...BOOK, inspect: { ...(BOOK.inspect as InspectManifest), analyzed_with_llm: true } };
+    const onStart = await renderPage(vi.fn(), book);
+    click(button("Convert to audio"));
+    expect(onStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ options: expect.objectContaining({ llm: true }) }),
+      "/out/lighthouse-1",
+    );
+  });
+
   it("an unanalyzed book offers Analyze", async () => {
     await renderPage(vi.fn(), { ...BOOK, analyzed: false, inspect: null, source: "/books/new.pdf" });
     expect(button("Analyze")).not.toHaveTextContent("again");

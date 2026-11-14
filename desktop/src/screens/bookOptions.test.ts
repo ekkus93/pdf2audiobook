@@ -21,6 +21,12 @@ export const CONFIG: CliConfig = {
 const FORM: OptionsForm = defaults(CONFIG, 12);
 
 describe("defaults", () => {
+  it("keep the LLM as the book was last analyzed, ahead of the CLI's configuration", () => {
+    expect(defaults(CONFIG, 4, {}, false).llm).toBe(false);
+    expect(defaults({ ...CONFIG, llm: { ...CONFIG.llm, enabled: false } }, 4, {}, true).llm).toBe(true);
+    expect(defaults(CONFIG, 4, {}, null).llm).toBe(CONFIG.llm.enabled);
+  });
+
   it("use the app's Settings for voice, provider and model when set", () => {
     const form = defaults(CONFIG, 4, { default_voice: "Luna", llm_provider: "llama-server", llm_model: "local-model" });
     expect([form.voice, form.provider, form.model]).toEqual(["Luna", "llama-server", "local-model"]);

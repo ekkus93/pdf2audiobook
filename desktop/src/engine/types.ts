@@ -133,6 +133,8 @@ export interface InspectManifest {
   approved: boolean;
   chapters: InspectChapter[];
   conversion_status?: { chapters: Array<{ number: number; status: string }> };
+  /** Whether the last analysis used the LLM; null if the workspace doesn't record it. */
+  analyzed_with_llm?: boolean | null;
 }
 
 export interface RunStage {

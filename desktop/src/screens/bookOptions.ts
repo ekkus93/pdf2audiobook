@@ -32,11 +32,21 @@ export interface Preferences {
   llm_model?: string | null;
 }
 
-export function defaults(config: CliConfig, chapters: number | null, preferences: Preferences = {}): OptionsForm {
+/**
+ * The options a book starts with: the CLI's configuration, then the app's Settings, then how the
+ * book itself was last analyzed. A book analyzed without the LLM keeps it off, so Convert doesn't
+ * re-analyze it (and the CLI doesn't refuse over approved chapters).
+ */
+export function defaults(
+  config: CliConfig,
+  chapters: number | null,
+  preferences: Preferences = {},
+  analyzedWithLlm: boolean | null = null,
+): OptionsForm {
   const tts = config.tts.provider === "piper" ? config.tts.piper : config.tts.kitten;
   const provider = preferences.llm_provider ?? config.llm.provider;
   return {
-    llm: config.llm.enabled,
+    llm: analyzedWithLlm ?? config.llm.enabled,
     provider,
     model: preferences.llm_model || config.llm[MODEL_KEY[provider]].model,
     contextTokens: String(config.llm.max_context_tokens),

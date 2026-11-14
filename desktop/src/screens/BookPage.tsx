@@ -69,18 +69,21 @@ export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, o
   const source = book.inspect?.source_path ?? book.source ?? "";
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
   const [form, setForm] = useState<OptionsForm | null>(null);
+  const analyzedWithLlm = book.inspect?.analyzed_with_llm ?? null;
 
   useEffect(() => {
     let current = true;
     void loadOptions().then((next) => {
       if (!current) return;
       setLoaded(next);
-      if (next.phase === "ready") setForm(defaults(next.config, summary.chapters, next.preferences));
+      if (next.phase === "ready") {
+        setForm(defaults(next.config, summary.chapters, next.preferences, analyzedWithLlm));
+      }
     });
     return () => {
       current = false;
     };
-  }, [summary.chapters]);
+  }, [summary.chapters, analyzedWithLlm]);
 
   return (
     <div className="screen book-page">

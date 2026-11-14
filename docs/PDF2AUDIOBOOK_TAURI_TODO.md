@@ -819,8 +819,9 @@ dark and light screenshots (spec D11.h).
   approved in review, gets "Use an LLM" on by default when the CLI config enables the LLM; Convert
   then stops with "This workspace contains manually approved or protected chapter/cleanup
   edits" because the LLM stage changed. The CLI's protection is right; the app could start from
-  the book's own analysis settings instead. Seen in the real app while checking TD5.09; not
-  fixed here.
+  the book's own analysis settings instead. Seen in the real app while checking TD5.09. Fixed
+  after the TODO was done: `inspect MANIFEST --json` reports `analyzed_with_llm`, and the book
+  page starts "Use an LLM" from it (the end-to-end walkthrough now checks it).
 - WebKitGTK's media element can't stream from Tauri's custom `asset:` scheme ("source not
   supported", error 4), though `fetch` over it works. The player and the voice samples therefore
   fetch the file and play a `blob:` URL (TD8.01). In this container, with no sound device, the

@@ -208,9 +208,12 @@ async function main() {
   await find(`${button("Review chapters")}[not(@disabled)]`, 30);
 
   step(DRY_RUN ? "convert with --dry-run" : "convert with real speech");
-  // The options start from the CLI's configuration again (LLM on); keep this book's analysis.
+  // The book was analyzed without the LLM, so its options must start with it off.
   await find("//h3[contains(., 'Analysis')]", 60);
-  await llmOff();
+  const llm = await find("//md-switch");
+  if (await run("return arguments[0].selected;", [{ [ELEMENT]: llm }])) {
+    throw new Error("the LLM is on for a book analyzed without it");
+  }
   await click(await find(button("Convert to audio"), 60));
   await find("//*[contains(., 'Conversion finished')]", DRY_RUN ? 180 : 1800);
   await screenshot("5-converted");
