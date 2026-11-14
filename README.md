@@ -1,26 +1,290 @@
 # pdf2audiobook
 
-Python CLI for analyzing PDF and EPUB books and converting approved chapters into tagged MP3 audiobooks. It supports selectable OCR, chapter review, optional LLM-assisted analysis, resumable TTS, batch conversion and M4B packaging.
+pdf2audiobook turns a PDF or EPUB book into an audiobook: one tagged MP3 per chapter, which you
+can also package as a single M4B file with chapter navigation. It works offline by default.
+
+It reads the book's text (using OCR for scanned pages), removes page numbers, headers and
+footers, and splits the text into chapters. You check the chapters in a small browser page, and
+then a local text-to-speech voice reads each chapter aloud. A local LLM can optionally help: it
+finds chapter structure, suggests cleanups for OCR errors, flags captions and tables for
+review, and proposes spoken readings of equations. The LLM's suggestions are only proposals, and
+nothing it suggests reaches the audio until you approve it.
 
 **Status:** Working CLI with offline end-to-end fixture coverage. Real Kitten synthesis is an opt-in smoke test; live OpenAI and llama-server acceptance remains deferred. See the [specification](docs/PDF2AUDIOBOOK_SPEC.md), [implementation TODO](docs/PDF2AUDIOBOOK_TODO.md), and [installation/maintainer guide](docs/MAINTAINER_GUIDE.md).
 
-## Development with uv
+**Contents:**
+[Requirements](#requirements) ·
+[Development setup](#development-setup) ·
+[Linting and tests](#linting-type-checking-and-tests) ·
+[Walkthrough](#walkthrough-from-pdf-to-audiobook) ·
+[Using a local LLM](#using-a-local-llm-ollama) ·
+[Command reference](#command-reference) ·
+[Voices](#voices-and-speech) ·
+[Editing chapter text](#editing-chapter-text) ·
+[Exit codes](#exit-codes)
 
-Requires [uv](https://docs.astral.sh/uv/) and Python 3.11+; uv manages the local `.venv` and dependencies.
+## Requirements
+
+| What | Needed for | Notes |
+|---|---|---|
+| [uv](https://docs.astral.sh/uv/) and Python 3.11+ | Everything | uv installs Python and manages `.venv` for you. CI tests 3.11, 3.12 and 3.13. |
+| FFmpeg | Making MP3 and M4B files | Install with your OS package manager, for example `sudo apt install ffmpeg`. |
+| Tesseract (`eng` pack) | Scanned pages (OCR) | For example `sudo apt install tesseract-ocr tesseract-ocr-eng`. Text PDFs don't need it. |
+| Kitten TTS | The default voice | A Python extra: `uv sync --extra kitten`. The first conversion downloads the model. |
+| Ollama | Optional LLM assistance | Not needed with `--no-llm`. See [Using a local LLM](#using-a-local-llm-ollama). |
+| Node 22 | A few page-script tests | Those tests skip when `node` isn't installed. |
+
+Piper is an alternative voice that you install separately; see [Voices and speech](#voices-and-speech).
+
+## Development setup
 
 ~~~bash
+git clone <this repository> pdf2audiobook
+cd pdf2audiobook
 uv python install 3.11
-uv sync --extra dev
-uv run pdf2audiobook --help
-uv run pdf2audiobook doctor
-uv run pdf2audiobook config show --sources
-uv run pytest -q
-uv run ruff check .
+uv sync --locked --extra kitten --extra dev   # app, voice model support and dev tools
+uv run pdf2audiobook doctor                   # checks FFmpeg, Tesseract, Kitten and the LLM settings
 ~~~
 
-The `uv sync` command creates/manages `.venv` automatically. You can also explicitly create one with `uv venv`. To use Kitten TTS later, run `uv sync --extra kitten --extra dev`; that may download a large model and additional dependencies. FFmpeg and Tesseract are installed separately at the OS level.
+`uv sync` creates and manages `.venv` automatically; run everything through `uv run` and never
+install into the system Python. If you don't need real speech (for example, to work only on
+analysis code), `uv sync --locked --extra dev` is enough and much smaller: the tests mock the
+voice. The `kitten` extra pulls in a large model stack and downloads the voice model on first use.
+
+**Lockfile:** The generated `uv.lock` is committed and pins the project's declared default, `dev`, and optional `kitten` dependency graphs. For reproducible development installs, run `uv sync --locked --extra dev`; for the heavyweight voice extra, run `uv sync --locked --extra kitten --extra dev`. Regenerate the lockfile deliberately with `uv lock` when changing dependencies and review the resulting diff. **CI verifies `uv lock --check` and installs development dependencies using `uv sync --locked --extra dev`** on Python 3.11, 3.12 and 3.13; the optional Kitten model remains an explicit heavyweight, environment-dependent acceptance gate.
+
+Note that `uv sync --locked --extra dev` *removes* the Kitten packages if they were installed;
+add `--extra kitten` again before converting a book.
+
+## Linting, type checking and tests
+
+These are the same checks CI runs (`.github/workflows/ci.yml`). Run them all before committing:
+
+~~~bash
+uv lock --check                        # the lockfile matches pyproject.toml
+uv run --extra dev ruff check .        # lint, including import sorting
+uv run --extra dev ruff format --check . # formatting (use `ruff format .` to fix)
+uv run --extra dev mypy                # type check the files listed in pyproject.toml
+uv run --extra dev pytest -q -ra       # the full test suite, with a summary of skips
+~~~
+
+- **Formatting:** `uv run --extra dev ruff format .` rewrites files in place;
+  `ruff check --fix .` fixes import order.
+- **Type checking:** CI runs mypy once per Python version. To match it, also run
+  `uv run --extra dev mypy --python-version 3.12` and `--python-version 3.13`. When you add a
+  module under `src/`, add it to `[tool.mypy].files` in `pyproject.toml`.
+- **One test file or test:** `uv run --extra dev pytest tests/test_review_ui.py -q`, or add
+  `-k name` to select by name.
+- **Skipped tests:** tests that need FFmpeg, Tesseract or Node skip when the program is missing.
+  Read the `-ra` summary at the end of the run to see what was skipped and why.
+- **No network:** the test suite never needs the network or a running LLM. Live LLM checks are
+  separate and opt-in (see [the smoke tests](#opt-in-live-llm-provider-smoke-tests)).
+
+CI also runs a CLI smoke test (`--help`, `config show --json`, `doctor --json`) and installs the
+built wheel and sdist into a clean virtual environment.
+
+## Walkthrough: from PDF to audiobook
+
+This example converts a short four-page demo book, `lighthouse.pdf`, without an LLM. Every
+screenshot is real output from the commands shown. Book workspaces are created under
+`./audiobooks/` in the folder you run from; each book gets its own folder, named after the file
+plus a short hash.
+
+### Step 1: Check your setup
+
+~~~bash
+uv run pdf2audiobook doctor
+~~~
+
+![doctor output](docs/images/readme/step-1-doctor.svg)
+
+Check that `ffmpeg` and `kitten_installed` are `true`, and that no OCR language is missing. If
+Kitten shows `false`, run `uv sync --extra kitten --extra dev`.
+
+### Step 2: Analyze the book
+
+~~~bash
+uv run pdf2audiobook analyze lighthouse.pdf --no-llm
+~~~
+
+![analyze output](docs/images/readme/step-2-analyze.svg)
+
+Analysis extracts the text and writes a workspace with `manifest.json` (the chapters, the source
+text and every warning) and one editable text file per chapter in `chapters/`. It makes no audio.
+You can skip this step and go straight to `convert`, which analyzes first if needed.
+
+### Step 3: Convert, and see why it stops
+
+~~~bash
+uv run pdf2audiobook convert lighthouse.pdf --no-llm
+~~~
+
+![convert stops for review](docs/images/readme/step-3-convert-stops.svg)
+
+Conversion refuses to make audio while any chapter boundary is uncertain. Here the title page
+became a "Front Matter" chapter with low confidence, so the run stops with exit status 6 and
+asks you to review. Nothing has been synthesized yet.
+
+### Step 4: Review the chapters in your browser
+
+~~~bash
+uv run pdf2audiobook review audiobooks/lighthouse-3c5f49c9a4/manifest.json
+~~~
+
+![review server output](docs/images/readme/step-4-review-server.svg)
+
+Open the printed address. The page lists every chapter with its title, its block range and a
+preview of its text:
+
+![the review page](docs/images/readme/review-1-open.png)
+
+Fix what is wrong. Here chapter 1 only holds the title page, so give it a better title. You can
+also move a chapter's start and end block (blocks are numbered from 0, and the end is
+exclusive), or set a different voice for a chapter:
+
+![editing a chapter title](docs/images/readme/review-2-edit-title.png)
+
+Scroll to the bottom and click **Save reviewed boundaries**. Saving checks that the chapters
+cover every block exactly once with no overlap, marks them all as manually approved, and
+rewrites the chapter text files:
+
+![saved and approved](docs/images/readme/review-3-saved.png)
+
+Press Ctrl+C in the terminal to stop the review server. The server listens only on
+`127.0.0.1` and uses a fresh access token each run.
+
+The review page can retitle chapters and move boundaries, but it can't add or remove chapters.
+To merge or split chapters, edit the `chapters` list in `manifest.json` (keep a backup), then
+see [Protecting manual edits](#protecting-manual-edits).
+
+### Step 5: Convert again
+
+~~~bash
+uv run pdf2audiobook convert lighthouse.pdf --no-llm
+~~~
+
+![convert output](docs/images/readme/step-5-convert.svg)
+
+The analysis is reused, and each chapter becomes a tagged MP3 in the workspace's `audio/`
+folder. A long book shows a progress bar with a time estimate in an interactive terminal (see
+[Progress and time estimates](#progress-and-time-estimates)). If a run is interrupted, run the
+same command again: finished chapters are kept.
+
+### Step 6: Package as one M4B (optional)
+
+~~~bash
+uv run pdf2audiobook pack-m4b audiobooks/lighthouse-3c5f49c9a4/manifest.json --output lighthouse.m4b
+~~~
+
+![pack-m4b output](docs/images/readme/step-6-pack-m4b.svg)
+
+The M4B holds all chapters with chapter markers, which most audiobook players show as a
+chapter list. Add `--cover cover.jpg` for artwork.
+
+### What to check before you share an audiobook
+
+Chapter detection, tables and figures are still the weak spots, especially in technical papers.
+Before you share the files, read `chapters/*.txt` or listen to the chapters, and check the
+warnings in `manifest.json`: tables are read cell by cell, and words drawn inside figures can
+appear as loose words. Put such material in its own chapter at review time, so listeners can
+skip it.
+
+## Using a local LLM (Ollama)
+
+LLM assistance is on by default and uses Ollama on `127.0.0.1`. Book text never leaves your
+machine unless you choose a remote provider and pass `--allow-remote-content`.
+
+1. Install [Ollama](https://ollama.com) and pull a model, for example `ollama pull qwen3.5:9b`.
+2. **Give the model a large enough context.** Before uploading any text, pdf2audiobook asks Ollama
+   what context the model really serves, and refuses the run if a request would not fit ("LLM
+   request exceeds the context length the Ollama server serves"). A plain model tag often has
+   a small default context, so create a variant with a larger `num_ctx`:
+
+   ~~~bash
+   printf 'FROM qwen3.5:9b\nPARAMETER num_ctx 262144\n' > Modelfile
+   ollama create qwen35-256k -f Modelfile
+   ~~~
+
+3. **Allow room for reasoning.** Thinking models such as qwen3.5 spend output tokens on reasoning
+   before they answer. The default cap of 1024 is too small for them ("LLM answer was cut off at
+   the output cap"); use 32768.
+4. Convert with those settings:
+
+   ~~~bash
+   uv run pdf2audiobook --heartbeat 60 convert book.pdf \
+     --llm-model qwen35-256k:latest --llm-context-tokens 262144 --llm-output-tokens 32768
+   ~~~
+
+   The book is sent in windows of about 4,000 bytes (`llm.chunk_tokens`), never all at once.
+   Each window also needs room for the output cap, so the served context must be larger than
+   the output cap plus the window. `--heartbeat 60` prints a status line every minute. As a
+   rough guide, a 15-page paper took about 100 requests and 7 minutes on a 16 GB GPU.
+
+5. **Approve the LLM's proposals.** Proposed cleanups and equation readings are stored as
+   *pending* edits and are not used until you accept them:
+
+   ~~~bash
+   uv run pdf2audiobook edits list audiobooks/BOOK/manifest.json
+   uv run pdf2audiobook edits accept audiobooks/BOOK/manifest.json --all
+   ~~~
+
+   Then run `convert` again to regenerate the affected chapters. See
+   [Citations and equations](#citations-and-equations).
+
+Put settings you use every time in `~/.config/pdf2audiobook/config.toml` instead of repeating the
+flags; `uv run pdf2audiobook config show --sources` shows the effective settings and where each
+came from:
+
+~~~toml
+[llm]
+max_context_tokens = 262144
+max_output_tokens = 32768
+
+[llm.ollama]
+model = "qwen35-256k:latest"
+~~~
 
 The default LLM provider is local Ollama; OpenAI requires explicit consent before transmitting book contents. For consented non-loopback endpoints, a one-time stderr warning identifies the provider, selected model, and current analysis block-window scope *before* uploading book text. Local loopback analysis does not emit the remote-upload warning. See the specification for privacy and audit requirements.
+
+## Command reference
+
+~~~bash
+uv run pdf2audiobook doctor
+uv run pdf2audiobook config show --sources
+uv run pdf2audiobook inspect path/to/book.pdf
+uv run pdf2audiobook analyze path/to/book.pdf --no-llm
+uv run pdf2audiobook convert path/to/book.pdf --no-llm --allow-single-chapter
+uv run pdf2audiobook batch ./books --no-llm --recursive
+uv run pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b
+uv run pdf2audiobook convert path/to/book.pdf --cover ./cover.jpg
+uv run pdf2audiobook convert path/to/damaged.pdf --accept-review damaged_source
+uv run pdf2audiobook budget show --output ./audiobooks/BOOK
+uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
+~~~
+
+Every command has `--help` with its options and an example.
+
+`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with the selected TTS provider; `--cover PATH` embeds JPEG/PNG artwork (up to 5 MiB). The same option works with `batch`, and `audio.cover_image` configures a default. `pack-m4b --cover` applies artwork to the M4B only; packaging freshness is based on chapter text. `budget show` reports content-free LLM request accounting; unknown and pending attempts count at their worst-case token and cost bounds. A rejected provider request still counts toward `max_requests`, but does not consume token or cost budget when it reports no usage. `budget resolve` settles an ambiguous request only after explicit confirmation. TTS retries default to two and are limited to transient failures; failed chapters are visible with `inspect`, and conversion continues through other chapters before reporting partial failures. Use `--accept-review REASON` only after reviewing a book-wide issue; the accepted codes are `damaged_source` and `ambiguous_page_numbers`. An unknown code exits 2 before any work, and `--dry-run` reports what it would acknowledge. Empty chapters are per-chapter: approve that chapter in the browser review page (`review`) before conversion. An approved empty chapter is skipped and listed in the conversion report. `--accept-review empty_chapter` exits 2; approval of one chapter never approves a different chapter that becomes empty later. Budget rows without a recorded bound (from older ledgers) block token and cost budgets until `budget resolve` settles them. A failed command prints only its `Error:` line (or one JSON object with `--json`). JSON results include a `warnings` array of warning event codes; human mode renders `Warning:` lines. `--quiet` suppresses warnings and progress, while progress and failure events appear on stderr only with `--verbose` or an explicitly configured `general.log_level`. A second `convert` of the same book is refused while one is running.
+
+Install Tesseract separately for scanned pages. For synthesis, run `uv sync --extra kitten --extra dev` and install FFmpeg. The Kitten model alias `mini` resolves to the lightweight 0.8 mini model.
+
+**Limitations:** Chapter detection is provisional, especially for complex layouts. A poem or section-number sequence in the only qualifying margin band can be mistaken for folios; disable removal with `pdf.remove_page_numbers = false` if needed. Tables, footnotes, OCR ambiguities and LLM-assisted text corrections remain in progress. Review chapter text before distributing audiobook files.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Unexpected error |
+| 2 | Invalid configuration or command-line usage |
+| 3 | Unreadable or unsupported input (for example a wrong PDF password) |
+| 4 | Extraction or workspace problem (for example a chapter-edit conflict or a pending recovery) |
+| 5 | LLM problem (unreachable server, context too small, output cut off, budget reached) |
+| 6 | Audio problem, including "review the manifest before synthesis" |
+| 7 | Some chapters converted and others failed |
+| 130 | Interrupted with Ctrl+C |
+
+### PDF and EPUB input
 
 PDF and EPUB books use the same analysis commands. For an EPUB, chapter boundaries come from its
 own outline when it has one: an entry such as "Chapter 12" is matched to the line that opens that
@@ -28,6 +292,16 @@ chapter on its page, including books whose chapters begin with only a numeral. C
 pages that are just an image are noted but do not block conversion, and an EPUB's many per-page
 warnings are summarized as one line with a count ("Analysis recorded N warnings; see warnings in manifest.json"). Page numbers in an EPUB are generated by
 the renderer and can vary.
+
+### Batch conversion
+
+Batch conversion accepts a directory of PDFs (nested folders are opt-in):
+
+~~~bash
+uv run pdf2audiobook batch ./books --no-llm --recursive --json
+~~~
+
+## Voices and speech
 
 Kitten is the default TTS provider. Piper can be selected when its CLI and a voice model are installed separately; configure the ONNX model path in TOML:
 
@@ -42,12 +316,6 @@ speed = 1.0
 ~~~
 
 Then run `uv run pdf2audiobook convert book.pdf --no-llm --tts-provider piper`. Piper is not installed or downloaded by the default project environment.
-
-Batch conversion accepts a directory of PDFs (nested folders are opt-in):
-
-~~~bash
-uv run pdf2audiobook batch ./books --no-llm --recursive --json
-~~~
 
 Use `tts.profiles` to select a voice and speed by exact PDF filename stem:
 
@@ -76,6 +344,8 @@ The narrator introduces the scene.
 
 The marker is omitted from speech; that voice continues until another marker or the end of the chapter. The chapter's configured voice is used before the first marker. Markers require blank-line paragraph boundaries, and their source offsets remain in the narration progress record.
 
+## Editing chapter text
+
 Chapter files are editable. After changing one, keep a backup: resume and conversion preserve
 compatible edits, and changed narration makes existing audio stale. If a boundary, source text,
 cleanup decision or footnote policy changes for an edited chapter, the operation stops and names
@@ -100,6 +370,8 @@ chapter files, and record it only when exactly one policy fits; nothing is guess
 they stop and ask you to run `analyze` with the original `pdf.footnotes` setting, or to pass
 `--footnotes warn|inline|end|omit` to `regenerate-chapter`.
 
+### Recovering an interrupted update
+
 Review and chapter regeneration record a workspace transaction before publishing files. If an
 update reports that recovery is needed, or a later command says a previous update needs recovery,
 run:
@@ -118,43 +390,9 @@ text and should be protected like the workspace. The stored footnote policy is r
 and packaging. A deleted edit can be detected only after the application has observed it; keep
 backups even when an edit has not yet been processed.
 
-After converting all chapters, package them as a single AAC audiobook with chapter navigation:
-
-~~~bash
-uv run pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b
-~~~
-
-Open a local browser editor for chapter titles and boundaries with:
-
-~~~bash
-uv run pdf2audiobook review ./audiobooks/BOOK/manifest.json
-~~~
+### The review page
 
 The review server binds only to loopback, requires a per-run token for manifest data, and marks saved chapter boundaries as manually approved. It also accepts an optional TTS voice ID per chapter; paragraph-level voice markers in the approved chapter text can override it for dialogue.
-
-**Lockfile:** The generated `uv.lock` is committed and pins the project's declared default, `dev`, and optional `kitten` dependency graphs. For reproducible development installs, run `uv sync --locked --extra dev`; for the heavyweight voice extra, run `uv sync --locked --extra kitten --extra dev`. Regenerate the lockfile deliberately with `uv lock` when changing dependencies and review the resulting diff. **CI verifies `uv lock --check` and installs development dependencies using `uv sync --locked --extra dev`** on Python 3.11, 3.12 and 3.13; the optional Kitten model remains an explicit heavyweight, environment-dependent acceptance gate.
-
-## CLI workflow
-
-~~~bash
-uv run pdf2audiobook doctor
-uv run pdf2audiobook config show --sources
-uv run pdf2audiobook inspect path/to/book.pdf
-uv run pdf2audiobook analyze path/to/book.pdf --no-llm
-uv run pdf2audiobook convert path/to/book.pdf --no-llm --allow-single-chapter
-uv run pdf2audiobook batch ./books --no-llm --recursive
-uv run pdf2audiobook pack-m4b ./audiobooks/BOOK/manifest.json --output ./book.m4b
-uv run pdf2audiobook convert path/to/book.pdf --cover ./cover.jpg
-uv run pdf2audiobook convert path/to/damaged.pdf --accept-review damaged_source
-uv run pdf2audiobook budget show --output ./audiobooks/BOOK
-uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
-~~~
-
-`analyze` extracts text, applies conservative pagination cleanup and writes chapter text plus a manifest. `convert` additionally creates tagged chapter MP3s with the selected TTS provider; `--cover PATH` embeds JPEG/PNG artwork (up to 5 MiB). The same option works with `batch`, and `audio.cover_image` configures a default. `pack-m4b --cover` applies artwork to the M4B only; packaging freshness is based on chapter text. `budget show` reports content-free LLM request accounting; unknown and pending attempts count at their worst-case token and cost bounds. A rejected provider request still counts toward `max_requests`, but does not consume token or cost budget when it reports no usage. `budget resolve` settles an ambiguous request only after explicit confirmation. TTS retries default to two and are limited to transient failures; failed chapters are visible with `inspect`, and conversion continues through other chapters before reporting partial failures. Use `--accept-review REASON` only after reviewing a book-wide issue; the accepted codes are `damaged_source` and `ambiguous_page_numbers`. An unknown code exits 2 before any work, and `--dry-run` reports what it would acknowledge. Empty chapters are per-chapter: approve that chapter in the browser review page (`review`) before conversion. An approved empty chapter is skipped and listed in the conversion report. `--accept-review empty_chapter` exits 2; approval of one chapter never approves a different chapter that becomes empty later. Budget rows without a recorded bound (from older ledgers) block token and cost budgets until `budget resolve` settles them. A failed command prints only its `Error:` line (or one JSON object with `--json`). JSON results include a `warnings` array of warning event codes; human mode renders `Warning:` lines. `--quiet` suppresses warnings and progress, while progress and failure events appear on stderr only with `--verbose` or an explicitly configured `general.log_level`. A second `convert` of the same book is refused while one is running.
-
-Install Tesseract separately for scanned pages. For synthesis, run `uv sync --extra kitten --extra dev` and install FFmpeg. The Kitten model alias `mini` resolves to the lightweight 0.8 mini model.
-
-**Limitations:** Chapter detection is provisional, especially for complex layouts. A poem or section-number sequence in the only qualifying margin band can be mistaken for folios; disable removal with `pdf.remove_page_numbers = false` if needed. Tables, footnotes, OCR ambiguities and LLM-assisted text corrections remain in progress. Review chapter text before distributing audiobook files.
 
 ## Chapter preview and selective conversion
 
