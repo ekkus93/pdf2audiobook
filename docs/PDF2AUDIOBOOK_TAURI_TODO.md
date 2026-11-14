@@ -26,9 +26,19 @@
 
 ## Phase TD0 — Baseline and decisions
 
-- [ ] TD0.01 Record the baseline on the branch: `/verify` result, `cargo --version`,
+- [x] TD0.01 Record the baseline on the branch: `/verify` result, `cargo --version`,
   `node --version`, and whether the Tauri Linux system libraries (WebKitGTK 4.1 and friends)
   are installed.
+  - Evidence: On `tauri` at 5ff9749 (2026-11-14), Ubuntu 22.04.4: `uv lock --check` and
+    `uv sync --locked --extra kitten --extra dev` clean; Ruff check and format check clean
+    (392 files); mypy clean on 3.11, 3.12 and 3.13 (52 source files); pytest 2412 passed,
+    1 skipped (the opt-in real-Kitten smoke); CLI smoke (`--help`, `config show --json`,
+    `doctor --json`) passed. Toolchain: cargo 1.96.0, rustc 1.96.0, Node v24.13.0, npm 11.6.2.
+    Tauri system libraries were missing (only GTK 3 and librsvg present, no `pkg-config`);
+    installed from the Ubuntu archive with `apt-get install pkg-config libwebkit2gtk-4.1-dev
+    libsoup-3.0-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libgtk-3-dev
+    build-essential file patchelf libxdo-dev`, giving webkit2gtk-4.1 2.50.4, libsoup-3.0
+    3.0.7, gtk+-3.0 3.24.33, ayatana-appindicator3 0.5.90, librsvg 2.52.5, OpenSSL 3.0.2.
 - [x] TD0.02 **[OWNER DECISION]** Settle O1–O5 (spec §14) and record each answer here. Until
   then, work proceeds on the recommended defaults: installed CLI, Linux first, React, unsigned
   builds, branch added to CI.
@@ -36,13 +46,26 @@
     CLI; O2 Linux only for now, macOS and Windows later; O3 React and TypeScript with Google's
     Material 3, polished and modern, with a chosen palette (spec D11: Midnight Iris with Amber);
     O4 unsigned builds; O5 add the `tauri` branch to the `ci.yml` push triggers.
-- [ ] TD0.03 Make CI run for the `tauri` branch (O5): add it to the `push` branches in
+- [x] TD0.03 Make CI run for the `tauri` branch (O5): add it to the `push` branches in
   `.github/workflows/ci.yml`, or open a draft pull request. Depends on TD0.02 for the choice.
+  - Evidence: `ci.yml` push branches are now `[master, tauri]`; the `ci.yml` cross-check tests
+    (`tests/test_ci_uv_pin.py` and others reading `ci.yml`) pass. Commit
+    fc65d442887297608f60d97cd0ba4f7457e2ced0 started the first branch run, Python CI
+    [43605414647](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605414647), which
+    passed.
 
 ## Phase TD1 — CLI contract additions (D2)
 
-- [ ] TD1.01 D2.f: `pdf2audiobook --version` with no command prints the version and exits 0.
+- [x] TD1.01 D2.f: `pdf2audiobook --version` with no command prints the version and exits 0.
   Test: run with no command; also with a command after it (unchanged).
+  - Evidence: `--version` is now an eager option with its own callback
+    (`src/pdf2audiobook/cli.py`, `_show_version`). `tests/test_cli_version.py`:
+    `test_version_alone_prints_the_version_and_exits_zero` failed before the fix (exit 2,
+    "Missing command") and passes after; `test_version_before_a_command_still_prints_only_the_version`
+    and `test_no_arguments_still_shows_help` pass. Full checks: Ruff and format clean, mypy clean
+    on 3.11/3.12/3.13, pytest 2415 passed, 1 skipped, CLI smoke passed. Commit
+    c95255dd76663c3f3dff077157dc88312b3e1206, Python CI
+    [43605569128](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605569128) passed.
 - [ ] TD1.02 D2.a: `pdf2audiobook workspace BOOK [--output DIR] --json` prints
   `{"workspace", "exists"}` using the analysis rule. Tests: matches the folder `analyze`
   creates; `exists` false before and true after; missing book gives exit 3 and the existing
@@ -192,3 +215,5 @@ dark and light screenshots (spec D11.h).
 
 | Date | Branch SHA | Completed tasks | Tests/CI | Blockers |
 | --- | --- | --- | --- | --- |
+| 2026-11-14 | fc65d442887297608f60d97cd0ba4f7457e2ced0 | Tauri TD0.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Python CI runs on pushes to the `tauri` branch | `ci.yml` cross-check tests pass; Exact-head Python CI #790 [43605414647](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605414647) passed on attempt 1 | None |
+| 2026-11-14 | c95255dd76663c3f3dff077157dc88312b3e1206 | Tauri TD1.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `pdf2audiobook --version` works without a command | /verify-equivalent checks: pytest 2415 passed, 1 skipped; mypy 3.11/3.12/3.13 clean; Exact-head Python CI #791 [43605569128](https://github.com/ekkus93/pdf2audiobook/actions/runs/43605569128) passed on attempt 1 | None |
