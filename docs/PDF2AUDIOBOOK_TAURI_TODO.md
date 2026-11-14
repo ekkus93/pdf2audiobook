@@ -644,7 +644,7 @@ dark and light screenshots (spec D11.h).
     protocol (`audio::serve`, registered in `lib.rs`) and the asset protocol is off. It serves
     only MP3s, by file name, from the open book's `audio/` folder, to the main window only, and
     opening another book replaces that folder. This keeps the item's intent (only the book's
-    `audio/` folder; anything else refused) by a different mechanism than D7.a's wording.
+    `audio/` folder; anything else refused); spec D7.a and D8.a were updated to match.
     Tests: `audio::tests::serve_reads_only_mp3s_in_the_open_books_audio_folder` (traversal,
     encoded traversal, sidecars, symlinks, no open book) and
     `opening_another_book_closes_the_first_ones_folder`; `permissions.rs`

@@ -198,8 +198,13 @@ terminal.
 
 ## 9. D7 — Listening and output
 
-- **D7.a** Chapter MP3s play in the app with an HTML `<audio>` element, through Tauri's asset
-  protocol scoped to the book's `audio/` folder.
+- **D7.a** Chapter MP3s play in the app with an HTML `<audio>` element. The app serves them
+  through its own `chapter:` URI scheme, which reads only MP3s, by file name, from the `audio/`
+  folder of the book currently open; opening another book replaces that folder, and anything
+  else (a path, a non-MP3, a symlink, or no open book) is refused. The player fetches each
+  chapter and plays it from a `blob:` URL, because WebKitGTK's media element can't stream from
+  a custom scheme. Tauri's asset protocol isn't used: its scope can only grow, so every book
+  opened earlier would stay readable.
 - **D7.b** "Make M4B" runs `pack-m4b --json` with an output path the user picks, and a cover
   if one is set.
 - **D7.c** "Export zip" writes the chapter MP3s and, if the user ticks it, the source book, as
@@ -208,9 +213,10 @@ terminal.
 
 ## 10. D8 — Security and privacy
 
-- **D8.a Capabilities.** Tauri capabilities allow only: the dialog plugin (open and save), the
-  bridge's own commands, and the asset protocol for the current book's `audio/` folder. No
-  general filesystem, shell, HTTP or opener access is exposed to the frontend.
+- **D8.a Capabilities.** The frontend may use only: the dialog plugin (open and save), the
+  bridge's own commands and events, and the `chapter:` scheme of D7.a, which answers only the
+  main window and reads only the current book's `audio/` folder. Tauri's asset protocol is
+  off. No general filesystem, shell, HTTP or opener access is exposed to the frontend.
 - **D8.b CSP.** The main window's Content Security Policy allows only the app's own scripts
   and styles; no remote origins and no `unsafe-eval`. The review window loads only
   `http://127.0.0.1:<port>/` from D2.c.
