@@ -63,6 +63,27 @@ The Python side has its own checks (see the main [README](../README.md#linting-t
 so change the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml` and
 `src-tauri/tauri.conf.json` together with it.
 
+## Design system
+
+The app uses Google's Material 3 (spec D11) with the Midnight Iris palette.
+
+- **Colours** are generated from two seeds in `src/theme/scheme.ts` at build time (the
+  `m3-theme` Vite plugin) into `--md-sys-color-*` variables; never type a colour in by hand.
+  `src/theme/scheme.test.ts` checks the result against the table in the spec, and
+  `contrast.test.ts` checks WCAG AA contrast for every pairing.
+- **Components** come from `@material/web` (pinned; in maintenance mode), each wrapped in a
+  small component in `src/ui/`. The rail, app bar, cards, snackbar and player bar are built
+  there from the same tokens.
+- **Icons** are Material Symbols Rounded, drawn from a 40 KB subset of the 5.4 MB font. To add
+  one, put its name in `src/theme/icons.json` (sorted) and run, from `desktop/`:
+
+  ```bash
+  uv run --no-project --with fonttools --with brotli python scripts/subset_icons.py
+  ```
+
+  This rewrites the font in `src/assets/fonts/` and `src/theme/icons.generated.ts`; commit
+  both. The build itself never needs Python.
+
 ## Building an installer
 
 ```bash
