@@ -93,12 +93,20 @@ export default function App() {
     setPage(next);
   };
 
-  const start = async (request: Request, workspace: string) => {
+  const start = async (request: Request, workspace: string, options: { waitForLock?: boolean; title?: string } = {}) => {
     if (request.command !== "analyze" && request.command !== "convert") return;
-    const title = open ? summarize(open.book, open.library.min_boundary_confidence).title : "Book";
+    const title = options.title ?? (open ? summarize(open.book, open.library.min_boundary_confidence).title : "Book");
     try {
       const id = await startRun(request, workspace);
-      setRun({ id, title, command: request.command, workspace, manifest: `${workspace}/manifest.json` });
+      setRun({
+        id,
+        title,
+        command: request.command,
+        workspace,
+        manifest: `${workspace}/manifest.json`,
+        request,
+        waitingForLock: options.waitForLock,
+      });
       setPage("run");
     } catch (error) {
       setMessage(errorMessage(error));
@@ -138,6 +146,12 @@ export default function App() {
               run={run}
               onDone={open ? () => setPage("library") : undefined}
               onReview={run ? () => void review(run.manifest, run.workspace, run.title) : undefined}
+              onRestart={
+                run
+                  ? (request, options) => void start(request, run.workspace, { ...options, title: run.title })
+                  : undefined
+              }
+              onOpenSettings={() => select("settings")}
             />
           ) : null}
         </main>

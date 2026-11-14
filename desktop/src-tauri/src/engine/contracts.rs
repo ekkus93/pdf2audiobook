@@ -40,7 +40,7 @@ fn assert_valid(schema_name: &str, instance: &Value) {
 }
 
 /// Success fixtures and the contract each follows.
-const RESULTS: [(&str, &str); 13] = [
+const RESULTS: [(&str, &str); 14] = [
     ("doctor.json", "doctor"),
     ("doctor-llm-check.json", "doctor"),
     ("config-show.json", "config-show"),
@@ -54,6 +54,7 @@ const RESULTS: [(&str, &str); 13] = [
     ("convert-dry-run.json", "convert-dry-run"),
     ("edits-list.json", "edits-list"),
     ("pack-m4b.json", "pack-m4b"),
+    ("budget-show.json", "budget-show"),
 ];
 
 #[test]

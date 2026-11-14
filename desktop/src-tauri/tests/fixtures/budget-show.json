@@ -1,0 +1,39 @@
+{
+  "requests": [
+    {
+      "id": 1,
+      "status": "complete",
+      "prompt_tokens": 2600,
+      "completion_tokens": 400,
+      "total_tokens": 3000,
+      "estimated_cost_usd": null
+    },
+    {
+      "id": 2,
+      "status": "complete",
+      "prompt_tokens": 2600,
+      "completion_tokens": 400,
+      "total_tokens": 3000,
+      "estimated_cost_usd": null
+    },
+    {
+      "id": 3,
+      "status": "complete",
+      "prompt_tokens": 2600,
+      "completion_tokens": 400,
+      "total_tokens": 3000,
+      "estimated_cost_usd": null
+    }
+  ],
+  "totals": {
+    "requests_started": 3,
+    "unresolved_requests": 0,
+    "reported_tokens": 9000,
+    "prompt_tokens": 7800,
+    "completion_tokens": 1200,
+    "unpriced_requests": 3,
+    "estimated_cost_usd": 0.0,
+    "scope": "persistent_book_workspace"
+  },
+  "warnings": []
+}

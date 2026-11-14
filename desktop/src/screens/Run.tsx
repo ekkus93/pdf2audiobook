@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { cancelRun, errorMessage, run as runEngine, runProgress } from "../engine/api";
-import type { Progress, RunStatus } from "../engine/types";
+import type { Progress, Request, RunStatus } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { LinearProgress } from "../ui/Progress";
+import { ReasonAction, isActionReason, type ReasonContext } from "./reasons";
 import "./screens.css";
 import "./run.css";
 
@@ -13,6 +14,10 @@ export interface ActiveRun {
   command: "analyze" | "convert";
   workspace: string;
   manifest: string;
+  /** The request that started the run, to start again from the reason actions. */
+  request?: Request;
+  /** True when this run was started to wait for another task to release the book. */
+  waitingForLock?: boolean;
 }
 
 /** "45s", "4m 12s", "1h 03m". */
@@ -35,6 +40,11 @@ interface RunProps {
   onReview?: () => void;
   /** How often to poll `run_status.json` (spec D5.a: about once a second). */
   pollMs?: number;
+  /** Starts a request again (spec D2.b actions). */
+  onRestart?: ReasonContext["onRestart"];
+  onOpenSettings?: () => void;
+  /** Seconds between retries while waiting for the book's lock. */
+  lockRetrySeconds?: number;
 }
 
 /** Run (spec D4.4, D5): live progress for analyze or convert, with cancel. */
@@ -47,7 +57,7 @@ function reviewReason(progress: Progress | null): string | null {
   return reason && REVIEW_REASONS.has(reason) ? reason : null;
 }
 
-export function Run({ run, onDone, onReview, pollMs = 1000 }: RunProps) {
+export function Run({ run, onDone, onReview, pollMs = 1000, onRestart, onOpenSettings, lockRetrySeconds }: RunProps) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const needsReview = reviewReason(progress) !== null;
@@ -128,6 +138,26 @@ export function Run({ run, onDone, onReview, pollMs = 1000 }: RunProps) {
       progress.outcome.outcome === "failed" &&
       progress.outcome.error.reason === "pending_recovery" ? (
         <Recover manifest={run.manifest} workspace={run.workspace} />
+      ) : null}
+      {progress?.state === "finished" &&
+      progress.outcome.outcome === "failed" &&
+      isActionReason(progress.outcome.error.reason) &&
+      run.request &&
+      onRestart ? (
+        <ReasonAction
+          reason={progress.outcome.error.reason}
+          context={{
+            request: run.request,
+            manifest: run.manifest,
+            workspace: run.workspace,
+            message: progress.outcome.error.message,
+            onRestart,
+            onOpenSettings,
+            onOpenBook: onDone,
+            waitingForLock: run.waitingForLock,
+            lockRetrySeconds,
+          }}
+        />
       ) : null}
       {status?.completed_stages?.length ? (
         <section className="stages" aria-label="Finished stages">

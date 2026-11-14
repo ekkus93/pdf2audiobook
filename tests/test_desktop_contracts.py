@@ -196,6 +196,31 @@ def test_edits_list(tmp_path: Path) -> None:
     assert with_text["edits"][0]["replacement"] == "The text."
 
 
+def test_budget_show(tmp_path: Path) -> None:
+    from pdf2audiobook.llm.budget import BookLLMBudgetLedger
+
+    workspace = tmp_path / "book"
+    (workspace / "reports").mkdir(parents=True)
+    ledger = BookLLMBudgetLedger(workspace / "reports" / "llm_budget.sqlite3")
+    settled = ledger.reserve(
+        request_hash="a", provider_hash="p", max_requests=5, max_tokens=None, max_usd=None
+    )
+    ledger.settle(
+        settled,
+        usage={"prompt_tokens": 900, "completion_tokens": 100, "total_tokens": 1000},
+        input_rate=None,
+        output_rate=None,
+    )
+    ledger.reserve(
+        request_hash="b", provider_hash="p", max_requests=5, max_tokens=None, max_usd=None
+    )
+    payload = _ok("budget", "show", "--output", str(workspace), "--json")
+    _check("budget-show", payload)
+    assert payload["totals"]["requests_started"] == 2
+    assert payload["totals"]["unresolved_requests"] == 1
+    assert payload["totals"]["reported_tokens"] == 1000
+
+
 def test_review_address(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     class Server:
         server_address = ("127.0.0.1", 43210)
@@ -248,6 +273,6 @@ def test_every_contract_has_a_test() -> None:
     tested = {
         "doctor", "config-show", "inspect-book", "inspect-manifest", "workspace", "voices",
         "thumbnail", "analyze", "run-status", "convert-dry-run", "convert", "pack-m4b",
-        "edits-list", "review-address", "error",
+        "edits-list", "review-address", "error", "budget-show",
     }  # fmt: skip
     assert contracts == tested

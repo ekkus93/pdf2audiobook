@@ -42,6 +42,13 @@ export type Request =
   | { command: "doctor"; check_llm?: boolean }
   | { command: "recover"; manifest: string; back_up_changed: boolean }
   | { command: "pack_m4b"; manifest: string; output: string; bitrate?: string | null; cover?: string | null }
+  | {
+      command: "regenerate_chapter";
+      manifest: string;
+      which: { kind: "chapter"; chapter: number } | { kind: "all_conflicts" };
+      footnotes?: "warn" | "inline" | "end" | "omit" | null;
+    }
+  | { command: "budget_show"; workspace: string }
   | { command: "edits_list"; manifest: string; status: "pending" | "accepted" | "rejected" | "all"; with_text?: boolean }
   | { command: "edits_accept"; manifest: string; which: { kind: "all" } | { kind: "blocks"; ids: string[] } }
   | { command: "edits_reject"; manifest: string; which: { kind: "all" } | { kind: "blocks"; ids: string[] } }
@@ -200,6 +207,10 @@ export interface CliConfig {
     max_context_tokens: number;
     max_output_tokens: number;
     allow_remote_content: boolean;
+    /** Per-book LLM budgets; null means no limit. */
+    max_requests?: number | null;
+    max_reported_tokens?: number | null;
+    max_estimated_cost_usd?: number | null;
     ollama: { model: string };
     openai: { model: string };
     llama_server: { model: string };
@@ -236,4 +247,23 @@ export interface AudioFile {
   path: string;
   name: string;
   bytes: number;
+}
+
+/** `budget show --json` (desktop/contracts/budget-show.schema.json). */
+export interface BudgetReport {
+  requests: Array<{
+    id: number;
+    status: string;
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+    total_tokens: number | null;
+    estimated_cost_usd: number | null;
+  }>;
+  totals: {
+    requests_started: number;
+    unresolved_requests: number;
+    reported_tokens: number;
+    estimated_cost_usd: number;
+    unpriced_requests?: number;
+  };
 }

@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "budget show --json",
+  "description": "A book's content-free LLM request accounting, shown when a run stops with budget_exhausted (spec D2.b).",
+  "type": "object",
+  "required": [
+    "requests",
+    "totals",
+    "warnings"
+  ],
+  "properties": {
+    "requests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "prompt_tokens",
+          "completion_tokens",
+          "total_tokens",
+          "estimated_cost_usd"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          },
+          "prompt_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "completion_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "estimated_cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "requests_started",
+        "unresolved_requests",
+        "reported_tokens",
+        "estimated_cost_usd"
+      ],
+      "properties": {
+        "requests_started": {
+          "type": "integer"
+        },
+        "unresolved_requests": {
+          "type": "integer"
+        },
+        "reported_tokens": {
+          "type": "integer"
+        },
+        "prompt_tokens": {
+          "type": "integer"
+        },
+        "completion_tokens": {
+          "type": "integer"
+        },
+        "unpriced_requests": {
+          "type": "integer"
+        },
+        "estimated_cost_usd": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
