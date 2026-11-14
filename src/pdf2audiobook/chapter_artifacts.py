@@ -152,7 +152,11 @@ def resolve_footnote_policy(manifest: BookManifest, folder: Path) -> str:
 
 
 def _flag(conflicts: list[int] | None, number: int) -> None:
-    """Raise the conflict, or record it when the caller is collecting conflicts."""
+    """Raise the conflict, or record it when the caller is collecting conflicts.
+
+    In collect mode the caller discards the plan, so planning simply carries on
+    after a flagged chapter.
+    """
     if conflicts is None:
         raise _conflict(number)
     if number not in conflicts:
@@ -222,29 +226,20 @@ def _plan(
         observed[name] = actual
         old = previous.get(chapter.id)
         occupant = old_by_number.get(chapter.number)
+        # A changed or edited file left by another chapter at this number was
+        # already flagged by the loop over old records above.
         if chapter.number in force:
             edited = False
-        elif (
-            occupant
-            and occupant[0] != chapter.id
-            and actual is not None
-            and (actual != occupant[1]["generated"] or occupant[1]["edited"])
-        ):
-            _flag(conflicts, chapter.number)
-            continue
         elif old is None or old["number"] != chapter.number:
             if actual is not None and actual != generated and not occupant:
                 _flag(conflicts, chapter.number)
-                continue
             edited = False
         else:
             if actual is None and old["edited"]:
                 _flag(conflicts, chapter.number)
-                continue
             edited = actual is not None and actual != old["generated"]
             if edited and old["identity"] != identity:
                 _flag(conflicts, chapter.number)
-                continue
         if not edited and actual != generated:
             writes[name] = content
         records[chapter.id] = {
@@ -263,11 +258,10 @@ def _plan(
             old_entry = next(
                 (r for r in previous.values() if f"{r['number']:03d}.txt" == path.name), None
             )
-            if int(path.stem) not in force and (
-                old_entry is None or old_entry["edited"] or actual != old_entry["generated"]
-            ):
+            # A tracked file that was edited or changed was already flagged by
+            # the loop over old records above; only untracked files remain.
+            if int(path.stem) not in force and old_entry is None:
                 _flag(conflicts, int(path.stem))
-                continue
             deletes.append(path.name)
     return ArtifactPlan(
         writes,
