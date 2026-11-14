@@ -40,9 +40,8 @@ def _within_depth(payload: bytes, max_depth: int) -> bool:
             if depth > max_depth:
                 return False
         elif byte in (0x5D, 0x7D):
+            # A closer before its opener is invalid JSON; json.loads rejects it.
             depth -= 1
-            if depth < 0:
-                return False
     return depth == 0 and not in_string
 
 
