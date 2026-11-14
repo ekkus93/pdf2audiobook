@@ -237,6 +237,38 @@ def test_chapter_path_that_is_not_a_regular_file_is_refused(tmp_path, kind):
     assert outside.read_text(encoding="utf-8") == "Private text elsewhere."
 
 
+def test_named_pipe_in_a_chapter_place_is_refused_without_blocking(tmp_path):
+    """U2.a: a FIFO is not a regular file; opening it to read would block forever."""
+    import os
+    import threading
+
+    from pdf2audiobook.document.structure import render_chapter_texts
+
+    manifest = _manifest()
+    render_chapter_texts(manifest, tmp_path)
+    chapter = tmp_path / "chapters" / "001.txt"
+    chapter.unlink()
+    os.mkfifo(chapter)
+    outcome = {}
+
+    def plan():
+        try:
+            plan_chapter_artifacts(manifest, tmp_path, "warn")
+        except ExtractionError as error:
+            outcome["message"] = str(error)
+
+    worker = threading.Thread(target=plan, daemon=True)
+    worker.start()
+    worker.join(timeout=5)
+    if worker.is_alive():
+        # Release the blocked reader before failing: open and close a writer end.
+        os.close(os.open(chapter, os.O_RDWR | os.O_NONBLOCK))
+        worker.join(timeout=5)
+        pytest.fail("planning blocked on a named pipe")
+
+    assert outcome == {"message": _INSPECT}
+
+
 def _state(**changes):
     record = {"number": 1, "generated": "a" * 64, "identity": "b" * 64, "edited": False}
     state = {"version": 1, "footnotes": "warn", "chapters": {"c": record}}
