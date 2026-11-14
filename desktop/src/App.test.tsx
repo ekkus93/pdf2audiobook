@@ -24,6 +24,9 @@ beforeEach(() => {
     output_dir: null,
     theme: "light",
     added_books: [],
+    default_voice: null,
+    llm_provider: null,
+    llm_model: null,
   });
   vi.mocked(api.library).mockResolvedValue({ output_dir: "/out", min_boundary_confidence: 0.75, books: [], commands: [] });
   vi.mocked(api.locateEngine).mockReturnValue(new Promise(() => {}));
@@ -67,7 +70,7 @@ describe("App shell", () => {
     await user.tab();
     await user.keyboard("{Enter}");
     expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("main", { name: "Setup" })).toBeInTheDocument();
+    expect(screen.getByRole("main", { name: "Settings" })).toBeInTheDocument();
   });
 
   it("re-reads the library when the review window closes", async () => {

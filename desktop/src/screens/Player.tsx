@@ -22,8 +22,13 @@ export function chapterName(file: AudioFile): string {
  * the opened book's `audio/` folder, so any other path is refused (403).
  */
 export async function loadChapter(path: string): Promise<string> {
-  const response = await fetch(convertFileSrc(path));
-  if (!response.ok) throw new Error(`asset ${response.status}`);
+  return blobUrl(convertFileSrc(path));
+}
+
+/** Fetches `url` into a `blob:` URL that WebKitGTK can play; the caller revokes it. */
+export async function blobUrl(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`fetch ${response.status}`);
   return URL.createObjectURL(await response.blob());
 }
 

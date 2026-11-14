@@ -6,7 +6,7 @@ import { Player, type Queue } from "./screens/Player";
 import { summarize } from "./screens/bookState";
 import { Library } from "./screens/Library";
 import { Run, type ActiveRun } from "./screens/Run";
-import { Setup } from "./screens/Setup";
+import { Settings } from "./screens/Settings";
 import { Button } from "./ui/Button";
 import { Dialog } from "./ui/Dialog";
 import { NavigationRail, type Destination } from "./ui/NavigationRail";
@@ -22,7 +22,7 @@ const DESTINATIONS: ReadonlyArray<Destination<Page>> = [
   { id: "settings", label: "Settings", icon: "settings" },
 ];
 
-const TITLES: Record<Page, string> = { library: "Library", run: "Run", settings: "Setup" };
+const TITLES: Record<Page, string> = { library: "Library", run: "Run", settings: "Settings" };
 
 export default function App() {
   const [page, setPage] = useState<Page>("library");
@@ -132,7 +132,7 @@ export default function App() {
           {page === "library" && !open ? (
             <Library onOpenSettings={() => select("settings")} onOpenBook={(book, library) => setOpen({ book, library })} />
           ) : null}
-          {page === "settings" ? <Setup /> : null}
+          {page === "settings" ? <Settings /> : null}
           {page === "run" ? (
             <Run
               run={run}

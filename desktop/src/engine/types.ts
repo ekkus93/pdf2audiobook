@@ -183,6 +183,12 @@ export interface AppSettings {
   output_dir: string | null;
   theme: Theme;
   added_books: string[];
+  /** The voice new books start with; null uses the CLI's voice. */
+  default_voice: string | null;
+  /** The LLM provider new books start with; null uses the CLI's provider. */
+  llm_provider: LlmProvider | null;
+  /** The LLM model new books start with; null uses the CLI's model for the provider. */
+  llm_model: string | null;
 }
 
 /** The parts of `config show --json` the app reads. */

@@ -21,6 +21,16 @@ export const CONFIG: CliConfig = {
 const FORM: OptionsForm = defaults(CONFIG, 12);
 
 describe("defaults", () => {
+  it("use the app's Settings for voice, provider and model when set", () => {
+    const form = defaults(CONFIG, 4, { default_voice: "Luna", llm_provider: "llama-server", llm_model: "local-model" });
+    expect([form.voice, form.provider, form.model]).toEqual(["Luna", "llama-server", "local-model"]);
+  });
+
+  it("take the CLI's model for a preferred provider without a preferred model", () => {
+    const form = defaults(CONFIG, 4, { llm_provider: "llama-server", llm_model: null, default_voice: null });
+    expect([form.voice, form.provider, form.model]).toEqual(["Jasper", "llama-server", CONFIG.llm.llama_server.model]);
+  });
+
   it("start from the CLI's own configuration", () => {
     expect(FORM).toEqual({
       llm: true,

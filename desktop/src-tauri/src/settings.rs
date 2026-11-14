@@ -27,6 +27,12 @@ pub struct AppSettings {
     pub theme: Theme,
     /// Books the user added that may not be analyzed yet, in the order added.
     pub added_books: Vec<PathBuf>,
+    /// The voice new books start with; `None` uses the CLI's configured voice.
+    pub default_voice: Option<String>,
+    /// The LLM provider new books start with; `None` uses the CLI's configured provider.
+    pub llm_provider: Option<String>,
+    /// The LLM model new books start with; `None` uses the CLI's model for the provider.
+    pub llm_model: Option<String>,
 }
 
 impl AppSettings {
@@ -72,6 +78,21 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
+    fn settings_from_before_the_defaults_were_added_still_load() {
+        let temp = TempDir::new().unwrap();
+        fs::write(
+            temp.path().join(FILE),
+            r#"{"cli_path": "/opt/p2a", "theme": "light", "added_books": []}"#,
+        )
+        .unwrap();
+        let settings = AppSettings::load(temp.path());
+        assert_eq!(settings.cli_path, Some(PathBuf::from("/opt/p2a")));
+        assert_eq!(settings.theme, Theme::Light);
+        assert_eq!(settings.default_voice, None);
+        assert_eq!(settings.llm_provider, None);
+    }
+
+    #[test]
     fn missing_settings_are_the_defaults() {
         let temp = TempDir::new().unwrap();
         assert_eq!(AppSettings::load(temp.path()), AppSettings::default());
@@ -87,6 +108,9 @@ mod tests {
             output_dir: Some("/books/out".into()),
             theme: Theme::System,
             added_books: vec!["/books/a.pdf".into()],
+            default_voice: Some("Luna".into()),
+            llm_provider: Some("llama-server".into()),
+            llm_model: Some("local-model".into()),
         };
         settings.save(&temp.path().join("nested")).unwrap();
         assert_eq!(AppSettings::load(&temp.path().join("nested")), settings);

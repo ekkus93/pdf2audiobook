@@ -1,0 +1,79 @@
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1040px;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.settings-group h3,
+.settings-group p {
+  margin: 0;
+}
+
+.settings-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.settings-field > :last-child {
+  margin-top: 8px;
+}
+
+.voice-samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-save {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-ok {
+  color: var(--md-sys-color-primary);
+}
+
+.settings-problem {
+  color: var(--md-sys-color-error);
+}
+
+.config-table {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+  font-size: var(--md-sys-typescale-body-small-size, 13px);
+}
+
+.config-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.config-table th,
+.config-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.config-table code {
+  font-family: var(--app-font-mono);
+}

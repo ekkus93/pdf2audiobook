@@ -25,16 +25,24 @@ const MODEL_KEY: Record<LlmProvider, "ollama" | "openai" | "llama_server"> = {
 };
 
 /** The form as the CLI's own configuration would run the book. */
-export function defaults(config: CliConfig, chapters: number | null): OptionsForm {
+/** What the app's Settings say new books start with (spec D4.8); unset values use the CLI's. */
+export interface Preferences {
+  default_voice?: string | null;
+  llm_provider?: LlmProvider | null;
+  llm_model?: string | null;
+}
+
+export function defaults(config: CliConfig, chapters: number | null, preferences: Preferences = {}): OptionsForm {
   const tts = config.tts.provider === "piper" ? config.tts.piper : config.tts.kitten;
+  const provider = preferences.llm_provider ?? config.llm.provider;
   return {
     llm: config.llm.enabled,
-    provider: config.llm.provider,
-    model: config.llm[MODEL_KEY[config.llm.provider]].model,
+    provider,
+    model: preferences.llm_model || config.llm[MODEL_KEY[provider]].model,
     contextTokens: String(config.llm.max_context_tokens),
     outputTokens: String(config.llm.max_output_tokens),
     remoteConsent: config.llm.allow_remote_content,
-    voice: tts.voice,
+    voice: preferences.default_voice || tts.voice,
     speed: tts.speed,
     allChapters: true,
     firstChapter: "1",

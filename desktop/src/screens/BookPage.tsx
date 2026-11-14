@@ -1,7 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
-import { describe, errorMessage, openReview, run } from "../engine/api";
-import type { CliConfig, LibraryBook, LlmProvider, Request, Voices } from "../engine/types";
+import { describe, errorMessage, getSettings, openReview, run } from "../engine/api";
+import type { AudioFile, CliConfig, LibraryBook, LlmProvider, Request, Voices } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { IconButton } from "../ui/IconButton";
@@ -10,10 +10,9 @@ import { Select } from "../ui/Select";
 import { Slider } from "../ui/Slider";
 import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
-import { defaults, modelFor, requests, validate, type OptionsForm } from "./bookOptions";
+import { defaults, modelFor, requests, validate, type OptionsForm, type Preferences } from "./bookOptions";
 import { PendingEdits } from "./PendingEdits";
 import { ChaptersAudio } from "./ChaptersAudio";
-import type { AudioFile } from "../engine/types";
 import { summarize } from "./bookState";
 import "./screens.css";
 import "./book.css";
@@ -34,7 +33,7 @@ interface BookPageProps {
   onStart: (request: Request, workspace: string) => void;
 }
 
-type Loaded = { phase: "loading" } | { phase: "failed"; message: string } | { phase: "ready"; config: CliConfig; voices: Voices | null };
+type Loaded = { phase: "loading" } | { phase: "failed"; message: string } | { phase: "ready"; config: CliConfig; voices: Voices | null; preferences: Preferences };
 
 /** Loads the CLI's configuration and the voice list; never rejects. */
 export async function loadOptions(): Promise<Loaded> {
@@ -45,7 +44,14 @@ export async function loadOptions(): Promise<Loaded> {
       return { phase: "failed", message };
     }
     const voices = await run<Voices>({ command: "voices" }).catch(() => null);
-    return { phase: "ready", config: config.result, voices: voices?.outcome === "success" ? voices.result : null };
+    // The app's own Settings choose what new books start with; without them, the CLI's values.
+    const preferences: Preferences = await getSettings().catch(() => ({}));
+    return {
+      phase: "ready",
+      config: config.result,
+      voices: voices?.outcome === "success" ? voices.result : null,
+      preferences,
+    };
   } catch (error) {
     return { phase: "failed", message: errorMessage(error) };
   }
@@ -69,7 +75,7 @@ export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, o
     void loadOptions().then((next) => {
       if (!current) return;
       setLoaded(next);
-      if (next.phase === "ready") setForm(defaults(next.config, summary.chapters));
+      if (next.phase === "ready") setForm(defaults(next.config, summary.chapters, next.preferences));
     });
     return () => {
       current = false;

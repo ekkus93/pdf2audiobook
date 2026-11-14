@@ -1,6 +1,6 @@
 /// <reference types="vitest/config" />
 import { fileURLToPath } from "node:url";
-import { defineConfig, runnerImport, type Plugin } from "vite";
+import { defineConfig, runnerImport, searchForWorkspaceRoot, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import process from "node:process";
 const host = process.env.TAURI_DEV_HOST;
@@ -49,6 +49,10 @@ export default defineConfig(() => ({
   server: {
     port: 1420,
     strictPort: true,
+    // The README's voice samples (docs/audio/voices) are bundled from the repository, not copied.
+    fs: {
+      allow: [searchForWorkspaceRoot(process.cwd()), fileURLToPath(new URL("../docs/audio/voices", import.meta.url))],
+    },
     host: host || false,
     hmr: host
       ? {
