@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { errorMessage, getSettings, onCloseRequested, quitApp, startRun } from "./engine/api";
+import { errorMessage, getSettings, library, onCloseRequested, onReviewClosed, openReview, quitApp, startRun } from "./engine/api";
 import type { Library as LibraryData, LibraryBook, Request } from "./engine/types";
 import { BookPage } from "./screens/BookPage";
 import { summarize } from "./screens/bookState";
@@ -30,6 +30,7 @@ export default function App() {
   const [message, setMessage] = useState<string | null>(null);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const [quitting, setQuitting] = useState(false);
+  const [reviewing, setReviewing] = useState<string | null>(null);
 
   useEffect(() => {
     void getSettings()
@@ -48,6 +49,36 @@ export default function App() {
       .catch(() => undefined);
     return () => unsubscribe?.();
   }, []);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    void onReviewClosed(() => {
+      setReviewing(null);
+      // Review may have changed the book: re-read it (spec D6.b).
+      void library()
+        .then((data) =>
+          setOpen((current) => {
+            const book = current && data.books.find((item) => item.workspace === current.book.workspace);
+            return current && book ? { book, library: data } : current;
+          }),
+        )
+        .catch(() => undefined);
+    })
+      .then((stop) => {
+        unsubscribe = stop;
+      })
+      .catch(() => undefined);
+    return () => unsubscribe?.();
+  }, []);
+
+  const review = async (manifest: string, workspace: string, title: string) => {
+    try {
+      await openReview(manifest, workspace, title);
+      setReviewing(workspace);
+    } catch (error) {
+      setMessage(errorMessage(error));
+    }
+  };
 
   const select = (next: Page) => {
     if (next === "library") setOpen(null);
@@ -80,6 +111,8 @@ export default function App() {
           {page === "library" && open ? (
             <BookPage
               book={open.book}
+              reviewing={reviewing === open.book.workspace}
+              onReviewOpened={() => setReviewing(open.book.workspace)}
               outputDir={open.library.output_dir}
               minConfidence={open.library.min_boundary_confidence}
               onBack={() => setOpen(null)}
@@ -90,7 +123,13 @@ export default function App() {
             <Library onOpenSettings={() => select("settings")} onOpenBook={(book, library) => setOpen({ book, library })} />
           ) : null}
           {page === "settings" ? <Setup /> : null}
-          {page === "run" ? <Run run={run} onDone={open ? () => setPage("library") : undefined} /> : null}
+          {page === "run" ? (
+            <Run
+              run={run}
+              onDone={open ? () => setPage("library") : undefined}
+              onReview={run ? () => void review(run.manifest, run.workspace, run.title) : undefined}
+            />
+          ) : null}
         </main>
       </div>
       <Dialog

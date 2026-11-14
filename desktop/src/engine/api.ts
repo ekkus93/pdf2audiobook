@@ -65,3 +65,13 @@ export async function quitApp(): Promise<void> {
 export function onCloseRequested(handler: () => void): Promise<() => void> {
   return listen("close-requested", handler);
 }
+
+/** Opens the chapter review page for a book in its own window (spec D6). */
+export async function openReview(manifest: string, workspace: string, title: string): Promise<void> {
+  await invoke("open_review", { manifest, workspace, title });
+}
+
+/** Called when the review window has closed and its server has stopped. */
+export function onReviewClosed(handler: () => void): Promise<() => void> {
+  return listen("review-closed", handler);
+}

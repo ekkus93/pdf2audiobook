@@ -7,13 +7,14 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use crate::engine::live::{CANCEL_GRACE, LiveRuns, Progress};
 use crate::engine::locate::{CliSource, LocateError, LocateOptions, LocatedCli, locate};
 use crate::engine::process::{CliCommand, Runner, SystemRunner};
 use crate::engine::request::Request;
 use crate::engine::result::{Outcome, parse};
+use crate::engine::review::{ReviewError, ReviewServer, allowed};
 use crate::engine::runs::WorkspaceRuns;
 use crate::library;
 use crate::settings::AppSettings;
@@ -24,6 +25,8 @@ pub struct Engine {
     pub cli: Mutex<Option<LocatedCli>>,
     pub runs: Arc<WorkspaceRuns>,
     pub live: Arc<LiveRuns>,
+    /// The review server behind the open review window, if any (spec D6).
+    pub review: Mutex<Option<ReviewServer>>,
 }
 
 impl Default for Engine {
@@ -33,6 +36,7 @@ impl Default for Engine {
             cli: Mutex::new(None),
             runs: WorkspaceRuns::new(),
             live: Arc::new(LiveRuns::default()),
+            review: Mutex::new(None),
         }
     }
 }
@@ -707,4 +711,87 @@ esac
         assert_eq!(pending.inspect, None);
         assert!(pending.thumbnail.is_some());
     }
+}
+
+/// The review window's label; there is at most one.
+pub const REVIEW_WINDOW: &str = "review";
+
+/// How long `review --json` gets to print its address.
+const REVIEW_START: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Opens the chapter review page for a book in its own window (spec D6.a). The window may load
+/// only the review server's own address and has no access to the app's commands.
+#[tauri::command]
+pub async fn open_review(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+    manifest: PathBuf,
+    workspace: PathBuf,
+    title: String,
+) -> Result<(), BridgeError> {
+    if let Some(window) = app.get_webview_window(REVIEW_WINDOW) {
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let request = Request::Review { manifest, port: 0 };
+    let args = request.args().map_err(|error| BridgeError::Request {
+        message: error.to_string(),
+    })?;
+    let cli = located(&engine, &app)?;
+    let guard = engine
+        .runs
+        .try_start(&workspace, &request)
+        .map_err(|busy| BridgeError::Busy {
+            message: busy.to_string(),
+        })?;
+    let server = tauri::async_runtime::spawn_blocking(move || {
+        ReviewServer::start(&cli.command, &args, Some(guard), REVIEW_START)
+    })
+    .await
+    .map_err(|_| BridgeError::Start)?
+    .map_err(|error| match error {
+        ReviewError::Failed { error } if error.reason.as_deref() == Some("workspace_locked") => {
+            BridgeError::Busy {
+                message: error.message,
+            }
+        }
+        other => BridgeError::Request {
+            message: other.to_string(),
+        },
+    })?;
+    let url: tauri::Url = server.url.parse().map_err(|_| BridgeError::Start)?;
+    let origin = url.clone();
+    let window = match WebviewWindowBuilder::new(&app, REVIEW_WINDOW, WebviewUrl::External(url))
+        .title(format!("Review chapters: {title}"))
+        .inner_size(1040.0, 780.0)
+        .on_navigation(move |target| allowed(target, &origin))
+        .build()
+    {
+        Ok(window) => window,
+        Err(_) => {
+            server.stop(CANCEL_GRACE);
+            return Err(BridgeError::Start);
+        }
+    };
+    *engine.review.lock().unwrap_or_else(PoisonError::into_inner) = Some(server);
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::Destroyed = event {
+            let server = handle
+                .state::<Engine>()
+                .review
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .take();
+            let handle = handle.clone();
+            std::thread::spawn(move || {
+                if let Some(server) = server {
+                    server.stop(CANCEL_GRACE);
+                }
+                // The main window re-reads the book: the review may have changed it (spec D6.b).
+                let _ = handle.emit("review-closed", ());
+            });
+        }
+    });
+    Ok(())
 }

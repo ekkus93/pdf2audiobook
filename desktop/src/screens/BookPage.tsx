@@ -1,6 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { useEffect, useMemo, useState } from "react";
-import { describe, errorMessage, run } from "../engine/api";
+import { describe, errorMessage, openReview, run } from "../engine/api";
 import type { CliConfig, LibraryBook, LlmProvider, Request, Voices } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
@@ -17,6 +17,9 @@ import "./book.css";
 
 interface BookPageProps {
   book: LibraryBook;
+  /** True while this book's review window is open. */
+  reviewing?: boolean;
+  onReviewOpened?: () => void;
   outputDir: string;
   minConfidence: number;
   onBack: () => void;
@@ -48,7 +51,7 @@ const PROVIDERS: ReadonlyArray<{ value: LlmProvider; label: string }> = [
 ];
 
 /** One book: its options (spec D4.3) and the actions that start analysis or conversion. */
-export function BookPage({ book, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
+export function BookPage({ book, reviewing = false, onReviewOpened, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
   const summary = summarize(book, minConfidence);
   const source = book.inspect?.source_path ?? book.source ?? "";
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
@@ -79,6 +82,16 @@ export function BookPage({ book, outputDir, minConfidence, onBack, onStart }: Bo
           </p>
         </div>
       </div>
+      {book.analyzed ? (
+        <ReviewPanel
+          manifest={book.manifest}
+          workspace={book.workspace}
+          title={summary.title}
+          needsReview={summary.state === "needs_review"}
+          reviewing={reviewing}
+          onOpened={onReviewOpened}
+        />
+      ) : null}
       {loaded.phase === "loading" ? (
         <div className="screen-loading">
           <CircularProgress label="Loading the options" />
@@ -260,5 +273,77 @@ function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, boo
         </details>
       ) : null}
     </>
+  );
+}
+
+interface ReviewPanelProps {
+  manifest: string;
+  workspace: string;
+  title: string;
+  needsReview: boolean;
+  reviewing: boolean;
+  onOpened?: () => void;
+}
+
+/** Chapter review (spec D6): opens the CLI's review page; explains what it can't do (D6.c). */
+function ReviewPanel({ manifest, workspace, title, needsReview, reviewing, onOpened }: ReviewPanelProps) {
+  const [problem, setProblem] = useState<string | null>(null);
+  const open = async () => {
+    setProblem(null);
+    try {
+      await openReview(manifest, workspace, title);
+      onOpened?.();
+    } catch (error) {
+      setProblem(errorMessage(error));
+    }
+  };
+  return (
+    <section className={`review-panel ${needsReview ? "review-panel-needed" : ""}`} aria-labelledby="review-heading">
+      <div className="review-panel-top">
+        <div>
+          <h3 id="review-heading" className="title-medium">
+            {needsReview ? "Chapters need your review" : "Chapter review"}
+          </h3>
+          <p className="body-medium">
+            {reviewing
+              ? "The review page is open in its own window. Close it when you're done, and this page updates."
+              : "Check chapter titles and where each chapter starts and ends before converting."}
+          </p>
+        </div>
+        <Button variant={needsReview ? "filled" : "tonal"} icon="rate_review" onClick={() => void open()} disabled={reviewing}>
+          Review chapters
+        </Button>
+      </div>
+      {problem ? <p className="body-medium review-problem">{problem}</p> : null}
+      <details className="details">
+        <summary>Merging or splitting chapters</summary>
+        <p className="body-medium">
+          The review page can rename chapters and move where they start and end, but it can't add or
+          remove chapters. To merge or split them, edit the <code>chapters</code> list in this book's
+          manifest with a text editor (keep a backup first), as described in the README section
+          “Protecting manual edits”. The app never edits the manifest itself.
+        </p>
+        <CopyPath path={manifest} />
+      </details>
+    </section>
+  );
+}
+
+function CopyPath({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="copy-command">
+      <pre className="command">{path}</pre>
+      <IconButton
+        icon={copied ? "check" : "content_copy"}
+        label={copied ? "Copied" : "Copy the manifest path"}
+        onClick={() => {
+          void navigator.clipboard
+            .writeText(path)
+            .then(() => setCopied(true))
+            .catch(() => setCopied(false));
+        }}
+      />
+    </div>
   );
 }

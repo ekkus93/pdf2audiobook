@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Progress, RunStatus } from "../engine/types";
 
@@ -223,5 +223,50 @@ describe("Run", () => {
     render(<Run run={RUN} pollMs={5} />);
     expect(await screen.findByText("No audio")).toBeInTheDocument();
     expect(screen.queryByText("An earlier update was interrupted")).not.toBeInTheDocument();
+  });
+
+  it("opens review by itself, once, when a run stops for review", async () => {
+    sequence({
+      state: "finished",
+      status: null,
+      outcome: {
+        outcome: "failed",
+        error: {
+          type: "AudioError",
+          code: 6,
+          message: "Chapter 1 has low boundary confidence; review the manifest before synthesis",
+          reason: "review_required",
+        },
+        warnings: [],
+      },
+      cancelled: false,
+    });
+    const onReview = vi.fn();
+    render(<Run run={RUN} pollMs={5} onReview={onReview} />);
+    expect(await screen.findByText("This book's chapters need your review")).toBeInTheDocument();
+    await waitFor(() => expect(onReview).toHaveBeenCalledOnce());
+    act(() => {
+      Array.from(document.querySelectorAll("md-filled-button"))
+        .find((element) => element.textContent?.includes("Review chapters"))
+        ?.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(onReview).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens review for a book-wide review reason too", async () => {
+    sequence({
+      state: "finished",
+      status: null,
+      outcome: {
+        outcome: "failed",
+        error: { type: "AudioError", code: 6, message: "damaged source", reason: "review_acknowledgement_required" },
+        warnings: [],
+      },
+      cancelled: false,
+    });
+    const onReview = vi.fn();
+    render(<Run run={RUN} pollMs={5} onReview={onReview} />);
+    await screen.findByText("This book's chapters need your review");
+    await waitFor(() => expect(onReview).toHaveBeenCalledOnce());
   });
 });

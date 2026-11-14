@@ -5,6 +5,7 @@ pub mod locate;
 pub mod process;
 pub mod request;
 pub mod result;
+pub mod review;
 pub mod runs;
 
 #[cfg(test)]

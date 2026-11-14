@@ -31,14 +31,32 @@ const UNITS: Record<string, string> = { char: "characters", request: "LLM reques
 interface RunProps {
   run: ActiveRun | null;
   onDone?: () => void;
+  /** Opens chapter review for the run's book (spec D4.5). */
+  onReview?: () => void;
   /** How often to poll `run_status.json` (spec D5.a: about once a second). */
   pollMs?: number;
 }
 
 /** Run (spec D4.4, D5): live progress for analyze or convert, with cancel. */
-export function Run({ run, onDone, pollMs = 1000 }: RunProps) {
+const REVIEW_REASONS = new Set(["review_required", "review_acknowledgement_required"]);
+
+/** The review reason a finished run stopped with, if any. */
+function reviewReason(progress: Progress | null): string | null {
+  if (progress?.state !== "finished" || progress.outcome.outcome !== "failed") return null;
+  const reason = progress.outcome.error.reason ?? null;
+  return reason && REVIEW_REASONS.has(reason) ? reason : null;
+}
+
+export function Run({ run, onDone, onReview, pollMs = 1000 }: RunProps) {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const needsReview = reviewReason(progress) !== null;
+
+  // A run that stops for review opens the review page once, by itself (spec D4.5).
+  useEffect(() => {
+    if (needsReview) onReview?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per run that needs review
+  }, [needsReview]);
 
   useEffect(() => {
     if (!run) return undefined;
@@ -92,6 +110,20 @@ export function Run({ run, onDone, pollMs = 1000 }: RunProps) {
         <Running status={status} cancelling={progress.cancelling} onCancel={() => void cancelRun(run.id)} />
       ) : null}
       {progress?.state === "finished" ? <Finished progress={progress} task={task} onDone={onDone} /> : null}
+      {needsReview && onReview ? (
+        <section className="recover" aria-label="Review">
+          <div className="title-medium">This book's chapters need your review</div>
+          <p className="body-medium on-surface-variant">
+            The review page has opened in its own window. Check the chapters there, save, close it,
+            then run the task again.
+          </p>
+          <div className="button-row">
+            <Button icon="rate_review" onClick={onReview}>
+              Review chapters
+            </Button>
+          </div>
+        </section>
+      ) : null}
       {progress?.state === "finished" &&
       progress.outcome.outcome === "failed" &&
       progress.outcome.error.reason === "pending_recovery" ? (

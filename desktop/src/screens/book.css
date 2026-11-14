@@ -104,3 +104,41 @@
 .book-actions-hint {
   color: var(--md-sys-color-error);
 }
+
+.review-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 24px;
+  border-radius: var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.review-panel-needed {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.review-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.review-panel h3,
+.review-panel p {
+  margin: 0;
+}
+
+.review-panel .details {
+  color: inherit;
+}
+
+.review-panel code {
+  font-family: var(--app-font-mono);
+}
+
+.review-problem {
+  color: var(--md-sys-color-error);
+}

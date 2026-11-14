@@ -1,12 +1,13 @@
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { LibraryBook, Request } from "../engine/types";
+import type { InspectManifest, LibraryBook, Request } from "../engine/types";
 
 vi.mock("../engine/api", async (original) => ({
   ...(await original<typeof import("../engine/api")>()),
   run: vi.fn(),
   describe: vi.fn(),
+  openReview: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
@@ -50,6 +51,15 @@ function respond() {
 
 beforeEach(respond);
 
+/** The Material button whose label contains `text`. */
+function button(text: string): HTMLElement {
+  const found = Array.from(
+    document.querySelectorAll("md-filled-button, md-filled-tonal-button, md-outlined-button, md-text-button"),
+  ).find((element) => element.textContent?.includes(text));
+  if (!found) throw new Error(`no button labelled ${text}`);
+  return found as HTMLElement;
+}
+
 function click(element: Element | null) {
   act(() => {
     element?.dispatchEvent(new Event("click", { bubbles: true }));
@@ -90,11 +100,7 @@ describe("BookPage", () => {
 
   it("starts analysis and conversion with the chosen options", async () => {
     const onStart = await renderPage();
-    const [analyze, convert] = [
-      document.querySelector("md-filled-tonal-button"),
-      document.querySelector("md-filled-button"),
-    ];
-    expect(analyze).toHaveTextContent("Analyze again");
+    const [analyze, convert] = [button("Analyze again"), button("Convert to audio")];
     click(analyze);
     expect(onStart).toHaveBeenLastCalledWith(
       expect.objectContaining({ command: "analyze", book: "/books/lighthouse.pdf" }),
@@ -109,9 +115,8 @@ describe("BookPage", () => {
 
   it("an unanalyzed book offers Analyze", async () => {
     await renderPage(vi.fn(), { ...BOOK, analyzed: false, inspect: null, source: "/books/new.pdf" });
-    const button = document.querySelector("md-filled-tonal-button");
-    expect(button).toHaveTextContent("Analyze");
-    expect(button).not.toHaveTextContent("again");
+    expect(button("Analyze")).not.toHaveTextContent("again");
+    expect(screen.queryByText("Review chapters")).not.toBeInTheDocument();
   });
 
   it("asks for consent before OpenAI and blocks the buttons until given", async () => {
@@ -123,7 +128,7 @@ describe("BookPage", () => {
     });
     expect(await screen.findByText("Send this book's text to OpenAI for analysis")).toBeInTheDocument();
     expect(screen.getByText("Fix the highlighted options first.")).toBeInTheDocument();
-    click(document.querySelector("md-filled-button"));
+    click(button("Convert to audio"));
     expect(onStart).not.toHaveBeenCalled();
   });
 
@@ -131,7 +136,7 @@ describe("BookPage", () => {
     vi.mocked(open).mockResolvedValue("/art/cover.png");
     await renderPage();
     await act(async () => {
-      document.querySelector("md-outlined-button")?.dispatchEvent(new Event("click", { bubbles: true }));
+      button("Choose image").dispatchEvent(new Event("click", { bubbles: true }));
     });
     expect(open).toHaveBeenCalledWith(expect.objectContaining({ filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png"] }] }));
     expect(screen.getByText("cover.png")).toBeInTheDocument();
@@ -167,5 +172,57 @@ describe("BookPage", () => {
     await user.click(await screen.findByRole("button", { name: "Open The Lighthouse at Gull Point" }));
     expect(onOpenBook).toHaveBeenCalledWith(BOOK, expect.objectContaining({ output_dir: "/out" }));
     library.mockRestore();
+  });
+
+  it("opens chapter review for an analyzed book", async () => {
+    vi.mocked(api.openReview).mockResolvedValue(undefined);
+    const onReviewOpened = vi.fn();
+    render(
+      <BookPage book={BOOK} outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={vi.fn()} onReviewOpened={onReviewOpened} />,
+    );
+    expect(screen.getByRole("heading", { name: "Chapter review" })).toBeInTheDocument();
+    await act(async () => {
+      button("Review chapters").dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(api.openReview).toHaveBeenCalledWith(BOOK.manifest, BOOK.workspace, "The Lighthouse at Gull Point");
+    expect(onReviewOpened).toHaveBeenCalledOnce();
+    await screen.findByRole("heading", { name: "Analysis" });
+  });
+
+  it("asks for review when chapters need it, and says when the window is open", async () => {
+    const uncertain = {
+      ...BOOK,
+      inspect: {
+        ...(BOOK.inspect as InspectManifest),
+        chapters: [{ number: 1, title: "One", confidence: 0.5, manually_approved: false }],
+      },
+    };
+    const { rerender } = render(
+      <BookPage book={uncertain} outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={vi.fn()} />,
+    );
+    expect(screen.getByRole("heading", { name: "Chapters need your review" })).toBeInTheDocument();
+    expect(button("Review chapters").tagName).toBe("MD-FILLED-BUTTON");
+    rerender(<BookPage book={uncertain} reviewing outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={vi.fn()} />);
+    expect(screen.getByText(/The review page is open in its own window/)).toBeInTheDocument();
+    expect(button("Review chapters")).toHaveAttribute("disabled");
+    await screen.findByRole("heading", { name: "Analysis" });
+  });
+
+  it("shows why review couldn't open", async () => {
+    vi.mocked(api.openReview).mockRejectedValue({ kind: "busy", message: "Another task is already changing this book; wait for it to finish" });
+    await renderPage();
+    await act(async () => {
+      button("Review chapters").dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(screen.getByText("Another task is already changing this book; wait for it to finish")).toBeInTheDocument();
+  });
+
+  it("explains merging and splitting without editing the manifest", async () => {
+    await renderPage();
+    const details = screen.getByText("Merging or splitting chapters").closest("details") as HTMLDetailsElement;
+    expect(details).toHaveTextContent("can't add or remove chapters");
+    expect(details).toHaveTextContent("Protecting manual edits");
+    expect(details).toHaveTextContent("The app never edits the manifest itself.");
+    expect(within(details).getByText(BOOK.manifest)).toBeInTheDocument();
   });
 });

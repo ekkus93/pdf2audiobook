@@ -10,6 +10,7 @@ vi.mock("./engine/api", async (original) => ({
   run: vi.fn(),
   describe: vi.fn(),
   onCloseRequested: vi.fn(),
+  onReviewClosed: vi.fn(),
   quitApp: vi.fn(),
 }));
 
@@ -31,7 +32,13 @@ beforeEach(() => {
     return () => undefined;
   });
   vi.mocked(api.quitApp).mockResolvedValue(undefined);
+  vi.mocked(api.onReviewClosed).mockImplementation(async (handler) => {
+    reviewClosed = handler;
+    return () => undefined;
+  });
 });
+
+let reviewClosed: () => void = () => undefined;
 
 let closeRequested: () => void = () => undefined;
 
@@ -61,6 +68,14 @@ describe("App shell", () => {
     await user.keyboard("{Enter}");
     expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("main", { name: "Setup" })).toBeInTheDocument();
+  });
+
+  it("re-reads the library when the review window closes", async () => {
+    render(<App />);
+    await screen.findByText("No books yet");
+    expect(api.library).toHaveBeenCalledTimes(1);
+    await act(async () => reviewClosed());
+    expect(api.library).toHaveBeenCalledTimes(2);
   });
 
   it("asks before quitting while a run is going, then stops it and quits", async () => {
