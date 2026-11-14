@@ -108,3 +108,18 @@ Recorded on 2026-11-14 from the code (`conversion.py`, `audio/encoding.py`, `aud
 - **Interruption.** SIGTERM or Ctrl+C during synthesis (tested at 291 of 1,427 characters): exit 130 with the `Interrupted` JSON error, the previous MP3 and sidecar byte-identical, `run_status.json` `stopped`, no temporary WAV or directory left. A hard kill (SIGKILL) can leave a `.cache/tts/chapters/chapter-*.wav` (removed by the next conversion) and a `tmp*` directory in `audio/` (not removed by anything today).
 - **Contracts.** `convert --json` prints `{"mp3_files": [...], "warnings": [...]}` (`desktop/contracts/convert.schema.json`); progress is `reports/run_status.json` (stage "Synthesizing speech", unit `char`); per-chapter outcomes are `reports/conversion_status.json` (schema 1: `status`, `pause_count`, `chunk_mapping`, and `error_code`/`reason_code` on failure).
 - **Gaps for AV4.** No recoverable backup of the replaced MP3 and sidecar; the MP3 rename and the sidecar write are two steps; a hard kill can leave a temporary directory in `audio/`.
+
+## 12. Decisions (AV0.02)
+
+Taken 2026-11-14 from §10's recommendations; the owner may change any of them.
+
+- **Report retention.** `reports/audio_verification.json` keeps, per chapter, the outcome, model votes, hashes and timings, and for each flagged span only a short excerpt: the expected words and each model's transcript of that span, with a few words of context. Full transcripts are kept only with `verify-audio --keep-transcripts`. Removing the report means deleting that file; nothing else refers to it.
+- **Default behavior on a mismatch.** `convert --verify-audio` finishes the conversion and warns: the exit code is unchanged, and the JSON result gains an `audio_verification` summary and a warning. `verify-audio` exits 0 whenever it ran, whatever it found; it exits non-zero only on errors (an unreadable manifest, a locked workspace, an interruption).
+- **Models and revisions.** Pinned; a different file or revision is reported as not ready:
+  - `whisper`: OpenAI Whisper `medium.en` through `openai-whisper==20250625`, weights from the URL that package pins (its path carries the file's SHA-256, `d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f`, which the package checks). MIT.
+  - `wav2vec2`: `facebook/wav2vec2-base-960h` at revision `22aad52d435eb6dbaf354bdad9b0da84ce7d6156` (safetensors weights). Apache-2.0.
+  - `vosk`: `vosk-model-en-us-0.22-lgraph.zip` from alphacephei.com (130,557,655 bytes; SHA-256 pinned in AV0.03 once downloaded) through `vosk==0.3.45`. Apache-2.0.
+- **Install.** Optional extras `asr-whisper`, `asr-wav2vec2`, `asr-vosk`, and `asr` for all three. The default install and the `kitten` extra are unchanged.
+- **Language scope.** English only. The manifest has no language field, so the speech engine decides: Kitten voices are English; a Piper voice whose name doesn't start with `en_` (such as `de_DE-thorsten-medium`) makes every chapter `verification_unavailable` with reason `unsupported_language`.
+- **Model download.** Never implicit. `pdf2audiobook asr list [--json]` shows each model's readiness (package installed, weights present and checked, size, location). `pdf2audiobook asr fetch MODEL... [--yes]` prints each model's source, size and destination and asks before downloading; `--yes` is for callers that have already shown that, such as the desktop app. Weights go to `$XDG_CACHE_HOME/pdf2audiobook/asr` (`~/.cache/pdf2audiobook/asr` by default), or to `PDF2AUDIOBOOK_ASR_DIR` if set.
+- **Order.** The CLI backends and report come first (AV1–AV4), then the desktop (AV5).

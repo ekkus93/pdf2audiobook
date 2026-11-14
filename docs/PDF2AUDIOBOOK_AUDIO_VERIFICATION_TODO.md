@@ -12,7 +12,17 @@
     `--chapter 10` run sent SIGTERM at 291 of 1,427 characters exited 130 with the `Interrupted`
     JSON error, left the MP3 and sidecar byte-identical (`396b68a424fc`, `fe3d8651508a`),
     `run_status.json` `stopped`, and no temporary WAV. Gaps for AV4 listed in §11.
-- [ ] AV0.02 Decide report retention, default warning behavior, supported model revisions, language scope, and model-download UX; record decisions in the spec.
+- [x] AV0.02 Decide report retention, default warning behavior, supported model revisions, language scope, and model-download UX; record decisions in the spec.
+  - Evidence: Spec §12, taken from §10's recommendations and open to the owner: flagged
+    excerpts only unless `--keep-transcripts`; `convert --verify-audio` finishes and warns,
+    `verify-audio` exits 0 when it ran; pinned models (Whisper `medium.en` via
+    `openai-whisper==20250625` and its SHA-256-bearing URL, `facebook/wav2vec2-base-960h` at
+    `22aad52d435eb6dbaf354bdad9b0da84ce7d6156` from the Hugging Face API, Vosk
+    `en-us-0.22-lgraph` 130,557,655 bytes by HEAD request); extras `asr-whisper`, `asr-wav2vec2`,
+    `asr-vosk`, `asr` (all resolve on Python 3.11 and 3.13 with `uv pip compile`; `torch` is
+    already pulled in by `kitten`); English only, judged from the TTS voice; explicit
+    `asr list` / `asr fetch` with confirmation. Note: the Vosk archive's SHA-256 is pinned in
+    AV0.03 after downloading it.
 - [ ] AV0.03 Benchmark the three ASR families on generated chapter audio and define normalization, alignment, mismatch thresholds, resource limits, and cancellation expectations.
 
 ## AV1 — Shared contracts and comparison core
