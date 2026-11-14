@@ -16,6 +16,10 @@ import { Library } from "./Library";
 const DATA: LibraryData = {
   output_dir: "/home/user/audiobooks",
   min_boundary_confidence: 0.75,
+  commands: [
+    "pdf2audiobook --no-progress config show --sources --json",
+    "pdf2audiobook --no-progress inspect --json -- /home/user/audiobooks/lighthouse-1/manifest.json",
+  ],
   books: [
     {
       workspace: "/home/user/audiobooks/lighthouse-1",
@@ -74,11 +78,20 @@ describe("Library", () => {
     expect(cards[1]).toHaveTextContent("Not analyzed");
   });
 
+  it("lists the commands it ran under a native Details disclosure", async () => {
+    render(<Library />);
+    await screen.findByRole("list", { name: "Books" });
+    const details = screen.getByText("Details").closest("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(within(details).getByText("pdf2audiobook --no-progress config show --sources --json")).toBeInTheDocument();
+    expect(within(details).getAllByText(/pdf2audiobook --no-progress/)).toHaveLength(2);
+  });
+
   it("shows an empty state that names the output folder", async () => {
     vi.mocked(api.library).mockResolvedValue({ ...DATA, books: [] });
     render(<Library />);
     expect(await screen.findByText("No books yet")).toBeInTheDocument();
-    expect(screen.getByText(/\/home\/user\/audiobooks/)).toBeInTheDocument();
+    expect(screen.getByText(/Books are kept in \/home\/user\/audiobooks/)).toBeInTheDocument();
   });
 
   it("sends the user to setup when the engine isn't found", async () => {

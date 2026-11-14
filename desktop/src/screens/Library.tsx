@@ -117,6 +117,17 @@ export function Library({ onOpenSettings }: { onOpenSettings?: () => void }) {
           ))}
         </ul>
       ) : null}
+      {state.phase === "ready" && state.data.commands.length > 0 ? (
+        <details className="details">
+          <summary>Details</summary>
+          <p className="body-medium on-surface-variant">Commands this screen ran:</p>
+          {state.data.commands.map((command) => (
+            <pre key={command} className="command">
+              {command}
+            </pre>
+          ))}
+        </details>
+      ) : null}
       {state.phase === "ready" ? (
         <div className="fab-anchor">
           <Fab icon="add" label="Add book" onClick={() => void add()} />

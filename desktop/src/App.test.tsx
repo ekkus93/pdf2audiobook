@@ -22,7 +22,7 @@ beforeEach(() => {
     theme: "light",
     added_books: [],
   });
-  vi.mocked(api.library).mockResolvedValue({ output_dir: "/out", min_boundary_confidence: 0.75, books: [] });
+  vi.mocked(api.library).mockResolvedValue({ output_dir: "/out", min_boundary_confidence: 0.75, books: [], commands: [] });
   vi.mocked(api.locateEngine).mockReturnValue(new Promise(() => {}));
 });
 

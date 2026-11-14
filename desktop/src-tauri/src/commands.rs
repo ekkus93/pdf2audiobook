@@ -249,6 +249,30 @@ pub struct Library {
     /// `chapters.min_boundary_confidence` from the CLI's configuration.
     pub min_boundary_confidence: f64,
     pub books: Vec<LibraryBook>,
+    /// The commands run to build the library, for "Details".
+    pub commands: Vec<String>,
+}
+
+/// Runs through `inner` and remembers each distinct command line, for "Details".
+struct Recording<'a> {
+    inner: &'a dyn Runner,
+    commands: Mutex<Vec<String>>,
+}
+
+impl Runner for Recording<'_> {
+    fn run(
+        &self,
+        cli: &CliCommand,
+        args: &[OsString],
+    ) -> std::io::Result<crate::engine::process::Finished> {
+        let shown = display_command(cli, args);
+        let mut commands = self.commands.lock().unwrap_or_else(PoisonError::into_inner);
+        if !commands.contains(&shown) {
+            commands.push(shown);
+        }
+        drop(commands);
+        self.inner.run(cli, args)
+    }
 }
 
 /// Builds the library: the CLI's configuration, then `inspect` and a cached thumbnail per book,
@@ -260,6 +284,11 @@ pub fn build_library(
     added_books: &[PathBuf],
     thumbnails: &Path,
 ) -> Result<Library, BridgeError> {
+    let recording = Recording {
+        inner: runner,
+        commands: Mutex::new(Vec::new()),
+    };
+    let runner: &dyn Runner = &recording;
     let config = run_success(cli, runner, &Request::ConfigShow)?;
     let output_dir = match configured_output {
         Some(path) => path.to_path_buf(),
@@ -336,6 +365,10 @@ pub fn build_library(
         output_dir,
         min_boundary_confidence,
         books,
+        commands: recording
+            .commands
+            .into_inner()
+            .unwrap_or_else(PoisonError::into_inner),
     })
 }
 
@@ -538,6 +571,20 @@ esac
             Some("data:image/png;base64,UE5H")
         );
         assert!(cache.join("good-1.png").exists());
+        assert_eq!(library.commands.len(), 4, "{:?}", library.commands);
+        assert!(library.commands[0].ends_with("config show --sources --json"));
+        assert!(
+            library
+                .commands
+                .iter()
+                .any(|line| line.contains(" inspect "))
+        );
+        assert!(
+            library
+                .commands
+                .iter()
+                .any(|line| line.contains(" thumbnail "))
+        );
     }
 
     #[test]

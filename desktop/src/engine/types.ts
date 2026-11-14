@@ -109,6 +109,8 @@ export interface Library {
   output_dir: string;
   min_boundary_confidence: number;
   books: LibraryBook[];
+  /** The commands run to build the library, for "Details". */
+  commands: string[];
 }
 
 export type Theme = "dark" | "light" | "system";
