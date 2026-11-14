@@ -58,6 +58,10 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+CI installs with `npm ci` on Node 22 (npm 10), which rejects a lock file written by npm 11
+that leaves out optional platform packages. After changing dependencies with a newer npm,
+rewrite the lock with `npx npm@10 install --package-lock-only` before committing.
+
 The end-to-end walkthrough (spec D9.d) drives a release build through `tauri-driver`: it adds
 the README demo book through the file dialog, analyzes it without the LLM, retitles chapter 1
 in review and saves, then converts with `--dry-run` (the app runs the real CLI from this
