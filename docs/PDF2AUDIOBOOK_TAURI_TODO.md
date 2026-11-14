@@ -1,6 +1,10 @@
 # PDF2Audiobook — Desktop App (Tauri) TODO
 
-**Status:** Not started; owner decisions O1–O5 settled 2026-11-14 (spec §14)
+**Status:** All items checked for Linux, 2026-11-14 (last code commit 9b03d4eefe28463bc3dffe6a5d5b4c9245cad451,
+Python CI #849 and Desktop CI #4 passed). Exceptions: TD10.05's acceptance run was driven by
+the end-to-end walkthrough rather than by hand and nobody listened to the audio; signing (O4)
+and macOS/Windows installers (O2) wait for the owner; real LLM use with Ollama was not run
+(optional). Owner decisions O1–O5 settled 2026-11-14 (spec §14).
 **Date:** 2026-11-14
 **Branch:** `tauri`, from master at 05ca4c37685325ced177cf06d21de2506fe18cd2 (tag `v0.1.0`)
 **Specification:** `docs/PDF2AUDIOBOOK_TAURI_SPEC.md` (D1–D11)
