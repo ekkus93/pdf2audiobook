@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import shutil
+import sys
 import time
 from importlib import import_module
 from pathlib import Path
@@ -1426,13 +1427,21 @@ def review(
             server = create_review_server(manifest_path, port=port)
         except OSError:
             raise ConfigError("Review server port is unavailable; choose another --port") from None
-        console.print(f"Chapter review UI: http://127.0.0.1:{server.server_address[1]}/")
-        console.print("Press Ctrl+C to stop the local review server.")
+        bound_port = server.server_address[1]
+        url = f"http://127.0.0.1:{bound_port}/"
+        if json_output:
+            # One line, flushed now: a caller reads it while the server keeps running.
+            typer.echo(json.dumps({"url": url, "port": bound_port}))
+            sys.stdout.flush()
+        else:
+            console.print(f"Chapter review UI: {url}")
+            console.print("Press Ctrl+C to stop the local review server.")
         try:
             server.serve_forever()
         except KeyboardInterrupt:
             # Stopping the server is how the review session normally ends.
-            console.print("Review server stopped.")
+            if not json_output:
+                console.print("Review server stopped.")
         finally:
             server.server_close()
     except KeyboardInterrupt:
