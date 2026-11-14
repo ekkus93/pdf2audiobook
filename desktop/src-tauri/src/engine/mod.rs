@@ -2,6 +2,7 @@
 
 pub mod locate;
 pub mod process;
+pub mod request;
 
 #[cfg(test)]
 pub(crate) mod testing;
