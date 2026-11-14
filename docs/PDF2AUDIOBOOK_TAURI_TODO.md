@@ -453,12 +453,75 @@ dark and light screenshots (spec D11.h).
     when chapters need review, with Review chapters (`BookPage.test.tsx`). Commit
     0fdc1afd180305c31510286559782db15f8a2ed2, Python CI #836
     [43626595603](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626595603) passed.
-- [ ] TD5.06 Pending edits: list, accept or reject each, and "accept all" behind a
+- [x] TD5.06 Pending edits: list, accept or reject each, and "accept all" behind a
   confirmation that shows the count.
-- [ ] TD5.07 Chapters and audio: per-chapter state, player, open folder, M4B, export (TD8).
-- [ ] TD5.08 Settings: CLI location, output folder, default voice with the README samples, LLM
+  - Evidence: The book page's Pending edits section (`src/screens/PendingEdits.tsx`) lists each
+    pending edit with its chapter, provider, original text (struck through) beside the proposed
+    text, and the model's reason; Accept and Reject act on that edit (`edits accept|reject MANIFEST ID`), and Accept all asks first in a dialog that shows the count. `edits list --json`
+    omitted the text, so the CLI gained `--with-text`, which adds `original`, `replacement` and
+    `reason` only when asked (`tests/test_cli_edits_with_text.py`: none without the flag, all
+    three with it; contract `edits-list` extended and checked; commit
+    c93643471f29a7cf43902063588780201178a11a, Python CI #837
+    [43626777117](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626777117) passed).
+    `PendingEdits.test.tsx` (6 tests): the list, nothing waiting, a load failure, accepting and
+    rejecting one edit for the book's workspace, Accept all only after confirming the count, and a
+    refused decision. In the real app, Accept all on two pending edits of the Lighthouse demo book
+    confirmed with "Accept all 2 edits?"; afterwards `edits list --status all --json` showed both
+    `accepted` and the section said "No edits are waiting for you". Screenshots:
+    `docs/images/tauri/pending-edits-dark.png`, `pending-edits-light.png`, `pending-edits-accept-
+    all-dark.png`. Commit 7e9cfab5ae7b3ec5e66474c4596797693d7d6a42, Python CI #838
+    [43627404890](https://github.com/ekkus93/pdf2audiobook/actions/runs/43627404890) passed.
+- [x] TD5.07 Chapters and audio: per-chapter state, player, open folder, M4B, export (TD8).
+  - Evidence: The book page's Chapters and audio section (`src/screens/ChaptersAudio.tsx`) shows
+    each chapter with Converted, Failed or Not converted (from `conversion_status` and the MP3s
+    present) and a play button for converted ones, plus Open folder, Make M4B and Export zip
+    (TD8.02, TD8.03); a bottom player (`src/screens/Player.tsx`) plays, pauses, moves between
+    chapters and goes on to the next one when a chapter ends. Tests: `ChaptersAudio.test.tsx`
+    (11), `Player.test.tsx` (6), `BookPage.test.tsx` (the section and play hand-off). Open folder
+    runs `xdg-open` on the book's `audio/` folder only (bridge command `open_audio_folder`), not a
+    general opener. In the release build a chapter played and the player moved on to the next by
+    itself. Screenshots: `docs/images/tauri/chapters-audio-dark.png`, `chapters-audio-light.png`,
+    `player-dark.png`. Commit 46d7bb33dad9a083c2424fa6b5e08c070ab61308, Python CI #840
+    [43631327843](https://github.com/ekkus93/pdf2audiobook/actions/runs/43631327843) passed.
+- [x] TD5.08 Settings: CLI location, output folder, default voice with the README samples, LLM
   settings; effective CLI configuration shown read-only.
-- [ ] TD5.09 Each D2.b `reason` leads to the action in the spec table. Tests for every reason.
+  - Evidence: Settings (`src/screens/Settings.tsx`) edit only the app's settings file: CLI
+    location and source checkout (with Browse), output folder (showing the CLI's own folder when
+    empty), default voice with play buttons for the README's eight Kitten samples (bundled from
+    `docs/audio/voices` by Vite, not copied), LLM provider and model, and theme. New books start
+    from these (`bookOptions.defaults` preferences; empty fields use the CLI's values). The
+    effective CLI configuration (`config show --sources --json`) is shown read-only as setting,
+    value and source (built-in, config file or environment), with where to change it; the setup
+    check is part of the page. Rust: the three new fields load from older settings files and
+    round-trip. Tests: `Settings.test.tsx` (configRows and source labels; defaults shown; saving
+    keeps unedited fields and applies the theme; clearing a field goes back to the CLI's value;
+    Browse; sample playback and its failure; the read-only table; the CLI unreachable; a failed
+    save), `bookOptions.test.ts` (preferences used, CLI model for a preferred provider). In the
+    real app, choosing Luna and saving wrote `"default_voice": "Luna"` to `settings.json` with the
+    other fields kept, and a book page then started with Luna. Screenshots:
+    `docs/images/tauri/settings-dark.png`, `settings-light.png`, `settings-saved-dark.png`,
+    `settings-cli-config-dark.png`. Commit 27d434f6074b9749dafd29beddc8c4731e10ae47, Python CI
+    #841 [43632382414](https://github.com/ekkus93/pdf2audiobook/actions/runs/43632382414) passed.
+- [x] TD5.09 Each D2.b `reason` leads to the action in the spec table. Tests for every reason.
+  - Evidence: `src/screens/reasons.tsx` maps each D2.b reason to its action on the Run screen:
+    review_acknowledgement_required shows the book-wide reasons still unacknowledged (from
+    `inspect`) and Acknowledge and convert (runs convert again with `--accept-review`);
+    workspace_locked offers Wait and try again (retries every 5 s until the book is free) or
+    Cancel; chapter_conflict offers Regenerate chapter N with a backup (`regenerate-chapter
+    --chapter N`), then Run again; llm_unreachable links to the LLM settings;
+    llm_context_too_small explains `num_ctx` (the README's Modelfile steps) and the Context
+    setting; llm_output_cap suggests a larger output cap; budget_exhausted shows the budget screen
+    (`budget show --json` against the configured limits, with how to raise them and resolve
+    unknown requests). review_required (review opens by itself) and pending_recovery (Recover)
+    were done in TD5.05 and TD6.03. `reasons.test.tsx` (26 tests) covers each reason through the
+    Run screen, plus a failure without a reason; with `Run.test.tsx` all nine are tested. New
+    contract `budget-show` with a Python test on a real ledger and a Rust fixture from real
+    output. In the real app, with the book's lock held by another process, Convert showed "Another
+    task is using this book"; Wait and try again retried every 5 s, and after the lock was
+    released the conversion started by itself. Screenshots: `docs/images/tauri/reason-locked-
+    dark.png`, `reason-locked-waiting-dark.png`. Commit 4512c39b8770f35e74f8b5a4c9d1aed516915544,
+    Python CI #842
+    [43633181030](https://github.com/ekkus93/pdf2audiobook/actions/runs/43633181030) passed.
 
 ## Phase TD6 — Progress and long runs (D5)
 
@@ -556,23 +619,105 @@ dark and light screenshots (spec D11.h).
 
 ## Phase TD8 — Listening and output (D7)
 
-- [ ] TD8.01 D7.a: play chapter MP3s through the asset protocol scoped to the book's `audio/`
+- [x] TD8.01 D7.a: play chapter MP3s through the asset protocol scoped to the book's `audio/`
   folder. Test that a path outside it is refused.
-- [ ] TD8.02 D7.b: "Make M4B" runs `pack-m4b --json` to a user-chosen path, with the cover if
+  - Evidence: Chapter MP3s are read through Tauri's asset protocol, enabled with an empty scope;
+    listing a book's chapters (`book_audio`) allows that book's `audio/` folder only (a symlinked
+    `audio` pointing elsewhere is refused).
+    `audio::tests::the_asset_scope_allows_only_the_opened_books_audio_folder` runs Tauri's real
+    scope on a mock app: nothing before a book is opened, then its chapters but not
+    `manifest.json` or the workspace. WebKitGTK's media element can't stream from the custom
+    `asset:` scheme (error 4, "source not supported"), so the player fetches the file over the
+    asset protocol and plays a `blob:` URL (see "Found while"); `Player.test.tsx` checks a path
+    outside the folder is refused (403) and shows "This chapter couldn't be loaded". In the real
+    app the asset protocol returned the chapter (200, audio/mpeg, 176,066 bytes) and refused the
+    book's `manifest.json` next to it (403). Note: the scope keeps the audio folders of books
+    opened earlier in the session; Tauri's scope can't be narrowed again. Commit
+    46d7bb33dad9a083c2424fa6b5e08c070ab61308, Python CI #840
+    [43631327843](https://github.com/ekkus93/pdf2audiobook/actions/runs/43631327843) passed.
+- [x] TD8.02 D7.b: "Make M4B" runs `pack-m4b --json` to a user-chosen path, with the cover if
   set; a stale chapter shows the CLI's message and offers to continue converting.
-- [ ] TD8.03 D7.c: "Export zip" with chapter MP3s and, optionally, the source book, written to a
+  - Evidence: Make M4B asks for a path with the save dialog and runs `pack-m4b --json` with the
+    book's cover when one is set. A stale or missing chapter shows the CLI's message and a
+    Continue converting button; other failures don't (`ChaptersAudio.test.tsx`).
+    `tests/test_pack_m4b_safety.py` now also pins the phrase "stale or missing" the app
+    recognizes. In the real app, saving through the GTK dialog wrote `tides.m4b`; ffprobe showed
+    three chapters with their titles, 23.88 s in all. Screenshot: `docs/images/tauri/m4b-saved-
+    dark.png`. Commit 46d7bb33dad9a083c2424fa6b5e08c070ab61308, Python CI #840
+    [43631327843](https://github.com/ekkus93/pdf2audiobook/actions/runs/43631327843) passed.
+- [x] TD8.03 D7.c: "Export zip" with chapter MP3s and, optionally, the source book, written to a
   user-chosen path outside the workspace. Test the zip's contents.
+  - Evidence: Export zip asks for a path with the save dialog and writes the chapter MP3s under
+    `<title>/audio/` and, if ticked (the default), the source book under `<title>/`
+    (`audio::export_zip`), stored uncompressed, written to a temporary file and renamed, mode
+    0644. Tests: `the_zip_holds_the_chapters_and_optionally_the_book` (entry names, contents,
+    0644, no temporary file left, and the audio-only variant),
+    `a_zip_inside_the_workspace_is_refused_and_nothing_is_written`,
+    `a_book_with_no_mp3_has_nothing_to_export`; `ChaptersAudio.test.tsx` checks the book is
+    included by default and left out when unticked. In the real app the export held the PDF and
+    the three MP3s under `Field Notes on Tides/`. Commit 46d7bb33dad9a083c2424fa6b5e08c070ab61308,
+    Python CI #840
+    [43631327843](https://github.com/ekkus93/pdf2audiobook/actions/runs/43631327843) passed.
 
 ## Phase TD9 — Security and privacy (D8)
 
-- [ ] TD9.01 D8.a: capabilities limited to dialog, the bridge's commands and the scoped asset
+- [x] TD9.01 D8.a: capabilities limited to dialog, the bridge's commands and the scoped asset
   protocol. Test (or a checked-in review script) that fails if another permission is added.
-- [ ] TD9.02 D8.b: CSP for the main window with no remote origins and no `unsafe-eval`; the
+  - Evidence: The main window's capability now grants only `core:event:allow-listen`,
+    `core:event:allow-unlisten`, `dialog:allow-open` and `dialog:allow-save` (was `core:default`);
+    the app's own commands need no permission, the review window has none, and the asset protocol
+    starts with an empty scope (TD8.01). `src-tauri/tests/permissions.rs` fails if a capability
+    file, window, permission or Tauri plugin (Rust or npm) is added; adding `core:default` back
+    made it fail. In the release build, events still arrive: the Review chapters button re-enabled
+    when the review window closed (`review-closed`). Commit
+    1c0ecc967e8fa63c5f16440bf82bc5e64b268260, Python CI #843
+    [43634551329](https://github.com/ekkus93/pdf2audiobook/actions/runs/43634551329) passed.
+- [x] TD9.02 D8.b: CSP for the main window with no remote origins and no `unsafe-eval`; the
   review window limited to its loopback URL.
-- [ ] TD9.03 D8.c: privacy test with marker strings in the title, file name and text; none
+  - Evidence: `tauri.conf.json` sets `csp`: `default-src`, `script-src` and `style-src` `'self'`,
+    `style-src-attr 'unsafe-inline'` (Material's style attributes), `img-src 'self' data:`
+    (thumbnails), `media-src 'self' blob:`, `connect-src` limited to `'self'` and Tauri's IPC and
+    asset protocols, `object-src` and `frame-src 'none'`. `devCsp` adds only Vite's dev server
+    (`ws://localhost:1420`, inline scripts) for `tauri dev`. `permissions.rs` checks both: no
+    `unsafe-eval`, no wildcard, no remote origin. The review window may only load its
+    `http://127.0.0.1:<port>` page (TD7.01's `the_window_may_only_load_the_review_server`). In a
+    release build the library, thumbnails, fonts, playback and voice samples all worked under the
+    policy. Commit 1c0ecc967e8fa63c5f16440bf82bc5e64b268260, Python CI #843
+    [43634551329](https://github.com/ekkus93/pdf2audiobook/actions/runs/43634551329) passed.
+- [x] TD9.03 D8.c: privacy test with marker strings in the title, file name and text; none
   appears in the app log or any error dialog.
-- [ ] TD9.04 D8.d: the app itself makes no network requests. Test with networking blocked for
+  - Evidence: The app now keeps a log (`src-tauri/src/applog.rs`): one JSON line per event (app
+    start, each CLI command, run start and end, review opened and closed) with only the event
+    name, the CLI command's name, exit code, duration, outcome and the `reason` code if it looks
+    like one; never a path, title or message. It goes to `pdf2audiobook-desktop.log` in the app's
+    log folder and is moved aside past 512 KB. `src-tauri/src/privacy.rs`: a fake CLI echoes
+    title, file-name and text markers on stdout and stderr and in its error message, warnings and
+    a non-code reason, run with marker paths both as a command and as a live run; the log holds no
+    marker and no path. With the code check bypassed the test failed. A second test checks every
+    bridge error (refused requests, a busy book, audio and export refusals, a CLI that can't
+    start) holds no marker. `tests/test_desktop_privacy.py` (7 tests): a real PDF with the markers
+    in its title, file name and text; review_required, workspace_locked, llm_unreachable (a
+    refused loopback port), pack-m4b without audio, budget without a ledger and an unreadable book
+    all fail with no marker in anything printed, and `edits list --json` carries none. In the
+    release build the log held lines such as `{"event":"engine_command","command":"voices","exit_c
+    ode":0,"seconds":0.891,"outcome":"success"}`. Commit 1c0ecc967e8fa63c5f16440bf82bc5e64b268260,
+    Python CI #843
+    [43634551329](https://github.com/ekkus93/pdf2audiobook/actions/runs/43634551329) passed.
+- [x] TD9.04 D8.d: the app itself makes no network requests. Test with networking blocked for
   the app process (the fake CLI needs none).
+  - Evidence: `desktop/scripts/no_network.py` runs a command under a seccomp filter (libseccomp
+    through ctypes, no privileges) that makes `socket()` fail for IPv4 and IPv6 in the process and
+    everything it starts; Unix sockets still work. The release app ran under it with the real CLI
+    from the project and `UV_OFFLINE=1`: the library, a book page, chapter playback through to the
+    next chapter, Settings with the setup check (FFmpeg, Tesseract and Kitten ready), and a clean
+    exit (code 0). Static checks: `permissions.rs` `the_app_links_no_network_client` (`cargo tree
+    --offline` for the shipped build has no reqwest, hyper, h2, ureq or similar; with dev edges
+    reqwest does appear, so the check would see one) and `src/network.test.ts` (no WebSocket,
+    EventSource, XHR or beacons; one `fetch`, for the app's own files; no remote address). Note:
+    the review window talks to the CLI's review server on 127.0.0.1 by design (D6); that server is
+    the CLI's, and it is not run under the filter. Commit
+    1c0ecc967e8fa63c5f16440bf82bc5e64b268260, Python CI #843
+    [43634551329](https://github.com/ekkus93/pdf2audiobook/actions/runs/43634551329) passed.
 
 ## Phase TD10 — End to end, CI and packaging (D9.d, D10)
 
@@ -600,6 +745,18 @@ dark and light screenshots (spec D11.h).
   is clean. The TD0.01 baseline result came from mypy's cache. Checks in this TODO therefore run
   mypy as CI does, in an isolated environment without Kitten:
   `uv run --isolated --extra dev mypy --no-incremental --python-version X`. Not fixed here.
+- The book page's options start from the CLI's configuration (and the app's Settings), not from
+  how the book was last analyzed. A book analyzed with `--no-llm`, whose chapters were then
+  approved in review, gets "Use an LLM" on by default when the CLI config enables the LLM; Convert
+  then stops with "This workspace contains manually approved or protected chapter/cleanup
+  edits" because the LLM stage changed. The CLI's protection is right; the app could start from
+  the book's own analysis settings instead. Seen in the real app while checking TD5.09; not
+  fixed here.
+- WebKitGTK's media element can't stream from Tauri's custom `asset:` scheme ("source not
+  supported", error 4), though `fetch` over it works. The player and the voice samples therefore
+  fetch the file and play a `blob:` URL (TD8.01). In this container, with no sound device, the
+  release build plays and advances through chapters; with a PipeWire null sink started by hand
+  the web process stalled for some seconds while connecting.
 
 ## Progress ledger
 
@@ -637,3 +794,9 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | ed1e99728d722a4be0e4d97d71479a594d787ea3 | Tauri TD5.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Run screen with progress, Stop and a quit prompt | 210 frontend tests; real conversion in the app; Exact-head Python CI #833 [43625829091](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625829091) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | f728e3e57442f2edfdd1aae973f8c17baa3590fd | Tauri TD6.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): offer recovery after a pending update | 212 frontend tests; Exact-head Python CI #835 [43626149718](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626149718) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 0fdc1afd180305c31510286559782db15f8a2ed2 | Tauri TD5.05, TD7.01-TD7.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): chapter review in a locked-down window | cargo test 86 passed, 219 frontend tests; real review window opened and closed; Exact-head Python CI #836 [43626595603](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626595603) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | c93643471f29a7cf43902063588780201178a11a | Tauri TD5.06 part (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `edits list --with-text` adds the edit text only on request | pytest 2481 passed, 1 skipped; edits-list contract extended; Exact-head Python CI #837 [43626777117](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626777117) passed on attempt 1 | None |
+| 2026-11-14 | 7e9cfab5ae7b3ec5e66474c4596797693d7d6a42 | Tauri TD5.06 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): review pending edits one by one or all at once | 225 frontend tests; real Accept all checked with the CLI; Exact-head Python CI #838 [43627404890](https://github.com/ekkus93/pdf2audiobook/actions/runs/43627404890) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 46d7bb33dad9a083c2424fa6b5e08c070ab61308 | Tauri TD5.07, TD8.01-TD8.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): chapters, player, M4B and zip export | cargo test 93 passed, 244 frontend tests; real M4B and zip checked; Exact-head Python CI #840 [43631327843](https://github.com/ekkus93/pdf2audiobook/actions/runs/43631327843) passed on attempt 1 | Desktop checks not yet in CI (TD10.02); the asset scope keeps folders of books opened earlier in the session |
+| 2026-11-14 | 27d434f6074b9749dafd29beddc8c4731e10ae47 | Tauri TD5.08 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): settings for the CLI, output folder, default voice and LLM | 274 frontend tests; real save and default voice checked; Exact-head Python CI #841 [43632382414](https://github.com/ekkus93/pdf2audiobook/actions/runs/43632382414) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 4512c39b8770f35e74f8b5a4c9d1aed516915544 | Tauri TD5.09 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): an action for each engine error reason | 300 frontend tests incl. every reason; budget-show contract; real lock wait checked; Exact-head Python CI #842 [43633181030](https://github.com/ekkus93/pdf2audiobook/actions/runs/43633181030) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 1c0ecc967e8fa63c5f16440bf82bc5e64b268260 | Tauri TD9.01-TD9.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): narrow permissions, CSP, content-free log, no network | pytest 2489 passed, 1 skipped; cargo test 101+7 passed; 303 frontend tests; release app run with IPv4/IPv6 refused; Exact-head Python CI #843 [43634551329](https://github.com/ekkus93/pdf2audiobook/actions/runs/43634551329) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
