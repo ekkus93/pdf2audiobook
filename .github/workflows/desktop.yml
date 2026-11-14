@@ -108,9 +108,20 @@ jobs:
           E2E_NATIVE_DRIVER: /usr/bin/WebKitWebDriver
           E2E_ARTIFACTS: ${{ runner.temp }}/e2e
         run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run e2e
+      - name: End-to-end walkthrough of the AppImage itself
+        env:
+          E2E_NATIVE_DRIVER: /usr/bin/WebKitWebDriver
+          E2E_ARTIFACTS: ${{ runner.temp }}/e2e-appimage
+          # Runners may lack FUSE; the AppImage then unpacks itself and runs.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          export E2E_APP="$(ls "$PWD"/src-tauri/target/release/bundle/appimage/*-unsigned.AppImage)"
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: e2e-screenshots
-          path: ${{ runner.temp }}/e2e
+          path: |
+            ${{ runner.temp }}/e2e
+            ${{ runner.temp }}/e2e-appimage
           if-no-files-found: ignore

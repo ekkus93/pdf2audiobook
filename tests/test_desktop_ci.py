@@ -43,6 +43,15 @@ def test_it_shares_the_python_ci_uv_pin_and_node_major() -> None:
     assert re.search(r"actions/setup-node@v4\s+with:\s+node-version: \"22\"", desktop)
 
 
+def test_the_walkthrough_also_runs_the_shipped_appimage() -> None:
+    workflow = _desktop()
+    step = workflow.split("- name: End-to-end walkthrough of the AppImage itself", 1)[1]
+    step = step.split("\n      - ", 1)[0]
+    assert 'APPIMAGE_EXTRACT_AND_RUN: "1"' in step
+    assert "bundle/appimage/*-unsigned.AppImage" in step
+    assert "npm run e2e" in step
+
+
 def test_installers_are_uploaded_and_named_unsigned() -> None:
     workflow = _desktop()
     assert '"${file%.*}-unsigned.${file##*.}"' in workflow

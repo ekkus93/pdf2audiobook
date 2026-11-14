@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
-use super::process::{CliCommand, Finished};
+use super::process::{CliCommand, Finished, use_host_environment};
 use super::result::{EngineError, Outcome, parse};
 use super::runs::RunGuard;
 
@@ -47,7 +47,7 @@ impl ReviewServer {
         guard: Option<RunGuard>,
         timeout: Duration,
     ) -> Result<Self, ReviewError> {
-        let mut child = Command::new(&cli.program)
+        let mut child = use_host_environment(&mut Command::new(&cli.program))
             .args(cli.argv(args))
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

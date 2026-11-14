@@ -863,7 +863,7 @@ pub fn open_audio_folder(workspace: PathBuf) -> Result<(), BridgeError> {
     let folder = crate::audio::audio_dir(&workspace).map_err(|error| BridgeError::Request {
         message: error.to_string(),
     })?;
-    std::process::Command::new("xdg-open")
+    crate::engine::process::use_host_environment(&mut std::process::Command::new("xdg-open"))
         .arg(folder)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

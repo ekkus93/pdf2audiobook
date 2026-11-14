@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use super::process::{CliCommand, Finished};
+use super::process::{CliCommand, Finished, use_host_environment};
 use super::result::{Outcome, parse};
 use super::runs::RunGuard;
 use crate::library;
@@ -100,7 +100,7 @@ impl LiveRuns {
         on_exit: ExitHook,
     ) -> Result<u64, LiveError> {
         let started = Instant::now();
-        let mut child = Command::new(&cli.program)
+        let mut child = use_host_environment(&mut Command::new(&cli.program))
             .args(cli.argv(args))
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

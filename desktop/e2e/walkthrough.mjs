@@ -1,6 +1,7 @@
 // End-to-end walkthrough of the desktop app (spec D9.d, TD10.01), through tauri-driver:
 // add the README demo book, analyze it without the LLM, retitle chapter 1 in review and save,
 // then convert with --dry-run. Plain W3C WebDriver over fetch; no test framework needed.
+// E2E_DRY_RUN=0 converts with real speech instead (manual acceptance, TD10.05; needs Kitten).
 //
 //   E2E_APP=src-tauri/target/release/pdf2audiobook-desktop \
 //   E2E_NATIVE_DRIVER=/usr/bin/WebKitWebDriver node e2e/walkthrough.mjs
@@ -21,6 +22,7 @@ const TAURI_DRIVER = process.env.E2E_TAURI_DRIVER ?? "tauri-driver";
 const ARTIFACTS = resolve(process.env.E2E_ARTIFACTS ?? join(DESKTOP, "e2e", "artifacts"));
 const PORT = 4444;
 const NEW_TITLE = "The Keeper (reviewed)";
+const DRY_RUN = process.env.E2E_DRY_RUN !== "0";
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
@@ -44,8 +46,8 @@ const made = spawnSync("uv", ["run", "--project", REPO, "python", "scripts/readm
 });
 if (made.status !== 0) throw new Error(`demo book: ${made.stderr}`);
 
-// The app runs this as its CLI. It is the real CLI, with --dry-run added to convert, so the
-// walkthrough needs no speech model.
+// The app runs this as its CLI. It is the real CLI, with --dry-run added to convert (unless
+// E2E_DRY_RUN=0), so the walkthrough needs no speech model.
 const cli = join(home, "pdf2audiobook");
 writeFileSync(
   cli,
@@ -55,7 +57,7 @@ first=1
 for arg in "$@"; do
   if [ "$first" = 1 ]; then set --; first=0; fi
   set -- "$@" "$arg"
-  if [ "$arg" = convert ]; then set -- "$@" --dry-run; fi
+  if [ "$arg" = convert ] && [ ${DRY_RUN ? 1 : 0} = 1 ]; then set -- "$@" --dry-run; fi
 done
 exec uv run --project ${JSON.stringify(REPO)} pdf2audiobook "$@"
 `,
@@ -205,19 +207,34 @@ async function main() {
   // The review button is enabled again once the app has seen the window close.
   await find(`${button("Review chapters")}[not(@disabled)]`, 30);
 
-  step("convert with --dry-run");
+  step(DRY_RUN ? "convert with --dry-run" : "convert with real speech");
   // The options start from the CLI's configuration again (LLM on); keep this book's analysis.
   await find("//h3[contains(., 'Analysis')]", 60);
   await llmOff();
   await click(await find(button("Convert to audio"), 60));
-  await find("//*[contains(., 'Conversion finished')]", 180);
+  await find("//*[contains(., 'Conversion finished')]", DRY_RUN ? 180 : 1800);
   await screenshot("5-converted");
 
   const workspace = readdirSync(out).find((name) => name.startsWith("lighthouse"));
   const manifest = JSON.parse(readFileSync(join(out, workspace, "manifest.json"), "utf8"));
   if (manifest.chapters[0].title !== NEW_TITLE) throw new Error(`chapter 1 is "${manifest.chapters[0].title}"`);
   if (!manifest.chapters[0].manually_approved) throw new Error("chapter 1 was not approved in review");
-  step("passed: the book was added, analyzed, reviewed and converted (dry run)");
+  if (!DRY_RUN) {
+    const audio = join(out, workspace, "audio");
+    const mp3s = readdirSync(audio).filter((name) => name.endsWith(".mp3")).sort();
+    if (mp3s.length !== manifest.chapters.length) {
+      throw new Error(`${mp3s.length} MP3s for ${manifest.chapters.length} chapters`);
+    }
+    for (const name of mp3s) {
+      const probe = spawnSync(
+        "ffprobe",
+        ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", join(audio, name)],
+        { encoding: "utf8" },
+      );
+      step(`  ${name}: ${Number(probe.stdout.trim()).toFixed(1)} s`);
+    }
+  }
+  step(`passed: the book was added, analyzed, reviewed and converted${DRY_RUN ? " (dry run)" : " with real speech"}`);
 }
 
 let failed = false;

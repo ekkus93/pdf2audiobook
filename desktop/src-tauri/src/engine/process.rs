@@ -40,14 +40,69 @@ pub trait Runner: Send + Sync {
     fn run(&self, cli: &CliCommand, args: &[OsString]) -> io::Result<Finished>;
 }
 
-/// Runs real processes. The child inherits the app's environment unchanged (spec D3.e), so
-/// `PDF2AUDIOBOOK_*` settings, the config file and password variables keep working.
+/// Variables an AppImage's launcher sets for itself; a child process has no use for them.
+const APPIMAGE_OWN: [&str; 4] = ["APPDIR", "APPIMAGE", "ARGV0", "OWD"];
+
+/// How to give a child process the host's environment back when the app runs from an AppImage.
+///
+/// The AppImage launcher points `PATH`, `PYTHONHOME`, `PYTHONPATH`, `LD_LIBRARY_PATH`,
+/// `XDG_DATA_DIRS` and GTK/GIO settings into the image (`$APPDIR`). A child inheriting them runs
+/// the image's libraries, and the CLI's Python can't even start. Each variable whose value
+/// points into the image keeps only its entries outside it, or is removed if none are left; the
+/// launcher's own variables are removed. Everything else, such as `PDF2AUDIOBOOK_*` and password
+/// variables, is passed on unchanged (spec D3.e). Outside an AppImage nothing changes.
+pub fn host_environment(vars: &[(OsString, OsString)]) -> Vec<(OsString, Option<OsString>)> {
+    let Some(appdir) = vars
+        .iter()
+        .find(|(key, _)| key == "APPDIR")
+        .and_then(|(_, value)| value.to_str())
+        .map(|value| value.trim_end_matches('/').to_owned())
+        .filter(|value| !value.is_empty())
+    else {
+        return Vec::new();
+    };
+    let inside = |entry: &str| entry == appdir || entry.starts_with(&format!("{appdir}/"));
+    let mut changes = Vec::new();
+    for (key, value) in vars {
+        if APPIMAGE_OWN.iter().any(|own| key == own) {
+            changes.push((key.clone(), None));
+            continue;
+        }
+        let Some(text) = value.to_str() else { continue };
+        if !text.split(':').any(inside) {
+            continue;
+        }
+        let kept: Vec<&str> = text
+            .split(':')
+            .filter(|entry| !entry.is_empty() && !inside(entry))
+            .collect();
+        let restored = (!kept.is_empty()).then(|| OsString::from(kept.join(":")));
+        changes.push((key.clone(), restored));
+    }
+    changes
+}
+
+/// Applies [`host_environment`] for this process's environment to `command`.
+pub fn use_host_environment(command: &mut Command) -> &mut Command {
+    let vars: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+    for (key, value) in host_environment(&vars) {
+        match value {
+            Some(value) => command.env(key, value),
+            None => command.env_remove(key),
+        };
+    }
+    command
+}
+
+/// Runs real processes. The child inherits the app's environment (spec D3.e), so
+/// `PDF2AUDIOBOOK_*` settings, the config file and password variables keep working; only what
+/// an AppImage's launcher pointed into the image is undone ([`host_environment`]).
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SystemRunner;
 
 impl Runner for SystemRunner {
     fn run(&self, cli: &CliCommand, args: &[OsString]) -> io::Result<Finished> {
-        let output = Command::new(&cli.program)
+        let output = use_host_environment(&mut Command::new(&cli.program))
             .args(cli.argv(args))
             .stdin(Stdio::null())
             .output()?;
@@ -141,5 +196,120 @@ mod tests {
         );
         assert_eq!(find_on_path("missing", Some(&path_env)), None);
         assert_eq!(find_on_path("tool", None), None);
+    }
+}
+
+#[cfg(test)]
+mod environment_tests {
+    use super::*;
+
+    fn vars(pairs: &[(&str, &str)]) -> Vec<(OsString, OsString)> {
+        pairs
+            .iter()
+            .map(|(key, value)| (OsString::from(key), OsString::from(value)))
+            .collect()
+    }
+
+    fn changes(pairs: &[(&str, &str)]) -> Vec<(String, Option<String>)> {
+        let mut changed: Vec<(String, Option<String>)> = host_environment(&vars(pairs))
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key.into_string().unwrap(),
+                    value.map(|value| value.into_string().unwrap()),
+                )
+            })
+            .collect();
+        changed.sort();
+        changed
+    }
+
+    #[test]
+    fn outside_an_appimage_nothing_changes() {
+        assert!(changes(&[("PATH", "/usr/bin:/bin"), ("PYTHONHOME", "/opt/py")]).is_empty());
+    }
+
+    #[test]
+    fn variables_pointing_into_the_image_are_given_back_to_the_host() {
+        let image = "/tmp/appimage_extracted_c991";
+        let changed = changes(&[
+            ("APPDIR", image),
+            ("APPIMAGE", "/home/me/Apps/pdf2audiobook.AppImage"),
+            ("ARGV0", "pdf2audiobook.AppImage"),
+            ("OWD", "/home/me"),
+            (
+                "PATH",
+                &format!("{image}/usr/bin/:{image}/usr/sbin/:/usr/local/bin:/usr/bin"),
+            ),
+            ("PYTHONHOME", &format!("{image}/usr/")),
+            ("PYTHONPATH", &format!("{image}/usr/share/pyshared/:")),
+            (
+                "LD_LIBRARY_PATH",
+                &format!("{image}/usr/lib/:/usr/local/nvidia/lib"),
+            ),
+            (
+                "XDG_DATA_DIRS",
+                &format!("{image}/usr/share:/usr/share:/usr/local/share"),
+            ),
+            ("GTK_PATH", &format!("{image}//usr/lib/gtk-3.0")),
+            ("GTK_THEME", "Adwaita:dark"),
+            ("HOME", "/home/me"),
+            ("PDF2AUDIOBOOK_LLM_PROVIDER", "ollama"),
+            ("BOOK_PASSWORD", "secret"),
+            ("OTHER", "/tmp/appimage_extracted_c9912/usr/lib"),
+        ]);
+        assert_eq!(
+            changed,
+            [
+                ("APPDIR".into(), None),
+                ("APPIMAGE".into(), None),
+                ("ARGV0".into(), None),
+                ("GTK_PATH".into(), None),
+                (
+                    "LD_LIBRARY_PATH".into(),
+                    Some("/usr/local/nvidia/lib".into())
+                ),
+                ("OWD".into(), None),
+                ("PATH".into(), Some("/usr/local/bin:/usr/bin".into())),
+                ("PYTHONHOME".into(), None),
+                ("PYTHONPATH".into(), None),
+                (
+                    "XDG_DATA_DIRS".into(),
+                    Some("/usr/share:/usr/local/share".into())
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_child_started_from_an_appimage_sees_the_host_environment() {
+        let image = "/tmp/appimage_extracted_test";
+        let mut command = Command::new("/bin/sh");
+        command.args([
+            "-c",
+            "printf '%s|%s|%s' \"$PYTHONHOME\" \"$PATH\" \"$KEEP\"",
+        ]);
+        command
+            .env("APPDIR", image)
+            .env("PYTHONHOME", format!("{image}/usr/"));
+        command
+            .env("PATH", format!("{image}/usr/bin:/usr/bin:/bin"))
+            .env("KEEP", "kept");
+        // The child's environment is what the command would pass on; apply the same rules to it.
+        let given: Vec<(OsString, OsString)> = command
+            .get_envs()
+            .filter_map(|(key, value)| Some((key.to_owned(), value?.to_owned())))
+            .collect();
+        for (key, value) in host_environment(&given) {
+            match value {
+                Some(value) => command.env(key, value),
+                None => command.env_remove(key),
+            };
+        }
+        let output = command.output().unwrap();
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            "|/usr/bin:/bin|kept"
+        );
     }
 }
