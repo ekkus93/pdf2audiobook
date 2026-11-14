@@ -6,12 +6,19 @@ vi.mock("../engine/api", async (original) => ({
   ...(await original<typeof import("../engine/api")>()),
   runProgress: vi.fn(),
   cancelRun: vi.fn(),
+  run: vi.fn(),
 }));
 
 import * as api from "../engine/api";
 import { Run, duration } from "./Run";
 
-const RUN = { id: 7, title: "The Lighthouse at Gull Point", command: "convert" as const };
+const RUN = {
+  id: 7,
+  title: "The Lighthouse at Gull Point",
+  command: "convert" as const,
+  workspace: "/out/lighthouse-1",
+  manifest: "/out/lighthouse-1/manifest.json",
+};
 
 function status(done: number, changes: Partial<RunStatus> = {}): RunStatus {
   return {
@@ -158,5 +165,63 @@ describe("Run", () => {
     sequence({ state: "finished", status: null, outcome: { outcome: "unreadable", exit_code: null }, cancelled: false });
     render(<Run run={RUN} pollMs={5} />);
     expect(await screen.findByText("The engine returned an unreadable result")).toBeInTheDocument();
+  });
+
+  it("offers recovery after a pending_recovery error, then the backup option if refused", async () => {
+    sequence({
+      state: "finished",
+      status: null,
+      outcome: {
+        outcome: "failed",
+        error: {
+          type: "PendingRecoveryError",
+          code: 4,
+          message: "A previous workspace update needs recovery",
+          reason: "pending_recovery",
+        },
+        warnings: [],
+      },
+      cancelled: false,
+    });
+    vi.mocked(api.run)
+      .mockResolvedValueOnce({
+        outcome: "failed",
+        error: { type: "PendingRecoveryError", code: 4, message: "chapter 1 changed after the interruption" },
+        warnings: [],
+      })
+      .mockResolvedValueOnce({ outcome: "success", result: { status: "recovered", backed_up: ["chapter 1"] } });
+    render(<Run run={RUN} pollMs={5} />);
+    expect(await screen.findByText("An earlier update was interrupted")).toBeInTheDocument();
+    const recover = Array.from(document.querySelectorAll("md-filled-button")).find((button) =>
+      button.textContent?.includes("Recover"),
+    ) as HTMLElement;
+    await act(async () => {
+      recover.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(api.run).toHaveBeenLastCalledWith(
+      { command: "recover", manifest: RUN.manifest, back_up_changed: false },
+      RUN.workspace,
+    );
+    expect(await screen.findByText("chapter 1 changed after the interruption")).toBeInTheDocument();
+    await act(async () => {
+      document.querySelector("md-outlined-button")?.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(api.run).toHaveBeenLastCalledWith(
+      { command: "recover", manifest: RUN.manifest, back_up_changed: true },
+      RUN.workspace,
+    );
+    expect(await screen.findByText(/The interrupted update is complete. Backed up: chapter 1./)).toBeInTheDocument();
+  });
+
+  it("doesn't offer recovery for other failures", async () => {
+    sequence({
+      state: "finished",
+      status: null,
+      outcome: { outcome: "failed", error: { type: "AudioError", code: 6, message: "No audio" }, warnings: [] },
+      cancelled: false,
+    });
+    render(<Run run={RUN} pollMs={5} />);
+    expect(await screen.findByText("No audio")).toBeInTheDocument();
+    expect(screen.queryByText("An earlier update was interrupted")).not.toBeInTheDocument();
   });
 });

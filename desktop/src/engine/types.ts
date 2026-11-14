@@ -40,6 +40,7 @@ export type Request =
   | { command: "analyze"; book: string; options: BookOptions }
   | { command: "convert"; book: string; options: BookOptions; convert: ConvertOptions }
   | { command: "doctor"; check_llm?: boolean }
+  | { command: "recover"; manifest: string; back_up_changed: boolean }
   | { command: "config_show" }
   | { command: "inspect"; source: string; pdf_password_env?: string | null }
   | { command: "workspace"; book: string; output?: string | null }

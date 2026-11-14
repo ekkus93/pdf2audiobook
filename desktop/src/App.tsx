@@ -59,7 +59,7 @@ export default function App() {
     const title = open ? summarize(open.book, open.library.min_boundary_confidence).title : "Book";
     try {
       const id = await startRun(request, workspace);
-      setRun({ id, title, command: request.command });
+      setRun({ id, title, command: request.command, workspace, manifest: `${workspace}/manifest.json` });
       setPage("run");
     } catch (error) {
       setMessage(errorMessage(error));

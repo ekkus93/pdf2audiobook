@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { cancelRun, errorMessage, runProgress } from "../engine/api";
+import { cancelRun, errorMessage, run as runEngine, runProgress } from "../engine/api";
 import type { Progress, RunStatus } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
@@ -11,6 +11,8 @@ export interface ActiveRun {
   id: number;
   title: string;
   command: "analyze" | "convert";
+  workspace: string;
+  manifest: string;
 }
 
 /** "45s", "4m 12s", "1h 03m". */
@@ -90,6 +92,11 @@ export function Run({ run, onDone, pollMs = 1000 }: RunProps) {
         <Running status={status} cancelling={progress.cancelling} onCancel={() => void cancelRun(run.id)} />
       ) : null}
       {progress?.state === "finished" ? <Finished progress={progress} task={task} onDone={onDone} /> : null}
+      {progress?.state === "finished" &&
+      progress.outcome.outcome === "failed" &&
+      progress.outcome.error.reason === "pending_recovery" ? (
+        <Recover manifest={run.manifest} workspace={run.workspace} />
+      ) : null}
       {status?.completed_stages?.length ? (
         <section className="stages" aria-label="Finished stages">
           {status.completed_stages.map((stage) => (
@@ -171,6 +178,62 @@ function Finished({ progress, task, onDone }: { progress: Extract<Progress, { st
               Back to the book
             </Button>
           </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+type RecoverState =
+  | { phase: "idle" }
+  | { phase: "working" }
+  | { phase: "done"; message: string }
+  | { phase: "blocked"; message: string };
+
+/** After a `pending_recovery` error: finish the interrupted update with `recover` (spec D5.c). */
+function Recover({ manifest, workspace }: { manifest: string; workspace: string }) {
+  const [state, setState] = useState<RecoverState>({ phase: "idle" });
+  const recover = async (backUpChanged: boolean) => {
+    setState({ phase: "working" });
+    try {
+      const outcome = await runEngine<{ status: string; backed_up: string[] }>(
+        { command: "recover", manifest, back_up_changed: backUpChanged },
+        workspace,
+      );
+      if (outcome.outcome === "success") {
+        const backups = outcome.result.backed_up;
+        const message =
+          outcome.result.status === "nothing_pending"
+            ? "Nothing was left to recover."
+            : `The interrupted update is complete.${backups.length ? ` Backed up: ${backups.join(", ")}.` : ""} Run the task again.`;
+        setState({ phase: "done", message });
+      } else if (outcome.outcome === "failed") {
+        setState({ phase: "blocked", message: outcome.error.message });
+      } else {
+        setState({ phase: "blocked", message: "The engine returned an unreadable result" });
+      }
+    } catch (error) {
+      setState({ phase: "blocked", message: errorMessage(error) });
+    }
+  };
+  return (
+    <section className="recover" aria-label="Recovery">
+      <div className="title-medium">An earlier update was interrupted</div>
+      <p className="body-medium on-surface-variant">
+        A previous review or regeneration stopped part-way. Recovery finishes it, then you can run
+        this task again.
+      </p>
+      {state.phase === "done" || state.phase === "blocked" ? <p className="body-medium">{state.message}</p> : null}
+      <div className="button-row">
+        {state.phase !== "done" ? (
+          <Button icon="replay" onClick={() => void recover(false)} disabled={state.phase === "working"}>
+            {state.phase === "working" ? "Recovering…" : "Recover"}
+          </Button>
+        ) : null}
+        {state.phase === "blocked" ? (
+          <Button variant="outlined" icon="content_copy" onClick={() => void recover(true)}>
+            Back up the changed files and recover
+          </Button>
         ) : null}
       </div>
     </section>

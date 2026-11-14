@@ -111,3 +111,22 @@
 .stage-done .icon {
   color: var(--md-sys-color-primary);
 }
+
+.recover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 24px;
+  border-radius: var(--md-sys-shape-corner-extra-large);
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.recover p {
+  margin: 0;
+}
+
+.recover .on-surface-variant {
+  color: inherit;
+  opacity: 0.85;
+}
