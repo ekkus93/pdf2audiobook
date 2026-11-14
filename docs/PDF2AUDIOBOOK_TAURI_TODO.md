@@ -356,7 +356,27 @@ dark and light screenshots (spec D11.h).
     `#5f52a7` light primary) and only local fonts. A real `npm run tauri dev` window shows the
     themed shell. Commit 0ec5846acacd50c7e58a141bd836757a59bc373c, Python CI
     [43610399942](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610399942) passed.
-- [ ] TD5.01 Setup: `doctor --json` results, Ollama served-context check, install hints.
+- [x] TD5.01 Setup: `doctor --json` results, Ollama served-context check, install hints.
+  - Evidence: Setup screen (`src/screens/Setup.tsx`, rules in `setupChecks.ts`): finds the CLI,
+    runs `doctor --json` and lists pdf2audiobook (version and where it was found), FFmpeg,
+    Tesseract and missing OCR languages, Kitten, Piper (optional) and the LLM; every missing piece
+    shows the exact install command with a copy button. The Ollama served-context check needed a
+    CLI addition first: `doctor --check-llm` (commit 1f4bf43c673614e1aca14ae5bcd9985615eabf8a,
+    `tests/test_cli_doctor_llm_check.py` 6 tests, doctor contract and fixture updated; Python CI
+    [43610721251](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610721251) passed), run
+    only when the user presses Check context because it loads the model; too little context shows
+    the Modelfile fix. Against the real Ollama it reported `qwen3.5:9b` served with 4,096 tokens
+    against about 9,248 needed. Tests: `setupChecks.test.ts` (9) and `Setup.test.tsx` (10):
+    loading, success, everything ready, engine not found, version mismatch, doctor failure,
+    unreadable result, the on-request LLM check, the commands under a native Details disclosure,
+    copy, and named keyboard-operable controls. Setup has no empty state. Keyboard use was checked
+    in the real app under Xvfb: Tab to Settings and Enter opens Setup; this exposed an invisible
+    focus ring on the rail, now fixed. Screenshots: `docs/images/tauri/setup-dark.png`, `setup-
+    light.png`, `setup-llm-check-dark.png`, `keyboard-focus-dark.png`. Bridge commands
+    (locate_engine, run_engine, describe_request) commit 3c5870fdfcd917820904e15a577506cfdca34b74,
+    Python CI [43612250270](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612250270)
+    passed; screen commit eeafb686e7b3a1e389d48c3be497800f6c1f8772, Python CI
+    [43612258477](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612258477) passed.
 - [ ] TD5.02 Library: books in the output folder with state and last run; "Add book" dialog.
 - [ ] TD5.02a **[OWNER REVIEW]** The owner reviews the Setup and Library screens in dark and
   light (D11.h) before TD5.03–TD5.08 are built.
@@ -463,3 +483,7 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | f0e2ab4bced3963108d9fce66fdbcc338726af39 | Tauri TD4.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): real CLI output checked against the contracts | pytest 2473 passed, 1 skipped; Exact-head Python CI #814 [43609557856](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609557856) passed on attempt 1 | None |
 | 2026-11-14 | a5d5ddbf4243d4713f774e91b20174456cbdbfa7 | Tauri TD4.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): bridge fixtures checked against the contracts | cargo test 59 passed; Exact-head Python CI #815 [43609697528](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609697528) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 0ec5846acacd50c7e58a141bd836757a59bc373c | Tauri TD5.00 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Material 3 design foundation | 122 frontend tests; build and dev window checked; Exact-head Python CI #817 [43610399942](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610399942) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 1f4bf43c673614e1aca14ae5bcd9985615eabf8a | Tauri TD5.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `doctor --check-llm` reports the served Ollama context | pytest 2479 passed, 1 skipped; real Ollama check; Exact-head Python CI #818 [43610721251](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610721251) passed on attempt 1 | None |
+| 2026-11-14 | 0769bb4bb9371a0ed6e6a0b349c01bc00bf1efcf | Tauri TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md) (partial): inspect shows source and review state | pytest 2479 passed, 1 skipped; Exact-head Python CI #819 [43610927673](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610927673) passed on attempt 1 | None |
+| 2026-11-14 | 3c5870fdfcd917820904e15a577506cfdca34b74 | Tauri TD5.01/TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): bridge commands, app settings, library scan | cargo test 74 passed; Exact-head Python CI #820 [43612250270](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612250270) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | eeafb686e7b3a1e389d48c3be497800f6c1f8772 | Tauri TD5.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Setup and Library screens | 161 frontend tests; real-app screenshots; Exact-head Python CI #821 [43612258477](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612258477) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
