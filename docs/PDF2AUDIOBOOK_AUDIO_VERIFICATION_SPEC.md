@@ -118,8 +118,44 @@ Taken 2026-11-14 from §10's recommendations; the owner may change any of them.
 - **Models and revisions.** Pinned; a different file or revision is reported as not ready:
   - `whisper`: OpenAI Whisper `medium.en` through `openai-whisper==20250625`, weights from the URL that package pins (its path carries the file's SHA-256, `d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f`, which the package checks). MIT.
   - `wav2vec2`: `facebook/wav2vec2-base-960h` at revision `22aad52d435eb6dbaf354bdad9b0da84ce7d6156` (safetensors weights). Apache-2.0.
-  - `vosk`: `vosk-model-en-us-0.22-lgraph.zip` from alphacephei.com (130,557,655 bytes; SHA-256 pinned in AV0.03 once downloaded) through `vosk==0.3.45`. Apache-2.0.
+  - `vosk`: `vosk-model-en-us-0.22-lgraph.zip` from alphacephei.com (130,557,655 bytes, SHA-256 `d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334`) through `vosk==0.3.45`. Apache-2.0.
 - **Install.** Optional extras `asr-whisper`, `asr-wav2vec2`, `asr-vosk`, and `asr` for all three. The default install and the `kitten` extra are unchanged.
 - **Language scope.** English only. The manifest has no language field, so the speech engine decides: Kitten voices are English; a Piper voice whose name doesn't start with `en_` (such as `de_DE-thorsten-medium`) makes every chapter `verification_unavailable` with reason `unsupported_language`.
 - **Model download.** Never implicit. `pdf2audiobook asr list [--json]` shows each model's readiness (package installed, weights present and checked, size, location). `pdf2audiobook asr fetch MODEL... [--yes]` prints each model's source, size and destination and asks before downloading; `--yes` is for callers that have already shown that, such as the desktop app. Weights go to `$XDG_CACHE_HOME/pdf2audiobook/asr` (`~/.cache/pdf2audiobook/asr` by default), or to `PDF2AUDIOBOOK_ASR_DIR` if set.
 - **Order.** The CLI backends and report come first (AV1–AV4), then the desktop (AV5).
+
+## 13. Benchmark and comparison rules (AV0.03)
+
+Run on 2026-11-14 with `scripts/asr_benchmark.py` on a 20-core machine with 62 GB of RAM and an NVIDIA RTX 4070 Ti SUPER (16 GB), using the pinned models of §12.
+
+**Samples.** 32 cases, 1,027 s of audio, made with the project's Kitten pipeline (`mini` model): six passages from the README demo books, each spoken clean (Jasper; Luna for two; Kiki and Leo for one), with a planted insertion (a 9-word phrase), an omission (a sentence) and a one-word substitution; one passage with pink noise at 10 dB and 0 dB SNR; a passage of numbers; and a 2-word chapter title. The reference is always the original text, so the planted edits are known exactly. Kitten's synthetic voices stand in for accents; real accented and recorded speech was not tested.
+
+**Speed and memory** (real-time factor = compute time / audio time; one model at a time):
+
+| Model | Device | Real-time factor | Load | Peak RAM | Peak GPU memory |
+|---|---|---|---|---|---|
+| Whisper `medium.en` | GPU | 0.043 | 4.1 s | 4.5 GB | 4.4 GB |
+| Whisper `medium.en` | CPU | 0.771 | 4.1 s | 7.1 GB | — |
+| Wav2Vec2 | GPU | 0.001 | 2.9 s | 1.3 GB | 0.7 GB |
+| Wav2Vec2 | CPU | 0.037 | 2.4 s | 2.1 GB | — |
+| Vosk `lgraph` | CPU (one core) | 0.196 | 0.6 s | 0.6 GB | — |
+
+On CPU, Whisper is the cost: about 13 minutes for 17 minutes of audio, and it used about nine cores although `torch.set_num_threads(4)` was set, so the adapters must also bound threads through the environment (`OMP_NUM_THREADS`, `MKL_NUM_THREADS`) before loading torch.
+
+**Accuracy** (word error rate after normalization): Whisper 1.2 % clean, 2.2 % at 10 and 0 dB; Wav2Vec2 3.5 %, 4.5 %, 7.9 %; Vosk 4.9 %, 3.4 %, 4.5 %.
+
+**Normalization** (`verification/compare.py`): lower case; punctuation, hyphens, slashes and apostrophes dropped; British spellings folded to American (`-our`, `-tre`, `-ise`, and a short list such as grey/gray); a compound written as one word or two counts as the same; a run of digits or number words is one token compared by value, accepting cardinals ("one thousand two hundred fifty"), decimals ("three point five"), year and hundreds pairs ("nineteen eighty seven", "three sixty five"), ordinals, and digits a transcriber split ("1, 250", "3 .5").
+
+**Alignment.** Word-level edit distance, vectorized per row (about 0.1 s for 5,000 words); above 40 million cells the alignment is split at an 8-word exact match nearest the middle. Two differences separated by a single matching word merge into one. Anchoring on exact matches alone (`difflib`) was tried first and mis-paired repeated sentences.
+
+**Thresholds** (all three models on GPU and on CPU gave the same results):
+
+- A difference counts if it is at least `MIN_WORDS = 2` words long, or a one-word substitution of an expected word of at least `MIN_LETTERS = 4` letters.
+- A substitution whose letters are at least `DISSIMILAR = 0.5` similar (difflib ratio of the joined words) is a transcriber's near-miss and doesn't count: "boat"/"boats", "goal"/"Gull", "goals work"/"Gulls worked". A wrong number always counts.
+- Differences from different models are the same place if their reference spans come within `SLACK_WORDS = 2` words; two or more model families at a place make a confirmed flag (`possible_mismatch`); one alone is `model_disagreement`.
+
+With these rules all 18 planted edits were confirmed (6 insertions, 6 omissions, 6 one-word substitutions), and exactly one other place was confirmed: all three models heard Kitten say "1,250" as something like "potou fifty" / "pro to fifty" / "250", a real speech-engine defect. The clean and noisy cases gave 10 one-model differences, nearly all Vosk hearing "Gull" as "go". Earlier settings for comparison: without the near-miss rule, 8 false confirmed flags; with a one-word minimum and no letter rule, 8 false flags and 93 one-model differences.
+
+**Resource limits.** One model at a time, loaded for a run and released before the next. Torch backends use the GPU when one is available, else the CPU with 4 threads (`--device cpu|cuda` overrides). Peak memory is about 7 GB on CPU (Whisper), so the CLI warns, before loading Whisper on a machine with less than 8 GB of RAM, that it may be slow or fail.
+
+**Cancellation.** The audio is fed to each model in windows of at most 30 s, split at the quietest point near each boundary so no word is cut, and a stop request is checked between windows (and between Vosk's 0.25 s frames). Expected latency is one window's compute: under 2 s on GPU; up to about 25 s for Whisper on CPU; well under 10 s for the others. Completed chapter results are kept; a cancelled chapter is reported `verification_unavailable` with reason `cancelled`.

@@ -23,7 +23,18 @@
     already pulled in by `kitten`); English only, judged from the TTS voice; explicit
     `asr list` / `asr fetch` with confirmation. Note: the Vosk archive's SHA-256 is pinned in
     AV0.03 after downloading it.
-- [ ] AV0.03 Benchmark the three ASR families on generated chapter audio and define normalization, alignment, mismatch thresholds, resource limits, and cancellation expectations.
+- [x] AV0.03 Benchmark the three ASR families on generated chapter audio and define normalization, alignment, mismatch thresholds, resource limits, and cancellation expectations.
+  - Evidence: Spec §13. `scripts/asr_benchmark.py` (`make`, `run`, `score`) made 32 Kitten
+    cases (1,027 s) from the demo books with planted insertions, omissions and substitutions,
+    noise at 10 and 0 dB, numbers and a short title; ran Whisper `medium.en`, Wav2Vec2 and Vosk
+    on GPU and CPU with the pinned weights (downloaded and checked: Whisper by its SHA-256,
+    Vosk archive SHA-256 `d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334`);
+    and scored with the production core (`verification/compare.py`, eb6db7b). Real-time
+    factors GPU/CPU: Whisper 0.043/0.771 (7.1 GB on CPU), Wav2Vec2 0.001/0.037, Vosk 0.196.
+    Chosen rules confirmed 18/18 planted edits with one other confirmed flag, a real Kitten
+    misreading of "1,250" heard by all three models; 10 one-model differences. Note: real
+    accented or recorded speech was not tested (Kitten voices stand in); the cancellation
+    latencies are expectations from the measured speeds, tested in AV3.05.
 
 ## AV1 — Shared contracts and comparison core
 
