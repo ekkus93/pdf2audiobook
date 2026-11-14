@@ -74,6 +74,12 @@ jobs:
         run: |
           uv build --wheel --out-dir "$RUNNER_TEMP/pdf2audiobook-wheelhouse"
           uv build --sdist --out-dir "$RUNNER_TEMP/pdf2audiobook-wheelhouse"
+          # The desktop app is a separate project and must never ship in the Python packages.
+          if unzip -l "$RUNNER_TEMP"/pdf2audiobook-wheelhouse/pdf2audiobook-*.whl | grep -q "desktop/" \
+            || tar tzf "$RUNNER_TEMP"/pdf2audiobook-wheelhouse/pdf2audiobook-*.tar.gz | grep -q "/desktop/"; then
+            echo "desktop/ was packaged into the wheel or sdist" >&2
+            exit 1
+          fi
           uv venv --python "${{ matrix.python-version }}" "$RUNNER_TEMP/pdf2audiobook-fresh"
           uv pip install --python "$RUNNER_TEMP/pdf2audiobook-fresh/bin/python" "$RUNNER_TEMP"/pdf2audiobook-wheelhouse/pdf2audiobook-*.whl
           (

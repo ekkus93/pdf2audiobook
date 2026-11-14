@@ -1,0 +1,2 @@
+# The desktop app (desktop/) is a separate project; it never ships in the Python packages.
+prune desktop
