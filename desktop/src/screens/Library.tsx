@@ -42,7 +42,13 @@ const STATES: Record<BookState, { label: string; icon: IconName; tone: "primary"
 };
 
 /** Library (spec D4.2): the books in the output folder, and adding a new one. */
-export function Library({ onOpenSettings }: { onOpenSettings?: () => void }) {
+interface LibraryProps {
+  onOpenSettings?: () => void;
+  /** Opens a book's page. */
+  onOpenBook?: (book: LibraryBook, library: LibraryData) => void;
+}
+
+export function Library({ onOpenSettings, onOpenBook }: LibraryProps) {
   const [state, setState] = useState<State>({ phase: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
@@ -113,7 +119,12 @@ export function Library({ onOpenSettings }: { onOpenSettings?: () => void }) {
       {state.phase === "ready" && state.data.books.length > 0 ? (
         <ul className="book-grid" aria-label="Books">
           {state.data.books.map((book) => (
-            <BookCard key={book.workspace} book={book} minConfidence={state.data.min_boundary_confidence} />
+            <BookCard
+              key={book.workspace}
+              book={book}
+              minConfidence={state.data.min_boundary_confidence}
+              onOpen={onOpenBook ? () => onOpenBook(book, state.data) : undefined}
+            />
           ))}
         </ul>
       ) : null}
@@ -138,7 +149,7 @@ export function Library({ onOpenSettings }: { onOpenSettings?: () => void }) {
   );
 }
 
-function BookCard({ book, minConfidence }: { book: LibraryBook; minConfidence: number }) {
+function BookCard({ book, minConfidence, onOpen }: { book: LibraryBook; minConfidence: number; onOpen?: () => void }) {
   const summary = summarize(book, minConfidence);
   const status = STATES[summary.state];
   const facts = [
@@ -149,6 +160,11 @@ function BookCard({ book, minConfidence }: { book: LibraryBook; minConfidence: n
   ].filter(Boolean);
   return (
     <li className="book-card" aria-label={summary.title}>
+      {onOpen ? (
+        <button type="button" className="book-open" aria-label={`Open ${summary.title}`} onClick={onOpen}>
+          <md-ripple />
+        </button>
+      ) : null}
       <div className="book-cover">
         {book.thumbnail ? (
           <img src={book.thumbnail} alt="" />

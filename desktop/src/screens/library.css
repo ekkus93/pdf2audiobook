@@ -13,6 +13,7 @@
 }
 
 .book-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -134,4 +135,20 @@
   position: fixed;
   right: 32px;
   bottom: 32px;
+}
+
+/* The whole card opens the book; the button sits over it so the card stays one control. */
+.book-open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+}
+
+.book-open:focus-visible {
+  outline: 3px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
 }
