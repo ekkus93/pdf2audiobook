@@ -431,8 +431,28 @@ dark and light screenshots (spec D11.h).
     themes. Screenshots: `docs/images/tauri/book-options-dark.png`, `book-options-light.png`.
     Commit c2c15bb94edca866599c6208ac2ab6f2b13baed5, Python CI #831
     [43623865218](https://github.com/ekkus93/pdf2audiobook/actions/runs/43623865218) passed.
-- [ ] TD5.04 Run: progress view (TD6) with cancel.
-- [ ] TD5.05 Review: opens on `review_required` and `review_acknowledgement_required` (TD7).
+- [x] TD5.04 Run: progress view (TD6) with cancel.
+  - Evidence: Run screen (`src/screens/Run.tsx`): book title and task, the current stage with its
+    detail, a percentage, a progress bar, done of total in words (characters, LLM requests,
+    pages), elapsed time and the estimate (or "estimating…"), finished stages with their times,
+    and Stop. A finished run shows success with its time, Stopped, or the engine's error.
+    `Run.test.tsx` covers the empty state, polling in steps, estimating, Stop, success, stopped,
+    errors and unreadable results. In the real app under Xvfb a 13-chapter demo book converted
+    with real Kitten speech: mid-run 15%, chapter 3/13, 2,535 of 16,804 characters, 10 s elapsed,
+    about 1m 17s left; finished in 1m 02s with 13 MP3s. Screenshots: `docs/images/tauri/run-
+    progress-dark.png`, `run-progress-light.png`, `run-finished-light.png`. Commits
+    6f625312b01393c8e0606ba32b3505259dff2324, Python CI #832
+    [43625820043](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625820043) passed
+    (bridge) and ed1e99728d722a4be0e4d97d71479a594d787ea3, Python CI #833
+    [43625829091](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625829091) passed
+    (screen).
+- [x] TD5.05 Review: opens on `review_required` and `review_acknowledgement_required` (TD7).
+  - Evidence: A run that stops with `review_required` or `review_acknowledgement_required` opens
+    chapter review by itself, once, and shows "This book's chapters need your review" with a
+    Review chapters button (`Run.test.tsx`, both reasons). The book page has a review panel, amber
+    when chapters need review, with Review chapters (`BookPage.test.tsx`). Commit
+    0fdc1afd180305c31510286559782db15f8a2ed2, Python CI #836
+    [43626595603](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626595603) passed.
 - [ ] TD5.06 Pending edits: list, accept or reject each, and "accept all" behind a
   confirmation that shows the count.
 - [ ] TD5.07 Chapters and audio: per-chapter state, player, open folder, M4B, export (TD8).
@@ -442,22 +462,97 @@ dark and light screenshots (spec D11.h).
 
 ## Phase TD6 — Progress and long runs (D5)
 
-- [ ] TD6.01 D5.a: poll `run_status.json` from the workspace given by TD1.02 and show stage,
+- [x] TD6.01 D5.a: poll `run_status.json` from the workspace given by TD1.02 and show stage,
   counts, elapsed and estimate. Test with a fake CLI that writes the file in steps.
-- [ ] TD6.02 D5.b: a run ends when the child exits; a stale `running` state is shown as stopped.
-- [ ] TD6.03 D5.c: cancel sends the termination signal, waits up to 30 seconds, then kills, and
+  - Evidence: `LiveRuns::progress` (`src-tauri/src/engine/live.rs`) reads the workspace's
+    `reports/run_status.json` (size-limited) on each poll; the Run screen polls it about once a
+    second. The workspace is the one the library knows for the book (from its folder, or from the
+    `workspace` command for an added book). `progress_follows_run_status_until_the_result` runs a
+    fake CLI that writes `run_status.json` in steps and checks each step and the final result;
+    `Run.test.tsx` checks the screen updates through the steps. Commits
+    6f625312b01393c8e0606ba32b3505259dff2324, Python CI #832
+    [43625820043](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625820043) passed and
+    ed1e99728d722a4be0e4d97d71479a594d787ea3, Python CI #833
+    [43625829091](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625829091) passed.
+- [x] TD6.02 D5.b: a run ends when the child exits; a stale `running` state is shown as stopped.
+  - Evidence: A run ends when its child exits: a waiter thread collects the output and parses the
+    result. A `run_status.json` still at `running` after the child exits is reported as `stopped`
+    (`a_run_left_running_in_run_status_is_reported_stopped_once_the_child_exits`). The library
+    marks a book `live` only while this app has a run on it, so a stale `running` status no longer
+    shows as Converting (`bookState.test.ts`: a running status left by a stopped run isn't in
+    progress). Commits 6f625312b01393c8e0606ba32b3505259dff2324, Python CI #832
+    [43625820043](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625820043) passed and
+    ed1e99728d722a4be0e4d97d71479a594d787ea3, Python CI #833
+    [43625829091](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625829091) passed.
+- [x] TD6.03 D5.c: cancel sends the termination signal, waits up to 30 seconds, then kills, and
   offers `recover` after a `pending_recovery` error. Tests with a fake CLI that ignores the
   signal and one that exits cleanly.
-- [ ] TD6.04 D5.d: closing the window during a run asks, then cancels; no child process
+  - Evidence: Stop sends SIGTERM to the CLI (which treats it as Ctrl+C, TD1.05; uv 0.12.5 was
+    checked to forward SIGTERM and pass back exit 130), waits up to 30 s (`CANCEL_GRACE`), then
+    kills the run's process group (`process_group(0)`). Tests with fake CLIs:
+    `cancel_stops_a_cooperative_run_with_its_own_result` (the Interrupted error, well within the
+    grace period) and `cancel_kills_a_run_that_ignores_the_signal_after_the_grace_period` (nothing
+    of the group left). After a `pending_recovery` error the Run screen offers Recover, and if
+    that is refused because files changed, "Back up the changed files and recover"
+    (`Run.test.tsx`; commit f728e3e57442f2edfdd1aae973f8c17baa3590fd, Python CI #835
+    [43626149718](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626149718) passed). In
+    the real app Stop ended a real conversion within a second: Stopped, `run_status.json`
+    `stopped`, finished chapters kept, no engine process left. Screenshot: `docs/images/tauri/run-
+    stopped-dark.png`. Commits 6f625312b01393c8e0606ba32b3505259dff2324, Python CI #832
+    [43625820043](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625820043) passed and
+    ed1e99728d722a4be0e4d97d71479a594d787ea3, Python CI #833
+    [43625829091](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625829091) passed.
+- [x] TD6.04 D5.d: closing the window during a run asks, then cancels; no child process
   outlives the app. Test that checks for orphaned processes after a forced close.
+  - Evidence: Closing the main window during a run is held back (`prevent_close`) and the frontend
+    asks "Stop the running task and quit?" (Keep running is the default focus); Stop and quit
+    calls `quit_app`, which stops every run (SIGTERM, then the group kill after the grace period)
+    before exiting, and `RunEvent::Exit` stops any run left however the app ends.
+    `shutdown_leaves_no_process_behind` runs a fake CLI that ignores SIGTERM and has started a
+    grandchild, and checks no process of its group is left running (zombies don't count: this
+    container's PID 1, jupyter-labhub, never reaps orphans). `App.test.tsx` checks the prompt and
+    quit. In the real app a close request (WM_DELETE_WINDOW) mid-conversion showed the prompt;
+    Stop and quit closed the window, left `run_status.json` `stopped`, finished chapters kept, and
+    no engine or app process running. Screenshot: `docs/images/tauri/run-close-dialog-dark.png`.
+    Commits 6f625312b01393c8e0606ba32b3505259dff2324, Python CI #832
+    [43625820043](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625820043) passed and
+    ed1e99728d722a4be0e4d97d71479a594d787ea3, Python CI #833
+    [43625829091](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625829091) passed.
 
 ## Phase TD7 — Chapter review (D6)
 
-- [ ] TD7.01 D6.a: start `review --json --port 0`, open the URL in a review window that may
+- [x] TD7.01 D6.a: start `review --json --port 0`, open the URL in a review window that may
   load only that origin.
-- [ ] TD7.02 D6.b: closing the window stops the server and refreshes the book's state.
-- [ ] TD7.03 D6.c: explain that merging and splitting need a manifest edit, with a link to the
+  - Evidence: `open_review` (`src-tauri/src/commands.rs`, server in `engine/review.rs`) starts
+    `review --json --port 0` holding the book's write guard, reads the address line, and opens it
+    in a separate window whose navigation is limited to that exact `http://127.0.0.1:<port>`
+    origin (`allowed`; `the_window_may_only_load_the_review_server` refuses other ports, https,
+    localhost, other hosts and file URLs). The window is not in any capability, so it has no
+    access to the app's commands. Tests: `the_address_line_is_read_and_stop_ends_the_server`,
+    `an_engine_error_before_the_address_is_reported` (e.g. `workspace_locked`),
+    `no_address_in_time_is_refused_and_the_server_is_stopped`. In the real app the window opened
+    as "Review chapters: The Lighthouse at Gull Point" showing the review page. Screenshot:
+    `docs/images/tauri/review-window-dark.png`. Commit 0fdc1afd180305c31510286559782db15f8a2ed2,
+    Python CI #836
+    [43626595603](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626595603) passed.
+- [x] TD7.02 D6.b: closing the window stops the server and refreshes the book's state.
+  - Evidence: When the review window is destroyed, the server is stopped (SIGTERM, then the group
+    kill after the grace period; `a_server_that_ignores_sigterm_is_killed_after_the_grace_period`)
+    and `review-closed` is sent; the app then re-reads the library and the open book
+    (`App.test.tsx`: re-reads the library when the review window closes). In the real app, after a
+    close request the window was gone and no review server process was left. Commit
+    0fdc1afd180305c31510286559782db15f8a2ed2, Python CI #836
+    [43626595603](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626595603) passed.
+- [x] TD7.03 D6.c: explain that merging and splitting need a manifest edit, with a link to the
   README section; no manifest writes by the app.
+  - Evidence: The review panel's "Merging or splitting chapters" disclosure explains that the
+    review page can rename chapters and move their bounds but not add or remove them, that merging
+    or splitting means editing the `chapters` list in the manifest with a backup, as in the README
+    section "Protecting manual edits", and that the app never edits the manifest; it shows the
+    manifest path with a copy button (`BookPage.test.tsx`). Note: the README is named rather than
+    linked, because opening links needs the opener plugin, which spec D8.a excludes. Commit
+    0fdc1afd180305c31510286559782db15f8a2ed2, Python CI #836
+    [43626595603](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626595603) passed.
 
 ## Phase TD8 — Listening and output (D7)
 
@@ -538,3 +633,7 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | eeafb686e7b3a1e389d48c3be497800f6c1f8772 | Tauri TD5.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Setup and Library screens | 161 frontend tests; real-app screenshots; Exact-head Python CI #821 [43612258477](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612258477) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 4e14283c93a428372ab3d94eda7cd600cfce6220 | Tauri TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Library screen with Details | 162 frontend tests, cargo test 74 passed; Exact-head Python CI #823 [43612519881](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612519881) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | c2c15bb94edca866599c6208ac2ab6f2b13baed5 | Tauri TD5.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): book page with analysis and conversion options | 197 frontend tests; real-app screenshots; Exact-head Python CI #831 [43623865218](https://github.com/ekkus93/pdf2audiobook/actions/runs/43623865218) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 6f625312b01393c8e0606ba32b3505259dff2324 | Tauri TD6.01-TD6.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): run, watch, cancel and shut down long tasks | cargo test 81 passed; real-app stop and quit checked; Exact-head Python CI #832 [43625820043](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625820043) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | ed1e99728d722a4be0e4d97d71479a594d787ea3 | Tauri TD5.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Run screen with progress, Stop and a quit prompt | 210 frontend tests; real conversion in the app; Exact-head Python CI #833 [43625829091](https://github.com/ekkus93/pdf2audiobook/actions/runs/43625829091) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | f728e3e57442f2edfdd1aae973f8c17baa3590fd | Tauri TD6.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): offer recovery after a pending update | 212 frontend tests; Exact-head Python CI #835 [43626149718](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626149718) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 0fdc1afd180305c31510286559782db15f8a2ed2 | Tauri TD5.05, TD7.01-TD7.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): chapter review in a locked-down window | cargo test 86 passed, 219 frontend tests; real review window opened and closed; Exact-head Python CI #836 [43626595603](https://github.com/ekkus93/pdf2audiobook/actions/runs/43626595603) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
