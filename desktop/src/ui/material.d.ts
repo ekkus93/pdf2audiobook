@@ -55,6 +55,7 @@ declare module "react" {
         labeled?: boolean;
         disabled?: boolean;
       }>;
+      "md-fab": Element<{ label?: string; variant?: "surface" | "primary" | "secondary" | "tertiary"; size?: "small" | "medium" | "large"; lowered?: boolean }>;
       "md-ripple": Element<object>;
       "md-focus-ring": Element<{ inward?: boolean }>;
       "md-elevation": Element<object>;

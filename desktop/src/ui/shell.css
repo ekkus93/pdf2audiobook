@@ -56,8 +56,14 @@
   transition: background-color var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
 }
 
+/* The focus ring sits on the pill, where the eye is; the button itself draws none. */
 .rail-item:focus-visible {
   outline: none;
+}
+
+.rail-item:focus-visible .rail-indicator {
+  outline: 3px solid var(--md-sys-color-secondary);
+  outline-offset: 2px;
 }
 
 .rail-item[aria-current="page"] .rail-indicator {

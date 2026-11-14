@@ -1,0 +1,178 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 960px;
+}
+
+.screen-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.screen-intro p {
+  margin: 0;
+}
+
+.screen-loading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 32px 0;
+}
+
+.title-medium {
+  font-size: var(--md-sys-typescale-title-medium-size);
+  line-height: var(--md-sys-typescale-title-medium-line-height);
+  font-weight: 500;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  border-radius: var(--md-sys-shape-corner-large);
+}
+
+.summary-ok {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.summary-attention {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--md-sys-color-surface-container-low);
+}
+
+.check:first-child {
+  border-radius: var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large) 4px 4px;
+}
+
+.check:last-child {
+  border-radius: 4px 4px var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large);
+}
+
+.check-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--md-sys-shape-corner-full);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-variant);
+  flex: none;
+}
+
+.check-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.check-body p {
+  margin: 4px 0 0;
+}
+
+.check-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.check-action {
+  align-self: center;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px 0 6px;
+  border-radius: var(--md-sys-shape-corner-small);
+  font-size: var(--md-sys-typescale-label-medium-size);
+  font-weight: 500;
+}
+
+.status-ok {
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+
+.status-attention {
+  background: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
+.status-optional {
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.copy-command {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.command {
+  flex: 1;
+  margin: 0;
+  padding: 10px 14px;
+  overflow-x: auto;
+  border-radius: var(--md-sys-shape-corner-small);
+  background: var(--md-sys-color-surface-container-highest);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--app-font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre;
+}
+
+.notice {
+  display: flex;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.notice-error > .icon {
+  color: var(--md-sys-color-error);
+}
+
+.notice p {
+  margin: 6px 0 0;
+}
+
+.details {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.details summary {
+  cursor: pointer;
+  font-size: var(--md-sys-typescale-label-large-size);
+  font-weight: 500;
+}
+
+.details .command {
+  margin-top: 8px;
+}

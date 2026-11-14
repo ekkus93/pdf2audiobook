@@ -1,5 +1,4 @@
 import "@material/web/ripple/ripple.js";
-import "@material/web/focus/md-focus-ring.js";
 import { Icon } from "./Icon";
 import type { IconName } from "../theme/icons.generated";
 import "./shell.css";
@@ -40,7 +39,6 @@ export function NavigationRail<Id extends string>({
               >
                 <span className="rail-indicator">
                   <md-ripple />
-                  <md-focus-ring />
                   <Icon name={item.icon} filled={active} />
                 </span>
                 <span className="rail-label">{item.label}</span>
