@@ -19,75 +19,75 @@
         font-weight: 700;
     }
 
-    .terminal-2968174170-matrix {
+    .terminal-1908523150-matrix {
         font-family: Fira Code, monospace;
         font-size: 20px;
         line-height: 24.4px;
         font-variant-east-asian: full-width;
     }
 
-    .terminal-2968174170-title {
+    .terminal-1908523150-title {
         font-size: 18px;
         font-weight: bold;
         font-family: arial;
     }
 
-    .terminal-2968174170-r1 { fill: #98a84b;font-weight: bold }
-.terminal-2968174170-r2 { fill: #c5c8c6 }
-.terminal-2968174170-r3 { fill: #c5c8c6;font-weight: bold }
-.terminal-2968174170-r4 { fill: #608ab1;font-weight: bold }
-.terminal-2968174170-r5 { fill: #98a84b }
+    .terminal-1908523150-r1 { fill: #98a84b;font-weight: bold }
+.terminal-1908523150-r2 { fill: #c5c8c6 }
+.terminal-1908523150-r3 { fill: #c5c8c6;font-weight: bold }
+.terminal-1908523150-r4 { fill: #608ab1;font-weight: bold }
+.terminal-1908523150-r5 { fill: #98a84b }
     </style>
 
     <defs>
-    <clipPath id="terminal-2968174170-clip-terminal">
+    <clipPath id="terminal-1908523150-clip-terminal">
       <rect x="0" y="0" width="1219.0" height="218.6" />
     </clipPath>
-    <clipPath id="terminal-2968174170-line-0">
+    <clipPath id="terminal-1908523150-line-0">
     <rect x="0" y="1.5" width="1220" height="24.65"/>
             </clipPath>
-<clipPath id="terminal-2968174170-line-1">
+<clipPath id="terminal-1908523150-line-1">
     <rect x="0" y="25.9" width="1220" height="24.65"/>
             </clipPath>
-<clipPath id="terminal-2968174170-line-2">
+<clipPath id="terminal-1908523150-line-2">
     <rect x="0" y="50.3" width="1220" height="24.65"/>
             </clipPath>
-<clipPath id="terminal-2968174170-line-3">
+<clipPath id="terminal-1908523150-line-3">
     <rect x="0" y="74.7" width="1220" height="24.65"/>
             </clipPath>
-<clipPath id="terminal-2968174170-line-4">
+<clipPath id="terminal-1908523150-line-4">
     <rect x="0" y="99.1" width="1220" height="24.65"/>
             </clipPath>
-<clipPath id="terminal-2968174170-line-5">
+<clipPath id="terminal-1908523150-line-5">
     <rect x="0" y="123.5" width="1220" height="24.65"/>
             </clipPath>
-<clipPath id="terminal-2968174170-line-6">
+<clipPath id="terminal-1908523150-line-6">
     <rect x="0" y="147.9" width="1220" height="24.65"/>
             </clipPath>
-<clipPath id="terminal-2968174170-line-7">
+<clipPath id="terminal-1908523150-line-7">
     <rect x="0" y="172.3" width="1220" height="24.65"/>
             </clipPath>
     </defs>
 
-    <rect fill="#292929" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1236" height="267.6" rx="8"/><text class="terminal-2968174170-title" fill="#c5c8c6" text-anchor="middle" x="618" y="27">pdf2audiobook</text>
+    <rect fill="#292929" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1236" height="267.6" rx="8"/><text class="terminal-1908523150-title" fill="#c5c8c6" text-anchor="middle" x="618" y="27">pdf2audiobook</text>
             <g transform="translate(26,22)">
             <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
             <circle cx="22" cy="0" r="7" fill="#febc2e"/>
             <circle cx="44" cy="0" r="7" fill="#28c840"/>
             </g>
         
-    <g transform="translate(9, 41)" clip-path="url(#terminal-2968174170-clip-terminal)">
+    <g transform="translate(9, 41)" clip-path="url(#terminal-1908523150-clip-terminal)">
     
-    <g class="terminal-2968174170-matrix">
-    <text class="terminal-2968174170-r1" x="0" y="20" textLength="24.4" clip-path="url(#terminal-2968174170-line-0)">$&#160;</text><text class="terminal-2968174170-r1" x="24.4" y="20" textLength="634.4" clip-path="url(#terminal-2968174170-line-0)">uv&#160;run&#160;pdf2audiobook&#160;convert&#160;lighthouse.pdf&#160;--no-llm</text><text class="terminal-2968174170-r2" x="1220" y="20" textLength="12.2" clip-path="url(#terminal-2968174170-line-0)">
-</text><text class="terminal-2968174170-r3" x="0" y="44.4" textLength="12.2" clip-path="url(#terminal-2968174170-line-1)">{</text><text class="terminal-2968174170-r2" x="1220" y="44.4" textLength="12.2" clip-path="url(#terminal-2968174170-line-1)">
-</text><text class="terminal-2968174170-r4" x="24.4" y="68.8" textLength="134.2" clip-path="url(#terminal-2968174170-line-2)">&quot;mp3_files&quot;</text><text class="terminal-2968174170-r2" x="158.6" y="68.8" textLength="24.4" clip-path="url(#terminal-2968174170-line-2)">:&#160;</text><text class="terminal-2968174170-r3" x="183" y="68.8" textLength="12.2" clip-path="url(#terminal-2968174170-line-2)">[</text><text class="terminal-2968174170-r2" x="1220" y="68.8" textLength="12.2" clip-path="url(#terminal-2968174170-line-2)">
-</text><text class="terminal-2968174170-r5" x="48.8" y="93.2" textLength="841.8" clip-path="url(#terminal-2968174170-line-3)">&quot;~/books/audiobooks/lighthouse-851b8566a0/audio/001&#160;-&#160;Title&#160;Page.mp3&quot;</text><text class="terminal-2968174170-r2" x="890.6" y="93.2" textLength="12.2" clip-path="url(#terminal-2968174170-line-3)">,</text><text class="terminal-2968174170-r2" x="1220" y="93.2" textLength="12.2" clip-path="url(#terminal-2968174170-line-3)">
-</text><text class="terminal-2968174170-r5" x="48.8" y="117.6" textLength="976" clip-path="url(#terminal-2968174170-line-4)">&quot;~/books/audiobooks/lighthouse-851b8566a0/audio/002&#160;-&#160;Chapter&#160;1_&#160;The&#160;Keeper.mp3&quot;</text><text class="terminal-2968174170-r2" x="1024.8" y="117.6" textLength="12.2" clip-path="url(#terminal-2968174170-line-4)">,</text><text class="terminal-2968174170-r2" x="1220" y="117.6" textLength="12.2" clip-path="url(#terminal-2968174170-line-4)">
-</text><text class="terminal-2968174170-r5" x="48.8" y="142" textLength="963.8" clip-path="url(#terminal-2968174170-line-5)">&quot;~/books/audiobooks/lighthouse-851b8566a0/audio/003&#160;-&#160;Chapter&#160;2_&#160;The&#160;Storm.mp3&quot;</text><text class="terminal-2968174170-r2" x="1012.6" y="142" textLength="12.2" clip-path="url(#terminal-2968174170-line-5)">,</text><text class="terminal-2968174170-r2" x="1220" y="142" textLength="12.2" clip-path="url(#terminal-2968174170-line-5)">
-</text><text class="terminal-2968174170-r5" x="48.8" y="166.4" textLength="939.4" clip-path="url(#terminal-2968174170-line-6)">&quot;~/books/audiobooks/lighthouse-851b8566a0/audio/004&#160;-&#160;Chapter&#160;3_&#160;Morning.mp3&quot;</text><text class="terminal-2968174170-r2" x="1220" y="166.4" textLength="12.2" clip-path="url(#terminal-2968174170-line-6)">
-</text><text class="terminal-2968174170-r3" x="24.4" y="190.8" textLength="12.2" clip-path="url(#terminal-2968174170-line-7)">]</text><text class="terminal-2968174170-r2" x="1220" y="190.8" textLength="12.2" clip-path="url(#terminal-2968174170-line-7)">
-</text><text class="terminal-2968174170-r3" x="0" y="215.2" textLength="12.2" clip-path="url(#terminal-2968174170-line-8)">}</text><text class="terminal-2968174170-r2" x="1220" y="215.2" textLength="12.2" clip-path="url(#terminal-2968174170-line-8)">
+    <g class="terminal-1908523150-matrix">
+    <text class="terminal-1908523150-r1" x="0" y="20" textLength="24.4" clip-path="url(#terminal-1908523150-line-0)">$&#160;</text><text class="terminal-1908523150-r1" x="24.4" y="20" textLength="634.4" clip-path="url(#terminal-1908523150-line-0)">uv&#160;run&#160;pdf2audiobook&#160;convert&#160;lighthouse.pdf&#160;--no-llm</text><text class="terminal-1908523150-r2" x="1220" y="20" textLength="12.2" clip-path="url(#terminal-1908523150-line-0)">
+</text><text class="terminal-1908523150-r3" x="0" y="44.4" textLength="12.2" clip-path="url(#terminal-1908523150-line-1)">{</text><text class="terminal-1908523150-r2" x="1220" y="44.4" textLength="12.2" clip-path="url(#terminal-1908523150-line-1)">
+</text><text class="terminal-1908523150-r4" x="24.4" y="68.8" textLength="134.2" clip-path="url(#terminal-1908523150-line-2)">&quot;mp3_files&quot;</text><text class="terminal-1908523150-r2" x="158.6" y="68.8" textLength="24.4" clip-path="url(#terminal-1908523150-line-2)">:&#160;</text><text class="terminal-1908523150-r3" x="183" y="68.8" textLength="12.2" clip-path="url(#terminal-1908523150-line-2)">[</text><text class="terminal-1908523150-r2" x="1220" y="68.8" textLength="12.2" clip-path="url(#terminal-1908523150-line-2)">
+</text><text class="terminal-1908523150-r5" x="48.8" y="93.2" textLength="841.8" clip-path="url(#terminal-1908523150-line-3)">&quot;~/books/audiobooks/lighthouse-2b79af3fb1/audio/001&#160;-&#160;Title&#160;Page.mp3&quot;</text><text class="terminal-1908523150-r2" x="890.6" y="93.2" textLength="12.2" clip-path="url(#terminal-1908523150-line-3)">,</text><text class="terminal-1908523150-r2" x="1220" y="93.2" textLength="12.2" clip-path="url(#terminal-1908523150-line-3)">
+</text><text class="terminal-1908523150-r5" x="48.8" y="117.6" textLength="976" clip-path="url(#terminal-1908523150-line-4)">&quot;~/books/audiobooks/lighthouse-2b79af3fb1/audio/002&#160;-&#160;Chapter&#160;1_&#160;The&#160;Keeper.mp3&quot;</text><text class="terminal-1908523150-r2" x="1024.8" y="117.6" textLength="12.2" clip-path="url(#terminal-1908523150-line-4)">,</text><text class="terminal-1908523150-r2" x="1220" y="117.6" textLength="12.2" clip-path="url(#terminal-1908523150-line-4)">
+</text><text class="terminal-1908523150-r5" x="48.8" y="142" textLength="963.8" clip-path="url(#terminal-1908523150-line-5)">&quot;~/books/audiobooks/lighthouse-2b79af3fb1/audio/003&#160;-&#160;Chapter&#160;2_&#160;The&#160;Storm.mp3&quot;</text><text class="terminal-1908523150-r2" x="1012.6" y="142" textLength="12.2" clip-path="url(#terminal-1908523150-line-5)">,</text><text class="terminal-1908523150-r2" x="1220" y="142" textLength="12.2" clip-path="url(#terminal-1908523150-line-5)">
+</text><text class="terminal-1908523150-r5" x="48.8" y="166.4" textLength="939.4" clip-path="url(#terminal-1908523150-line-6)">&quot;~/books/audiobooks/lighthouse-2b79af3fb1/audio/004&#160;-&#160;Chapter&#160;3_&#160;Morning.mp3&quot;</text><text class="terminal-1908523150-r2" x="1220" y="166.4" textLength="12.2" clip-path="url(#terminal-1908523150-line-6)">
+</text><text class="terminal-1908523150-r3" x="24.4" y="190.8" textLength="12.2" clip-path="url(#terminal-1908523150-line-7)">]</text><text class="terminal-1908523150-r2" x="1220" y="190.8" textLength="12.2" clip-path="url(#terminal-1908523150-line-7)">
+</text><text class="terminal-1908523150-r3" x="0" y="215.2" textLength="12.2" clip-path="url(#terminal-1908523150-line-8)">}</text><text class="terminal-1908523150-r2" x="1220" y="215.2" textLength="12.2" clip-path="url(#terminal-1908523150-line-8)">
 </text>
     </g>
     </g>

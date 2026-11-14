@@ -86,7 +86,8 @@ built wheel and sdist into a clean virtual environment.
 ## Walkthrough: from PDF to audiobook
 
 This example converts a short four-page demo book, `lighthouse.pdf`, without an LLM. Every
-screenshot is real output from the commands shown. Book workspaces are created under
+screenshot is real output from the commands shown; to regenerate them after the output
+changes, run `scripts/readme_screenshots/run.sh` (its header lists what it needs). Book workspaces are created under
 `./audiobooks/` in the folder you run from; each book gets its own folder, named after the file
 plus a short hash.
 
@@ -128,7 +129,7 @@ asks you to review. Nothing has been synthesized yet.
 ### Step 4: Review the chapters in your browser
 
 ~~~bash
-uv run pdf2audiobook review audiobooks/lighthouse-3c5f49c9a4/manifest.json
+uv run pdf2audiobook review audiobooks/lighthouse-2b79af3fb1/manifest.json
 ~~~
 
 ![review server output](docs/images/readme/step-4-review-server.svg)
@@ -173,7 +174,7 @@ same command again: finished chapters are kept.
 ### Step 6: Package as one M4B (optional)
 
 ~~~bash
-uv run pdf2audiobook pack-m4b audiobooks/lighthouse-3c5f49c9a4/manifest.json --output lighthouse.m4b
+uv run pdf2audiobook pack-m4b audiobooks/lighthouse-2b79af3fb1/manifest.json --output lighthouse.m4b
 ~~~
 
 ![pack-m4b output](docs/images/readme/step-6-pack-m4b.svg)
