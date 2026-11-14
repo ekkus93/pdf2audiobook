@@ -218,12 +218,8 @@ class PiperProvider:
     def generate(self, text: str, *, voice: str, speed: float) -> np.ndarray:
         if not isinstance(text, str) or not text.strip() or len(text) > self.max_chars_per_chunk:
             raise AudioError("Piper text must be nonempty and within its chunk limit")
-        if (
-            isinstance(speed, bool)
-            or not isinstance(speed, (int, float))
-            or not math.isfinite(speed)
-            or not 0 < speed <= 3
-        ):
+        # The range check also rejects infinity and NaN.
+        if isinstance(speed, bool) or not isinstance(speed, (int, float)) or not 0 < speed <= 3:
             raise AudioError("Piper speech speed must be finite and in (0, 3]")
         args = [self.executable, "--model", str(self.model_path)]
         if voice:
