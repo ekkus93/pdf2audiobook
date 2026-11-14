@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import wave
 from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
 
@@ -13,8 +15,9 @@ from pdf2audiobook.errors import AudioError
 class _BoundedWavWriter:
     """Track RIFF payload bytes without depending on wave.Wave_write internals."""
 
-    def __init__(self, writer: wave.Wave_write):
+    def __init__(self, writer: wave.Wave_write, stream: BinaryIO):
         self.writer = writer
+        self.stream = stream
         self.bytes_written = 0
 
     def writeframesraw(self, frames: bytes) -> None:
@@ -22,18 +25,35 @@ class _BoundedWavWriter:
         self.bytes_written += len(frames)
 
     def close(self) -> None:
-        self.writer.close()
+        # wave doesn't close a handle it was given, so close both.
+        try:
+            self.writer.close()
+        finally:
+            self.stream.close()
 
 
 def _open_streaming_wav(path: Path, sample_rate: int) -> _BoundedWavWriter:
+    # Open the file before handing it to wave: if wave.open had to open it and
+    # failed, its half-built writer would raise in __del__ during collection.
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        writer = wave.open(str(path), "wb")
+        stream = path.open("wb")
+    except OSError:
+        raise AudioError("Could not create temporary chapter WAV") from None
+    writer: wave.Wave_write | None = None
+    try:
+        writer = wave.open(stream, "wb")
         writer.setnchannels(1)
         writer.setsampwidth(2)
         writer.setframerate(sample_rate)
-        return _BoundedWavWriter(writer)
+        return _BoundedWavWriter(writer, stream)
     except (OSError, wave.Error):
+        if writer is not None:
+            # close() drops its file even when the header can't be written,
+            # so the writer's __del__ has nothing left to do.
+            with contextlib.suppress(OSError, wave.Error):
+                writer.close()
+        stream.close()
         raise AudioError("Could not create temporary chapter WAV") from None
 
 

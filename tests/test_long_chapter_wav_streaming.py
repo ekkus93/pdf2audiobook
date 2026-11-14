@@ -183,19 +183,22 @@ def test_chapter_size_limit_leaves_no_temporary_wav(monkeypatch, tmp_path):
 # --- Writer refusals (test coverage round 2, U7) -------------------------------
 
 
-@pytest.mark.parametrize(
-    "blocker",
-    [
-        "file-as-folder",
-        # wave.open fails inside Wave_write.__init__, and the half-built writer's
-        # __del__ then raises AttributeError during garbage collection (a CPython
-        # wave quirk, recorded in the round 2 TODO). The refusal itself is correct.
-        pytest.param(
-            "folder-as-file",
-            marks=pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning"),
-        ),
-    ],
+@pytest.fixture
+def _earlier_garbage_collected():
+    """Collect garbage left by earlier tests (with warnings ignored), so a warning
+    raised by the collection inside a test below comes from that test alone."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        gc.collect()
+
+
+@pytest.mark.usefixtures("_earlier_garbage_collected")
+@pytest.mark.filterwarnings(
+    "error::pytest.PytestUnraisableExceptionWarning", "error::ResourceWarning"
 )
+@pytest.mark.parametrize("blocker", ["file-as-folder", "folder-as-file"])
 def test_chapter_wav_that_cannot_be_created_is_a_fixed_error(tmp_path, blocker):
     """U7.a: a file where the folder should be, or a folder where the WAV should be."""
     if blocker == "file-as-folder":
@@ -209,10 +212,39 @@ def test_chapter_wav_that_cannot_be_created_is_a_fixed_error(tmp_path, blocker):
         audio_wav._open_streaming_wav(target, 24000)
     message = str(error.value)
     del error
-    gc.collect()  # release the half-built writer while this test's filter applies
+    gc.collect()  # any half-built writer or open handle is released inside this test
 
     assert message == "Could not create temporary chapter WAV"
     assert str(tmp_path) not in message
+
+
+@pytest.mark.usefixtures("_earlier_garbage_collected")
+@pytest.mark.filterwarnings(
+    "error::pytest.PytestUnraisableExceptionWarning", "error::ResourceWarning"
+)
+def test_writer_that_cannot_be_configured_is_closed_cleanly(tmp_path):
+    """U7.a: a rate wave refuses is a fixed error, with no file handle left open."""
+    with pytest.raises(AudioError) as error:
+        audio_wav._open_streaming_wav(tmp_path / "chapter.wav", 0)
+    message = str(error.value)
+    del error
+    gc.collect()
+
+    assert message == "Could not create temporary chapter WAV"
+
+
+@pytest.mark.usefixtures("_earlier_garbage_collected")
+@pytest.mark.filterwarnings(
+    "error::pytest.PytestUnraisableExceptionWarning", "error::ResourceWarning"
+)
+def test_closing_the_writer_closes_its_file(tmp_path):
+    """U7.a: the writer owns the handle it opened and closes it with the WAV."""
+    writer = audio_wav._open_streaming_wav(tmp_path / "chapter.wav", 24000)
+    stream = writer.stream
+    writer.close()
+
+    assert stream.closed
+    assert _frames(tmp_path / "chapter.wav") == (0, 24000, 1, 2)
 
 
 def _frames(path):
