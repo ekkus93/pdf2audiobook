@@ -652,6 +652,12 @@ dark and light screenshots (spec D11.h).
     Notes open its chapter 200 (176,066 bytes) and another book's chapter, `../manifest.json`
     and the `.cache.json` sidecar 404; after opening the Harbour book, the Field Notes chapter
     404 and Harbour's 200, and the player played and advanced through Harbour's chapters.
+  - Note: Then the readable folder became the playing book's rather than the shown book's, so
+    playback no longer fails after browsing to another book: listing chapters (`book_audio`)
+    doesn't change it; the player selects its book's folder (`play_book_audio`) before each
+    chapter. `Player.test.tsx` "keeps reading its own book's chapters after another book's
+    folder is selected" fails without that. In the release app, Harbour kept playing into its
+    next chapter while Field Notes was shown.
 - [x] TD8.02 D7.b: "Make M4B" runs `pack-m4b --json` to a user-chosen path, with the cover if
   set; a stale chapter shows the CLI's message and offers to continue converting.
   - Evidence: Make M4B asks for a path with the save dialog and runs `pack-m4b --json` with the
@@ -902,3 +908,4 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | 9b03d4eefe28463bc3dffe6a5d5b4c9245cad451 | Tauri TD10.01-TD10.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Desktop CI passes, unsigned AppImage and .deb artifacts | 316 frontend tests on Node 22 and 24; Desktop CI #4 [43638534169](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534169) passed every step incl. both walkthroughs; Exact-head Python CI #849 [43638534189](https://github.com/ekkus93/pdf2audiobook/actions/runs/43638534189) passed on attempt 1 | macOS and Windows installers wait for O2; signing waits for O4 |
 | 2026-11-14 | f6ea9f916a22c05b24fd1a56ffa2f000259f991c | Tauri follow-up (docs/PDF2AUDIOBOOK_TAURI_TODO.md, Found while): book options start from how the book was analyzed; `inspect MANIFEST` reports `analyzed_with_llm` (582af1691f209e6ef5c2fbc0a9578f47ea179a08, no CI run of its own) | pytest 2500 passed, 1 skipped; 323 frontend tests; real app converts a --no-llm book; Desktop CI #7 [43641352438](https://github.com/ekkus93/pdf2audiobook/actions/runs/43641352438) passed incl. both walkthroughs; Exact-head Python CI #852 [43641352503](https://github.com/ekkus93/pdf2audiobook/actions/runs/43641352503) passed on attempt 1 | None |
 | 2026-11-14 | 0dff5f2daa4c3494e90812f549dd41488b58d343 | Tauri TD8.01 follow-up (docs/PDF2AUDIOBOOK_TAURI_TODO.md): chapters served by the app's `chapter:` protocol from the open book only; asset protocol off | cargo test 105+7 passed; 323 frontend tests; release app checked: earlier book's chapter 404 after switching; Desktop CI #9 [43644220677](https://github.com/ekkus93/pdf2audiobook/actions/runs/43644220677) passed incl. both walkthroughs; Exact-head Python CI #854 [43644220665](https://github.com/ekkus93/pdf2audiobook/actions/runs/43644220665) passed on attempt 1 | None |
+| 2026-11-14 | fbfb5a787ab1744662120c67153af7c637c4f049 | Tauri TD8.01 follow-up (docs/PDF2AUDIOBOOK_TAURI_TODO.md): the player keeps playing after browsing to another book; spec D7.a/D8.a say the playing book | 324 frontend tests (the new player test fails without the fix); release app played on while another book was shown; Desktop CI #12 [43646007461](https://github.com/ekkus93/pdf2audiobook/actions/runs/43646007461) passed incl. both walkthroughs; Exact-head Python CI #857 [43646007472](https://github.com/ekkus93/pdf2audiobook/actions/runs/43646007472) passed on attempt 1 | None |
