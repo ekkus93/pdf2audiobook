@@ -51,6 +51,25 @@ def _preserve_rejected_deterministic_edits(
         replacement.accepted = edit.accepted
 
 
+def analyzed_with_llm(folder: Path) -> bool | None:
+    """Whether the workspace's last analysis used the LLM, or None if that isn't recorded.
+
+    Analysis without the LLM stores the fixed `llm-analysis` fingerprint of "disabled"
+    (`pipeline._analysis_stage_fingerprints`); any other value means an LLM was used. Which
+    provider or model can't be told from the hash.
+    """
+    from pdf2audiobook.workspace import fingerprint
+
+    previous = load_bounded_json(
+        folder / "reports" / "analysis_fingerprints.json", max_bytes=4096, max_depth=8
+    )
+    stages = previous.get("stages") if isinstance(previous, dict) else None
+    value = stages.get("llm-analysis") if isinstance(stages, dict) else None
+    if not isinstance(value, str):
+        return None
+    return value != fingerprint("disabled")
+
+
 def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]:
     """Return changed stage names without loading or displaying their inputs."""
     previous = load_bounded_json(

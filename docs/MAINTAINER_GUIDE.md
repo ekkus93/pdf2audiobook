@@ -379,6 +379,11 @@ The desktop app (`docs/PDF2AUDIOBOOK_TAURI_SPEC.md`, D2) drives the CLI only thr
 outputs, so treat their shapes as contracts: add fields, never rename or remove them.
 
 - `--version` prints the version and exits 0, with or without a command after it.
+- `inspect MANIFEST --json` includes `analyzed_with_llm`: `false` when the workspace's last
+  analysis ran without the LLM (its `llm-analysis` fingerprint is the fixed "disabled" value),
+  `true` when it used one, `null` when `reports/analysis_fingerprints.json` is missing or
+  unreadable. The desktop app starts a book's options from it, so converting a book analyzed
+  with `--no-llm` doesn't switch the LLM back on.
 - `doctor --check-llm --json` adds `llm_check`. For Ollama it asks the server what context it
   serves for the configured model (this loads the model) and reports `served_context`,
   `configured_context`, `output_tokens`, `chunk_tokens`, `estimated_tokens_needed` (a window,

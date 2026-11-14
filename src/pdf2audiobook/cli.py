@@ -569,6 +569,7 @@ def inspect(
             from pdf2audiobook.workspace import read_manifest
 
             manifest = read_manifest(source)
+            from pdf2audiobook.analysis_state import analyzed_with_llm
             from pdf2audiobook.document.structure import chapter_coverage_report
 
             payload = {
@@ -580,6 +581,8 @@ def inspect(
                 "chapters": [chapter.model_dump() for chapter in manifest.chapters],
                 "warnings": manifest.warnings,
                 "coverage": chapter_coverage_report(manifest),
+                # How the book was last analyzed, so a caller can keep it (null if unknown).
+                "analyzed_with_llm": analyzed_with_llm(source.parent),
             }
             from pdf2audiobook.jsonio import JSONTooLargeError, load_size_checked_json
 

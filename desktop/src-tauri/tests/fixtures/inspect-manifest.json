@@ -226,5 +226,6 @@
         ]
       }
     ]
-  }
+  },
+  "analyzed_with_llm": false
 }

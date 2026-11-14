@@ -4,6 +4,7 @@
   "description": "A workspace's chapters, coverage and (after conversion) per-chapter audio status.",
   "type": "object",
   "required": [
+    "analyzed_with_llm",
     "approved",
     "chapters",
     "coverage",
@@ -165,6 +166,13 @@
     },
     "approved": {
       "type": "boolean"
+    },
+    "analyzed_with_llm": {
+      "type": [
+        "boolean",
+        "null"
+      ],
+      "description": "Whether the last analysis used the LLM; null if not recorded."
     }
   },
   "additionalProperties": true
