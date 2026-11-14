@@ -377,7 +377,31 @@ dark and light screenshots (spec D11.h).
     Python CI [43612250270](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612250270)
     passed; screen commit eeafb686e7b3a1e389d48c3be497800f6c1f8772, Python CI
     [43612258477](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612258477) passed.
-- [ ] TD5.02 Library: books in the output folder with state and last run; "Add book" dialog.
+- [x] TD5.02 Library: books in the output folder with state and last run; "Add book" dialog.
+  - Evidence: Library screen (`src/screens/Library.tsx`, states in `bookState.ts`): a grid of book
+    cards from the output folder (from the app settings, or the CLI's `general.output_dir`), each
+    with a thumbnail made by the CLI's `thumbnail` command and cached in the app's cache folder,
+    the title, chapter count, a state chip (not analyzed, needs review, ready, analyzing,
+    converting, converted, needs attention) and the last run time from `run_status.json`. To judge
+    review state and find the source book, `inspect MANIFEST --json` gained `source_path`,
+    `review_required`, `review_acknowledged` and `approved` (commit
+    0769bb4bb9371a0ed6e6a0b349c01bc00bf1efcf, contract and fixture updated; Python CI
+    [43610927673](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610927673) passed). "Add
+    book" is a Material extended FAB opening the native file dialog (Tauri dialog plugin,
+    `dialog:allow-open` only) filtered to PDF and EPUB; the book is remembered in the app settings
+    and shown as "Not analyzed" until its workspace exists. The commands run (config show,
+    inspect, thumbnail, workspace) are listed under Details. Tests: Rust
+    `the_library_lists_books_with_their_inspection_and_thumbnail`,
+    `a_configured_output_folder_overrides_the_cli_setting`,
+    `added_books_appear_until_they_are_analyzed` and the settings tests; frontend
+    `bookState.test.ts` (12) and `Library.test.tsx` (8): loading, success, Details, empty (names
+    the folder), engine not found (sends to Setup), failure with retry, adding a book, a cancelled
+    dialog and the labelled FAB. Checked in the real app under Xvfb with three original demo
+    books: thumbnails, states and the FAB render in both themes. Screenshots:
+    `docs/images/tauri/library-dark.png`, `library-light.png`. Commits
+    3c5870fdfcd917820904e15a577506cfdca34b74 and eeafb686e7b3a1e389d48c3be497800f6c1f8772 (Python
+    CI passed, see TD5.01) and 4e14283c93a428372ab3d94eda7cd600cfce6220 (Details), Python CI #823
+    [43612519881](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612519881) passed.
 - [ ] TD5.02a **[OWNER REVIEW]** The owner reviews the Setup and Library screens in dark and
   light (D11.h) before TD5.03–TD5.08 are built.
 - [ ] TD5.03 Book options: LLM, model, context and output caps, voice (from `voices --json`),
@@ -487,3 +511,4 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | 0769bb4bb9371a0ed6e6a0b349c01bc00bf1efcf | Tauri TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md) (partial): inspect shows source and review state | pytest 2479 passed, 1 skipped; Exact-head Python CI #819 [43610927673](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610927673) passed on attempt 1 | None |
 | 2026-11-14 | 3c5870fdfcd917820904e15a577506cfdca34b74 | Tauri TD5.01/TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): bridge commands, app settings, library scan | cargo test 74 passed; Exact-head Python CI #820 [43612250270](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612250270) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | eeafb686e7b3a1e389d48c3be497800f6c1f8772 | Tauri TD5.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Setup and Library screens | 161 frontend tests; real-app screenshots; Exact-head Python CI #821 [43612258477](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612258477) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 4e14283c93a428372ab3d94eda7cd600cfce6220 | Tauri TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Library screen with Details | 162 frontend tests, cargo test 74 passed; Exact-head Python CI #823 [43612519881](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612519881) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
