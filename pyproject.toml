@@ -100,6 +100,7 @@ files = [
     "src/pdf2audiobook/verification/compare.py",
     "src/pdf2audiobook/verification/reference.py",
     "src/pdf2audiobook/verification/report.py",
+    "src/pdf2audiobook/verification/models.py",
 ]
 check_untyped_defs = true
 warn_unused_ignores = true

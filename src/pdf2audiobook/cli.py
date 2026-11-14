@@ -74,6 +74,11 @@ edits_app = typer.Typer(
     epilog="Example: pdf2audiobook edits list ./audiobooks/BOOK/manifest.json",
 )
 app.add_typer(edits_app, name="edits")
+asr_app = typer.Typer(
+    help="List or fetch the optional speech recognizers that audio verification uses.",
+    epilog="Example: pdf2audiobook asr list",
+)
+app.add_typer(asr_app, name="asr")
 console = Console(stderr=True)
 # Largest reports/conversion_status.json that `inspect` will read.
 CONVERSION_STATUS_MAX_BYTES = 1024 * 1024
@@ -363,6 +368,68 @@ def edits_reject(
 ) -> None:
     """Remove pending edits. Accepted edits cannot be rejected."""
     _edit_decision("rejected", manifest_path, block_ids, all_edits, json_output)
+
+
+@asr_app.command("list", epilog="Example: pdf2audiobook asr list --json")
+def asr_list(json_output: bool = typer.Option(False, "--json")) -> None:
+    """Show whether each ASR model is installed and downloaded, without loading it."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.verification.models import list_payload, list_text
+
+        payload = list_payload()
+        if json_output:
+            emit(payload, json_output)
+        else:
+            typer.echo(list_text(payload))
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
+@asr_app.command("fetch", epilog="Example: pdf2audiobook asr fetch whisper vosk")
+def asr_fetch(
+    models: list[str] = typer.Argument(None, help="whisper, wav2vec2, vosk or all (default)."),
+    yes: bool = typer.Option(False, "--yes", help="Download without asking first."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Download pinned ASR model weights, after saying what, from where and how much."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.verification import models as asr
+
+        names = asr.resolve_names(list(models or []))
+        plan = asr.fetch_plan(names)
+        if any(files for _, files in plan) and not yes:
+            if json_output:
+                raise ConfigError("Pass --yes to download models with --json")
+            console.print(asr.plan_text([(n, f) for n, f in plan if f]))
+            if not typer.confirm("Download these files?", default=False, err=True):
+                raise typer.Exit(1)
+        fetched = []
+        for name, files in plan:
+            if files:
+                done = asr.fetch(
+                    name,
+                    on_file=None
+                    if json_output
+                    else lambda f: console.print(f"Downloading {f.name}..."),
+                )
+                fetched.append({"model": name, "files": [f.name for f in done]})
+        payload = {**asr.list_payload(), "fetched": fetched}
+        if json_output:
+            emit(payload, json_output)
+        else:
+            typer.echo(asr.list_text(payload))
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
 
 
 @budget_app.command("show", epilog="Example: pdf2audiobook budget show --output ./audiobooks/BOOK")
