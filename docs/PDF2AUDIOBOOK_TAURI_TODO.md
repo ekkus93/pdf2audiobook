@@ -245,16 +245,62 @@
     (doctor, config show, inspect, workspace, thumbnail) and passed; Typer accepts `--name=value`
     and a dash-named file after `--`. Commit 7115a8b0285cda590b74493878b285513d77ed5a, Python CI
     [43608974129](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608974129) passed.
-- [ ] TD3.03 D3.c: parse success JSON, the error object with optional `reason`, and unreadable
+- [x] TD3.03 D3.c: parse success JSON, the error object with optional `reason`, and unreadable
   output (fixed message with the exit code only). Tests for each.
-- [ ] TD3.04 D3.d: at most one write-capable command per workspace in the bridge. Tests: a
+  - Evidence: `src-tauri/src/engine/result.rs`: exit 0 with a JSON object on stdout is `Success`;
+    otherwise the last stderr line that is a well-formed `{"ok": false, "error": {...}}` envelope
+    is `Failed` with `type`, `code`, `message` and optional `reason` (log and warning lines before
+    it are skipped); anything else is `Unreadable` with the exit code only, shown with the fixed
+    message "The engine returned an unreadable result". 8 tests: `success_json_is_returned`,
+    `every_reason_is_kept` (all 9 codes), `an_error_without_a_reason_has_none`,
+    `the_error_is_found_after_log_lines`, `unreadable_success_output_keeps_only_the_exit_code` and
+    `a_failure_without_an_error_object_is_unreadable` (neither keeps the output text),
+    `a_process_ended_by_a_signal_is_unreadable`, `outcomes_serialize_for_the_frontend`. The opt-in
+    real-CLI test also parses a real missing-book failure as `InputError` 3 with no reason. cargo
+    fmt, clippy -D warnings, cargo test (42 passed) clean. Commit
+    ee2a92dc71362c5ebdc8ebe60b8feea4b025c75e, Python CI
+    [43609044424](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609044424) passed.
+- [x] TD3.04 D3.d: at most one write-capable command per workspace in the bridge. Tests: a
   second start is refused while the first runs; read-only commands are not blocked.
-- [ ] TD3.05 D3.e: environment passed through; encrypted PDFs take an environment variable
+  - Evidence: `src-tauri/src/engine/runs.rs`: `WorkspaceRuns::try_start` claims a canonicalized
+    workspace path for write-capable requests (`Request::is_write`) and returns a guard that frees
+    it on drop; read-only requests claim nothing. 7 tests:
+    `a_second_write_is_refused_while_the_first_runs` (and allowed again after the guard drops),
+    `read_only_commands_are_not_blocked`, `read_only_runs_do_not_hold_the_workspace`,
+    `different_workspaces_run_independently`,
+    `another_spelling_of_the_same_folder_is_the_same_workspace` (symlink and `..`),
+    `only_one_of_many_simultaneous_starts_wins` (16 threads behind a barrier),
+    `the_busy_message_has_no_path`. cargo fmt, clippy, cargo test (49 passed) clean. Commit
+    62c153942b34dca1b5c1b15324ba0b175cce0cee, Python CI
+    [43609098083](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609098083) passed.
+- [x] TD3.05 D3.e: environment passed through; encrypted PDFs take an environment variable
   name, never a password. Test that no password value is ever placed in arguments.
+  - Evidence: `SystemRunner` never clears or sets the child's environment, and a PDF password can
+    only be an `EnvVarName` (`[A-Za-z_][A-Za-z0-9_]*`, at most 128 characters), so no password
+    value can reach the arguments. Tests: `the_child_inherits_the_app_environment` (a real child
+    sees the same HOME and PATH), `the_child_gets_no_input_and_its_output_is_captured`,
+    `find_on_path_needs_an_executable_file`,
+    `a_pdf_password_is_only_ever_an_environment_variable_name` (inspect, thumbnail, analyze and
+    convert each carry only `--pdf-password-env=BOOK_PDF_PASSWORD`),
+    `a_password_typed_where_a_variable_name_belongs_is_refused` (`hunter2!`, `my secret`,
+    `p@ssw0rd` and others refused, also when deserialized from the frontend, without echoing the
+    value). cargo fmt, clippy, cargo test (54 passed) clean. Commit
+    108780a0ff8673ae21582777b84562073ee32a1c, Python CI
+    [43609143809](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609143809) passed.
 
 ## Phase TD4 — Shared contracts (D9.c)
 
-- [ ] TD4.01 Write JSON Schemas in `desktop/contracts/` for every output in spec D9.c.
+- [x] TD4.01 Write JSON Schemas in `desktop/contracts/` for every output in spec D9.c.
+  - Evidence: 15 JSON Schemas (draft 2020-12) in `desktop/contracts/`: doctor, config-show,
+    inspect-book, inspect-manifest, workspace, voices, thumbnail, analyze, convert, convert-dry-
+    run, edits-list, pack-m4b, review-address, error (with the 9 `reason` codes) and run-status,
+    plus a README. Required fields are typed; objects allow added fields, except the review
+    address line, which is exactly `{url, port}`. All 15 validated against real CLI output
+    captured from the README demo book with `--no-llm` (doctor, config, inspect, workspace,
+    voices, thumbnail, analyze, convert, dry run, pack-m4b, review, a missing-book error and a
+    `review_required` error, and `run_status.json`). Commit
+    0a4a732eb53c290aa2bf168c9c0e3dc8fb15cc19, Python CI
+    [43609354757](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609354757) passed.
 - [ ] TD4.02 Python tests validate real CLI output against those schemas (the `jsonschema`
   package added to the `dev` extra, with the lockfile updated).
 - [ ] TD4.03 Rust tests validate the parser's fixtures against the same schemas.
@@ -372,3 +418,7 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | 94de70ca8142e146938f779d0930de0f842e39df | Tauri TD2.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): desktop README, linked from the main README | deb and AppImage builds and npm ci checked; Exact-head Python CI #804 [43608326670](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608326670) passed on attempt 1 | None |
 | 2026-11-14 | 3ab14c122ac89447db8a944f5a8d59097235e22c | Tauri TD3.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): locate and confirm the CLI | cargo test 11 passed; fmt and clippy clean; Exact-head Python CI #807 [43608955476](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608955476) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 7115a8b0285cda590b74493878b285513d77ed5a | Tauri TD3.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): typed requests to CLI argument vectors | cargo test 34 passed, opt-in real-CLI test passed; Exact-head Python CI #808 [43608974129](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608974129) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | ee2a92dc71362c5ebdc8ebe60b8feea4b025c75e | Tauri TD3.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): parse CLI results and JSON errors | cargo test 42 passed; Exact-head Python CI #809 [43609044424](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609044424) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 62c153942b34dca1b5c1b15324ba0b175cce0cee | Tauri TD3.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): one write-capable command per workspace | cargo test 49 passed; Exact-head Python CI #810 [43609098083](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609098083) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 108780a0ff8673ae21582777b84562073ee32a1c | Tauri TD3.05 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): environment passthrough, password variable names only | cargo test 54 passed; Exact-head Python CI #811 [43609143809](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609143809) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 0a4a732eb53c290aa2bf168c9c0e3dc8fb15cc19 | Tauri TD4.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): JSON Schemas for the CLI outputs | all 15 validated against real CLI output; Exact-head Python CI #813 [43609354757](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609354757) passed on attempt 1 | None |
