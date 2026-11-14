@@ -322,10 +322,13 @@ The app should look polished, modern and professional, built on Google's
 - **D11.i Accent buttons.** At the owner's request (2026-11-14, after reviewing the first two
   screens), the main actions are more striking than stock Material 3: filled buttons and the FAB
   carry a gradient from `primary` to amber `tertiary` (dark themes) or to `onPrimaryContainer`
-  (light themes, where an amber dark enough for white text turns brown), with a soft coloured
-  glow, a 1 px lift on hover and a slight press-in. Tonal buttons get a highlight edge and an
-  amber icon. Labels stay `onPrimary`; the contrast test checks both gradient ends in both
-  themes. Material's own state layers, ripple and focus ring are kept.
+  (light themes, where an amber dark enough for white text turns brown), a glossy top edge, a
+  coloured glow, and on hover a light sheen that sweeps across, a 2 px lift, a warmer glow and a
+  faint ring; a slight press-in on click. The FAB is 64 px tall with 20 px corners. Tonal buttons
+  get an iris-to-amber gradient outline, an amber icon and an amber glow on hover. Labels stay
+  `onPrimary`; the contrast test checks both gradient ends in both themes (the sheen is a
+  passing highlight). Material's own state layers, ripple and focus ring are kept, and reduced
+  motion turns the movement off.
 
 ## 14. Owner decisions
 

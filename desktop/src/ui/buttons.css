@@ -11,11 +11,13 @@
 
 :root[data-theme="light"] {
   --app-accent-end: var(--md-sys-color-on-primary-container);
+  --app-sheen-strength: 18%;
 }
 
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] {
     --app-accent-end: var(--md-sys-color-on-primary-container);
+    --app-sheen-strength: 18%;
   }
 }
 
@@ -23,11 +25,20 @@
   --app-accent-gradient: linear-gradient(
     120deg,
     var(--md-sys-color-primary) 0%,
-    var(--md-sys-color-primary) 40%,
-    var(--app-accent-end) 135%
+    var(--md-sys-color-primary) 25%,
+    var(--app-accent-end) 100%
   );
-  --app-accent-glow: color-mix(in srgb, var(--md-sys-color-primary) 45%, transparent);
-  --app-accent-glow-strong: color-mix(in srgb, var(--md-sys-color-primary) 60%, transparent);
+  /* A bright band, parked off the left edge, that sweeps across on hover. */
+  --app-sheen: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgb(255 255 255 / var(--app-sheen-strength)) 50%,
+    transparent 65%
+  );
+  --app-sheen-strength: 32%;
+  --app-accent-glow: color-mix(in srgb, var(--md-sys-color-primary) 55%, transparent);
+  --app-accent-glow-strong: color-mix(in srgb, var(--app-accent-end) 55%, transparent);
+  --app-gloss: inset 0 1px 0 rgb(255 255 255 / 35%), inset 0 -2px 4px rgb(0 0 0 / 12%);
   --app-press-scale: 0.97;
 }
 
@@ -67,13 +78,18 @@ md-fab {
   --md-fab-focus-container-elevation: 0;
   --md-fab-pressed-container-elevation: 0;
 
-  background-image: var(--app-accent-gradient);
+  background-image: var(--app-sheen), var(--app-accent-gradient);
+  background-size: 250% 100%, 100% 100%;
+  background-position: 120% 0, 0 0;
+  background-repeat: no-repeat;
   box-shadow:
+    var(--app-gloss),
     0 1px 2px rgb(0 0 0 / 30%),
-    0 6px 18px -4px var(--app-accent-glow);
+    0 8px 22px -6px var(--app-accent-glow);
   transition:
     transform var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard),
-    box-shadow var(--md-sys-motion-duration-short) var(--md-sys-motion-easing-standard);
+    box-shadow var(--md-sys-motion-duration-medium) var(--md-sys-motion-easing-standard),
+    background-position var(--md-sys-motion-duration-long) var(--md-sys-motion-easing-emphasized);
 }
 
 md-filled-button {
@@ -81,21 +97,29 @@ md-filled-button {
 }
 
 md-fab {
-  border-radius: var(--md-sys-shape-corner-large);
+  --md-fab-container-height: 64px;
+  --md-fab-container-shape: 20px;
+  --md-fab-label-text-size: 16px;
+  --md-fab-icon-size: 26px;
+  border-radius: 20px;
 }
 
 md-filled-button:hover,
 md-fab:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+  background-position: -20% 0, 0 0;
   box-shadow:
+    var(--app-gloss),
     0 2px 4px rgb(0 0 0 / 30%),
-    0 12px 28px -6px var(--app-accent-glow-strong);
+    0 14px 32px -6px var(--app-accent-glow-strong),
+    0 0 0 1px color-mix(in srgb, var(--app-accent-end) 35%, transparent);
 }
 
 md-filled-button:active,
 md-fab:active {
-  transform: scale(var(--app-press-scale));
+  transform: translateY(0) scale(var(--app-press-scale));
   box-shadow:
+    var(--app-gloss),
     0 1px 2px rgb(0 0 0 / 30%),
     0 4px 10px -4px var(--app-accent-glow);
 }
@@ -114,7 +138,14 @@ md-filled-tonal-button {
   --md-filled-tonal-button-focus-icon-color: var(--md-sys-color-tertiary);
   --md-filled-tonal-button-pressed-icon-color: var(--md-sys-color-tertiary);
 
+  --md-filled-tonal-button-container-color: transparent;
+
+  border: 1.5px solid transparent;
   border-radius: var(--md-sys-shape-corner-full);
+  background:
+    linear-gradient(var(--md-sys-color-secondary-container), var(--md-sys-color-secondary-container))
+      padding-box,
+    linear-gradient(120deg, var(--md-sys-color-primary), var(--md-sys-color-tertiary)) border-box;
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-secondary-container) 14%, transparent),
     0 1px 2px rgb(0 0 0 / 20%);
@@ -127,7 +158,7 @@ md-filled-tonal-button:hover {
   transform: translateY(-1px);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--md-sys-color-on-secondary-container) 20%, transparent),
-    0 6px 16px -6px rgb(0 0 0 / 45%);
+    0 8px 20px -8px color-mix(in srgb, var(--md-sys-color-tertiary) 55%, transparent);
 }
 
 md-filled-tonal-button:active {
