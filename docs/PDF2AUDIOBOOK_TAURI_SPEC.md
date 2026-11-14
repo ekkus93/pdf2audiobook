@@ -1,6 +1,6 @@
 # PDF2Audiobook — Desktop App (Tauri) Specification
 
-**Status:** Draft; owner decisions in §13 are open, with recommended defaults
+**Status:** Draft; owner decisions settled 2026-11-14 (§14)
 **Date:** 2026-11-14
 **Branch:** `tauri`, from master at 05ca4c37685325ced177cf06d21de2506fe18cd2 (tag `v0.1.0`)
 **Parent specification:** `docs/PDF2AUDIOBOOK_SPEC.md` (contracts, privacy rules, §12 engineering principles)
@@ -31,6 +31,7 @@ unchanged.
 | D8 | Security and privacy | Tauri capabilities, CSP, file scope, content-free logs |
 | D9 | Testing | Rust, frontend, CLI contract and end-to-end tests |
 | D10 | Packaging and CI | Installers, signing, and the CI jobs that build and test the app |
+| D11 | Visual design | Material 3 components, the Midnight Iris palette, theme, type, layout and motion |
 
 **Out of scope for this round:** reimplementing any pipeline step in Rust or TypeScript; a
 native chapter editor that merges or splits chapters (the review page can only retitle and
@@ -64,8 +65,7 @@ Ollama, FFmpeg or Tesseract; any change to analysis or audio output.
 - **D1.a** The app lives in `desktop/`: `desktop/src-tauri/` (Rust, Tauri 2) and
   `desktop/src/` (frontend). Nothing under `src/pdf2audiobook/` depends on it, and the Python
   wheel and sdist don't include it.
-- **D1.b** Frontend: TypeScript with Vite. The UI framework is an owner decision (§13, O3);
-  the default is React.
+- **D1.b** Frontend: React and TypeScript with Vite, using Google's Material 3 (D11).
 - **D1.c** Versions are pinned: `rust-toolchain.toml` for Rust, `package-lock.json` with an
   exact Node version in `.nvmrc` (Node 22, matching CI), and `Cargo.lock` committed.
 - **D1.d** The app version matches `pyproject.toml` (`0.1.0`). A test fails if
@@ -115,6 +115,11 @@ pins the exact JSON keys. The app depends only on these documented shapes.
 - **D2.f `--version` on its own.** `pdf2audiobook --version` currently exits 2 with "Missing
   command" unless another command follows it (found while writing this spec, on master at the
   baseline). It must print the version and exit 0 on its own; a test runs it with no command.
+- **D2.g Book thumbnail.** `pdf2audiobook thumbnail BOOK --output FILE.png [--width N] --json`
+  renders the first page of a PDF (or the cover of an EPUB) to a PNG at the given path and
+  prints `{"thumbnail": "<path>", "width": N, "height": N}`. It writes nothing else. The app
+  keeps thumbnails in its own cache folder, which holds book images and is treated like the
+  workspace for privacy.
 
 ## 5. D3 — Engine bridge (Rust)
 
@@ -225,7 +230,7 @@ terminal.
 - **D9.c CLI contracts:** Python tests pin the JSON shape of every output the app reads:
   `doctor`, `inspect`, `analyze`, `convert`, `edits list`, `pack-m4b`, `config show`, `review`
   (D2.c), `workspace` (D2.a), `voices` (D2.e), the error object with `reason` (D2.b), and
-  `run_status.json`. A shared JSON Schema file in `desktop/contracts/` is the single source; the
+  `thumbnail` (D2.g) and `run_status.json`. A shared JSON Schema file in `desktop/contracts/` is the single source; the
   Rust parser tests and the Python tests both validate against it.
 - **D9.d End to end:** on Linux CI, a WebDriver test (`tauri-driver`) runs the walkthrough on
   the README demo book (`scripts/readme_screenshots/make_demo_pdf.py`) with `--no-llm`: add
@@ -238,8 +243,8 @@ terminal.
   The installer is the Tauri app only; the Setup screen explains how to install the CLI with
   `uv tool install` from a source checkout (`uv tool install ".[kitten]"`, run in the checkout)
   or how to point the app at a checkout run with `uv run`.
-- **D10.b** Installers per target platform (owner decision O2): AppImage and `.deb` for Linux;
-  `.dmg` for macOS; `.msi` for Windows.
+- **D10.b** Installers: AppImage and `.deb` for Linux now (O2). macOS (`.dmg`) and Windows
+  (`.msi`) come later.
 - **D10.c** A CI job on the `tauri` branch and on pull requests runs `cargo fmt --check`,
   `cargo clippy`, `cargo test`, the frontend checks and a Linux `tauri build`. The existing
   Python CI also runs for pull requests from this branch. CI needs no network beyond package
@@ -247,24 +252,89 @@ terminal.
 - **D10.d** Signing and notarization are owner decisions (O4); unsigned builds are labelled as
   such in their file names.
 
-## 13. Owner decisions
+## 13. D11 — Visual design
 
-Each has a recommended default; the TODO marks items that depend on one.
+The app should look polished, modern and professional, built on Google's
+[Material 3](https://m3.material.io) design system.
 
-- **O1 Python runtime.** (a) Require an installed CLI (recommended for the first release); or
-  (b) bundle a frozen Python sidecar. Bundling is blocked in practice by size: with the
-  `kitten` extra the environment is 6.1 GB (PyTorch 1.1 GB, NVIDIA libraries 3.2 GB, Triton
-  0.9 GB), although the default `mini` voice is an ONNX model that needs only `onnxruntime`
-  (63 MB). Bundling would first need a slimmer Kitten dependency set.
-- **O2 Platforms.** Linux first (recommended: it is the only platform tested so far); macOS and
-  Windows later.
-- **O3 UI framework.** React (recommended: widest familiarity), Svelte, or plain TypeScript.
-- **O4 Signing.** Unsigned development builds for now (recommended), or signed and notarized
-  releases, which need certificates only the owner can provide.
-- **O5 CI on the branch.** Add the `tauri` branch to `ci.yml` triggers (recommended), or work
-  through a pull request so the existing `pull_request` trigger runs.
+- **D11.a Components.** Use Google's `@material/web` (Material 3 web components; React 19 uses
+  custom elements directly) for the components it provides: buttons, icon buttons, FABs,
+  text fields, selects, chips, checkboxes, radios, switches, sliders, dialogs, lists, menus,
+  tabs and progress indicators. It has no navigation rail, top app bar, snackbar or stable
+  card, so build those as React components that use only the same `--md-sys-*` design tokens.
+  No second component library.
+- **D11.b Color.** The palette is **Midnight Iris with Amber**: primary seed `#6D5BD0` (iris
+  violet), tertiary seed `#E8A25C` (amber), and neutrals tinted with the primary hue. The full
+  Material 3 scheme is generated from the seeds with `@material/material-color-utilities` at
+  build time, never typed in by hand. The key roles:
 
-## 14. Risks
+  | Role | Dark (default) | Light |
+  | --- | --- | --- |
+  | `primary` | `#c9bfff` | `#5f52a7` |
+  | `onPrimary` | `#302175` | `#ffffff` |
+  | `primaryContainer` | `#473a8d` | `#e5deff` |
+  | `onPrimaryContainer` | `#e5deff` | `#473a8d` |
+  | `secondary` | `#c9c3dc` | `#5f5c71` |
+  | `secondaryContainer` | `#484459` | `#e5dff9` |
+  | `onSecondaryContainer` | `#e5dff9` | `#484459` |
+  | `tertiary` | `#ffb872` | `#885211` |
+  | `onTertiary` | `#4a2800` | `#ffffff` |
+  | `tertiaryContainer` | `#6a3b00` | `#ffdcbf` |
+  | `onTertiaryContainer` | `#ffdcbf` | `#6a3b00` |
+  | `error` | `#ffb4ab` | `#ba1a1a` |
+  | `errorContainer` | `#93000a` | `#ffdad6` |
+  | `surface` | `#141318` | `#fdf8ff` |
+  | `surfaceContainerLow` | `#1c1b20` | `#f7f2fa` |
+  | `surfaceContainer` | `#201f25` | `#f1ecf4` |
+  | `surfaceContainerHigh` | `#2b292f` | `#ebe6ee` |
+  | `surfaceContainerHighest` | `#35343a` | `#e5e1e9` |
+  | `onSurface` | `#e5e1e9` | `#1c1b20` |
+  | `onSurfaceVariant` | `#c9c4d3` | `#484551` |
+  | `outline` | `#938f9c` | `#797582` |
+  | `outlineVariant` | `#484551` | `#c9c4d3` |
+
+  ![Midnight Iris with Amber, dark and light](images/tauri/palette-preview.png)
+
+  How the roles are used: **primary** for the main action on each screen (Convert, Analyze)
+  and progress; **tertiary amber** for things that need the user (needs review, pending
+  edits) and for audio playback; **error** only for failures. Containers carry chips and
+  status badges; the surface-container steps give depth instead of shadows.
+- **D11.c Theme.** Dark is the default (people often listen in the evening). Light and "follow
+  the system" are offered in Settings. Every text and icon pairing meets WCAG AA contrast (4.5:1
+  for text, 3:1 for large text and icons); a test computes the ratios from the generated scheme.
+- **D11.d Type and shape.** Material 3 type scale with Roboto Flex for the interface and Roboto
+  Mono for chapter text previews, bundled with the app (no font downloads at run time).
+  Material 3 shape scale: large (16 px) corners for cards, extra-large (28 px) for dialogs,
+  full rounding for buttons and chips.
+- **D11.e Layout.** A navigation rail on the left (Library, Run, Settings) and a content area
+  of cards. The library is a grid of book cards with the PDF's first page as a thumbnail, the
+  title, chapter count and a status chip. A persistent bottom player bar appears once any
+  chapter is playing. The window works from 960×600 up; below 1200 px wide the grid drops to
+  fewer columns rather than shrinking cards.
+- **D11.f Motion.** Material 3 easing and durations for page changes, card expansion and the
+  player bar; progress uses the Material linear and circular indicators. Everything respects
+  the system's reduced-motion setting.
+- **D11.g Icons.** Material Symbols (Rounded), bundled as a subset font; no icon downloads at
+  run time.
+- **D11.h Review.** Before a screen counts as done, its screenshots in dark and light mode
+  are attached to its TODO item, and the owner reviews the first two screens (Setup and
+  Library) before the rest are built.
+
+## 14. Owner decisions
+
+All five were decided by the owner on 2026-11-14:
+
+- **O1 Python runtime: require an installed CLI.** The installer is the Tauri app only.
+  Bundling Python was ruled out for now by size: with the `kitten` extra the environment is
+  6.1 GB (PyTorch 1.1 GB, NVIDIA libraries 3.2 GB, Triton 0.9 GB), although the default
+  `mini` voice is an ONNX model that needs only `onnxruntime` (63 MB). Bundling would first
+  need a slimmer Kitten dependency set.
+- **O2 Platforms: Linux only for now.** macOS and Windows come later.
+- **O3 UI: React and TypeScript, with Google's Material 3** (D11).
+- **O4 Signing: unsigned builds for now.**
+- **O5 CI: add the `tauri` branch to the `ci.yml` push triggers.**
+
+## 15. Risks
 
 - **Engine and app drift.** Mitigated by D9.c: one JSON Schema checked from both sides.
 - **Long LLM runs.** A book can take hours; D5 depends on `run_status.json` staying current,
@@ -273,3 +343,7 @@ Each has a recommended default; the TODO marks items that depend on one.
   Windows is a supported platform.
 - **Webview differences.** The review page is plain HTML and should work in WebKitGTK,
   WebKit and WebView2, but D9.d tests only Linux.
+- **`@material/web` is in maintenance mode.** Its README says it is "in maintenance mode
+  pending new maintainers", so it will get few fixes and no new components. Pin its version;
+  keep every use behind small React wrapper components so a replacement touches only the
+  wrappers.

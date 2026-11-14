@@ -1,9 +1,9 @@
 # PDF2Audiobook — Desktop App (Tauri) TODO
 
-**Status:** Not started; owner decisions O1–O5 open (spec §13)
+**Status:** Not started; owner decisions O1–O5 settled 2026-11-14 (spec §14)
 **Date:** 2026-11-14
 **Branch:** `tauri`, from master at 05ca4c37685325ced177cf06d21de2506fe18cd2 (tag `v0.1.0`)
-**Specification:** `docs/PDF2AUDIOBOOK_TAURI_SPEC.md` (D1–D10)
+**Specification:** `docs/PDF2AUDIOBOOK_TAURI_SPEC.md` (D1–D11)
 
 ## Working rules
 
@@ -29,9 +29,13 @@
 - [ ] TD0.01 Record the baseline on the branch: `/verify` result, `cargo --version`,
   `node --version`, and whether the Tauri Linux system libraries (WebKitGTK 4.1 and friends)
   are installed.
-- [ ] TD0.02 **[OWNER DECISION]** Settle O1–O5 (spec §13) and record each answer here. Until
+- [x] TD0.02 **[OWNER DECISION]** Settle O1–O5 (spec §14) and record each answer here. Until
   then, work proceeds on the recommended defaults: installed CLI, Linux first, React, unsigned
   builds, branch added to CI.
+  - Evidence: The owner decided on 2026-11-14 (recorded in spec §14): O1 require an installed
+    CLI; O2 Linux only for now, macOS and Windows later; O3 React and TypeScript with Google's
+    Material 3, polished and modern, with a chosen palette (spec D11: Midnight Iris with Amber);
+    O4 unsigned builds; O5 add the `tauri` branch to the `ci.yml` push triggers.
 - [ ] TD0.03 Make CI run for the `tauri` branch (O5): add it to the `push` branches in
   `.github/workflows/ci.yml`, or open a draft pull request. Depends on TD0.02 for the choice.
 
@@ -55,7 +59,11 @@
 - [ ] TD1.06 D2.e: `pdf2audiobook voices --json` lists the provider's voices. Tests: fake Kitten
   and Piper providers; the Kitten list matches `KittenProvider.list_voices`; an unavailable
   provider gives the existing install message.
-- [ ] TD1.07 Document TD1.01–TD1.06 in the README command reference and exit-code notes, and
+- [ ] TD1.07 D2.g: `pdf2audiobook thumbnail BOOK --output FILE.png [--width N] --json` renders
+  the first page (PDF) or cover (EPUB) and prints `{"thumbnail", "width", "height"}`. Tests:
+  PDF and EPUB fixtures, the requested width, an unreadable book gives the existing exit 3
+  message, and nothing else is written.
+- [ ] TD1.08 Document TD1.01–TD1.07 in the README command reference and exit-code notes, and
   in `docs/MAINTAINER_GUIDE.md` where it describes the JSON outputs.
 
 ## Phase TD2 — Project scaffold (D1)
@@ -95,10 +103,20 @@
 ## Phase TD5 — Screens (D4)
 
 Each screen has component tests for its loading, empty, success and error states, works with
-the keyboard, and shows the command it runs under "Details".
+the keyboard, and shows the command it runs under "Details". Each screen's item also records
+dark and light screenshots (spec D11.h).
 
+- [ ] TD5.00 Design foundation (D11): generate the Material 3 scheme from the seeds `#6D5BD0`
+  and `#E8A25C` with `@material/material-color-utilities` at build time into `--md-sys-color-*`
+  CSS variables for dark and light; bundle Roboto Flex, Roboto Mono and Material Symbols
+  Rounded; pin `@material/web` and wrap each component used in a small React component; build
+  the navigation rail, top app bar, card, snackbar and player bar from the same tokens.
+  Tests: the generated roles match the spec D11.b table; every text and icon pairing passes
+  WCAG AA (D11.c); no font or icon is fetched at run time.
 - [ ] TD5.01 Setup: `doctor --json` results, Ollama served-context check, install hints.
 - [ ] TD5.02 Library: books in the output folder with state and last run; "Add book" dialog.
+- [ ] TD5.02a **[OWNER REVIEW]** The owner reviews the Setup and Library screens in dark and
+  light (D11.h) before TD5.03–TD5.08 are built.
 - [ ] TD5.03 Book options: LLM, model, context and output caps, voice (from `voices --json`),
   speed, chapter range, cover, and remote-content consent.
 - [ ] TD5.04 Run: progress view (TD6) with cancel.
@@ -159,6 +177,8 @@ the keyboard, and shows the command it runs under "Details".
   wait for O2.
 - [ ] TD10.04 **[OWNER DECISION]** D10.d signing and notarization (O4). Unsigned builds are
   labelled as unsigned until then.
+  - Note: The owner chose unsigned builds for now (spec §14, O4). The item stays open until the
+    build labels unsigned installers, which is part of TD10.03.
 - [ ] TD10.05 Manual acceptance on this machine: install the AppImage, convert the README demo
   book with real Kitten speech, and record the result. Real LLM use with Ollama is recorded
   separately and stays optional.
