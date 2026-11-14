@@ -194,17 +194,57 @@
     file's version in a copy and checks the difference is found. Ruff and format clean, mypy clean on 3.11/3.12/3.13 (isolated, as CI),
     pytest 2458 passed, 1 skipped. Commit 88f3c599666fd1eab88406d10b1479323c5aa8f5, Python CI
     [43608025888](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608025888) passed.
-- [ ] TD2.04 D1.e: `desktop/README.md` with setup, development run, every check, and building
+- [x] TD2.04 D1.e: `desktop/README.md` with setup, development run, every check, and building
   an installer; link it from the main README.
+  - Evidence: `desktop/README.md` covers requirements (Rust 1.96.0, Node 22, the Tauri system
+    packages, the CLI via `uv tool install ".[kitten]"`), development (`npm ci`, `npm run tauri
+    dev`), every check (lint, typecheck, Vitest, build, cargo fmt, clippy, test), building
+    installers and the folder layout. Its commands were run: `npm ci` (261 packages, tests pass),
+    `npm run tauri build -- --bundles deb` (1m 26s, `pdf2audiobook_0.1.0_amd64.deb`, 1.79 MiB) and
+    `--bundles appimage` (76.69 MiB; the first build downloads linuxdeploy). The main README links
+    it under "Desktop app". Commit 94de70ca8142e146938f779d0930de0f842e39df, Python CI
+    [43608326670](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608326670) passed.
 
 ## Phase TD3 — Engine bridge (D3)
 
-- [ ] TD3.01 D3.a: locate the CLI (settings path, `PATH`, `uv run --project`), confirm it with
+- [x] TD3.01 D3.a: locate the CLI (settings path, `PATH`, `uv run --project`), confirm it with
   `--version` and `doctor --json`, and refuse a version whose major or minor differs. Tests with
   a fake CLI for each source and for a version mismatch.
-- [ ] TD3.02 D3.b: typed requests to argument vectors for every supported command and option;
+  - Evidence: `src-tauri/src/engine/locate.rs`: candidates in order (settings path if executable,
+    `pdf2audiobook` on PATH, `uv run --project <checkout> pdf2audiobook` when uv is on PATH); each
+    is confirmed by `--version` and `doctor --json` reporting the same version, and a different
+    major or minor version is refused (`VersionMismatch`); errors hold no paths. 11 tests with
+    real fake-CLI scripts: `configured_path_is_used_first`, `cli_on_path_is_found`,
+    `source_checkout_runs_through_uv` (checkout path with spaces),
+    `a_different_minor_version_is_refused`, `a_different_major_version_is_refused`,
+    `a_mismatched_configured_cli_falls_back_to_a_matching_one_on_path`,
+    `doctor_disagreeing_with_version_is_unresponsive`,
+    `something_else_called_pdf2audiobook_is_unresponsive`,
+    `nothing_found_reports_not_found_without_paths`, `a_file_that_is_not_executable_is_skipped`,
+    `series_reads_major_and_minor`. Parallel tests hit ETXTBSY when one thread writes a script
+    while another forks (confirmed: 5 retries over 5 runs); the test-only `TestRunner` retries
+    that errno, and 10 consecutive runs passed. cargo fmt, clippy -D warnings, cargo test, and the
+    frontend checks pass. Commit 3ab14c122ac89447db8a944f5a8d59097235e22c, Python CI
+    [43608955476](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608955476) passed
+    (desktop checks join CI in TD10.02).
+- [x] TD3.02 D3.b: typed requests to argument vectors for every supported command and option;
   `--json` and `--no-progress` always added; no shell. Tests: one per request variant, and a
   test that a book path with spaces, quotes and leading dashes stays a single argument.
+  - Evidence: `src-tauri/src/engine/request.rs`: one `Request` variant per command the app runs
+    (doctor, config show, inspect, workspace, voices, thumbnail, analyze, convert, review, edits
+    list/accept/reject, pack-m4b, regenerate-chapter, recover, budget show), with typed options
+    (enums for OCR, providers, review reasons, edit status, footnotes; ranges for speed, sample
+    rate, width, chapters and token counts; no empty or NUL text). Arguments are `--no-progress
+    COMMAND --name=value ... --json -- POSITIONALS`, built as a vector and started without a
+    shell. Tests: one exact argument vector per variant (17), defaults pass no options,
+    `json_and_no_progress_are_always_present`, `write_capable_commands_are_marked`,
+    `invalid_values_are_refused_without_echoing_them`,
+    `requests_deserialize_from_the_frontend_shape`, and `an_awkward_book_path_stays_one_argument`
+    (`/books/-x my "quoted" 'book'; rm -rf $HOME.pdf`: a real child receives it as one argument
+    after `--`). The opt-in `real_cli_accepts_the_read_only_requests` ran the real CLI through uv
+    (doctor, config show, inspect, workspace, thumbnail) and passed; Typer accepts `--name=value`
+    and a dash-named file after `--`. Commit 7115a8b0285cda590b74493878b285513d77ed5a, Python CI
+    [43608974129](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608974129) passed.
 - [ ] TD3.03 D3.c: parse success JSON, the error object with optional `reason`, and unreadable
   output (fixed message with the exit code only). Tests for each.
 - [ ] TD3.04 D3.d: at most one write-capable command per workspace in the bridge. Tests: a
@@ -329,3 +369,6 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | 8f8a7e473d309d25bd42adc591e6ec6dbab827e4 | Tauri TD2.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Tauri 2 + React + TypeScript scaffold in `desktop/` | local desktop checks (lint, typecheck, Vitest, build, fmt, clippy, cargo test) pass; empty window opened under Xvfb; Exact-head Python CI #801 [43607616011](https://github.com/ekkus93/pdf2audiobook/actions/runs/43607616011) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 946ddd9ef0c4f60ae492cb0dcf89d4169f8e1f46 | Tauri TD2.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): `desktop/` kept out of the Python packages, Ruff and mypy | pytest 2453 passed, 1 skipped; CI packaging check for `desktop/`; Exact-head Python CI #802 [43607833526](https://github.com/ekkus93/pdf2audiobook/actions/runs/43607833526) passed on attempt 1 | None |
 | 2026-11-14 | 88f3c599666fd1eab88406d10b1479323c5aa8f5 | Tauri TD2.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): app and CLI versions must match | pytest 2458 passed, 1 skipped; Exact-head Python CI #803 [43608025888](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608025888) passed on attempt 1 | None |
+| 2026-11-14 | 94de70ca8142e146938f779d0930de0f842e39df | Tauri TD2.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): desktop README, linked from the main README | deb and AppImage builds and npm ci checked; Exact-head Python CI #804 [43608326670](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608326670) passed on attempt 1 | None |
+| 2026-11-14 | 3ab14c122ac89447db8a944f5a8d59097235e22c | Tauri TD3.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): locate and confirm the CLI | cargo test 11 passed; fmt and clippy clean; Exact-head Python CI #807 [43608955476](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608955476) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 7115a8b0285cda590b74493878b285513d77ed5a | Tauri TD3.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): typed requests to CLI argument vectors | cargo test 34 passed, opt-in real-CLI test passed; Exact-head Python CI #808 [43608974129](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608974129) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
