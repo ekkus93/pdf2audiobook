@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import io
 import json
-import math
 import shutil
 import subprocess
 import tempfile
@@ -139,8 +138,7 @@ class KittenProvider:
         if (
             isinstance(speed, bool)
             or not isinstance(speed, (int, float))
-            or not math.isfinite(speed)
-            or not 0 < speed <= 3
+            or not 0 < speed <= 3  # also rejects infinity and NaN
         ):
             raise AudioError("Kitten speech speed must be finite and in (0, 3]")
         if not isinstance(voice, str) or not voice.strip():
