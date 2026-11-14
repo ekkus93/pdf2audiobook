@@ -27,7 +27,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (url: string) => {
     fetched.push(url);
     const allowed = decodeURIComponent(url).startsWith("asset://localhost//out/b/audio/");
-    return new Response(allowed ? new Blob(["mp3"], { type: "audio/mpeg" }) : null, { status: allowed ? 200 : 403 });
+    // A string body: Node 22's Response can't read jsdom's Blob.
+    return new Response(allowed ? "mp3" : null, { status: allowed ? 200 : 403, headers: { "Content-Type": "audio/mpeg" } });
   });
   let next = 0;
   URL.createObjectURL = () => `blob:chapter-${++next}`;

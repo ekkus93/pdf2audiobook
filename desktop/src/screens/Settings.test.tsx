@@ -201,7 +201,8 @@ describe("Settings", () => {
     const fetched: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
       fetched.push(url);
-      return new Response(new Blob(["mp3"], { type: "audio/mpeg" }));
+      // A string body: Node 22's Response can't read jsdom's Blob.
+      return new Response("mp3", { headers: { "Content-Type": "audio/mpeg" } });
     });
     URL.createObjectURL = () => "blob:sample";
     URL.revokeObjectURL = () => undefined;
