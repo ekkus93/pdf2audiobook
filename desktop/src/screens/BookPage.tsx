@@ -12,6 +12,8 @@ import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
 import { defaults, modelFor, requests, validate, type OptionsForm } from "./bookOptions";
 import { PendingEdits } from "./PendingEdits";
+import { ChaptersAudio } from "./ChaptersAudio";
+import type { AudioFile } from "../engine/types";
 import { summarize } from "./bookState";
 import "./screens.css";
 import "./book.css";
@@ -22,6 +24,8 @@ interface BookPageProps {
   reviewing?: boolean;
   /** Called after the book changed here (an edit accepted or rejected). */
   onChanged?: () => void;
+  /** Plays chapter `index` of the book's chapter files. */
+  onPlay?: (files: AudioFile[], index: number) => void;
   onReviewOpened?: () => void;
   outputDir: string;
   minConfidence: number;
@@ -54,7 +58,7 @@ const PROVIDERS: ReadonlyArray<{ value: LlmProvider; label: string }> = [
 ];
 
 /** One book: its options (spec D4.3) and the actions that start analysis or conversion. */
-export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
+export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, onPlay, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
   const summary = summarize(book, minConfidence);
   const source = book.inspect?.source_path ?? book.source ?? "";
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
@@ -96,6 +100,18 @@ export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, o
         />
       ) : null}
       {book.analyzed ? <PendingEdits manifest={book.manifest} workspace={book.workspace} onChanged={onChanged} /> : null}
+      {book.analyzed && book.inspect ? (
+        <ChaptersAudio
+          title={book.inspect.title}
+          workspace={book.workspace}
+          manifest={book.manifest}
+          source={source}
+          inspect={book.inspect}
+          cover={form?.cover ?? null}
+          onPlay={(files, index) => onPlay?.(files, index)}
+          onContinueConverting={() => form && onStart(requests(source, form, outputDir).convert, book.workspace)}
+        />
+      ) : null}
       {loaded.phase === "loading" ? (
         <div className="screen-loading">
           <CircularProgress label="Loading the options" />

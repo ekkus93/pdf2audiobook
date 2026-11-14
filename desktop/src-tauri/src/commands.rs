@@ -795,3 +795,66 @@ pub async fn open_review(
     });
     Ok(())
 }
+
+/// Lists a book's chapter MP3s and lets the player read that `audio` folder, and only that one,
+/// through the asset protocol (spec D7.a).
+#[tauri::command]
+pub fn book_audio(
+    app: AppHandle,
+    workspace: PathBuf,
+) -> Result<Vec<crate::audio::AudioFile>, BridgeError> {
+    let files = match crate::audio::chapter_files(&workspace) {
+        Ok(files) => files,
+        Err(crate::audio::AudioError::NoAudio) => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(BridgeError::Request {
+                message: error.to_string(),
+            });
+        }
+    };
+    let folder = crate::audio::audio_dir(&workspace).map_err(|error| BridgeError::Request {
+        message: error.to_string(),
+    })?;
+    app.asset_protocol_scope()
+        .allow_directory(&folder, false)
+        .map_err(|_| BridgeError::Start)?;
+    Ok(files)
+}
+
+/// Opens the book's audio folder in the system's file manager. Only that folder: the frontend
+/// has no general opener (spec D8.a).
+#[tauri::command]
+pub fn open_audio_folder(workspace: PathBuf) -> Result<(), BridgeError> {
+    let folder = crate::audio::audio_dir(&workspace).map_err(|error| BridgeError::Request {
+        message: error.to_string(),
+    })?;
+    std::process::Command::new("xdg-open")
+        .arg(folder)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| BridgeError::Request {
+            message: "The folder could not be opened".into(),
+        })
+}
+
+/// Writes a zip of the chapter MP3s, and the source book if asked, to a user-chosen path
+/// outside the workspace (spec D7.c). Returns the number of files written.
+#[tauri::command]
+pub async fn export_zip(
+    workspace: PathBuf,
+    destination: PathBuf,
+    title: String,
+    source: Option<PathBuf>,
+) -> Result<usize, BridgeError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::audio::export_zip(&workspace, &destination, &title, source.as_deref())
+    })
+    .await
+    .map_err(|_| BridgeError::Start)?
+    .map_err(|error| BridgeError::Request {
+        message: error.to_string(),
+    })
+}

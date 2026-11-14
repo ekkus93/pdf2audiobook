@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod commands;
 pub mod engine;
 pub mod library;
@@ -38,6 +39,9 @@ pub fn run() {
             commands::cancel_run,
             commands::quit_app,
             commands::open_review,
+            commands::book_audio,
+            commands::open_audio_folder,
+            commands::export_zip,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

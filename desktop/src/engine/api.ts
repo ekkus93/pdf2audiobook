@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AppSettings, EngineInfo, Library, Outcome, Progress, Request } from "./types";
+import type { AppSettings, AudioFile, EngineInfo, Library, Outcome, Progress, Request } from "./types";
 
 /** Finds and confirms the CLI (spec D3.a). Rejects with a `BridgeError`. */
 export function locateEngine(): Promise<EngineInfo> {
@@ -74,4 +74,18 @@ export async function openReview(manifest: string, workspace: string, title: str
 /** Called when the review window has closed and its server has stopped. */
 export function onReviewClosed(handler: () => void): Promise<() => void> {
   return listen("review-closed", handler);
+}
+
+/** A book's chapter MP3s; also lets the player read that book's audio folder. */
+export function bookAudio(workspace: string): Promise<AudioFile[]> {
+  return invoke<AudioFile[]>("book_audio", { workspace });
+}
+
+export async function openAudioFolder(workspace: string): Promise<void> {
+  await invoke("open_audio_folder", { workspace });
+}
+
+/** Writes a zip of the chapter MP3s (and the book, if `source` is given); resolves with the file count. */
+export function exportZip(workspace: string, destination: string, title: string, source: string | null): Promise<number> {
+  return invoke<number>("export_zip", { workspace, destination, title, source });
 }

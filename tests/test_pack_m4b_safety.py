@@ -83,6 +83,8 @@ def test_pack_m4b_cli_refuses_text_stale_audio_without_disclosing_content(tmp_pa
     )
     assert result.exit_code == 6
     assert "chapter(s): 1" in result.stderr
+    # The desktop app recognizes this phrase to offer "Continue converting" (ChaptersAudio.tsx).
+    assert "stale or missing" in result.stderr
     for private in ("Narration", "private-source", "private-output", str(tmp_path)):
         assert private not in result.stderr
 

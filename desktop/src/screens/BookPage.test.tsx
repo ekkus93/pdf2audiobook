@@ -8,6 +8,7 @@ vi.mock("../engine/api", async (original) => ({
   run: vi.fn(),
   describe: vi.fn(),
   openReview: vi.fn(),
+  bookAudio: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 
@@ -48,6 +49,7 @@ function respond() {
     };
   });
   vi.mocked(api.describe).mockImplementation(async (request: Request) => `pdf2audiobook ${request.command} …`);
+  vi.mocked(api.bookAudio).mockResolvedValue([]);
 }
 
 beforeEach(respond);
@@ -226,5 +228,24 @@ describe("BookPage", () => {
     expect(details).toHaveTextContent("Protecting manual edits");
     expect(details).toHaveTextContent("The app never edits the manifest itself.");
     expect(within(details).getByText(BOOK.manifest)).toBeInTheDocument();
+  });
+
+  it("lists the chapters' audio and passes a chosen chapter to the player", async () => {
+    const files = [{ path: "/out/lighthouse-1/audio/001 - One.mp3", name: "001 - One.mp3", bytes: 10 }];
+    vi.mocked(api.bookAudio).mockResolvedValue(files);
+    const onPlay = vi.fn();
+    render(<BookPage book={BOOK} outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={vi.fn()} onPlay={onPlay} />);
+    expect(await screen.findByText("1 of 2 chapters converted")).toBeInTheDocument();
+    expect(api.bookAudio).toHaveBeenCalledWith(BOOK.workspace);
+    await act(async () => {
+      screen.getByLabelText("Play chapter 1").dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(onPlay).toHaveBeenCalledWith(files, 0);
+  });
+
+  it("has no chapters and audio section before analysis", async () => {
+    await renderPage(vi.fn(), { ...BOOK, analyzed: false, inspect: null, source: "/books/new.pdf" });
+    expect(screen.queryByRole("heading", { name: "Chapters and audio" })).not.toBeInTheDocument();
+    expect(api.bookAudio).not.toHaveBeenCalled();
   });
 });

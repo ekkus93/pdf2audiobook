@@ -41,6 +41,7 @@ export type Request =
   | { command: "convert"; book: string; options: BookOptions; convert: ConvertOptions }
   | { command: "doctor"; check_llm?: boolean }
   | { command: "recover"; manifest: string; back_up_changed: boolean }
+  | { command: "pack_m4b"; manifest: string; output: string; bitrate?: string | null; cover?: string | null }
   | { command: "edits_list"; manifest: string; status: "pending" | "accepted" | "rejected" | "all"; with_text?: boolean }
   | { command: "edits_accept"; manifest: string; which: { kind: "all" } | { kind: "blocks"; ids: string[] } }
   | { command: "edits_reject"; manifest: string; which: { kind: "all" } | { kind: "blocks"; ids: string[] } }
@@ -222,4 +223,11 @@ export interface PendingEdit {
   reason?: string;
   original?: string;
   replacement?: string;
+}
+
+/** A chapter MP3 (src-tauri/src/audio.rs). */
+export interface AudioFile {
+  path: string;
+  name: string;
+  bytes: number;
 }

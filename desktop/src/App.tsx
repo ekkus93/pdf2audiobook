@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { errorMessage, getSettings, library, onCloseRequested, onReviewClosed, openReview, quitApp, startRun } from "./engine/api";
 import type { Library as LibraryData, LibraryBook, Request } from "./engine/types";
 import { BookPage } from "./screens/BookPage";
+import { Player, type Queue } from "./screens/Player";
 import { summarize } from "./screens/bookState";
 import { Library } from "./screens/Library";
 import { Run, type ActiveRun } from "./screens/Run";
@@ -49,6 +50,8 @@ export default function App() {
       .catch(() => undefined);
     return () => unsubscribe?.();
   }, []);
+
+  const [queue, setQueue] = useState<Queue | null>(null);
 
   /** Re-reads the open book after something changed it (review, an edit decision). */
   const refreshOpenBook = () => {
@@ -118,6 +121,7 @@ export default function App() {
               book={open.book}
               reviewing={reviewing === open.book.workspace}
               onChanged={refreshOpenBook}
+              onPlay={(files, index) => setQueue({ book: open.book.inspect?.title ?? "", files, index })}
               onReviewOpened={() => setReviewing(open.book.workspace)}
               outputDir={open.library.output_dir}
               minConfidence={open.library.min_boundary_confidence}
@@ -137,6 +141,7 @@ export default function App() {
             />
           ) : null}
         </main>
+        <Player queue={queue} onChange={setQueue} />
       </div>
       <Dialog
         open={confirmQuit}
