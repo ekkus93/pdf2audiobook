@@ -406,8 +406,14 @@ dark and light screenshots (spec D11.h).
     3c5870fdfcd917820904e15a577506cfdca34b74 and eeafb686e7b3a1e389d48c3be497800f6c1f8772 (Python
     CI passed, see TD5.01) and 4e14283c93a428372ab3d94eda7cd600cfce6220 (Details), Python CI #823
     [43612519881](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612519881) passed.
-- [ ] TD5.02a **[OWNER REVIEW]** The owner reviews the Setup and Library screens in dark and
+- [x] TD5.02a **[OWNER REVIEW]** The owner reviews the Setup and Library screens in dark and
   light (D11.h) before TD5.03–TD5.08 are built.
+  - Evidence: The owner reviewed the Setup and Library screens in dark and light on 2026-11-14
+    (screenshots in `docs/images/tauri/`). Feedback: liked overall; asked twice for snazzier
+    buttons (done in b93af00 and 1ffbf1f, spec D11.i; the owner accepted the result for now, to
+    revisit later) and for a more striking font (Instrument Serif with Figtree chosen from four
+    rendered options, done in 8790b03, spec D11.d). The owner then approved the screens and the
+    font choice and asked to continue.
 - [ ] TD5.03 Book options: LLM, model, context and output caps, voice (from `voices --json`),
   speed, chapter range, cover, and remote-content consent.
 - [ ] TD5.04 Run: progress view (TD6) with cancel.
