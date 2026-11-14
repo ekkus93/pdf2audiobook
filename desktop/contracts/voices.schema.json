@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "voices --json",
+  "description": "Voices the selected TTS provider accepts (spec D2.e).",
+  "type": "object",
+  "required": [
+    "default_voice",
+    "listable",
+    "provider",
+    "voices",
+    "warnings"
+  ],
+  "properties": {
+    "provider": {
+      "enum": [
+        "kitten",
+        "piper"
+      ]
+    },
+    "voices": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "listable": {
+      "type": "boolean"
+    },
+    "default_voice": {
+      "type": "string"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

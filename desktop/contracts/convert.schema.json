@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "convert --json",
+  "description": "The chapter MP3s that exist after conversion.",
+  "type": "object",
+  "required": [
+    "mp3_files",
+    "warnings"
+  ],
+  "properties": {
+    "mp3_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

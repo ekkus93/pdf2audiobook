@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "workspace BOOK --json",
+  "description": "Where analysis keeps a book (spec D2.a).",
+  "type": "object",
+  "required": [
+    "exists",
+    "warnings",
+    "workspace"
+  ],
+  "properties": {
+    "workspace": {
+      "type": "string"
+    },
+    "exists": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

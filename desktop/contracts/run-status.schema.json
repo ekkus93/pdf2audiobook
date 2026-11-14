@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "reports/run_status.json",
+  "description": "Live progress of analyze or convert (spec D5); stage names, counts and times only.",
+  "type": "object",
+  "required": [
+    "command",
+    "completed_stages",
+    "elapsed_seconds",
+    "schema_version",
+    "stage",
+    "started_at",
+    "state",
+    "updated_at"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "running",
+        "completed",
+        "stopped"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "elapsed_seconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stage": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "detail",
+            "done",
+            "elapsed_seconds",
+            "estimated_remaining_seconds",
+            "name",
+            "total",
+            "unit"
+          ],
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "detail": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "unit": {
+              "type": "string"
+            },
+            "done": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "elapsed_seconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "estimated_remaining_seconds": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "completed_stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "seconds"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "seconds": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

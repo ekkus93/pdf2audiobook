@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "doctor --json",
+  "description": "Setup check shown on the Setup screen.",
+  "type": "object",
+  "required": [
+    "ffmpeg",
+    "kitten_installed",
+    "llm_provider",
+    "llm_timeout_seconds",
+    "ocr_installed_languages",
+    "ocr_missing_languages",
+    "ocr_requested_languages",
+    "piper_installed",
+    "process_citations",
+    "process_equations",
+    "tesseract",
+    "version",
+    "warnings"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "ffmpeg": {
+      "type": "boolean"
+    },
+    "tesseract": {
+      "type": "boolean"
+    },
+    "ocr_requested_languages": {
+      "type": "string"
+    },
+    "ocr_installed_languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ocr_missing_languages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "kitten_installed": {
+      "type": "boolean"
+    },
+    "piper_installed": {
+      "type": "boolean"
+    },
+    "llm_provider": {
+      "enum": [
+        "ollama",
+        "openai",
+        "llama-server",
+        "disabled"
+      ]
+    },
+    "process_citations": {
+      "type": "boolean"
+    },
+    "process_equations": {
+      "type": "boolean"
+    },
+    "llm_timeout_seconds": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

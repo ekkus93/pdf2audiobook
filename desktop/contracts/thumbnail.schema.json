@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "thumbnail BOOK --output FILE.png --json",
+  "description": "A rendered first page or cover (spec D2.g).",
+  "type": "object",
+  "required": [
+    "height",
+    "thumbnail",
+    "warnings",
+    "width"
+  ],
+  "properties": {
+    "thumbnail": {
+      "type": "string"
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

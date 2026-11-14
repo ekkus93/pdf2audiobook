@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "inspect BOOK --json",
+  "description": "Book metadata and per-page counts; no book text.",
+  "type": "object",
+  "required": [
+    "author",
+    "embedded_text",
+    "outline",
+    "page_label_rules",
+    "page_labels",
+    "page_rotations",
+    "page_sizes",
+    "pages",
+    "title",
+    "warnings"
+  ],
+  "properties": {
+    "title": {
+      "type": "string"
+    },
+    "author": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "pages": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "outline": {
+      "type": "array"
+    },
+    "page_label_rules": {
+      "type": "array"
+    },
+    "page_labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "page_rotations": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "page_sizes": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "embedded_text": {
+      "type": "object",
+      "required": [
+        "characters_per_page",
+        "image_only_pages",
+        "images_per_page",
+        "pages_with_text",
+        "pages_without_text"
+      ],
+      "properties": {
+        "pages_with_text": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pages_without_text": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "image_only_pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "characters_per_page": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "images_per_page": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

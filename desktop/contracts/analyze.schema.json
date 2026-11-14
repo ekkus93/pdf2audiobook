@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "analyze --json",
+  "description": "Path of the written manifest.",
+  "type": "object",
+  "required": [
+    "manifest",
+    "warnings"
+  ],
+  "properties": {
+    "manifest": {
+      "type": "string"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

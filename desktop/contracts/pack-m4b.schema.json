@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "pack-m4b --json",
+  "description": "The written M4B and any chapters left out.",
+  "type": "object",
+  "required": [
+    "m4b_file",
+    "skipped_chapters",
+    "warnings"
+  ],
+  "properties": {
+    "m4b_file": {
+      "type": "string"
+    },
+    "skipped_chapters": {
+      "type": "array"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

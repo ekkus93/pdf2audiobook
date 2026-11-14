@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "review --json (first stdout line)",
+  "description": "Printed once the review server listens (spec D2.c). Exactly these keys.",
+  "type": "object",
+  "required": [
+    "port",
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "type": "string",
+      "pattern": "^http://127\\.0\\.0\\.1:[0-9]+/$"
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "convert --dry-run --json",
+  "description": "The planned MP3s, without synthesis.",
+  "type": "object",
+  "required": [
+    "chapters",
+    "dry_run",
+    "mp3_files",
+    "skipped_chapters",
+    "warnings",
+    "would_acknowledge"
+  ],
+  "properties": {
+    "dry_run": {
+      "const": true
+    },
+    "chapters": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "mp3_files": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skipped_chapters": {
+      "type": "array"
+    },
+    "would_acknowledge": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "config show --sources --json",
+  "description": "Effective configuration, shown read-only in Settings.",
+  "type": "object",
+  "required": [
+    "_sources",
+    "audio",
+    "cache",
+    "chapters",
+    "general",
+    "llm",
+    "pdf",
+    "reading",
+    "tts",
+    "warnings"
+  ],
+  "properties": {
+    "general": {
+      "type": "object"
+    },
+    "pdf": {
+      "type": "object"
+    },
+    "chapters": {
+      "type": "object"
+    },
+    "llm": {
+      "type": "object"
+    },
+    "tts": {
+      "type": "object"
+    },
+    "cache": {
+      "type": "object"
+    },
+    "audio": {
+      "type": "object"
+    },
+    "reading": {
+      "type": "object"
+    },
+    "_sources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

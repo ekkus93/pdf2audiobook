@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "--json error (last JSON line on stderr)",
+  "description": "Any failed command (spec D2.b).",
+  "type": "object",
+  "required": [
+    "error",
+    "ok",
+    "warnings"
+  ],
+  "properties": {
+    "ok": {
+      "const": false
+    },
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "code": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "review_required",
+            "review_acknowledgement_required",
+            "workspace_locked",
+            "pending_recovery",
+            "chapter_conflict",
+            "llm_unreachable",
+            "llm_context_too_small",
+            "llm_output_cap",
+            "budget_exhausted"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}
