@@ -137,22 +137,63 @@
     `test_missing_piper_model_gives_the_existing_message`. With the real Kitten installed it lists
     Bella, Jasper, Luna, Bruno, Rosie, Hugo, Kiki and Leo. Full checks: Ruff and format clean, mypy clean on 3.11/3.12/3.13 (run as `uv run --isolated --extra dev mypy`, see "Found while"), pytest 2443 passed, 1 skipped. Commit
     c87c24a350b3044f2b7aed7b09b27ef5da2a9d47, Python CI [43606973444](https://github.com/ekkus93/pdf2audiobook/actions/runs/43606973444) passed.
-- [ ] TD1.07 D2.g: `pdf2audiobook thumbnail BOOK --output FILE.png [--width N] --json` renders
+- [x] TD1.07 D2.g: `pdf2audiobook thumbnail BOOK --output FILE.png [--width N] --json` renders
   the first page (PDF) or cover (EPUB) and prints `{"thumbnail", "width", "height"}`. Tests:
   PDF and EPUB fixtures, the requested width, an unreadable book gives the existing exit 3
   message, and nothing else is written.
-- [ ] TD1.08 Document TD1.01–TD1.07 in the README command reference and exit-code notes, and
+  - Evidence: `pdf.render_thumbnail` renders page 0 at the requested width (default 320,
+    16–2048) and writes it with `atomic_write`; the output must be a `.png` in an existing folder
+    (exit 2 otherwise, nothing created). An EPUB's first page holds its cover. `cli thumbnail`
+    prints `{"thumbnail", "width", "height", "warnings"}`. `tests/test_cli_thumbnail.py` (7
+    tests): PDF at width 200 (PNG size and aspect, only the PNG added), default width 320, EPUB
+    cover (the fixture's blue cover pixel), unreadable book (exit 3, the existing "cannot open PDF"
+    message, no name or path, nothing written), missing book, missing output folder and a non-PNG
+    output. 6 of 7 fail without the change. Ruff and format clean, mypy clean on 3.11/3.12/3.13 (isolated, as CI), pytest 2450 passed,
+    1 skipped. Commit a7b81516e196d1646cc8f9842921aa38a99911cf, Python CI
+    [43607182172](https://github.com/ekkus93/pdf2audiobook/actions/runs/43607182172) passed.
+- [x] TD1.08 Document TD1.01–TD1.07 in the README command reference and exit-code notes, and
   in `docs/MAINTAINER_GUIDE.md` where it describes the JSON outputs.
+  - Evidence: README command reference lists `workspace`, `voices`, `thumbnail` and
+    `--version` and explains `review --json`; the exit-code table notes SIGTERM and a paragraph
+    lists every `reason`. `docs/MAINTAINER_GUIDE.md` has a new "Machine-readable outputs for other
+    programs" section covering TD1.01–TD1.07, and its entry-point paragraph names `cli:main`
+    (TD1.05). Commit 272559f8276a8e57301afc7e7f219c58652a0457, Python CI
+    [43607226126](https://github.com/ekkus93/pdf2audiobook/actions/runs/43607226126) passed.
 
 ## Phase TD2 — Project scaffold (D1)
 
-- [ ] TD2.01 Create `desktop/` with Tauri 2, Vite and TypeScript (framework per O3), pinned
+- [x] TD2.01 Create `desktop/` with Tauri 2, Vite and TypeScript (framework per O3), pinned
   toolchains (`rust-toolchain.toml`, `.nvmrc` with Node 22, committed `Cargo.lock` and
   `package-lock.json`). `npm run tauri dev` opens an empty window on Linux.
-- [ ] TD2.02 Exclude `desktop/` from the Python wheel and sdist, and from Ruff and mypy. Test:
+  - Evidence: scaffolded with `create-tauri-app` 4.7.5 (`react-ts`), Tauri 2.12; trimmed to an
+    empty shell (no demo command, no opener plugin; capability `core:default` only), product
+    "pdf2audiobook", window 1280×800 with a 960×600 minimum. Pinned: `rust-toolchain.toml`
+    (1.96.0 with rustfmt and clippy), `.nvmrc` (22), committed `Cargo.lock` and
+    `package-lock.json`. Added ESLint 9 (typescript-eslint strict, react-hooks), Vitest 5 with
+    jsdom and Testing Library, and `lint`, `typecheck` and `test` scripts. Local checks: lint,
+    typecheck, 1 Vitest test, `npm run build`, `cargo fmt --check`, `cargo clippy --all-targets
+    -- -D warnings`, `cargo test` all pass. `npm run tauri dev` on a virtual display (Xvfb, with
+    `xvfb` and `x11-utils` installed from the Ubuntu archive) opened one window titled
+    "pdf2audiobook", 1280×800, blank as intended; screenshot checked. Commit
+    8f8a7e473d309d25bd42adc591e6ec6dbab827e4, Python CI [43607616011](https://github.com/ekkus93/pdf2audiobook/actions/runs/43607616011) passed
+    (desktop checks join CI in TD10.02).
+- [x] TD2.02 Exclude `desktop/` from the Python wheel and sdist, and from Ruff and mypy. Test:
   build the wheel and sdist and check that no `desktop/` file is inside.
-- [ ] TD2.03 D1.d: a test that fails when the versions in `pyproject.toml`, `Cargo.toml`,
+  - Evidence: `MANIFEST.in` has `prune desktop`, Ruff has `extend-exclude = ["desktop"]` and
+    mypy checks only its explicit `src/` list. The CI packaging step now fails if the wheel or
+    sdist contains `desktop/`; that check caught a hand-made sdist containing `desktop/`. A local
+    `uv build` of both had no `desktop/` entry. `tests/test_desktop_packaging.py` (3 tests) pins
+    the three settings and the CI check. Ruff and format clean, mypy clean on 3.11/3.12/3.13 (isolated, as CI), pytest 2453 passed, 1
+    skipped. Commit 946ddd9ef0c4f60ae492cb0dcf89d4169f8e1f46, Python CI
+    [43607833526](https://github.com/ekkus93/pdf2audiobook/actions/runs/43607833526) passed, including the new packaging check.
+- [x] TD2.03 D1.d: a test that fails when the versions in `pyproject.toml`, `Cargo.toml`,
   `package.json` and `tauri.conf.json` differ.
+  - Evidence: `tests/test_desktop_versions.py`: `test_every_version_matches_pyproject` reads
+    `pyproject.toml`, `package.json`, `package-lock.json` (`packages[""]`), `Cargo.toml` and
+    `tauri.conf.json` (all 0.1.0); `test_a_differing_version_is_detected` changes each desktop
+    file's version in a copy and checks the difference is found. Ruff and format clean, mypy clean on 3.11/3.12/3.13 (isolated, as CI),
+    pytest 2458 passed, 1 skipped. Commit 88f3c599666fd1eab88406d10b1479323c5aa8f5, Python CI
+    [43608025888](https://github.com/ekkus93/pdf2audiobook/actions/runs/43608025888) passed.
 - [ ] TD2.04 D1.e: `desktop/README.md` with setup, development run, every check, and building
   an installer; link it from the main README.
 
