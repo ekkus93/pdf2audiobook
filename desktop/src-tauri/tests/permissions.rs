@@ -1,6 +1,7 @@
 //! The frontend's permissions stay as narrow as spec D8.a says: the app's own commands, its
-//! events, the open and save dialogs, and the asset protocol, scoped at run time to the opened
-//! book's `audio/` folder. Adding any other permission, capability, window or plugin fails here.
+//! events, the open and save dialogs, and the app's `chapter:` protocol, which reads only the
+//! open book's `audio/` folder. Adding any other permission, capability, window or plugin fails
+//! here.
 
 use std::fs;
 use std::path::PathBuf;
@@ -58,12 +59,20 @@ fn the_main_window_has_only_events_and_the_file_dialogs() {
 }
 
 #[test]
-fn the_asset_protocol_starts_with_nothing_in_scope() {
+fn the_asset_protocol_is_off() {
+    // Its scope can only grow, so it would keep every earlier book's folder readable; chapters
+    // come through the app's own `chapter:` protocol instead (audio::serve).
     let config = json("tauri.conf.json");
     let asset = &config["app"]["security"]["assetProtocol"];
-    assert_eq!(asset["enable"], Value::Bool(true));
-    // Each book's audio folder is allowed when its chapters are listed (commands::book_audio).
-    assert_eq!(asset["scope"], serde_json::json!([]));
+    assert!(
+        asset.is_null() || asset["enable"] == Value::Bool(false),
+        "{asset}"
+    );
+    let manifest = fs::read_to_string(root().join("Cargo.toml")).unwrap();
+    assert!(
+        !manifest.contains("protocol-asset"),
+        "the asset protocol feature is linked"
+    );
 }
 
 #[test]
@@ -107,12 +116,12 @@ fn csp(name: &str) -> Vec<(String, Vec<String>)> {
         .collect()
 }
 
-/// Origins the app itself may reach: Tauri's IPC and asset protocols, and only those.
+/// Origins the app itself may reach: Tauri's IPC and the app's `chapter:` protocol, and only those.
 const LOCAL: [&str; 4] = [
     "ipc:",
     "http://ipc.localhost",
-    "asset:",
-    "http://asset.localhost",
+    "chapter:",
+    "http://chapter.localhost",
 ];
 
 #[test]

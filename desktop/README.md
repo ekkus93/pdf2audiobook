@@ -90,11 +90,14 @@ so change the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.t
 - **Permissions.** The main window may call the app's own commands, listen to its events and
   open the file dialogs, nothing more (`src-tauri/capabilities/default.json`). The review window
   has no permissions at all and may only load the CLI's review page on `127.0.0.1`. Chapter
-  audio is read through Tauri's asset protocol, which starts with an empty scope; listing a
-  book's chapters allows that book's `audio/` folder only. `src-tauri/tests/permissions.rs`
-  fails if a permission, capability, plugin or network client is added.
+  audio is read through the app's own `chapter:` protocol (`audio::serve`), which answers only
+  the main window and serves only MP3s, by file name, from the open book's `audio/` folder;
+  opening another book closes the previous one's. Tauri's asset protocol is off: its scope can
+  only grow, so it would keep every book opened earlier readable.
+  `src-tauri/tests/permissions.rs` fails if a permission, capability, plugin or network client
+  is added, or if the asset protocol comes back.
 - **Content Security Policy.** The release build allows only the app's own scripts and styles,
-  `data:` images (thumbnails), `blob:` media (the player) and Tauri's IPC and asset protocols;
+  `data:` images (thumbnails), `blob:` media (the player), Tauri's IPC and the `chapter:` protocol;
   no remote origin and no `eval`. `devCsp` adds Vite's dev server and React's refresh preamble
   for `npm run tauri dev` only.
 - **Log.** The app writes one JSON line per event (app start, each CLI command, runs, the review

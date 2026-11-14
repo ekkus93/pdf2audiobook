@@ -25,9 +25,9 @@ describe("the frontend makes no network requests of its own (spec D8.d)", () => 
     const callers = SOURCES.filter((file) => /\bfetch\(/.test(readFileSync(file, "utf8")));
     expect(callers.map((file) => file.slice(__dirname.length + 1))).toEqual(["screens/Player.tsx"]);
     const player = readFileSync(join(__dirname, "screens/Player.tsx"), "utf8");
-    // blobUrl's callers pass an asset-protocol URL (convertFileSrc) or a bundled sample.
+    // blobUrl's callers pass a chapter-protocol URL (convertFileSrc) or a bundled sample.
     expect(player.match(/\bfetch\(/g)).toHaveLength(1);
-    expect(player).toMatch(/return blobUrl\(convertFileSrc\(path\)\)/);
+    expect(player).toMatch(/return blobUrl\(convertFileSrc\(name, "chapter"\)\)/);
   });
 
   it("names no remote address", () => {

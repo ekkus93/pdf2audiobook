@@ -30,6 +30,8 @@ pub struct Engine {
     pub review: Mutex<Option<ReviewServer>>,
     /// The app's content-free log (spec D8.c).
     pub log: Arc<AppLog>,
+    /// The audio folder the `chapter:` protocol may read: the open book's (spec D8.a).
+    pub audio: crate::audio::OpenBookAudio,
 }
 
 impl Default for Engine {
@@ -41,6 +43,7 @@ impl Default for Engine {
             live: Arc::new(LiveRuns::default()),
             review: Mutex::new(None),
             log: Arc::new(AppLog::default()),
+            audio: crate::audio::OpenBookAudio::default(),
         }
     }
 }
@@ -831,11 +834,11 @@ pub async fn open_review(
     Ok(())
 }
 
-/// Lists a book's chapter MP3s and lets the player read that `audio` folder, and only that one,
-/// through the asset protocol (spec D7.a).
+/// Lists a book's chapter MP3s and makes its `audio/` folder the one the player may read through
+/// the `chapter:` protocol, closing any earlier book's (spec D7.a, D8.a).
 #[tauri::command]
 pub fn book_audio(
-    app: AppHandle,
+    engine: State<'_, Engine>,
     workspace: PathBuf,
 ) -> Result<Vec<crate::audio::AudioFile>, BridgeError> {
     let files = match crate::audio::chapter_files(&workspace) {
@@ -850,9 +853,7 @@ pub fn book_audio(
     let folder = crate::audio::audio_dir(&workspace).map_err(|error| BridgeError::Request {
         message: error.to_string(),
     })?;
-    app.asset_protocol_scope()
-        .allow_directory(&folder, false)
-        .map_err(|_| BridgeError::Start)?;
+    engine.audio.open(folder);
     Ok(files)
 }
 

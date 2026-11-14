@@ -39,6 +39,65 @@ pub fn audio_dir(workspace: &Path) -> Result<PathBuf, AudioError> {
     Ok(canonical)
 }
 
+/// The URI scheme the player reads chapters through: `chapter://localhost/<file name>`.
+pub const SCHEME: &str = "chapter";
+
+/// The one folder chapters may be read from: the open book's `audio/` folder (spec D8.a).
+/// Opening another book replaces it, so no earlier book's folder stays readable. (Tauri's asset
+/// protocol scope can only grow, which is why the app serves chapters itself.)
+#[derive(Debug, Default)]
+pub struct OpenBookAudio(std::sync::Mutex<Option<PathBuf>>);
+
+impl OpenBookAudio {
+    pub fn open(&self, folder: PathBuf) {
+        *self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(folder);
+    }
+
+    pub fn folder(&self) -> Option<PathBuf> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+}
+
+/// Answers a request for `chapter://localhost/<file name>`: the bytes of that MP3 in `folder`
+/// (the open book's audio folder), with an HTTP status. A name with a path in it, anything but
+/// an `.mp3`, a symlink, or no open book is refused; nothing outside the folder is ever read.
+pub fn serve(folder: Option<&Path>, uri_path: &str) -> (u16, Vec<u8>) {
+    let Some(folder) = folder else {
+        return (403, Vec::new());
+    };
+    let Ok(name) =
+        percent_encoding::percent_decode_str(uri_path.trim_start_matches('/')).decode_utf8()
+    else {
+        return (404, Vec::new());
+    };
+    let unsafe_name = name.is_empty()
+        || name == "."
+        || name == ".."
+        || name.contains(['/', '\\', '\0'])
+        || !name.to_lowercase().ends_with(".mp3");
+    if unsafe_name {
+        return (404, Vec::new());
+    }
+    let path = folder.join(name.as_ref());
+    let is_file = fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_file());
+    let inside = path
+        .canonicalize()
+        .is_ok_and(|real| real.parent() == Some(folder));
+    if !is_file || !inside {
+        return (404, Vec::new());
+    }
+    match fs::read(&path) {
+        Ok(bytes) => (200, bytes),
+        Err(_) => (404, Vec::new()),
+    }
+}
+
 /// The chapter MP3s in the audio folder, in file-name order (`001 - ...`). Symlinks are skipped.
 pub fn chapter_files(workspace: &Path) -> Result<Vec<AudioFile>, AudioError> {
     let folder = audio_dir(workspace)?;
@@ -282,27 +341,57 @@ mod tests {
     }
 
     #[test]
-    fn the_asset_scope_allows_only_the_opened_books_audio_folder() {
-        use tauri::Manager;
+    fn serve_reads_only_mp3s_in_the_open_books_audio_folder() {
         let temp = TempDir::new().unwrap();
         let workspace = book(&temp);
         fs::write(workspace.join("manifest.json"), "{}").unwrap();
-        let app = tauri::test::mock_builder()
-            .build(tauri::test::mock_context(tauri::test::noop_assets()))
-            .unwrap();
-        let scope = app.asset_protocol_scope();
-        let chapter = workspace.join("audio/001 - One.mp3");
-        assert!(
-            !scope.is_allowed(&chapter),
-            "nothing is allowed before a book is opened"
+        fs::write(temp.path().join("secret.mp3"), "secret").unwrap();
+        std::os::unix::fs::symlink(
+            temp.path().join("secret.mp3"),
+            workspace.join("audio/009 - Link.mp3"),
+        )
+        .unwrap();
+        let folder = audio_dir(&workspace).unwrap();
+        let open = Some(folder.as_path());
+
+        assert_eq!(
+            serve(open, "/001%20-%20One.mp3"),
+            (200, b"001 - One.mp3".to_vec())
         );
+        for refused in [
+            "/../manifest.json",
+            "/..%2Fmanifest.json",
+            "/%2E%2E%2Fsecret.mp3",
+            "/..%2F..%2Fsecret.mp3",
+            "/001%20-%20One.cache.json",
+            "/notes.txt",
+            "/009%20-%20Link.mp3",
+            "/missing.mp3",
+            "/",
+            "/%FF.mp3",
+        ] {
+            assert_eq!(serve(open, refused).0, 404, "{refused}");
+        }
+        assert_eq!(serve(None, "/001%20-%20One.mp3").0, 403, "no book is open");
+    }
 
-        scope
-            .allow_directory(audio_dir(&workspace).unwrap(), false)
-            .unwrap();
+    #[test]
+    fn opening_another_book_closes_the_first_ones_folder() {
+        let temp = TempDir::new().unwrap();
+        let first = book(&temp);
+        let second = temp.path().join("book-2");
+        fs::create_dir_all(second.join("audio")).unwrap();
+        fs::write(second.join("audio/001 - Other.mp3"), "other").unwrap();
+        let open = OpenBookAudio::default();
 
-        assert!(scope.is_allowed(chapter.canonicalize().unwrap()));
-        assert!(!scope.is_allowed(workspace.join("manifest.json").canonicalize().unwrap()));
-        assert!(!scope.is_allowed(temp.path().join("book-1")));
+        open.open(audio_dir(&first).unwrap());
+        assert_eq!(serve(open.folder().as_deref(), "/001%20-%20One.mp3").0, 200);
+
+        open.open(audio_dir(&second).unwrap());
+        assert_eq!(serve(open.folder().as_deref(), "/001%20-%20One.mp3").0, 404);
+        assert_eq!(
+            serve(open.folder().as_deref(), "/001%20-%20Other.mp3").0,
+            200
+        );
     }
 }

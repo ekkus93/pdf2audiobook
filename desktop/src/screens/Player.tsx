@@ -16,13 +16,13 @@ export function chapterName(file: AudioFile): string {
 }
 
 /**
- * Reads a chapter through Tauri's asset protocol and returns a `blob:` URL to play. WebKitGTK's
- * media loader can't stream from the custom `asset:` scheme (the element reports "source not
- * supported"), but `fetch` can, and still goes through the asset scope: the bridge allows only
- * the opened book's `audio/` folder, so any other path is refused (403).
+ * Reads a chapter by file name through the app's `chapter:` protocol and returns a `blob:` URL
+ * to play. The bridge serves only MP3s in the open book's `audio/` folder (audio::serve);
+ * anything else is refused. WebKitGTK's media element can't stream from a custom scheme (it
+ * reports "source not supported"), but `fetch` can.
  */
-export async function loadChapter(path: string): Promise<string> {
-  return blobUrl(convertFileSrc(path));
+export async function loadChapter(name: string): Promise<string> {
+  return blobUrl(convertFileSrc(name, "chapter"));
 }
 
 /** Fetches `url` into a `blob:` URL that WebKitGTK can play; the caller revokes it. */
@@ -47,7 +47,7 @@ export function Player({ queue, onChange }: { queue: Queue | null; onChange: (qu
     let url: string | null = null;
     setPosition(0);
     setFailed(false);
-    void loadChapter(file.path)
+    void loadChapter(file.name)
       .then((loaded) => {
         url = loaded;
         if (!current) return URL.revokeObjectURL(loaded);

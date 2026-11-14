@@ -5,7 +5,7 @@ import type { AudioFile } from "../engine/types";
 
 vi.mock("@tauri-apps/api/core", async (original) => ({
   ...(await original<typeof import("@tauri-apps/api/core")>()),
-  convertFileSrc: (path: string) => `asset://localhost/${encodeURIComponent(path)}`,
+  convertFileSrc: (path: string, protocol = "asset") => `${protocol}://localhost/${encodeURIComponent(path)}`,
 }));
 
 import { Player, chapterName, type Queue } from "./Player";
@@ -23,10 +23,10 @@ beforeEach(() => {
   revoked.length = 0;
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
-  // Like the bridge's asset scope: only the book's audio folder is served.
+  // Like the bridge (audio::serve): only MP3s of the open book are served.
   vi.stubGlobal("fetch", async (url: string) => {
     fetched.push(url);
-    const allowed = decodeURIComponent(url).startsWith("asset://localhost//out/b/audio/");
+    const allowed = /^chapter:\/\/localhost\/[^/]+\.mp3$/.test(decodeURIComponent(url));
     // A string body: Node 22's Response can't read jsdom's Blob.
     return new Response(allowed ? "mp3" : null, { status: allowed ? 200 : 403, headers: { "Content-Type": "audio/mpeg" } });
   });
@@ -64,11 +64,12 @@ describe("Player", () => {
     expect(screen.queryByRole("region", { name: "Player" })).not.toBeInTheDocument();
   });
 
-  it("reads the chosen chapter through the asset protocol, plays it, and moves between chapters", async () => {
+  it("reads the chosen chapter through the chapter protocol, plays it, and moves between chapters", async () => {
     render(<Harness start={{ book: "Lighthouse", files: FILES, index: 0 }} />);
     expect(screen.getByRole("region", { name: "Player" })).toHaveTextContent("The Keeper");
     await waitFor(() => expect(audio().src).toBe("blob:chapter-1"));
-    expect(fetched).toEqual([`asset://localhost/${encodeURIComponent(FILES[0].path)}`]);
+    // By file name only: the bridge decides which folder that is.
+    expect(fetched).toEqual([`chapter://localhost/${encodeURIComponent(FILES[0].name)}`]);
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
     expect(screen.getByLabelText("Previous chapter")).toHaveAttribute("disabled");
     await press("Next chapter");
@@ -80,7 +81,7 @@ describe("Player", () => {
     expect(screen.getByRole("region", { name: "Player" })).toHaveTextContent("The Keeper");
   });
 
-  it("says so when the asset protocol refuses a chapter outside the audio folder", async () => {
+  it("says so when the bridge refuses a file that isn't a chapter", async () => {
     const outside = { path: "/out/b/manifest.json", name: "manifest.json", bytes: 1 };
     render(<Harness start={{ book: "Lighthouse", files: [outside], index: 0 }} />);
     expect(await screen.findByText("This chapter couldn't be loaded")).toBeInTheDocument();

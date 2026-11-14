@@ -11,11 +11,52 @@ use std::time::Duration;
 
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
+/// The main window's origins: the release build's and `tauri dev`'s. Only they may read the
+/// `chapter:` protocol's answers from script.
+const APP_ORIGINS: [&str; 3] = [
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "http://localhost:1420",
+];
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::Engine::default())
+        // Chapter audio for the player, from the open book's audio folder only (spec D7.a, D8.a).
+        .register_asynchronous_uri_scheme_protocol(audio::SCHEME, |context, request, responder| {
+            let main = context.webview_label() == "main";
+            let folder = context
+                .app_handle()
+                .state::<commands::Engine>()
+                .audio
+                .folder();
+            let origin = request
+                .headers()
+                .get("Origin")
+                .and_then(|value| value.to_str().ok())
+                .filter(|origin| APP_ORIGINS.contains(origin))
+                .map(str::to_owned);
+            let path = request.uri().path().to_owned();
+            std::thread::spawn(move || {
+                let (status, body) = if main {
+                    audio::serve(folder.as_deref(), &path)
+                } else {
+                    (403, Vec::new())
+                };
+                let mut response = tauri::http::Response::builder().status(status);
+                if status == 200 {
+                    response = response.header("Content-Type", "audio/mpeg");
+                }
+                if let Some(origin) = origin {
+                    response = response.header("Access-Control-Allow-Origin", origin);
+                }
+                if let Ok(response) = response.body(body) {
+                    responder.respond(response);
+                }
+            });
+        })
         .setup(|app| {
             // The app's own, content-free log (spec D8.c), next to Tauri's other app data.
             if let Ok(folder) = app.path().app_log_dir() {
