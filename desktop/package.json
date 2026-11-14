@@ -10,7 +10,8 @@
     "tauri": "tauri",
     "lint": "eslint . --max-warnings 0",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.node.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "node e2e/walkthrough.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",

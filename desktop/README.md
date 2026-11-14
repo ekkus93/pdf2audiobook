@@ -58,6 +58,24 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+The end-to-end walkthrough (spec D9.d) drives a release build through `tauri-driver`: it adds
+the README demo book through the file dialog, analyzes it without the LLM, retitles chapter 1
+in review and saves, then converts with `--dry-run` (the app runs the real CLI from this
+checkout through a wrapper that adds `--dry-run`, so no speech model is needed). It needs an X
+display, `xdotool`, WebKitGTK's `WebKitWebDriver` (`webkit2gtk-driver` on Ubuntu) and
+`tauri-driver` (`cargo install tauri-driver --locked`):
+
+```bash
+npm run tauri build -- --no-bundle
+xvfb-run -s "-screen 0 1280x800x24" npm run e2e   # screenshots go to e2e/artifacts/
+```
+
+`E2E_NATIVE_DRIVER`, `E2E_TAURI_DRIVER` and `E2E_APP` point it at other binaries.
+
+The "Desktop CI" workflow (`.github/workflows/desktop.yml`) runs all of the above on Ubuntu
+22.04, builds the AppImage and `.deb`, and uploads them as the `pdf2audiobook-desktop-linux-unsigned`
+artifact.
+
 The Python side has its own checks (see the main [README](../README.md#linting-type-checking-and-tests)).
 `tests/test_desktop_versions.py` there fails if this app's version differs from `pyproject.toml`,
 so change the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml` and
@@ -122,7 +140,7 @@ The installers are written to `src-tauri/target/release/bundle/deb/` and
 `src-tauri/target/release/bundle/appimage/`. A release build takes a few minutes (about 90
 seconds for the `.deb` on a 20-core machine). The first AppImage build downloads `linuxdeploy`
 from GitHub. The `.deb` is about 2 MB and the AppImage about 77 MB, since it bundles WebKitGTK.
-Builds are unsigned for now.
+Builds are unsigned for now; CI adds `-unsigned` to the installers' file names (spec D10.d).
 
 ## Layout
 

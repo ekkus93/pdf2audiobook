@@ -1,0 +1,116 @@
+name: Desktop CI
+# The Tauri desktop app in desktop/ (spec D10.c): frontend and Rust checks, a Linux build with
+# AppImage and .deb artifacts (D10.b, unsigned per D10.d), and the end-to-end walkthrough (D9.d).
+on:
+  push:
+    branches: [master, tauri]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    # The oldest supported Ubuntu with WebKitGTK 4.1, so the AppImage runs on newer systems too.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore apt package cache
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives
+          key: apt-${{ runner.os }}-desktop-webkit-v1
+      - name: Install WebKitGTK, its WebDriver and the X tools the walkthrough uses
+        timeout-minutes: 25
+        working-directory: .
+        run: |
+          # man-db index triggers can stall hosted runners for hours.
+          sudo rm -f /var/lib/man-db/auto-update
+          mkdir -p ~/apt-archives
+          sudo cp ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
+          APT_OPTS="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=5 -o APT::Keep-Downloaded-Packages=true"
+          PACKAGES="libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev build-essential file patchelf webkit2gtk-driver xvfb xdotool imagemagick"
+          for attempt in 1 2 3; do
+            if timeout 180 sudo apt-get $APT_OPTS update -q \
+              && timeout 600 sudo apt-get $APT_OPTS install -y -q $PACKAGES; then
+              break
+            fi
+            echo "apt attempt $attempt failed; retrying from archive.ubuntu.com"
+            sudo sed -i 's|http://[a-z.]*archive.ubuntu.com|http://archive.ubuntu.com|g' \
+              /etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+            sleep 15
+          done
+          command -v WebKitWebDriver
+          command -v xdotool
+          cp /var/cache/apt/archives/*.deb ~/apt-archives/ 2>/dev/null || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+          enable-cache: true
+          python-version: "3.12"
+      - name: Install the CLI the walkthrough drives
+        working-directory: .
+        run: uv sync --locked
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Frontend lint
+        run: npm run lint
+      - name: Frontend type check
+        run: npm run typecheck
+      - name: Frontend tests
+        run: npm test
+      - name: Frontend build
+        run: npm run build
+      - name: Rust format check
+        working-directory: desktop/src-tauri
+        run: cargo fmt --check
+      - name: Rust lint
+        working-directory: desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Rust tests
+        working-directory: desktop/src-tauri
+        run: cargo test
+      - name: Linux build with AppImage and .deb
+        run: npx tauri build --bundles appimage,deb
+      - name: Label the installers as unsigned
+        run: |
+          # Signing waits for an owner decision (spec D10.d); until then the file names say so.
+          cd src-tauri/target/release/bundle
+          for file in appimage/*.AppImage deb/*.deb; do
+            mv "$file" "${file%.*}-unsigned.${file##*.}"
+          done
+          ls -l appimage deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pdf2audiobook-desktop-linux-unsigned
+          path: |
+            desktop/src-tauri/target/release/bundle/appimage/*-unsigned.AppImage
+            desktop/src-tauri/target/release/bundle/deb/*-unsigned.deb
+          if-no-files-found: error
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+      - name: End-to-end walkthrough
+        env:
+          E2E_NATIVE_DRIVER: /usr/bin/WebKitWebDriver
+          E2E_ARTIFACTS: ${{ runner.temp }}/e2e
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: ${{ runner.temp }}/e2e
+          if-no-files-found: ignore

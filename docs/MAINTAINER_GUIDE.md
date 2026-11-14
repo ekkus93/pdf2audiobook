@@ -562,6 +562,14 @@ the exact commit SHA and Actions run when claiming CI acceptance. Before
 marking a TODO complete, add a deterministic regression test or explicitly
 document environment-dependent/manual acceptance evidence.
 
+`.github/workflows/desktop.yml` ("Desktop CI") checks the Tauri app in `desktop/` on Ubuntu
+22.04: frontend lint, types, tests and build, `cargo fmt`, `clippy` and `cargo test`, a release
+build with the AppImage and `.deb` (uploaded as `pdf2audiobook-desktop-linux-unsigned`), and the
+`tauri-driver` walkthrough under Xvfb. It shares `ci.yml`'s uv pin (`tests/test_desktop_ci.py`
+checks both workflows together) and has its own apt cache key (`apt-…-desktop-webkit-v1`; bump
+it when that package list changes). See `desktop/README.md` for running the same checks
+locally.
+
 The `ollama_context` pytest marker bypasses the autouse stub for Ollama served
 context discovery. Apply it only to tests intended to exercise the live local
 Ollama `/api/ps` lookup; the ordinary suite must remain offline. Use

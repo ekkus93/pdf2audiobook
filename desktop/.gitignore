@@ -25,3 +25,6 @@ dist-ssr
 
 # TypeScript incremental build state
 *.tsbuildinfo
+
+# Screenshots from the end-to-end walkthrough
+e2e/artifacts/
