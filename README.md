@@ -12,6 +12,9 @@ nothing it suggests reaches the audio until you approve it.
 
 **Status:** Working CLI with offline end-to-end fixture coverage. Real Kitten synthesis is an opt-in smoke test; live OpenAI and llama-server acceptance remains deferred. See the [specification](docs/PDF2AUDIOBOOK_SPEC.md), [implementation TODO](docs/PDF2AUDIOBOOK_TODO.md), and [installation/maintainer guide](docs/MAINTAINER_GUIDE.md).
 
+**Desktop app:** a Tauri desktop app is being built on the `tauri` branch; see
+[desktop/README.md](desktop/README.md).
+
 **Contents:**
 [Requirements](#requirements) ·
 [Development setup](#development-setup) ·
