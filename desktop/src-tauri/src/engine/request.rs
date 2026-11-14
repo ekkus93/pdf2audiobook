@@ -171,7 +171,10 @@ pub struct ConvertOptions {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum Request {
-    Doctor,
+    Doctor {
+        #[serde(default)]
+        check_llm: bool,
+    },
     ConfigShow,
     Inspect {
         source: PathBuf,
@@ -256,7 +259,12 @@ impl Request {
     pub fn args(&self) -> Result<Vec<OsString>, RequestError> {
         let mut args = Args::default();
         match self {
-            Request::Doctor => args.command(&["doctor"]),
+            Request::Doctor { check_llm } => {
+                args.command(&["doctor"]);
+                if *check_llm {
+                    args.flag("--check-llm");
+                }
+            }
             Request::ConfigShow => {
                 args.command(&["config", "show"]);
                 args.flag("--sources");
@@ -672,9 +680,19 @@ mod tests {
     }
 
     #[test]
+    fn doctor_with_the_llm_check() {
+        assert_eq!(
+            args_of(Request::Doctor { check_llm: true }),
+            ["--no-progress", "doctor", "--check-llm", "--json"]
+        );
+        let request: Request = serde_json::from_str(r#"{"command": "doctor"}"#).unwrap();
+        assert_eq!(request, Request::Doctor { check_llm: false });
+    }
+
+    #[test]
     fn doctor() {
         assert_eq!(
-            args_of(Request::Doctor),
+            args_of(Request::Doctor { check_llm: false }),
             ["--no-progress", "doctor", "--json"]
         );
     }
@@ -1081,7 +1099,7 @@ mod tests {
     #[test]
     fn json_and_no_progress_are_always_present() {
         let requests = [
-            Request::Doctor,
+            Request::Doctor { check_llm: false },
             Request::BudgetShow {
                 workspace: "/w".into(),
             },
@@ -1100,7 +1118,7 @@ mod tests {
     #[test]
     fn write_capable_commands_are_marked() {
         let manifest = PathBuf::from("/w/manifest.json");
-        assert!(!Request::Doctor.is_write());
+        assert!(!Request::Doctor { check_llm: true }.is_write());
         assert!(
             !Request::EditsList {
                 manifest: manifest.clone(),
@@ -1334,7 +1352,7 @@ mod real_cli {
         let book = root.join("tests/fixtures/outlined_text.pdf");
         let temp = tempfile::TempDir::new().unwrap();
         let requests = [
-            Request::Doctor,
+            Request::Doctor { check_llm: false },
             Request::ConfigShow,
             Request::Inspect {
                 source: book.clone(),

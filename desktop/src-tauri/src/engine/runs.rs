@@ -132,7 +132,7 @@ mod tests {
 
         for request in [
             list(temp.path()),
-            Request::Doctor,
+            Request::Doctor { check_llm: false },
             Request::BudgetShow {
                 workspace: temp.path().into(),
             },
