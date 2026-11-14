@@ -3,6 +3,7 @@
 pub mod locate;
 pub mod process;
 pub mod request;
+pub mod result;
 
 #[cfg(test)]
 pub(crate) mod testing;

@@ -1292,6 +1292,22 @@ mod real_cli {
             assert_eq!(done.code, Some(0), "{request:?}: {}", done.stderr);
             let payload: serde_json::Value = serde_json::from_str(&done.stdout).unwrap();
             assert!(payload.is_object(), "{request:?}");
+            assert!(matches!(
+                crate::engine::result::parse(&done),
+                crate::engine::result::Outcome::Success { .. }
+            ));
         }
+        let missing = Request::Workspace {
+            book: temp.path().join("missing.pdf"),
+            output: None,
+        };
+        let done = SystemRunner.run(&cli, &missing.args().unwrap()).unwrap();
+        let crate::engine::result::Outcome::Failed { error, .. } =
+            crate::engine::result::parse(&done)
+        else {
+            panic!("expected a failure: {}", done.stderr)
+        };
+        assert_eq!((error.kind.as_str(), error.code), ("InputError", 3));
+        assert_eq!(error.reason, None);
     }
 }
