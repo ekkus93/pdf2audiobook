@@ -61,9 +61,11 @@
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
-  font-size: var(--md-sys-typescale-title-medium-size);
-  line-height: var(--md-sys-typescale-title-medium-line-height);
-  font-weight: 500;
+  font-family: var(--app-font-display);
+  font-size: 22px;
+  line-height: 27px;
+  font-weight: 400;
+  font-synthesis: none;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }

@@ -356,6 +356,10 @@ dark and light screenshots (spec D11.h).
     `#5f52a7` light primary) and only local fonts. A real `npm run tauri dev` window shows the
     themed shell. Commit 0ec5846acacd50c7e58a141bd836757a59bc373c, Python CI
     [43610399942](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610399942) passed.
+  - Note: On 2026-11-14, after reviewing the first two screens, the owner asked for snazzier
+    buttons (spec D11.i: gradient, gloss, sheen and gradient outlines, commits b93af00 and
+    1ffbf1f) and a more striking font, choosing Instrument Serif with Figtree over the original
+    Roboto Flex (spec D11.d). Roboto Mono stays. The offline test now checks the new fonts.
 - [x] TD5.01 Setup: `doctor --json` results, Ollama served-context check, install hints.
   - Evidence: Setup screen (`src/screens/Setup.tsx`, rules in `setupChecks.ts`): finds the CLI,
     runs `doctor --json` and lists pdf2audiobook (version and where it was found), FFmpeg,

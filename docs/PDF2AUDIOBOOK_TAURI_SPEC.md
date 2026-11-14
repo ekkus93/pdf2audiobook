@@ -302,8 +302,11 @@ The app should look polished, modern and professional, built on Google's
 - **D11.c Theme.** Dark is the default (people often listen in the evening). Light and "follow
   the system" are offered in Settings. Every text and icon pairing meets WCAG AA contrast (4.5:1
   for text, 3:1 for large text and icons); a test computes the ratios from the generated scheme.
-- **D11.d Type and shape.** Material 3 type scale with Roboto Flex for the interface and Roboto
-  Mono for chapter text previews, bundled with the app (no font downloads at run time).
+- **D11.d Type and shape.** Material 3 type scale with Instrument Serif for headings, book titles
+  and other display text (one weight, so it is set larger rather than bolder, with no synthetic
+  bold), Figtree for the interface and Roboto Mono for commands and chapter text, all bundled
+  with the app (no font downloads at run time). The owner chose this pairing on 2026-11-14 from
+  four options (`docs/images/tauri/font-options.png`), replacing the original Roboto Flex.
   Material 3 shape scale: large (16 px) corners for cards, extra-large (28 px) for dialogs,
   full rounding for buttons and chips.
 - **D11.e Layout.** A navigation rail on the left (Library, Run, Settings) and a content area

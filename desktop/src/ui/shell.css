@@ -86,16 +86,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 64px;
+  height: 72px;
   padding: 0 16px 0 24px;
 }
 
 .top-app-bar-title {
   flex: 1;
   margin: 0;
-  font-size: var(--md-sys-typescale-title-large-size);
-  line-height: var(--md-sys-typescale-title-large-line-height);
-  font-weight: 500;
+  font-family: var(--app-font-display);
+  font-size: 34px;
+  line-height: 40px;
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0.005em;
 }
 
 .top-app-bar-actions {
@@ -202,8 +205,10 @@
 }
 
 .player-title {
-  font-size: var(--md-sys-typescale-title-small-size);
-  font-weight: 600;
+  font-family: var(--app-font-display);
+  font-size: 19px;
+  font-weight: 400;
+  font-synthesis: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -2,7 +2,9 @@
  * Colour variables come from `virtual:m3-theme.css`, generated from the seeds at build time.
  * Every font is bundled from node_modules; nothing is fetched at run time (D11.d, D11.g). */
 
-@import "@fontsource-variable/roboto-flex/index.css";
+@import "@fontsource/instrument-serif/400.css";
+@import "@fontsource/instrument-serif/400-italic.css";
+@import "@fontsource-variable/figtree/index.css";
 @import "@fontsource-variable/roboto-mono/index.css";
 
 @font-face {
@@ -15,8 +17,10 @@
 
 :root {
   /* Typefaces: @material/web reads the --md-ref-typeface-* variables. */
-  --md-ref-typeface-brand: "Roboto Flex Variable", system-ui, sans-serif;
-  --md-ref-typeface-plain: "Roboto Flex Variable", system-ui, sans-serif;
+  /* Instrument Serif for headings and book titles, Figtree for the interface (owner's choice). */
+  --md-ref-typeface-brand: "Instrument Serif", Georgia, serif;
+  --md-ref-typeface-plain: "Figtree Variable", system-ui, sans-serif;
+  --app-font-display: var(--md-ref-typeface-brand);
   --app-font-mono: "Roboto Mono Variable", ui-monospace, monospace;
 
   /* Material 3 type scale. */
@@ -110,10 +114,18 @@ body {
   font-weight: 500;
 }
 
+/* Display text: Instrument Serif has one weight, so it is set larger instead of bolder. */
+.display-text,
 .headline-small {
-  font-size: var(--md-sys-typescale-headline-small-size);
-  line-height: var(--md-sys-typescale-headline-small-line-height);
-  font-weight: 500;
+  font-family: var(--app-font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  letter-spacing: 0.005em;
+}
+
+.headline-small {
+  font-size: 30px;
+  line-height: 36px;
 }
 
 .body-medium {

@@ -51,9 +51,10 @@ describe("nothing is fetched at run time", () => {
     }
   });
 
-  it("bundles Roboto Flex, Roboto Mono and the icon subset", () => {
+  it("bundles Instrument Serif, Figtree, Roboto Mono and the icon subset", () => {
     const base = readFileSync(join(DESKTOP, "src/theme/base.css"), "utf8");
-    expect(base).toContain('@import "@fontsource-variable/roboto-flex/index.css"');
+    expect(base).toContain('@import "@fontsource/instrument-serif/400.css"');
+    expect(base).toContain('@import "@fontsource-variable/figtree/index.css"');
     expect(base).toContain('@import "@fontsource-variable/roboto-mono/index.css"');
     const subset = join(DESKTOP, "src/assets/fonts/material-symbols-rounded-subset.woff2");
     expect(statSync(subset).size).toBeLessThan(200_000);
