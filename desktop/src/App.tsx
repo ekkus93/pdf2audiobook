@@ -144,7 +144,15 @@ export default function App() {
           {page === "run" ? (
             <Run
               run={run}
-              onDone={open ? () => setPage("library") : undefined}
+              onDone={
+                open
+                  ? () => {
+                      // The run changed the book (analysis, audio): show it as it is now.
+                      refreshOpenBook();
+                      setPage("library");
+                    }
+                  : undefined
+              }
               onReview={run ? () => void review(run.manifest, run.workspace, run.title) : undefined}
               onRestart={
                 run

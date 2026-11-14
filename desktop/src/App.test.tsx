@@ -12,10 +12,15 @@ vi.mock("./engine/api", async (original) => ({
   onCloseRequested: vi.fn(),
   onReviewClosed: vi.fn(),
   quitApp: vi.fn(),
+  startRun: vi.fn(),
+  runProgress: vi.fn(),
+  bookAudio: vi.fn(),
 }));
 
 import * as api from "./engine/api";
+import type { LibraryBook, Request } from "./engine/types";
 import App from "./App";
+import { CONFIG } from "./screens/bookOptions.test";
 
 beforeEach(() => {
   vi.mocked(api.getSettings).mockResolvedValue({
@@ -94,5 +99,67 @@ describe("App shell", () => {
       quit.dispatchEvent(new Event("click", { bubbles: true }));
     });
     expect(api.quitApp).toHaveBeenCalledOnce();
+  });
+
+  it("shows the book as the run left it when going back from the run", async () => {
+    const before: LibraryBook = {
+      workspace: "/out/lighthouse-1",
+      manifest: "/out/lighthouse-1/manifest.json",
+      analyzed: false,
+      live: false,
+      source: "/books/lighthouse.pdf",
+      inspect: null,
+      error: null,
+      run_status: null,
+      thumbnail: null,
+    };
+    const after: LibraryBook = {
+      ...before,
+      analyzed: true,
+      source: null,
+      inspect: {
+        title: "The Lighthouse at Gull Point",
+        source_path: "/books/lighthouse.pdf",
+        review_required: [],
+        review_acknowledged: [],
+        approved: false,
+        chapters: [{ number: 1, title: "One", confidence: 1, manually_approved: false }],
+      },
+    };
+    const shelf = (book: LibraryBook) => ({ output_dir: "/out", min_boundary_confidence: 0.75, books: [book], commands: [] });
+    vi.mocked(api.library).mockResolvedValueOnce(shelf(before)).mockResolvedValue(shelf(after));
+    vi.mocked(api.run).mockImplementation(async (request: Request) => {
+      if (request.command === "config_show") return { outcome: "success", result: CONFIG };
+      if (request.command === "edits_list") return { outcome: "success", result: { edits: [] } };
+      return { outcome: "success", result: { provider: "kitten", voices: ["Jasper"], listable: true, default_voice: "Jasper" } };
+    });
+    vi.mocked(api.describe).mockResolvedValue("pdf2audiobook …");
+    vi.mocked(api.bookAudio).mockResolvedValue([]);
+    vi.mocked(api.startRun).mockResolvedValue(7);
+    vi.mocked(api.runProgress).mockResolvedValue({
+      state: "finished",
+      status: null,
+      outcome: { outcome: "success", result: {} },
+      cancelled: false,
+    });
+    const press = async (element: Element) => {
+      await act(async () => {
+        element.dispatchEvent(new Event("click", { bubbles: true }));
+      });
+    };
+    const material = (text: string) =>
+      Array.from(document.querySelectorAll("md-filled-button, md-filled-tonal-button")).find((element) =>
+        element.textContent?.includes(text),
+      ) as Element;
+
+    render(<App />);
+    await press(await screen.findByRole("button", { name: /^Open / }));
+    await screen.findByRole("heading", { name: "Analysis" });
+    await press(material("Analyze"));
+    expect(api.startRun).toHaveBeenCalledWith(expect.objectContaining({ command: "analyze" }), "/out/lighthouse-1");
+    expect(await screen.findByText(/Analysis finished/)).toBeInTheDocument();
+    await press(material("Back to the book"));
+    expect(await screen.findByRole("heading", { name: "The Lighthouse at Gull Point" })).toBeInTheDocument();
+    expect(api.library).toHaveBeenCalledTimes(2);
   });
 });
