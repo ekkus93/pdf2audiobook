@@ -78,6 +78,91 @@
       "items": {
         "type": "string"
       }
+    },
+    "llm_check": {
+      "description": "Present with --check-llm. Only Ollama is checked; others report checked=false.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "provider",
+            "checked"
+          ],
+          "properties": {
+            "provider": {
+              "enum": [
+                "openai",
+                "llama-server",
+                "disabled"
+              ]
+            },
+            "checked": {
+              "const": false
+            }
+          },
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "required": [
+            "provider",
+            "checked",
+            "model",
+            "configured_context",
+            "output_tokens",
+            "chunk_tokens",
+            "estimated_tokens_needed",
+            "reachable",
+            "served_context",
+            "enough"
+          ],
+          "properties": {
+            "provider": {
+              "const": "ollama"
+            },
+            "checked": {
+              "const": true
+            },
+            "model": {
+              "type": "string"
+            },
+            "configured_context": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "output_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "chunk_tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "estimated_tokens_needed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reachable": {
+              "type": "boolean"
+            },
+            "served_context": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enough": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": true
+        }
+      ]
     }
   },
   "additionalProperties": true

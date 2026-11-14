@@ -442,11 +442,55 @@ def budget_resolve(
         fail(exc, json_output=json_output)
 
 
-@app.command(epilog="Example: pdf2audiobook doctor --json")
+# Room assumed for an analysis prompt's instructions when judging whether a model's served
+# context fits one window; the CLI checks every real request exactly before sending it.
+LLM_INSTRUCTIONS_ALLOWANCE = 4096
+
+
+def _llm_capacity(settings: Settings) -> dict[str, Any]:
+    """Content-free check of whether the configured LLM can take one analysis window."""
+    if not settings.llm.enabled:
+        return {"provider": "disabled", "checked": False}
+    provider_name = settings.llm.provider
+    if provider_name != "ollama":
+        # Only Ollama reports the context it really serves.
+        return {"provider": provider_name, "checked": False}
+    from pdf2audiobook.llm.provider import create_provider
+
+    needed = (
+        settings.llm.chunk_tokens
+        + settings.llm.max_output_tokens
+        + 128
+        + LLM_INSTRUCTIONS_ALLOWANCE
+    )
+    report: dict[str, Any] = {
+        "provider": provider_name,
+        "checked": True,
+        "model": settings.llm.ollama.model,
+        "configured_context": settings.llm.max_context_tokens,
+        "output_tokens": settings.llm.max_output_tokens,
+        "chunk_tokens": settings.llm.chunk_tokens,
+        "estimated_tokens_needed": needed,
+    }
+    try:
+        with create_provider(settings) as provider:
+            served = provider._ollama_served_context(provider._model())
+    except LLMError:
+        return {**report, "reachable": False, "served_context": None, "enough": False}
+    limit = min(served, settings.llm.max_context_tokens)
+    return {**report, "reachable": True, "served_context": served, "enough": needed <= limit}
+
+
+@app.command(epilog="Example: pdf2audiobook doctor --check-llm --json")
 def doctor(
     json_output: bool = typer.Option(False, "--json"),
     config: Path | None = typer.Option(None, "--config"),
     no_config: bool = typer.Option(False, "--no-config"),
+    check_llm: bool = typer.Option(
+        False,
+        "--check-llm",
+        help="Also ask a local Ollama what context it serves (loads the model).",
+    ),
 ) -> None:
     set_output_mode(json_output)
     try:
@@ -483,6 +527,7 @@ def doctor(
                     if settings.llm.enabled
                     else None
                 ),
+                **({"llm_check": _llm_capacity(settings)} if check_llm else {}),
             },
             json_output,
         )

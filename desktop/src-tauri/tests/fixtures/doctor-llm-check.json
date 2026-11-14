@@ -1,0 +1,30 @@
+{
+  "version": "0.1.0",
+  "ffmpeg": true,
+  "tesseract": true,
+  "ocr_requested_languages": "eng",
+  "ocr_installed_languages": [
+    "eng",
+    "osd"
+  ],
+  "ocr_missing_languages": [],
+  "kitten_installed": true,
+  "piper_installed": false,
+  "llm_provider": "ollama",
+  "process_citations": true,
+  "process_equations": true,
+  "llm_timeout_seconds": 300.0,
+  "warnings": [],
+  "llm_check": {
+    "provider": "ollama",
+    "checked": true,
+    "model": "qwen3.5:9b",
+    "configured_context": 16384,
+    "output_tokens": 1024,
+    "chunk_tokens": 4000,
+    "estimated_tokens_needed": 9248,
+    "reachable": true,
+    "served_context": 4096,
+    "enough": false
+  }
+}

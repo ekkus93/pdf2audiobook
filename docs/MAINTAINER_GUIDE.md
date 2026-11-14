@@ -379,6 +379,12 @@ The desktop app (`docs/PDF2AUDIOBOOK_TAURI_SPEC.md`, D2) drives the CLI only thr
 outputs, so treat their shapes as contracts: add fields, never rename or remove them.
 
 - `--version` prints the version and exits 0, with or without a command after it.
+- `doctor --check-llm --json` adds `llm_check`. For Ollama it asks the server what context it
+  serves for the configured model (this loads the model) and reports `served_context`,
+  `configured_context`, `output_tokens`, `chunk_tokens`, `estimated_tokens_needed` (a window,
+  the output cap, 128 tokens of overhead and a 4096-token allowance for instructions) and
+  `enough`. Other providers report `"checked": false`. Without the flag doctor never contacts an
+  LLM.
 - `workspace BOOK [--output DIR] --json` prints `{"workspace", "exists", "warnings"}`. The
   folder uses the same rule as analysis (`pipeline.analysis_workspace_folder`:
   `<output_dir>/<stem>-<first 10 hex of the book's SHA-256>`); the command reads the book to

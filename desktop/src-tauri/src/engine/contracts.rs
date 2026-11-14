@@ -40,8 +40,9 @@ fn assert_valid(schema_name: &str, instance: &Value) {
 }
 
 /// Success fixtures and the contract each follows.
-const RESULTS: [(&str, &str); 12] = [
+const RESULTS: [(&str, &str); 13] = [
     ("doctor.json", "doctor"),
+    ("doctor-llm-check.json", "doctor"),
     ("config-show.json", "config-show"),
     ("inspect-book.json", "inspect-book"),
     ("inspect-manifest.json", "inspect-manifest"),
@@ -130,6 +131,8 @@ fn every_contract_has_a_fixture() {
     let mut covered: Vec<String> = RESULTS
         .iter()
         .map(|(_, contract)| contract.to_string())
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
         .chain(["error", "review-address", "run-status"].map(String::from))
         .collect();
     covered.sort();

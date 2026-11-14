@@ -83,6 +83,9 @@ def book(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
 
 def test_doctor() -> None:
     _check("doctor", _ok("doctor", "--no-config", "--json"))
+    checked = _ok("doctor", "--no-config", "--json", "--check-llm")
+    _check("doctor", checked)
+    assert checked["llm_check"]["checked"] is True
 
 
 def test_config_show() -> None:
