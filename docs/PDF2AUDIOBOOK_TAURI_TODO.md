@@ -301,9 +301,30 @@
     `review_required` error, and `run_status.json`). Commit
     0a4a732eb53c290aa2bf168c9c0e3dc8fb15cc19, Python CI
     [43609354757](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609354757) passed.
-- [ ] TD4.02 Python tests validate real CLI output against those schemas (the `jsonschema`
+- [x] TD4.02 Python tests validate real CLI output against those schemas (the `jsonschema`
   package added to the `dev` extra, with the lockfile updated).
-- [ ] TD4.03 Rust tests validate the parser's fixtures against the same schemas.
+  - Evidence: `jsonschema>=4.23,<5` added to the `dev` extra (`uv.lock` updated; jsonschema
+    4.26.0). `tests/test_desktop_contracts.py` (15 tests) produces every output with the real CLI
+    code, offline (fake Kitten voice, stand-in review server), and validates it against
+    `desktop/contracts` with format checking: doctor, config show, inspect book and manifest,
+    workspace, voices, thumbnail, analyze, run_status.json, convert dry run, convert and pack-m4b
+    (through FFmpeg), edits list, the review address and the error object with and without a
+    reason; `test_every_contract_has_a_test` keeps the list complete. Temporarily requiring a
+    missing field in the doctor schema made the test fail with `'renamed_field' is a required
+    property`. Ruff and format clean, mypy clean on 3.11/3.12/3.13 (isolated), pytest 2473 passed,
+    1 skipped. Commit f0e2ab4bced3963108d9fce66fdbcc338726af39, Python CI
+    [43609557856](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609557856) passed.
+- [x] TD4.03 Rust tests validate the parser's fixtures against the same schemas.
+  - Evidence: `src-tauri/tests/fixtures/` holds real CLI outputs captured from the README demo
+    book (paths replaced with `/home/user/books`), plus a `running` run status with a live stage
+    and an edits list with one edit. `src-tauri/src/engine/contracts.rs` validates each against
+    its schema with the `jsonschema` crate (format checking on) and parses it through
+    `result::parse`: every success fixture parses to itself, both stderr fixtures parse to typed
+    errors (`InputError` 3; `review_required` 6); `contracts_reject_a_broken_output` shows a
+    missing field or an unknown reason fails; `every_contract_has_a_fixture`. cargo fmt, clippy -D
+    warnings, cargo test (59 passed) clean. Commit a5d5ddbf4243d4713f774e91b20174456cbdbfa7,
+    Python CI [43609697528](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609697528)
+    passed.
 
 ## Phase TD5 — Screens (D4)
 
@@ -311,13 +332,30 @@ Each screen has component tests for its loading, empty, success and error states
 the keyboard, and shows the command it runs under "Details". Each screen's item also records
 dark and light screenshots (spec D11.h).
 
-- [ ] TD5.00 Design foundation (D11): generate the Material 3 scheme from the seeds `#6D5BD0`
+- [x] TD5.00 Design foundation (D11): generate the Material 3 scheme from the seeds `#6D5BD0`
   and `#E8A25C` with `@material/material-color-utilities` at build time into `--md-sys-color-*`
   CSS variables for dark and light; bundle Roboto Flex, Roboto Mono and Material Symbols
   Rounded; pin `@material/web` and wrap each component used in a small React component; build
   the navigation rail, top app bar, card, snackbar and player bar from the same tokens.
   Tests: the generated roles match the spec D11.b table; every text and icon pairing passes
   WCAG AA (D11.c); no font or icon is fetched at run time.
+  - Evidence: Colours: `src/theme/scheme.ts` generates the Material 3 scheme from `#6D5BD0` and
+    `#E8A25C` (tonal spot, iris-tinted neutrals); the `m3-theme` Vite plugin runs it at build and
+    dev time through `runnerImport` into `--md-sys-color-*` for dark (default), light and system.
+    Fonts: Roboto Flex and Roboto Mono from `@fontsource-variable`, and Material Symbols Rounded
+    subset by `desktop/scripts/subset_icons.py` from 5.4 MB to 40.6 KB (44 icons drawn by
+    codepoint; FILL, GRAD, opsz and wght axes kept). `@material/web` 2.5.0 pinned, with wrappers
+    for buttons, icon buttons, text field, select, switch, checkbox, chips, dialog, progress and
+    slider; navigation rail, top app bar, card, snackbar and player bar built from the same
+    tokens; M3 type, shape and motion tokens with reduced motion respected. Tests (122):
+    `scheme.test.ts` reads the D11.b table from the spec and matches all 22 roles in both themes;
+    `contrast.test.ts` checks WCAG AA for every text pairing (4.5:1) and icon/boundary pairing
+    (3:1) in both themes; `offline.test.ts` finds no remote URL in the HTML, the generated theme
+    or any stylesheet and its imports, and every `url()` resolves locally; `ui.test.tsx` covers
+    every wrapper and shell component. The built CSS holds the generated values (`#c9bfff` dark,
+    `#5f52a7` light primary) and only local fonts. A real `npm run tauri dev` window shows the
+    themed shell. Commit 0ec5846acacd50c7e58a141bd836757a59bc373c, Python CI
+    [43610399942](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610399942) passed.
 - [ ] TD5.01 Setup: `doctor --json` results, Ollama served-context check, install hints.
 - [ ] TD5.02 Library: books in the output folder with state and last run; "Add book" dialog.
 - [ ] TD5.02a **[OWNER REVIEW]** The owner reviews the Setup and Library screens in dark and
@@ -422,3 +460,6 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | 62c153942b34dca1b5c1b15324ba0b175cce0cee | Tauri TD3.04 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): one write-capable command per workspace | cargo test 49 passed; Exact-head Python CI #810 [43609098083](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609098083) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 108780a0ff8673ae21582777b84562073ee32a1c | Tauri TD3.05 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): environment passthrough, password variable names only | cargo test 54 passed; Exact-head Python CI #811 [43609143809](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609143809) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 0a4a732eb53c290aa2bf168c9c0e3dc8fb15cc19 | Tauri TD4.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): JSON Schemas for the CLI outputs | all 15 validated against real CLI output; Exact-head Python CI #813 [43609354757](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609354757) passed on attempt 1 | None |
+| 2026-11-14 | f0e2ab4bced3963108d9fce66fdbcc338726af39 | Tauri TD4.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): real CLI output checked against the contracts | pytest 2473 passed, 1 skipped; Exact-head Python CI #814 [43609557856](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609557856) passed on attempt 1 | None |
+| 2026-11-14 | a5d5ddbf4243d4713f774e91b20174456cbdbfa7 | Tauri TD4.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): bridge fixtures checked against the contracts | cargo test 59 passed; Exact-head Python CI #815 [43609697528](https://github.com/ekkus93/pdf2audiobook/actions/runs/43609697528) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | 0ec5846acacd50c7e58a141bd836757a59bc373c | Tauri TD5.00 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Material 3 design foundation | 122 frontend tests; build and dev window checked; Exact-head Python CI #817 [43610399942](https://github.com/ekkus93/pdf2audiobook/actions/runs/43610399942) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
