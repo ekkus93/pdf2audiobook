@@ -568,6 +568,51 @@ def workspace(
         fail(exc, json_output=json_output)
 
 
+@app.command(epilog="Example: pdf2audiobook voices --tts-provider kitten --json")
+def voices(
+    tts_provider: str | None = typer.Option(None, "--tts-provider"),
+    tts_model: str | None = typer.Option(None, "--tts-model"),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """List the voices the selected text-to-speech provider accepts."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.pipeline import create_tts_provider
+
+        settings, origins = load_settings(config, no_config=no_config)
+        name = tts_provider or settings.tts.provider
+        tts: dict[str, Any] = {}
+        if tts_provider is not None:
+            tts["provider"] = tts_provider
+        if tts_model is not None:
+            key = "model_path" if name == "piper" else "model"
+            tts.setdefault("piper" if name == "piper" else "kitten", {})[key] = tts_model
+        if tts:
+            settings, origins = load_settings(config, no_config=no_config, overrides={"tts": tts})
+        configure_effective_logging(settings, origins)
+        provider = create_tts_provider(settings)
+        # Piper speakers are numbers in the model, not names, so it has nothing to list.
+        listable = getattr(provider, "supports_voice_listing", False) is True
+        section = settings.tts.piper if settings.tts.provider == "piper" else settings.tts.kitten
+        emit(
+            {
+                "provider": settings.tts.provider,
+                "voices": provider.list_voices() if listable else [],
+                "listable": listable,
+                "default_voice": section.voice,
+            },
+            json_output,
+        )
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
 def _overrides(
     output: Path | None,
     ocr: str | None,
