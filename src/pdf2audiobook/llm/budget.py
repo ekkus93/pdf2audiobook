@@ -190,7 +190,7 @@ class BookLLMBudgetLedger:
         # An exactly exhausted limit may return its already-paid response.
         # A subsequent reservation still rejects equality before the next call.
         if max_requests is not None and stats["requests_started"] >= max_requests:
-            raise LLMError("Per-book LLM request budget exhausted")
+            raise LLMError("Per-book LLM request budget exhausted", error_reason="budget_exhausted")
         if (max_tokens is not None or max_usd is not None) and stats["_unbounded_open"]:
             raise LLMError(
                 "Per-book LLM budget has unresolved requests without a recorded bound; "
@@ -201,14 +201,20 @@ class BookLLMBudgetLedger:
             if postflight
             else stats["reported_tokens"] >= max_tokens
         ):
-            raise LLMError("Per-book LLM reported token budget reached or exceeded")
+            raise LLMError(
+                "Per-book LLM reported token budget reached or exceeded",
+                error_reason="budget_exhausted",
+            )
         if max_usd is not None and stats["unpriced_requests"]:
             raise LLMError("Per-book cost budget has unpriced earlier requests; inspect ledger")
         if max_usd is not None:
             cost = Decimal(str(stats.get("_exact_cost_usd", stats["estimated_cost_usd"])))
             limit = Decimal(str(max_usd))
             if cost > limit if postflight else cost >= limit:
-                raise LLMError("Per-book LLM estimated cost budget reached or exceeded")
+                raise LLMError(
+                    "Per-book LLM estimated cost budget reached or exceeded",
+                    error_reason="budget_exhausted",
+                )
 
     def totals(self, *, readonly: bool = False) -> dict:
         try:
@@ -280,13 +286,19 @@ class BookLLMBudgetLedger:
                     and upper_bound_tokens is not None
                     and stats["reported_tokens"] + upper_bound_tokens > max_tokens
                 ):
-                    raise LLMError("Per-book LLM token budget cannot cover the next request")
+                    raise LLMError(
+                        "Per-book LLM token budget cannot cover the next request",
+                        error_reason="budget_exhausted",
+                    )
                 if max_usd is not None:
                     assert upper_bound_usd is not None
                     if Decimal(stats["_exact_cost_usd"]) + Decimal(upper_bound_usd) > Decimal(
                         str(max_usd)
                     ):
-                        raise LLMError("Per-book LLM cost budget cannot cover the next request")
+                        raise LLMError(
+                            "Per-book LLM cost budget cannot cover the next request",
+                            error_reason="budget_exhausted",
+                        )
                 cursor = connection.execute(
                     "INSERT INTO calls (request_hash, provider_hash, status, upper_bound_tokens, upper_bound_usd) "
                     "VALUES (?, ?, 'pending', ?, ?)",

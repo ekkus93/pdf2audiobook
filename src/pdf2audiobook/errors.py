@@ -3,6 +3,14 @@
 
 class AudiobookError(Exception):
     exit_code = 1
+    # Stable code in --json errors for failures a caller can act on, e.g. "review_required".
+    # Set on a subclass or per raise; None leaves the JSON error without a "reason" key.
+    error_reason: str | None = None
+
+    def __init__(self, *args: object, error_reason: str | None = None) -> None:
+        super().__init__(*args)
+        if error_reason is not None:
+            self.error_reason = error_reason
 
 
 class ConfigError(AudiobookError):
@@ -24,6 +32,8 @@ class WorkspaceError(ExtractionError):
 class PendingRecoveryError(WorkspaceError):
     """A committed workspace update is pending and must be recovered first."""
 
+    error_reason = "pending_recovery"
+
     def __init__(self, message: str, *, labels: tuple[str, ...] | list[str] = ()):
         super().__init__(message)
         # Safe target labels such as "chapter 1"; never paths, digests or text.
@@ -32,6 +42,8 @@ class PendingRecoveryError(WorkspaceError):
 
 class ChapterConflictError(ExtractionError):
     """A chapter file conflicts with generated text; carries only its number."""
+
+    error_reason = "chapter_conflict"
 
     def __init__(self, chapter: int):
         super().__init__(
@@ -56,8 +68,15 @@ class FootnotePolicyUnknownError(ExtractionError):
 class LLMError(AudiobookError):
     exit_code = 5
 
-    def __init__(self, message: str, *, unbilled: bool = False, reason: str | None = None):
-        super().__init__(message)
+    def __init__(
+        self,
+        message: str,
+        *,
+        unbilled: bool = False,
+        reason: str | None = None,
+        error_reason: str | None = None,
+    ):
+        super().__init__(message, error_reason=error_reason)
         # Stable, content-free tag for logs, e.g. "output_cap".
         self.reason = reason
         # Only transport failures that prove the request was never sent set this.
@@ -74,6 +93,8 @@ class TTSError(AudioError):
 
 class WorkspaceLockedError(AudioError):
     """A workspace is currently owned by another analysis or conversion."""
+
+    error_reason = "workspace_locked"
 
 
 class PartialConversionError(AudiobookError):

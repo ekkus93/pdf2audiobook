@@ -171,7 +171,9 @@ class CachedLLMProvider:
                 if postflight
                 else count >= self.max_reported_tokens
             ):
-                raise LLMError("LLM reported token budget reached or exceeded")
+                raise LLMError(
+                    "LLM reported token budget reached or exceeded", error_reason="budget_exhausted"
+                )
         if self.max_estimated_cost_usd is not None:
             cost = self._reported_cost_usd()
             if cost is None:
@@ -182,7 +184,9 @@ class CachedLLMProvider:
                 if postflight
                 else cost >= self.max_estimated_cost_usd
             ):
-                raise LLMError("LLM estimated cost budget reached or exceeded")
+                raise LLMError(
+                    "LLM estimated cost budget reached or exceeded", error_reason="budget_exhausted"
+                )
 
     def _write_usage(self) -> None:
         """Persist counters only, never book text, prompts, credentials or model output."""

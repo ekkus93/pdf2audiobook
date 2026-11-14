@@ -101,7 +101,8 @@ def select_chapters(
             and not item.manually_approved
         ):
             raise AudioError(
-                f"Chapter {item.number} has no speakable text; review and approve it before synthesis"
+                f"Chapter {item.number} has no speakable text; review and approve it before synthesis",
+                error_reason="review_required",
             )
         if (
             "damaged_source" in manifest.review_required
@@ -109,21 +110,24 @@ def select_chapters(
         ):
             raise AudioError(
                 f"Chapter {item.number} comes from a damaged source; "
-                "review and approve it before synthesis"
+                "review and approve it before synthesis",
+                error_reason="review_acknowledgement_required",
             )
         if (
             "ambiguous_page_numbers" in manifest.review_required
             and "ambiguous_page_numbers" not in manifest.review_acknowledged
         ):
             raise AudioError(
-                f"Chapter {item.number} has ambiguous page-number cleanup; review and approve it"
+                f"Chapter {item.number} has ambiguous page-number cleanup; review and approve it",
+                error_reason="review_acknowledgement_required",
             )
         if item.confidence < settings.chapters.min_boundary_confidence and not (
             item.manually_approved or settings.chapters.allow_single_chapter
         ):
             raise AudioError(
                 f"Chapter {item.number} has low boundary confidence; "
-                "review the manifest before synthesis"
+                "review the manifest before synthesis",
+                error_reason="review_required",
             )
     return chosen
 

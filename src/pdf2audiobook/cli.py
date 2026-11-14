@@ -80,6 +80,7 @@ CONVERSION_STATUS_MAX_BYTES = 1024 * 1024
 def fail(exc: Exception, *, json_output: bool = False) -> None:
     """Report a stable exit code and optionally a machine-readable stderr diagnostic."""
     code = exc.exit_code if isinstance(exc, AudiobookError) else 1
+    reason = exc.error_reason if isinstance(exc, AudiobookError) else None
     if isinstance(exc, AudiobookError):
         message = str(exc)
     elif isinstance(exc, OSError):
@@ -97,7 +98,12 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
             json.dumps(
                 {
                     "ok": False,
-                    "error": {"type": type(exc).__name__, "code": code, "message": message},
+                    "error": {
+                        "type": type(exc).__name__,
+                        "code": code,
+                        "message": message,
+                        **({"reason": reason} if reason is not None else {}),
+                    },
                     "warnings": warnings,
                 },
                 ensure_ascii=False,

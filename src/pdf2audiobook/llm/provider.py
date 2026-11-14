@@ -167,7 +167,9 @@ class OpenAICompatibleProvider:
             return list(dict.fromkeys(names))
         except (httpx.HTTPError, KeyError, ValueError, TypeError):
             # Transport/parser diagnostics may include private server details.
-            raise LLMError("Could not discover the served LLM models") from None
+            raise LLMError(
+                "Could not discover the served LLM models", error_reason="llm_unreachable"
+            ) from None
 
     def health(self) -> bool:
         """Check model discovery without uploading any document content."""
@@ -256,7 +258,10 @@ class OpenAICompatibleProvider:
                 + 128
                 > self.max_context_tokens
             ):
-                raise LLMError("LLM request exceeds configured context and output reserve")
+                raise LLMError(
+                    "LLM request exceeds configured context and output reserve",
+                    error_reason="llm_context_too_small",
+                )
 
     def _ollama_served_context(self, model: str) -> int:
         """Return the context length Ollama actually serves for ``model``.
@@ -288,7 +293,10 @@ class OpenAICompatibleProvider:
             except (httpx.HTTPError, KeyError, ValueError, TypeError, AttributeError):
                 lengths = []
             if not lengths:
-                raise LLMError("Could not read the context length Ollama serves for the model")
+                raise LLMError(
+                    "Could not read the context length Ollama serves for the model",
+                    error_reason="llm_unreachable",
+                )
             self._served_context = min(lengths)
         return self._served_context
 
@@ -307,7 +315,8 @@ class OpenAICompatibleProvider:
         ):
             raise LLMError(
                 "LLM request exceeds the context length the Ollama server serves; "
-                "lower llm.chunk_tokens or use a model with a larger num_ctx"
+                "lower llm.chunk_tokens or use a model with a larger num_ctx",
+                error_reason="llm_context_too_small",
             )
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
@@ -563,6 +572,7 @@ class OpenAICompatibleProvider:
                 "LLM output cap reached before any answer; raise "
                 "llm.max_output_tokens or disable model reasoning",
                 reason="output_cap",
+                error_reason="llm_output_cap",
             )
         try:
             decoded = json.loads(message)
@@ -571,6 +581,7 @@ class OpenAICompatibleProvider:
                 raise LLMError(
                     "LLM answer was cut off at the output cap; raise llm.max_output_tokens",
                     reason="output_cap",
+                    error_reason="llm_output_cap",
                 ) from None
             raise
         if not isinstance(decoded, dict):
@@ -605,9 +616,11 @@ class OpenAICompatibleProvider:
                 f"{label} LLM transport failure: request timed out after "
                 f"{self.timeout:g} s; increase {setting}"
             ) from None
+        unreachable = isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout))
         raise LLMError(
             f"{label} LLM transport failure",
-            unbilled=isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)),
+            unbilled=unreachable,
+            error_reason="llm_unreachable" if unreachable else None,
         ) from None
 
     def _complete_json_request(
