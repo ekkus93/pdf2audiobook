@@ -414,8 +414,23 @@ dark and light screenshots (spec D11.h).
     revisit later) and for a more striking font (Instrument Serif with Figtree chosen from four
     rendered options, done in 8790b03, spec D11.d). The owner then approved the screens and the
     font choice and asked to continue.
-- [ ] TD5.03 Book options: LLM, model, context and output caps, voice (from `voices --json`),
+- [x] TD5.03 Book options: LLM, model, context and output caps, voice (from `voices --json`),
   speed, chapter range, cover, and remote-content consent.
+  - Evidence: Book page (`src/screens/BookPage.tsx`, form logic in `bookOptions.ts`), opened by
+    clicking a library card (the card is one named button). Options load from the CLI's `config
+    show` and `voices --json` and cover: LLM on or off, provider, model, context and output caps,
+    remote-content consent (shown only for OpenAI, and required before either button works),
+    voice, speed, all chapters or a range, and a cover image (native dialog filtered to JPEG and
+    PNG). Validation mirrors the CLI (model required, context at least 512, the output cap plus
+    128 must fit the context, speed 0.1 to 3, a range within the book). Nothing is stored per
+    book: the choices become flags on the `analyze` and `convert` requests, whose exact commands
+    appear under Details. Tests: `bookOptions.test.ts` (10: defaults from the config, every rule,
+    the requests built) and `BookPage.test.tsx` (9: loading, success, load failure, Analyze and
+    Convert with the options, an unanalyzed book, the OpenAI consent gate, cover choice, Details,
+    the back button, opening from the library card). Checked in the real app under Xvfb in both
+    themes. Screenshots: `docs/images/tauri/book-options-dark.png`, `book-options-light.png`.
+    Commit c2c15bb94edca866599c6208ac2ab6f2b13baed5, Python CI #831
+    [43623865218](https://github.com/ekkus93/pdf2audiobook/actions/runs/43623865218) passed.
 - [ ] TD5.04 Run: progress view (TD6) with cancel.
 - [ ] TD5.05 Review: opens on `review_required` and `review_acknowledgement_required` (TD7).
 - [ ] TD5.06 Pending edits: list, accept or reject each, and "accept all" behind a
@@ -522,3 +537,4 @@ dark and light screenshots (spec D11.h).
 | 2026-11-14 | 3c5870fdfcd917820904e15a577506cfdca34b74 | Tauri TD5.01/TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): bridge commands, app settings, library scan | cargo test 74 passed; Exact-head Python CI #820 [43612250270](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612250270) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | eeafb686e7b3a1e389d48c3be497800f6c1f8772 | Tauri TD5.01 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Setup and Library screens | 161 frontend tests; real-app screenshots; Exact-head Python CI #821 [43612258477](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612258477) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
 | 2026-11-14 | 4e14283c93a428372ab3d94eda7cd600cfce6220 | Tauri TD5.02 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): Library screen with Details | 162 frontend tests, cargo test 74 passed; Exact-head Python CI #823 [43612519881](https://github.com/ekkus93/pdf2audiobook/actions/runs/43612519881) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
+| 2026-11-14 | c2c15bb94edca866599c6208ac2ab6f2b13baed5 | Tauri TD5.03 (docs/PDF2AUDIOBOOK_TAURI_TODO.md): book page with analysis and conversion options | 197 frontend tests; real-app screenshots; Exact-head Python CI #831 [43623865218](https://github.com/ekkus93/pdf2audiobook/actions/runs/43623865218) passed on attempt 1 | Desktop checks not yet in CI (TD10.02) |
