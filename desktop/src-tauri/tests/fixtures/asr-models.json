@@ -1,0 +1,32 @@
+{
+  "models": [
+    {
+      "model": "whisper",
+      "family": "OpenAI Whisper",
+      "model_id": "medium.en",
+      "revision": "d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f",
+      "package": "openai-whisper",
+      "package_version": "20250625",
+      "weights_present": true,
+      "size_bytes": 1528006491,
+      "location": "/home/me/.cache/pdf2audiobook/asr/whisper",
+      "ready": true,
+      "reason": null
+    },
+    {
+      "model": "vosk",
+      "family": "Vosk/Kaldi",
+      "model_id": "vosk-model-en-us-0.22-lgraph",
+      "revision": "d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f",
+      "package": "vosk",
+      "package_version": null,
+      "weights_present": true,
+      "size_bytes": 130557655,
+      "location": "/home/me/.cache/pdf2audiobook/asr/vosk",
+      "ready": false,
+      "reason": "model_not_installed"
+    }
+  ],
+  "directory": "/home/me/.cache/pdf2audiobook/asr",
+  "warnings": []
+}

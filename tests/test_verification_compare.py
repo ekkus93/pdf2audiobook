@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from pdf2audiobook.verification.compare import (
     MIN_WORDS,
+    chapter_outcome,
     differences,
     tokenize,
     tokenize_text,
     vote,
 )
-from pdf2audiobook.verification.contracts import Difference, Word
+from pdf2audiobook.verification.contracts import Difference, ModelRun, Word
 
 REFERENCE = (
     "Mara Quill had kept the light at Gull Point for eleven winters. Each evening she climbed "
@@ -200,3 +201,72 @@ def test_disagreement_on_different_places_is_not_combined() -> None:
     flags = vote(reference, found)
     assert len(flags) == 2
     assert all(not flag.confirmed for flag in flags)
+
+
+def _flags(*sets: str) -> list:
+    reference = ref()
+    texts = {"inserted": INSERTED, "clean": REFERENCE.lower().replace(",", "").replace(".", "")}
+    found = {
+        model: differences(model, reference, heard(texts[kind]))
+        for model, kind in zip(("whisper", "wav2vec2", "vosk"), sets)
+    }
+    return vote(reference, found)
+
+
+OK = [ModelRun("whisper", "ok"), ModelRun("wav2vec2", "ok"), ModelRun("vosk", "ok")]
+
+
+def test_outcome_of_three_agreeing_models() -> None:
+    assert chapter_outcome(OK, _flags("clean", "clean", "clean")) == (
+        "no_mismatch_detected",
+        None,
+        False,
+    )
+    assert chapter_outcome(OK, _flags("inserted", "inserted", "clean")) == (
+        "possible_mismatch",
+        None,
+        False,
+    )
+    assert chapter_outcome(OK, _flags("inserted", "clean", "clean")) == (
+        "model_disagreement",
+        None,
+        False,
+    )
+
+
+def test_a_failed_model_abstains_and_the_result_is_partial() -> None:
+    runs = [
+        ModelRun("whisper", "ok"),
+        ModelRun("wav2vec2", "failed", "model_failed"),
+        ModelRun("vosk", "ok"),
+    ]
+    reference = ref()
+    flags = vote(
+        reference,
+        {
+            "whisper": differences("whisper", reference, heard(INSERTED)),
+            "vosk": differences("vosk", reference, heard(INSERTED)),
+        },
+    )
+    assert chapter_outcome(runs, flags) == ("possible_mismatch", None, True)
+
+
+def test_one_model_alone_can_only_disagree() -> None:
+    runs = [
+        ModelRun("whisper", "ok"),
+        ModelRun("wav2vec2", "unavailable", "model_not_installed"),
+        ModelRun("vosk", "unavailable", "model_not_downloaded"),
+    ]
+    reference = ref()
+    flags = vote(reference, {"whisper": differences("whisper", reference, heard(INSERTED))})
+    assert chapter_outcome(runs, flags) == ("model_disagreement", None, True)
+    assert chapter_outcome(runs, []) == ("no_mismatch_detected", None, True)
+
+
+def test_no_voting_model_means_unavailable() -> None:
+    runs = [
+        ModelRun(m, "unavailable", "model_not_installed") for m in ("whisper", "wav2vec2", "vosk")
+    ]
+    assert chapter_outcome(runs, []) == ("verification_unavailable", "no_models", True)
+    cancelled = [ModelRun("whisper", "failed", "cancelled")]
+    assert chapter_outcome(cancelled, []) == ("verification_unavailable", "cancelled", True)

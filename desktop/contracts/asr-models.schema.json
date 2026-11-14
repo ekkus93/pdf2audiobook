@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "asr list --json",
+  "description": "Readiness of each optional ASR model for audio verification (verification spec \u00a74, \u00a712).",
+  "type": "object",
+  "required": [
+    "models",
+    "directory",
+    "warnings"
+  ],
+  "properties": {
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "model",
+          "family",
+          "model_id",
+          "revision",
+          "package",
+          "package_version",
+          "weights_present",
+          "size_bytes",
+          "location",
+          "ready",
+          "reason"
+        ],
+        "properties": {
+          "model": {
+            "enum": [
+              "whisper",
+              "wav2vec2",
+              "vosk"
+            ]
+          },
+          "family": {
+            "type": "string"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "package": {
+            "type": "string"
+          },
+          "package_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "weights_present": {
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "location": {
+            "type": "string"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "reason": {
+            "enum": [
+              "model_not_installed",
+              "model_not_downloaded",
+              null
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "directory": {
+      "type": "string",
+      "description": "Where model weights are kept."
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-11-14T12:00:00+00:00",
+  "completed_at": "2026-11-14T12:01:00+00:00",
+  "keep_transcripts": false,
+  "models": [
+    {
+      "model": "whisper",
+      "model_id": "medium.en",
+      "revision": "d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f",
+      "package_version": "20250625"
+    }
+  ],
+  "summary": {
+    "chapters": 1,
+    "by_status": {
+      "possible_mismatch": 1
+    }
+  },
+  "chapters": [
+    {
+      "number": 3,
+      "status": "possible_mismatch",
+      "reason": null,
+      "partial": true,
+      "audio_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "reference_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "duration_seconds": 9.5,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 1.5,
+          "word_count": 19
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "failed",
+          "reason": "model_failed",
+          "seconds": null,
+          "word_count": null
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.7,
+          "word_count": 19
+        }
+      ],
+      "flags": [
+        {
+          "kind": "insertion",
+          "confirmed": true,
+          "models": [
+            "whisper",
+            "vosk"
+          ],
+          "ref_start": 6,
+          "ref_end": 6,
+          "expected": "",
+          "heard": {
+            "whisper": "and the old bell rang",
+            "vosk": "and the old bell rang"
+          },
+          "before": "the keeper climbed the ninety two steps",
+          "after": "and trimmed the wick of the",
+          "start": 3.5,
+          "end": 5.9,
+          "reviewed": false
+        }
+      ]
+    }
+  ],
+  "warnings": []
+}

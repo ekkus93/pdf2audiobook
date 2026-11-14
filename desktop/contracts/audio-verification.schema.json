@@ -1,0 +1,328 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "verify-audio --json and reports/audio_verification.json",
+  "description": "A verification run's chapter outcomes (verification spec \u00a72, \u00a73, \u00a75, \u00a712). Never proof that audio is right or wrong.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "created_at",
+    "completed_at",
+    "keep_transcripts",
+    "models",
+    "summary",
+    "chapters",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "created_at": {
+      "type": "string"
+    },
+    "completed_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "keep_transcripts": {
+      "type": "boolean"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "model",
+          "model_id",
+          "revision",
+          "package_version"
+        ],
+        "properties": {
+          "model": {
+            "enum": [
+              "whisper",
+              "wav2vec2",
+              "vosk"
+            ]
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "package_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "chapters",
+        "by_status"
+      ],
+      "properties": {
+        "chapters": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "by_status": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "chapters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "number",
+          "status",
+          "reason",
+          "partial",
+          "audio_sha256",
+          "reference_sha256",
+          "duration_seconds",
+          "models",
+          "flags"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "enum": [
+              "no_mismatch_detected",
+              "possible_mismatch",
+              "model_disagreement",
+              "verification_unavailable"
+            ]
+          },
+          "reason": {
+            "enum": [
+              "audio_missing",
+              "audio_stale",
+              "no_models",
+              "unsupported_language",
+              "model_not_installed",
+              "model_not_downloaded",
+              "model_failed",
+              "cancelled",
+              null
+            ]
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "audio_sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reference_sha256": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_seconds": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "model",
+                "outcome",
+                "reason",
+                "seconds",
+                "word_count"
+              ],
+              "properties": {
+                "model": {
+                  "enum": [
+                    "whisper",
+                    "wav2vec2",
+                    "vosk"
+                  ]
+                },
+                "outcome": {
+                  "enum": [
+                    "ok",
+                    "unavailable",
+                    "failed"
+                  ]
+                },
+                "reason": {
+                  "enum": [
+                    "audio_missing",
+                    "audio_stale",
+                    "no_models",
+                    "unsupported_language",
+                    "model_not_installed",
+                    "model_not_downloaded",
+                    "model_failed",
+                    "cancelled",
+                    null
+                  ]
+                },
+                "seconds": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "word_count": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "confirmed",
+                "models",
+                "ref_start",
+                "ref_end",
+                "expected",
+                "heard",
+                "before",
+                "after",
+                "start",
+                "end",
+                "reviewed"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "insertion",
+                    "omission",
+                    "substitution"
+                  ]
+                },
+                "confirmed": {
+                  "type": "boolean"
+                },
+                "models": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "whisper",
+                      "wav2vec2",
+                      "vosk"
+                    ]
+                  },
+                  "minItems": 1
+                },
+                "ref_start": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "ref_end": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "expected": {
+                  "type": "string"
+                },
+                "heard": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "before": {
+                  "type": "string"
+                },
+                "after": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "end": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "reviewed": {
+                  "type": "boolean"
+                }
+              },
+              "additionalProperties": true
+            }
+          },
+          "transcripts": {
+            "type": "object",
+            "description": "Only with --keep-transcripts.",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "text",
+                  "start",
+                  "end"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "end": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

@@ -19,10 +19,13 @@ from dataclasses import dataclass
 import numpy as np
 
 from pdf2audiobook.verification.contracts import (
+    MODEL_NAMES,
+    ChapterStatus,
     Difference,
     DifferenceKind,
     Flag,
     ModelName,
+    ModelRun,
     Word,
 )
 
@@ -434,3 +437,25 @@ def vote(reference: Sequence[Token], found: Mapping[ModelName, Sequence[Differen
             )
         )
     return flags
+
+
+def chapter_outcome(
+    runs: Sequence[ModelRun], flags: Sequence[Flag]
+) -> tuple[ChapterStatus, str | None, bool]:
+    """A chapter's status, reason and whether it is partial, from its model runs and flags.
+
+    Models that failed or were unavailable abstain (spec §5). With fewer than three voting
+    families the result is partial and never a three-way majority (spec §3); with none, the
+    chapter is `verification_unavailable`.
+    """
+    voted = [run for run in runs if run.outcome == "ok"]
+    if not voted:
+        reasons = {run.reason for run in runs}
+        reason = "cancelled" if "cancelled" in reasons else "no_models"
+        return "verification_unavailable", reason, True
+    partial = len({run.model for run in voted}) < len(MODEL_NAMES)
+    if any(flag.confirmed for flag in flags):
+        return "possible_mismatch", None, partial
+    if flags:
+        return "model_disagreement", None, partial
+    return "no_mismatch_detected", None, partial

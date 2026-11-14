@@ -53,12 +53,18 @@ def _inside(path: Path, folder: Path) -> bool:
         return False
 
 
+def _english_piper(voice: str, settings: Settings) -> bool:
+    """Piper voices are named by locale (`en_US-lessac-medium`); the model file says so too."""
+    name = voice or Path(str(settings.tts.piper.model_path or "")).name
+    return name.split("/")[-1].startswith("en_")
+
+
 def chapter_reference(
     workspace: Path, manifest: BookManifest, chapter: Chapter, settings: Settings
 ) -> Reference | Unavailable:
     """The expected narration for `chapter`, or why it can't be verified."""
     provider, voice, _speed = tts_selection(settings, chapter)
-    if provider == "piper" and not voice.split("/")[-1].startswith("en_"):
+    if provider == "piper" and not _english_piper(voice, settings):
         return Unavailable("unsupported_language")
     audio = audio_output_path(manifest, chapter, workspace)
     if not _inside(audio, workspace / "audio"):
