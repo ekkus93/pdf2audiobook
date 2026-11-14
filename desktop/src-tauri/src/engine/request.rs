@@ -243,6 +243,28 @@ pub enum Request {
 }
 
 impl Request {
+    /// The CLI command, as the app's log names it: a fixed word, never a path or value.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Request::Doctor { .. } => "doctor",
+            Request::ConfigShow => "config show",
+            Request::Inspect { .. } => "inspect",
+            Request::Workspace { .. } => "workspace",
+            Request::Voices { .. } => "voices",
+            Request::Thumbnail { .. } => "thumbnail",
+            Request::Analyze { .. } => "analyze",
+            Request::Convert { .. } => "convert",
+            Request::Review { .. } => "review",
+            Request::EditsList { .. } => "edits list",
+            Request::EditsAccept { .. } => "edits accept",
+            Request::EditsReject { .. } => "edits reject",
+            Request::PackM4b { .. } => "pack-m4b",
+            Request::RegenerateChapter { .. } => "regenerate-chapter",
+            Request::Recover { .. } => "recover",
+            Request::BudgetShow { .. } => "budget show",
+        }
+    }
+
     /// Whether the command can change a workspace (spec D3.d).
     pub fn is_write(&self) -> bool {
         matches!(

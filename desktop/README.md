@@ -63,6 +63,32 @@ The Python side has its own checks (see the main [README](../README.md#linting-t
 so change the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml` and
 `src-tauri/tauri.conf.json` together with it.
 
+## Security and privacy
+
+- **Permissions.** The main window may call the app's own commands, listen to its events and
+  open the file dialogs, nothing more (`src-tauri/capabilities/default.json`). The review window
+  has no permissions at all and may only load the CLI's review page on `127.0.0.1`. Chapter
+  audio is read through Tauri's asset protocol, which starts with an empty scope; listing a
+  book's chapters allows that book's `audio/` folder only. `src-tauri/tests/permissions.rs`
+  fails if a permission, capability, plugin or network client is added.
+- **Content Security Policy.** The release build allows only the app's own scripts and styles,
+  `data:` images (thumbnails), `blob:` media (the player) and Tauri's IPC and asset protocols;
+  no remote origin and no `eval`. `devCsp` adds Vite's dev server and React's refresh preamble
+  for `npm run tauri dev` only.
+- **Log.** The app writes one JSON line per event (app start, each CLI command, runs, the review
+  window) to `pdf2audiobook-desktop.log` in its log folder
+  (`~/.local/share/io.github.ekkus93.pdf2audiobook/logs/` on Linux). Each line holds an event
+  name, the CLI command's name, its exit code, duration, outcome and `reason` code, never a
+  path, title or message. `src-tauri/src/privacy.rs` and `../tests/test_desktop_privacy.py`
+  check that marker strings in a book's title, file name and text reach neither the log nor an
+  error.
+- **No network.** The app makes no network requests; only the CLI does (an LLM server, model
+  downloads). To check, run it with IPv4 and IPv6 refused for it and every process it starts:
+
+  ```bash
+  python3 scripts/no_network.py -- src-tauri/target/release/pdf2audiobook-desktop
+  ```
+
 ## Design system
 
 The app uses Google's Material 3 (spec D11) with the Midnight Iris palette.
@@ -106,3 +132,4 @@ Builds are unsigned for now.
 | `src-tauri/src/` | Rust: the bridge that runs the CLI, and the Tauri commands the frontend calls |
 | `src-tauri/capabilities/` | Permissions the frontend gets; kept to the minimum |
 | `src-tauri/tauri.conf.json` | Window, bundle and security settings |
+| `scripts/` | Icon subsetting and the no-network launcher |

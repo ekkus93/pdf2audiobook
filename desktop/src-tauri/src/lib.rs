@@ -1,7 +1,10 @@
+pub mod applog;
 pub mod audio;
 pub mod commands;
 pub mod engine;
 pub mod library;
+#[cfg(test)]
+mod privacy;
 pub mod settings;
 
 use std::time::Duration;
@@ -13,6 +16,16 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::Engine::default())
+        .setup(|app| {
+            // The app's own, content-free log (spec D8.c), next to Tauri's other app data.
+            if let Ok(folder) = app.path().app_log_dir() {
+                app.state::<commands::Engine>().log.set_folder(&folder);
+            }
+            app.state::<commands::Engine>()
+                .log
+                .record(applog::Event::new("app_started"));
+            Ok(())
+        })
         .on_window_event(|window, event| {
             // Closing during a run asks first; the frontend confirms, then calls quit_app.
             if let WindowEvent::CloseRequested { api, .. } = event {

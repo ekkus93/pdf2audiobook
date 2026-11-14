@@ -9,6 +9,7 @@ use base64::Engine as _;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
+use crate::applog::{AppLog, Event};
 use crate::engine::live::{CANCEL_GRACE, LiveRuns, Progress};
 use crate::engine::locate::{CliSource, LocateError, LocateOptions, LocatedCli, locate};
 use crate::engine::process::{CliCommand, Runner, SystemRunner};
@@ -27,6 +28,8 @@ pub struct Engine {
     pub live: Arc<LiveRuns>,
     /// The review server behind the open review window, if any (spec D6).
     pub review: Mutex<Option<ReviewServer>>,
+    /// The app's content-free log (spec D8.c).
+    pub log: Arc<AppLog>,
 }
 
 impl Default for Engine {
@@ -37,6 +40,7 @@ impl Default for Engine {
             runs: WorkspaceRuns::new(),
             live: Arc::new(LiveRuns::default()),
             review: Mutex::new(None),
+            log: Arc::new(AppLog::default()),
         }
     }
 }
@@ -202,6 +206,7 @@ pub async fn run_engine(
         }
     };
     let runner = Arc::clone(&engine.runner);
+    let started = std::time::Instant::now();
     let done = tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
         runner.run(&cli.command, &args)
@@ -209,7 +214,13 @@ pub async fn run_engine(
     .await
     .map_err(|_| BridgeError::Start)?
     .map_err(|_| BridgeError::Start)?;
-    Ok(parse(&done))
+    let outcome = parse(&done);
+    engine.log.record(
+        Event::new("engine_command")
+            .command(request.name())
+            .finished(done.code, started.elapsed(), &outcome, false),
+    );
+    Ok(outcome)
 }
 
 #[tauri::command]
@@ -481,10 +492,27 @@ pub fn start_run(
         .map_err(|busy| BridgeError::Busy {
             message: busy.to_string(),
         })?;
-    engine
+    let name = request.name();
+    let log = Arc::clone(&engine.log);
+    let id = engine
         .live
-        .start(&cli.command, &args, &workspace, Some(guard))
-        .map_err(|_| BridgeError::Start)
+        .start_with_hook(
+            &cli.command,
+            &args,
+            &workspace,
+            Some(guard),
+            Box::new(move |exit| {
+                log.record(Event::new("run_finished").command(name).finished(
+                    exit.code,
+                    exit.elapsed,
+                    exit.outcome,
+                    exit.cancelled,
+                ));
+            }),
+        )
+        .map_err(|_| BridgeError::Start)?;
+    engine.log.record(Event::new("run_started").command(name));
+    Ok(id)
 }
 
 #[tauri::command]
@@ -774,6 +802,9 @@ pub async fn open_review(
         }
     };
     *engine.review.lock().unwrap_or_else(PoisonError::into_inner) = Some(server);
+    engine
+        .log
+        .record(Event::new("review_opened").command("review"));
     let handle = app.clone();
     window.on_window_event(move |event| {
         if let WindowEvent::Destroyed = event {
@@ -788,6 +819,10 @@ pub async fn open_review(
                 if let Some(server) = server {
                     server.stop(CANCEL_GRACE);
                 }
+                handle
+                    .state::<Engine>()
+                    .log
+                    .record(Event::new("review_closed").command("review"));
                 // The main window re-reads the book: the review may have changed it (spec D6.b).
                 let _ = handle.emit("review-closed", ());
             });

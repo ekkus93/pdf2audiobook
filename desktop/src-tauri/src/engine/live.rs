@@ -55,6 +55,17 @@ struct Live {
     _guard: Option<RunGuard>,
 }
 
+/// How a live run ended, for the app's log.
+pub struct Exit<'a> {
+    pub code: Option<i32>,
+    pub elapsed: Duration,
+    pub outcome: &'a Outcome,
+    pub cancelled: bool,
+}
+
+/// Called once when a live run's child has exited.
+pub type ExitHook = Box<dyn FnOnce(Exit<'_>) + Send>;
+
 /// Every run this app started, by ID.
 #[derive(Default)]
 pub struct LiveRuns {
@@ -76,6 +87,19 @@ impl LiveRuns {
         workspace: &Path,
         guard: Option<RunGuard>,
     ) -> Result<u64, LiveError> {
+        self.start_with_hook(cli, args, workspace, guard, Box::new(|_| {}))
+    }
+
+    /// [`LiveRuns::start`], calling `on_exit` once the child has exited and its result is known.
+    pub fn start_with_hook(
+        &self,
+        cli: &CliCommand,
+        args: &[OsString],
+        workspace: &Path,
+        guard: Option<RunGuard>,
+        on_exit: ExitHook,
+    ) -> Result<u64, LiveError> {
+        let started = Instant::now();
         let mut child = Command::new(&cli.program)
             .args(cli.argv(args))
             .stdin(Stdio::null())
@@ -107,9 +131,19 @@ impl LiveRuns {
                     .map(|reader| reader.join().unwrap_or_default())
                     .unwrap_or_default(),
             };
-            let mut live = lock(&live);
-            live.done = Some(parse(&finished));
-            live._guard = None;
+            let outcome = parse(&finished);
+            let cancelled = {
+                let mut live = lock(&live);
+                live.done = Some(outcome.clone());
+                live._guard = None;
+                live.cancelled
+            };
+            on_exit(Exit {
+                code,
+                elapsed: started.elapsed(),
+                outcome: &outcome,
+                cancelled,
+            });
         });
         Ok(id)
     }

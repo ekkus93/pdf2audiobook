@@ -1,12 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "The main window may call the app's own commands, listen to its events and open the file dialogs; nothing else (spec D8.a).",
   "windows": [
     "main"
   ],
   "permissions": [
-    "core:default",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
     "dialog:allow-open",
     "dialog:allow-save"
   ]
