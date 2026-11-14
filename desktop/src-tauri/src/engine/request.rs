@@ -1211,6 +1211,70 @@ mod tests {
     }
 
     #[test]
+    fn a_pdf_password_is_only_ever_an_environment_variable_name() {
+        let name = env("BOOK_PDF_PASSWORD");
+        let options = BookOptions {
+            pdf_password_env: Some(name.clone()),
+            ..BookOptions::default()
+        };
+        let requests = [
+            Request::Inspect {
+                source: "/b.pdf".into(),
+                pdf_password_env: Some(name.clone()),
+            },
+            Request::Thumbnail {
+                book: "/b.pdf".into(),
+                output: "/t.png".into(),
+                width: 320,
+                pdf_password_env: Some(name.clone()),
+            },
+            Request::Analyze {
+                book: "/b.pdf".into(),
+                options: options.clone(),
+            },
+            Request::Convert {
+                book: "/b.pdf".into(),
+                options,
+                convert: ConvertOptions::default(),
+            },
+        ];
+        for request in requests {
+            let args = args_of(request);
+            let password_args: Vec<_> =
+                args.iter().filter(|arg| arg.contains("password")).collect();
+            assert_eq!(password_args, ["--pdf-password-env=BOOK_PDF_PASSWORD"]);
+        }
+    }
+
+    #[test]
+    fn a_password_typed_where_a_variable_name_belongs_is_refused() {
+        for value in [
+            "hunter2!",
+            "my secret",
+            "p@ssw0rd",
+            "",
+            "1BOOK",
+            "BOOK-PW",
+            "PW=secret",
+        ] {
+            assert_eq!(
+                EnvVarName::try_from(value.to_owned()),
+                Err(RequestError::InvalidEnvVarName),
+                "{value}"
+            );
+        }
+        assert!(EnvVarName::try_from("A".repeat(129)).is_err());
+        for value in ["BOOK_PDF_PASSWORD", "_pw", "pw2"] {
+            assert!(EnvVarName::try_from(value.to_owned()).is_ok(), "{value}");
+        }
+        let json = r#"{"command": "inspect", "source": "/b.pdf", "pdf_password_env": "hunter2!"}"#;
+        let error = serde_json::from_str::<Request>(json)
+            .unwrap_err()
+            .to_string();
+        assert!(!error.contains("hunter2"), "{error}");
+    }
+
+    #[test]
     fn an_awkward_book_path_stays_one_argument() {
         let path = "/books/-x my \"quoted\" 'book'; rm -rf $HOME.pdf";
         let request = Request::Workspace {

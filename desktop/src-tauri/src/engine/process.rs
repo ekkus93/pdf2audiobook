@@ -80,3 +80,66 @@ pub fn is_executable(path: &Path) -> bool {
         path.is_file()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::testing::{TestRunner, write_script};
+    use tempfile::TempDir;
+
+    #[test]
+    fn the_child_inherits_the_app_environment() {
+        let temp = TempDir::new().unwrap();
+        let cli = write_script(
+            temp.path(),
+            "env-echo",
+            "#!/bin/sh\nprintf '%s\\n%s' \"$HOME\" \"$PATH\"\n",
+        );
+
+        let done = TestRunner.run(&CliCommand::direct(cli), &[]).unwrap();
+
+        let expected = format!(
+            "{}\n{}",
+            std::env::var("HOME").unwrap(),
+            std::env::var("PATH").unwrap()
+        );
+        assert_eq!(done.stdout, expected);
+    }
+
+    #[test]
+    fn the_child_gets_no_input_and_its_output_is_captured() {
+        let temp = TempDir::new().unwrap();
+        let cli = write_script(
+            temp.path(),
+            "io",
+            "#!/bin/sh\nread line || echo no-input\necho err >&2\nexit 7\n",
+        );
+
+        let done = TestRunner.run(&CliCommand::direct(cli), &[]).unwrap();
+
+        assert_eq!(
+            done,
+            Finished {
+                code: Some(7),
+                stdout: "no-input\n".into(),
+                stderr: "err\n".into()
+            }
+        );
+    }
+
+    #[test]
+    fn find_on_path_needs_an_executable_file() {
+        let temp = TempDir::new().unwrap();
+        write_script(&temp.path().join("bin"), "tool", "#!/bin/sh\n");
+        std::fs::create_dir_all(temp.path().join("dir/tool")).unwrap();
+        let path_env =
+            std::env::join_paths([temp.path().join("dir"), temp.path().join("bin")]).unwrap();
+
+        assert_eq!(
+            find_on_path("tool", Some(&path_env)),
+            Some(temp.path().join("bin/tool"))
+        );
+        assert_eq!(find_on_path("missing", Some(&path_env)), None);
+        assert_eq!(find_on_path("tool", None), None);
+    }
+}
