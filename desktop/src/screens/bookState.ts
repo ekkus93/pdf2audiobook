@@ -31,7 +31,8 @@ export function summarize(book: LibraryBook, minConfidence: number): BookSummary
   const statuses = inspect.conversion_status?.chapters ?? [];
   const converted = statuses.length ? statuses.filter((chapter) => chapter.status === "complete").length : null;
   const base = { title: inspect.title, chapters, converted, lastRun };
-  if (book.run_status?.state === "running") {
+  // A "running" status with no live run was left by a run that stopped (spec D5.b).
+  if (book.live && book.run_status?.state === "running") {
     return { ...base, state: book.run_status.command === "convert" ? "converting" : "analyzing" };
   }
   if (statuses.some((chapter) => chapter.status === "failed")) {

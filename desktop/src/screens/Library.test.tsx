@@ -25,6 +25,7 @@ const DATA: LibraryData = {
       workspace: "/home/user/audiobooks/lighthouse-1",
       manifest: "/home/user/audiobooks/lighthouse-1/manifest.json",
       analyzed: true,
+      live: false,
       source: null,
       inspect: {
         title: "The Lighthouse at Gull Point",
@@ -42,6 +43,7 @@ const DATA: LibraryData = {
       workspace: "/home/user/audiobooks/new-2",
       manifest: "/home/user/audiobooks/new-2/manifest.json",
       analyzed: false,
+      live: false,
       source: "/books/Spring Snow.epub",
       inspect: null,
       error: null,

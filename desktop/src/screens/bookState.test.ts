@@ -19,6 +19,7 @@ function book(changes: Partial<LibraryBook> = {}, inspect: Partial<InspectManife
     workspace: "/out/lighthouse-2b79af3fb1",
     manifest: "/out/lighthouse-2b79af3fb1/manifest.json",
     analyzed: true,
+    live: false,
     source: null,
     inspect: { ...INSPECT, ...inspect },
     error: null,
@@ -63,9 +64,17 @@ describe("summarize", () => {
 
   it("a running analyze or convert shows as in progress, with its last report time", () => {
     const running = (command: string) =>
-      book({ run_status: { command, state: "running", updated_at: "2026-11-14T10:00:00+00:00", elapsed_seconds: 5 } });
+      book({ live: true, run_status: { command, state: "running", updated_at: "2026-11-14T10:00:00+00:00", elapsed_seconds: 5 } });
     expect(summarize(running("convert"), 0.75)).toMatchObject({ state: "converting", lastRun: "2026-11-14T10:00:00+00:00" });
     expect(summarize(running("analyze"), 0.75).state).toBe("analyzing");
+  });
+
+  it("a running status left by a run that stopped isn't shown as in progress", () => {
+    const stale = book({
+      live: false,
+      run_status: { command: "convert", state: "running", updated_at: "2026-11-14T10:00:00+00:00", elapsed_seconds: 5 },
+    });
+    expect(summarize(stale, 0.75)).toMatchObject({ state: "ready", lastRun: "2026-11-14T10:00:00+00:00" });
   });
 
   it("a workspace that can't be inspected needs attention", () => {

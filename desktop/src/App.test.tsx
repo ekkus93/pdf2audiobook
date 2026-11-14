@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +9,8 @@ vi.mock("./engine/api", async (original) => ({
   locateEngine: vi.fn(),
   run: vi.fn(),
   describe: vi.fn(),
+  onCloseRequested: vi.fn(),
+  quitApp: vi.fn(),
 }));
 
 import * as api from "./engine/api";
@@ -24,7 +26,14 @@ beforeEach(() => {
   });
   vi.mocked(api.library).mockResolvedValue({ output_dir: "/out", min_boundary_confidence: 0.75, books: [], commands: [] });
   vi.mocked(api.locateEngine).mockReturnValue(new Promise(() => {}));
+  vi.mocked(api.onCloseRequested).mockImplementation(async (handler) => {
+    closeRequested = handler;
+    return () => undefined;
+  });
+  vi.mocked(api.quitApp).mockResolvedValue(undefined);
 });
+
+let closeRequested: () => void = () => undefined;
 
 describe("App shell", () => {
   it("opens on the library with the rail's three destinations", async () => {
@@ -52,5 +61,20 @@ describe("App shell", () => {
     await user.keyboard("{Enter}");
     expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("main", { name: "Setup" })).toBeInTheDocument();
+  });
+
+  it("asks before quitting while a run is going, then stops it and quits", async () => {
+    render(<App />);
+    await screen.findByText("No books yet");
+    act(() => closeRequested());
+    const dialog = document.querySelector("md-dialog") as HTMLElement & { open: boolean };
+    expect(dialog.open).toBe(true);
+    expect(dialog).toHaveTextContent("Stop the running task and quit?");
+    const [keep, quit] = Array.from(dialog.querySelectorAll("md-text-button, md-filled-button"));
+    expect(keep).toHaveTextContent("Keep running");
+    await act(async () => {
+      quit.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(api.quitApp).toHaveBeenCalledOnce();
   });
 });

@@ -19,6 +19,7 @@ const BOOK: LibraryBook = {
   workspace: "/out/lighthouse-1",
   manifest: "/out/lighthouse-1/manifest.json",
   analyzed: true,
+  live: false,
   source: null,
   inspect: {
     title: "The Lighthouse at Gull Point",

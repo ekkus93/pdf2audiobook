@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, EngineInfo, Library, Outcome, Request } from "./types";
+import { listen } from "@tauri-apps/api/event";
+import type { AppSettings, EngineInfo, Library, Outcome, Progress, Request } from "./types";
 
 /** Finds and confirms the CLI (spec D3.a). Rejects with a `BridgeError`. */
 export function locateEngine(): Promise<EngineInfo> {
@@ -39,4 +40,28 @@ export function errorMessage(error: unknown): string {
     return error.message;
   }
   return "The engine could not be started";
+}
+
+/** Starts analyze or convert for a book's workspace; resolves with the run's ID at once. */
+export function startRun(request: Request, workspace: string): Promise<number> {
+  return invoke<number>("start_run", { request, workspace });
+}
+
+export function runProgress(id: number): Promise<Progress> {
+  return invoke<Progress>("run_progress", { id });
+}
+
+/** Asks a run to stop; the bridge kills it if it hasn't stopped after 30 seconds. */
+export async function cancelRun(id: number): Promise<void> {
+  await invoke("cancel_run", { id });
+}
+
+/** Stops every run, then quits the app. */
+export async function quitApp(): Promise<void> {
+  await invoke("quit_app");
+}
+
+/** Called when the window is closed while a run is going; returns an unsubscribe function. */
+export function onCloseRequested(handler: () => void): Promise<() => void> {
+  return listen("close-requested", handler);
 }

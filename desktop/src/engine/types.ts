@@ -123,19 +123,38 @@ export interface InspectManifest {
   conversion_status?: { chapters: Array<{ number: number; status: string }> };
 }
 
+export interface RunStage {
+  name: string;
+  detail: string | null;
+  unit: string;
+  done: number;
+  total: number | null;
+  elapsed_seconds: number;
+  estimated_remaining_seconds: number | null;
+}
+
 /** `reports/run_status.json` (desktop/contracts/run-status.schema.json). */
 export interface RunStatus {
   command: string;
   state: "running" | "completed" | "stopped";
   updated_at: string;
   elapsed_seconds: number;
+  stage?: RunStage | null;
+  completed_stages?: Array<{ name: string; seconds: number }>;
 }
+
+/** `run_progress`: a run still going, or its result (src-tauri/src/engine/live.rs). */
+export type Progress =
+  | { state: "running"; status: RunStatus | null; cancelling: boolean }
+  | { state: "finished"; status: RunStatus | null; outcome: Outcome; cancelled: boolean };
 
 export interface LibraryBook {
   workspace: string;
   manifest: string;
   /** False for a book added in the app that hasn't been analyzed yet. */
   analyzed: boolean;
+  /** True while a run this app started is working on the book. */
+  live: boolean;
   source: string | null;
   inspect: InspectManifest | null;
   error: string | null;
