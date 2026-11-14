@@ -261,7 +261,18 @@ uv run pdf2audiobook convert path/to/book.pdf --cover ./cover.jpg
 uv run pdf2audiobook convert path/to/damaged.pdf --accept-review damaged_source
 uv run pdf2audiobook budget show --output ./audiobooks/BOOK
 uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
+uv run pdf2audiobook workspace path/to/book.pdf --json
+uv run pdf2audiobook voices --json
+uv run pdf2audiobook thumbnail path/to/book.pdf --output cover.png --width 320 --json
+uv run pdf2audiobook --version
 ~~~
+
+`workspace` prints the folder a book's analysis uses, without creating it. `voices` lists the
+voices the selected TTS provider accepts (Piper reports that its numbered speakers can't be
+listed). `thumbnail` writes a PNG of a PDF's first page or an EPUB's cover into an existing
+folder. `review --json` prints its address as one JSON line, `{"url", "port"}`, as soon as the
+server is listening. These and the error `reason` codes below exist so that other programs,
+such as the desktop app, can drive the CLI.
 
 Every command has `--help` with its options and an example.
 
@@ -283,7 +294,14 @@ Install Tesseract separately for scanned pages. For synthesis, run `uv sync --ex
 | 5 | LLM problem (unreachable server, context too small, output cut off, budget reached) |
 | 6 | Audio problem, including "review the manifest before synthesis" |
 | 7 | Some chapters converted and others failed |
-| 130 | Interrupted with Ctrl+C |
+| 130 | Interrupted with Ctrl+C, or stopped with SIGTERM |
+
+With `--json`, a failure prints one JSON object on stderr: `{"ok": false, "error": {"type",
+"code", "message", "reason"}, "warnings"}`. `reason` appears only when a program can act on the
+failure: `review_required`, `review_acknowledgement_required`, `workspace_locked`,
+`pending_recovery`, `chapter_conflict`, `llm_unreachable`, `llm_context_too_small`,
+`llm_output_cap` or `budget_exhausted`. For example, exit 6 with `review_required` means "open
+the review page", while exit 6 without a reason is an audio failure.
 
 ### PDF and EPUB input
 

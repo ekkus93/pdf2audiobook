@@ -372,6 +372,35 @@ Events print for warnings; `--verbose` or an explicit `general.log_level` adds p
 and `command_failed`. Unexpected exceptions print "Unexpected internal error"; `OSError` and
 `ValueError` keep their fixed messages; a busy `review` port reports a fixed message and
 Ctrl+C ends `review` with exit 0.
+
+### Machine-readable outputs for other programs
+
+The desktop app (`docs/PDF2AUDIOBOOK_TAURI_SPEC.md`, D2) drives the CLI only through these
+outputs, so treat their shapes as contracts: add fields, never rename or remove them.
+
+- `--version` prints the version and exits 0, with or without a command after it.
+- `workspace BOOK [--output DIR] --json` prints `{"workspace", "exists", "warnings"}`. The
+  folder uses the same rule as analysis (`pipeline.analysis_workspace_folder`:
+  `<output_dir>/<stem>-<first 10 hex of the book's SHA-256>`); the command reads the book to
+  hash it and writes nothing.
+- Every `--json` error is one stderr object `{"ok": false, "error": {"type", "code",
+  "message", "reason"?}, "warnings"}`. `reason` is present only for failures a caller can act
+  on, and comes from `AudiobookError.error_reason` (set on a subclass or per raise; the older
+  `LLMError.reason` is a separate log tag for `llm_request_failed`). The codes are
+  `review_required` (low boundary confidence, or an unapproved empty chapter),
+  `review_acknowledgement_required` (`damaged_source`, `ambiguous_page_numbers`),
+  `workspace_locked`, `pending_recovery`, `chapter_conflict`, `llm_unreachable` (connection
+  refused, or Ollama's served context can't be read), `llm_context_too_small`,
+  `llm_output_cap` and `budget_exhausted`. A timeout is not `llm_unreachable`.
+- `review --json` prints one flushed stdout line, `{"url": "http://127.0.0.1:<port>/",
+  "port": <port>}`, once the server listens, and nothing else; `--port 0` picks a free port.
+- SIGTERM stops any command like Ctrl+C (see the entry point below).
+- `voices [--tts-provider P] [--tts-model M] --json` prints `{"provider", "voices",
+  "listable", "default_voice", "warnings"}`. Piper speakers are numbers inside the model, so
+  Piper reports `"listable": false` and an empty list.
+- `thumbnail BOOK --output FILE.png [--width N] --json` writes only that PNG (first page of a
+  PDF, first page of an EPUB, where its cover usually is) and prints `{"thumbnail", "width",
+  "height", "warnings"}`. The output folder must already exist.
 `pack-m4b --cover` applies artwork to the M4B output; freshness checks use the
 chapter text hash, independently of conversion voice, speed or cover settings.
 Unknown and pending LLM requests count against their recorded worst-case token
