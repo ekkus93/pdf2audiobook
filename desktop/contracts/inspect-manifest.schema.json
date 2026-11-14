@@ -4,8 +4,12 @@
   "description": "A workspace's chapters, coverage and (after conversion) per-chapter audio status.",
   "type": "object",
   "required": [
+    "approved",
     "chapters",
     "coverage",
+    "review_acknowledged",
+    "review_required",
+    "source_path",
     "title",
     "warnings"
   ],
@@ -143,6 +147,24 @@
         }
       },
       "additionalProperties": true
+    },
+    "source_path": {
+      "type": "string"
+    },
+    "review_required": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "review_acknowledged": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "approved": {
+      "type": "boolean"
     }
   },
   "additionalProperties": true

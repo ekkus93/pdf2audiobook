@@ -1,5 +1,9 @@
 {
   "title": "The Lighthouse at Gull Point",
+  "source_path": "/home/user/books/lighthouse.pdf",
+  "review_required": [],
+  "review_acknowledged": [],
+  "approved": false,
   "chapters": [
     {
       "id": "c0001",

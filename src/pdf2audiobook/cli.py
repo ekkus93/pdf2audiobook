@@ -557,6 +557,10 @@ def inspect(
 
             payload = {
                 "title": manifest.title,
+                "source_path": manifest.source_path,
+                "review_required": manifest.review_required,
+                "review_acknowledged": manifest.review_acknowledged,
+                "approved": manifest.approved,
                 "chapters": [chapter.model_dump() for chapter in manifest.chapters],
                 "warnings": manifest.warnings,
                 "coverage": chapter_coverage_report(manifest),

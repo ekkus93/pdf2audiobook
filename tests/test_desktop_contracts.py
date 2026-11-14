@@ -97,7 +97,10 @@ def test_inspect_book(book: dict[str, Path]) -> None:
 
 
 def test_inspect_manifest(book: dict[str, Path]) -> None:
-    _check("inspect-manifest", _ok("inspect", str(book["manifest"]), "--json"))
+    payload = _ok("inspect", str(book["manifest"]), "--json")
+    _check("inspect-manifest", payload)
+    assert payload["source_path"] == str(book["source"].resolve())
+    assert payload["review_required"] == [] and payload["approved"] is False
 
 
 def test_workspace(book: dict[str, Path]) -> None:
