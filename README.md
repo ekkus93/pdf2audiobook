@@ -304,6 +304,46 @@ uv run pdf2audiobook batch ./books --no-llm --recursive --json
 
 ## Voices and speech
 
+### Kitten voices
+
+Kitten has eight voices, and all three Kitten models (`mini`, the default, plus `micro` and
+`nano`) offer the same ones. The default voice is **Jasper**. Each name links to a short sample
+made with the `mini` model at normal speed; all eight read the same sentence:
+
+| Voice | Kitten voice ID | Sample |
+|---|---|---|
+| Bella | `expr-voice-2-f` (female) | [Bella.mp3](docs/audio/voices/Bella.mp3?raw=true) |
+| Jasper (default) | `expr-voice-2-m` (male) | [Jasper.mp3](docs/audio/voices/Jasper.mp3?raw=true) |
+| Luna | `expr-voice-3-f` (female) | [Luna.mp3](docs/audio/voices/Luna.mp3?raw=true) |
+| Bruno | `expr-voice-3-m` (male) | [Bruno.mp3](docs/audio/voices/Bruno.mp3?raw=true) |
+| Rosie | `expr-voice-4-f` (female) | [Rosie.mp3](docs/audio/voices/Rosie.mp3?raw=true) |
+| Hugo | `expr-voice-4-m` (male) | [Hugo.mp3](docs/audio/voices/Hugo.mp3?raw=true) |
+| Kiki | `expr-voice-5-f` (female) | [Kiki.mp3](docs/audio/voices/Kiki.mp3?raw=true) |
+| Leo | `expr-voice-5-m` (male) | [Leo.mp3](docs/audio/voices/Leo.mp3?raw=true) |
+
+Use the name, not the ID, wherever pdf2audiobook asks for a voice. To choose one:
+
+- **One run:** `uv run pdf2audiobook convert book.pdf --voice Luna` (add `--speed 1.1` to read
+  faster, or `--tts-model micro` for a smaller model).
+- **Every run:** set it in `~/.config/pdf2audiobook/config.toml`:
+
+  ~~~toml
+  [tts.kitten]
+  model = "mini"
+  voice = "Luna"
+  speed = 1.0
+  ~~~
+
+- **One book:** a `tts.profiles` entry matched by file name (below).
+- **One chapter:** the "Speaker voice ID" field on the [review page](#step-4-review-the-chapters-in-your-browser).
+- **One passage:** a `[[voice:Leo]]` marker in the chapter text (see dialogue, below).
+
+To regenerate the samples, for example after a Kitten upgrade, run
+`uv run python scripts/voice_samples.py` (it needs the `kitten` extra and FFmpeg). Kitten's
+output varies slightly between runs, so every run rewrites all eight files.
+
+### Piper and other settings
+
 Kitten is the default TTS provider. Piper can be selected when its CLI and a voice model are installed separately; configure the ONNX model path in TOML:
 
 ~~~toml
