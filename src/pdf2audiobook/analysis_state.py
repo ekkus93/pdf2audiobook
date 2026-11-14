@@ -59,11 +59,7 @@ def _changed_analysis_stages(folder: Path, current: dict[str, str]) -> list[str]
     prior_stages = previous.get("stages") if isinstance(previous, dict) else None
     if not isinstance(prior_stages, dict):
         return ["analysis"]
-    changed = sorted(
-        name
-        for name, value in current.items()
-        if not isinstance(prior_stages.get(name), str) or prior_stages[name] != value
-    )
+    changed = sorted(name for name, value in current.items() if prior_stages.get(name) != value)
     return changed or ["analysis"]
 
 
