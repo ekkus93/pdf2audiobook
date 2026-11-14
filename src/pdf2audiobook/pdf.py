@@ -14,7 +14,7 @@ from typing import Any, Literal, Protocol, runtime_checkable
 import pymupdf
 
 from pdf2audiobook.config import Pdf as PdfSettings
-from pdf2audiobook.errors import ExtractionError, InputError
+from pdf2audiobook.errors import ConfigError, ExtractionError, InputError, WorkspaceError
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.pdf_layout import (
     _background_only,
@@ -152,6 +152,34 @@ def inspect_pdf(source: Path, password_env: str | None = None) -> dict:
             # Malformed PDF metadata or backend diagnostics can echo private
             # document paths or content; inspection is read-only and fail-closed.
             raise ExtractionError("Failed to inspect PDF metadata or page geometry") from None
+
+
+def render_thumbnail(
+    source: Path, output: Path, *, width: int, password_env: str | None = None
+) -> tuple[int, int]:
+    """Write the first page of a PDF, or the cover of an EPUB, as a PNG ``width`` wide.
+
+    Writes only ``output``, which must be a ``.png`` path in an existing folder.
+    """
+    if output.suffix.lower() != ".png" or not output.parent.is_dir():
+        raise ConfigError("Thumbnail output must be a .png file in an existing folder")
+    with _open(source, password_env) as document:
+        try:
+            page = document[0]
+            scale = width / page.rect.width
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
+            data = pixmap.tobytes("png")
+            size = (pixmap.width, pixmap.height)
+        except Exception:
+            # Backend diagnostics can echo private paths or book content.
+            raise ExtractionError("Failed to render the book's first page") from None
+    from pdf2audiobook.workspace import atomic_write
+
+    try:
+        atomic_write(output, data)
+    except WorkspaceError:
+        raise ExtractionError("Cannot write the thumbnail file") from None
+    return size
 
 
 def _inspection_label(page: pymupdf.Page, index: int) -> str:

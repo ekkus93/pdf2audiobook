@@ -613,6 +613,36 @@ def voices(
         fail(exc, json_output=json_output)
 
 
+@app.command(epilog="Example: pdf2audiobook thumbnail ./book.pdf --output ./cover.png --json")
+def thumbnail(
+    source: Path = typer.Argument(..., help="PDF or EPUB book."),
+    output: Path = typer.Option(..., "--output", help="PNG file to write."),
+    width: int = typer.Option(320, "--width", min=16, max=2048, help="Width in pixels."),
+    pdf_password_env: str | None = typer.Option(
+        None, "--pdf-password-env", help="Name of environment variable containing PDF password."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Render a book's first page (or an EPUB's cover) as a PNG thumbnail."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.pdf import render_thumbnail
+
+        rendered_width, height = render_thumbnail(
+            source, output, width=width, password_env=pdf_password_env
+        )
+        emit(
+            {"thumbnail": str(output), "width": rendered_width, "height": height},
+            json_output,
+        )
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
 def _overrides(
     output: Path | None,
     ocr: str | None,
