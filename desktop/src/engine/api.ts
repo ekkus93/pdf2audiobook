@@ -76,9 +76,14 @@ export function onReviewClosed(handler: () => void): Promise<() => void> {
   return listen("review-closed", handler);
 }
 
-/** A book's chapter MP3s; also lets the player read that book's audio folder. */
+/** A book's chapter MP3s. */
 export function bookAudio(workspace: string): Promise<AudioFile[]> {
   return invoke<AudioFile[]>("book_audio", { workspace });
+}
+
+/** Lets the player read this book's chapters (and no other book's) through `chapter:`. */
+export async function playBookAudio(workspace: string): Promise<void> {
+  await invoke("play_book_audio", { workspace });
 }
 
 export async function openAudioFolder(workspace: string): Promise<void> {

@@ -94,6 +94,7 @@ pub fn run() {
             commands::quit_app,
             commands::open_review,
             commands::book_audio,
+            commands::play_book_audio,
             commands::open_audio_folder,
             commands::export_zip,
         ])

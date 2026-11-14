@@ -1,11 +1,14 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
+import { playBookAudio } from "../engine/api";
 import type { AudioFile } from "../engine/types";
 import { PlayerBar } from "../ui/PlayerBar";
 
 export interface Queue {
   /** The book's title, shown under the chapter. */
   book: string;
+  /** The book's workspace: the player reads chapters from its `audio/` folder. */
+  workspace: string;
   files: AudioFile[];
   index: number;
 }
@@ -16,12 +19,14 @@ export function chapterName(file: AudioFile): string {
 }
 
 /**
- * Reads a chapter by file name through the app's `chapter:` protocol and returns a `blob:` URL
- * to play. The bridge serves only MP3s in the open book's `audio/` folder (audio::serve);
- * anything else is refused. WebKitGTK's media element can't stream from a custom scheme (it
- * reports "source not supported"), but `fetch` can.
+ * Reads a chapter of the book in `workspace` by file name through the app's `chapter:` protocol
+ * and returns a `blob:` URL to play. The bridge serves only MP3s from one book's `audio/`
+ * folder (audio::serve), so the player first makes it this book's: browsing to another book
+ * meanwhile doesn't stop playback. WebKitGTK's media element can't stream from a custom scheme
+ * (it reports "source not supported"), but `fetch` can.
  */
-export async function loadChapter(name: string): Promise<string> {
+export async function loadChapter(workspace: string, name: string): Promise<string> {
+  await playBookAudio(workspace);
   return blobUrl(convertFileSrc(name, "chapter"));
 }
 
@@ -39,15 +44,16 @@ export function Player({ queue, onChange }: { queue: Queue | null; onChange: (qu
   const [position, setPosition] = useState(0);
   const [failed, setFailed] = useState(false);
   const file = queue ? queue.files[queue.index] : undefined;
+  const workspace = queue?.workspace;
 
   useEffect(() => {
     const element = audio.current;
-    if (!element || !file) return;
+    if (!element || !file || !workspace) return;
     let current = true;
     let url: string | null = null;
     setPosition(0);
     setFailed(false);
-    void loadChapter(file.name)
+    void loadChapter(workspace, file.name)
       .then((loaded) => {
         url = loaded;
         if (!current) return URL.revokeObjectURL(loaded);
@@ -60,7 +66,7 @@ export function Player({ queue, onChange }: { queue: Queue | null; onChange: (qu
       element.pause();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [file]);
+  }, [file, workspace]);
 
   if (!queue || !file) return null;
   const go = (index: number) => onChange({ ...queue, index });

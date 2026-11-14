@@ -834,27 +834,28 @@ pub async fn open_review(
     Ok(())
 }
 
-/// Lists a book's chapter MP3s and makes its `audio/` folder the one the player may read through
-/// the `chapter:` protocol, closing any earlier book's (spec D7.a, D8.a).
+/// Lists a book's chapter MP3s. Listing doesn't change what the player may read.
 #[tauri::command]
-pub fn book_audio(
-    engine: State<'_, Engine>,
-    workspace: PathBuf,
-) -> Result<Vec<crate::audio::AudioFile>, BridgeError> {
-    let files = match crate::audio::chapter_files(&workspace) {
-        Ok(files) => files,
-        Err(crate::audio::AudioError::NoAudio) => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(BridgeError::Request {
-                message: error.to_string(),
-            });
-        }
-    };
+pub fn book_audio(workspace: PathBuf) -> Result<Vec<crate::audio::AudioFile>, BridgeError> {
+    match crate::audio::chapter_files(&workspace) {
+        Ok(files) => Ok(files),
+        Err(crate::audio::AudioError::NoAudio) => Ok(Vec::new()),
+        Err(error) => Err(BridgeError::Request {
+            message: error.to_string(),
+        }),
+    }
+}
+
+/// Makes this book's `audio/` folder the one the `chapter:` protocol may read, replacing any
+/// other (spec D7.a, D8.a). The player calls it before loading each chapter, so the folder is
+/// always the book being played, whatever book the window shows.
+#[tauri::command]
+pub fn play_book_audio(engine: State<'_, Engine>, workspace: PathBuf) -> Result<(), BridgeError> {
     let folder = crate::audio::audio_dir(&workspace).map_err(|error| BridgeError::Request {
         message: error.to_string(),
     })?;
     engine.audio.open(folder);
-    Ok(files)
+    Ok(())
 }
 
 /// Opens the book's audio folder in the system's file manager. Only that folder: the frontend

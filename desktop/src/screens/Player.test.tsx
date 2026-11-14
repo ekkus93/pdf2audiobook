@@ -8,7 +8,15 @@ vi.mock("@tauri-apps/api/core", async (original) => ({
   convertFileSrc: (path: string, protocol = "asset") => `${protocol}://localhost/${encodeURIComponent(path)}`,
 }));
 
+vi.mock("../engine/api", async (original) => ({
+  ...(await original<typeof import("../engine/api")>()),
+  playBookAudio: vi.fn(),
+}));
+
+import * as api from "../engine/api";
 import { Player, chapterName, type Queue } from "./Player";
+
+const BOOK = "/out/b";
 
 const FILES: AudioFile[] = [
   { path: "/out/b/audio/001 - The Keeper.mp3", name: "001 - The Keeper.mp3", bytes: 1 },
@@ -17,16 +25,22 @@ const FILES: AudioFile[] = [
 
 const fetched: string[] = [];
 const revoked: string[] = [];
+/** The book whose folder the bridge serves, as play_book_audio sets it. */
+let selected: string | null = null;
 
 beforeEach(() => {
   fetched.length = 0;
   revoked.length = 0;
+  selected = null;
+  vi.mocked(api.playBookAudio).mockImplementation(async (workspace: string) => {
+    selected = workspace;
+  });
   vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
   vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
-  // Like the bridge (audio::serve): only MP3s of the open book are served.
+  // Like the bridge (audio::serve): only MP3s of the selected book are served.
   vi.stubGlobal("fetch", async (url: string) => {
     fetched.push(url);
-    const allowed = /^chapter:\/\/localhost\/[^/]+\.mp3$/.test(decodeURIComponent(url));
+    const allowed = selected === BOOK && /^chapter:\/\/localhost\/[^/]+\.mp3$/.test(decodeURIComponent(url));
     // A string body: Node 22's Response can't read jsdom's Blob.
     return new Response(allowed ? "mp3" : null, { status: allowed ? 200 : 403, headers: { "Content-Type": "audio/mpeg" } });
   });
@@ -65,7 +79,7 @@ describe("Player", () => {
   });
 
   it("reads the chosen chapter through the chapter protocol, plays it, and moves between chapters", async () => {
-    render(<Harness start={{ book: "Lighthouse", files: FILES, index: 0 }} />);
+    render(<Harness start={{ book: "Lighthouse", workspace: BOOK, files: FILES, index: 0 }} />);
     expect(screen.getByRole("region", { name: "Player" })).toHaveTextContent("The Keeper");
     await waitFor(() => expect(audio().src).toBe("blob:chapter-1"));
     // By file name only: the bridge decides which folder that is.
@@ -83,14 +97,26 @@ describe("Player", () => {
 
   it("says so when the bridge refuses a file that isn't a chapter", async () => {
     const outside = { path: "/out/b/manifest.json", name: "manifest.json", bytes: 1 };
-    render(<Harness start={{ book: "Lighthouse", files: [outside], index: 0 }} />);
+    render(<Harness start={{ book: "Lighthouse", workspace: BOOK, files: [outside], index: 0 }} />);
     expect(await screen.findByText("This chapter couldn't be loaded")).toBeInTheDocument();
     expect(audio().getAttribute("src")).toBeNull();
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
   });
 
+  it("keeps reading its own book's chapters after another book's folder is selected", async () => {
+    render(<Harness start={{ book: "Lighthouse", workspace: BOOK, files: FILES, index: 0 }} />);
+    await waitFor(() => expect(audio().src).toBe("blob:chapter-1"));
+    expect(api.playBookAudio).toHaveBeenLastCalledWith(BOOK);
+    // Another book takes the bridge's folder, as playing it from elsewhere would.
+    selected = "/out/other";
+    await press("Next chapter");
+    await waitFor(() => expect(audio().src).toBe("blob:chapter-2"));
+    expect(api.playBookAudio).toHaveBeenLastCalledWith(BOOK);
+    expect(screen.queryByText("This chapter couldn't be loaded")).not.toBeInTheDocument();
+  });
+
   it("goes on to the next chapter when one ends", async () => {
-    render(<Harness start={{ book: "Lighthouse", files: FILES, index: 0 }} />);
+    render(<Harness start={{ book: "Lighthouse", workspace: BOOK, files: FILES, index: 0 }} />);
     await act(async () => {
       audio().dispatchEvent(new Event("ended"));
     });
@@ -98,7 +124,7 @@ describe("Player", () => {
   });
 
   it("shows play or pause from the element's state, and closes", async () => {
-    render(<Harness start={{ book: "Lighthouse", files: FILES, index: 0 }} />);
+    render(<Harness start={{ book: "Lighthouse", workspace: BOOK, files: FILES, index: 0 }} />);
     await act(async () => {
       audio().dispatchEvent(new Event("play"));
     });

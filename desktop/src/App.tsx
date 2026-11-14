@@ -129,7 +129,9 @@ export default function App() {
               book={open.book}
               reviewing={reviewing === open.book.workspace}
               onChanged={refreshOpenBook}
-              onPlay={(files, index) => setQueue({ book: open.book.inspect?.title ?? "", files, index })}
+              onPlay={(files, index) =>
+                setQueue({ book: open.book.inspect?.title ?? "", workspace: open.book.workspace, files, index })
+              }
               onReviewOpened={() => setReviewing(open.book.workspace)}
               outputDir={open.library.output_dir}
               minConfidence={open.library.min_boundary_confidence}

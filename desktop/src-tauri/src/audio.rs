@@ -42,9 +42,9 @@ pub fn audio_dir(workspace: &Path) -> Result<PathBuf, AudioError> {
 /// The URI scheme the player reads chapters through: `chapter://localhost/<file name>`.
 pub const SCHEME: &str = "chapter";
 
-/// The one folder chapters may be read from: the open book's `audio/` folder (spec D8.a).
-/// Opening another book replaces it, so no earlier book's folder stays readable. (Tauri's asset
-/// protocol scope can only grow, which is why the app serves chapters itself.)
+/// The one folder chapters may be read from: the `audio/` folder of the book being played
+/// (spec D8.a). Playing another book replaces it, so no earlier book's folder stays readable.
+/// (Tauri's asset protocol scope can only grow, which is why the app serves chapters itself.)
 #[derive(Debug, Default)]
 pub struct OpenBookAudio(std::sync::Mutex<Option<PathBuf>>);
 
@@ -65,7 +65,7 @@ impl OpenBookAudio {
 }
 
 /// Answers a request for `chapter://localhost/<file name>`: the bytes of that MP3 in `folder`
-/// (the open book's audio folder), with an HTTP status. A name with a path in it, anything but
+/// (the playing book's audio folder), with an HTTP status. A name with a path in it, anything but
 /// an `.mp3`, a symlink, or no open book is refused; nothing outside the folder is ever read.
 pub fn serve(folder: Option<&Path>, uri_path: &str) -> (u16, Vec<u8>) {
     let Some(folder) = folder else {

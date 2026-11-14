@@ -91,8 +91,8 @@ so change the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.t
   open the file dialogs, nothing more (`src-tauri/capabilities/default.json`). The review window
   has no permissions at all and may only load the CLI's review page on `127.0.0.1`. Chapter
   audio is read through the app's own `chapter:` protocol (`audio::serve`), which answers only
-  the main window and serves only MP3s, by file name, from the open book's `audio/` folder;
-  opening another book closes the previous one's. Tauri's asset protocol is off: its scope can
+  the main window and serves only MP3s, by file name, from the `audio/` folder of the book being
+  played; playing another book closes the previous one's, while browsing to one doesn't. Tauri's asset protocol is off: its scope can
   only grow, so it would keep every book opened earlier readable.
   `src-tauri/tests/permissions.rs` fails if a permission, capability, plugin or network client
   is added, or if the asset protocol comes back.
