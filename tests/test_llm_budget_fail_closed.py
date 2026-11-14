@@ -219,7 +219,7 @@ def test_429_after_the_last_retry_stays_unknown(tmp_path):
     assert BookLLMBudgetLedger(ledger_path).totals()["reported_tokens"] > 0
 
 
-def test_provider_usage_above_the_reserved_bound_still_fails_closed(tmp_path):
+def test_provider_usage_above_the_reserved_bound_still_fails_closed(tmp_path, closing):
     class Overreporting:
         max_context_tokens = 4096
         max_output_tokens = 1
@@ -238,12 +238,14 @@ def test_provider_usage_above_the_reserved_bound_still_fails_closed(tmp_path):
 
     for persistent in (False, True):
         provider = Overreporting()
-        worker = CachedLLMProvider(
-            provider,
-            cache_dir=tmp_path / f"cache-{persistent}",
-            identity="synthetic",
-            ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
-            max_reported_tokens=300,
+        worker = closing(
+            CachedLLMProvider(
+                provider,
+                cache_dir=tmp_path / f"cache-{persistent}",
+                identity="synthetic",
+                ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
+                max_reported_tokens=300,
+            )
         )
         with pytest.raises(LLMError, match="token budget"):
             worker.complete_json(instructions="x", document_text="first")

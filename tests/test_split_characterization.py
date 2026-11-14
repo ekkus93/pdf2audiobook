@@ -149,7 +149,7 @@ def test_synthesis_rejects_an_invalid_retry_count(max_retries, tmp_path):
         )
 
 
-def test_cost_budget_without_prices_refuses_before_sending(tmp_path):
+def test_cost_budget_without_prices_refuses_before_sending(tmp_path, closing):
     """S6: a cost budget needs a price-derived bound before any request is sent."""
     sent = []
 
@@ -161,8 +161,10 @@ def test_cost_budget_without_prices_refuses_before_sending(tmp_path):
             sent.append(document_text)
             return {}
 
-    cached = CachedLLMProvider(
-        Provider(), cache_dir=tmp_path, identity="stub", max_estimated_cost_usd=1.0
+    cached = closing(
+        CachedLLMProvider(
+            Provider(), cache_dir=tmp_path, identity="stub", max_estimated_cost_usd=1.0
+        )
     )
 
     with pytest.raises(
@@ -360,11 +362,11 @@ def test_repeated_contents_entry_and_boundary_are_rejected_as_duplicates():
     ]
 
 
-def test_cost_budget_with_an_output_cap_but_no_prices_refuses_before_sending(tmp_path):
+def test_cost_budget_with_an_output_cap_but_no_prices_refuses_before_sending(tmp_path, closing):
     """Cache: a cost budget cannot bound a request without prices, even with an output cap."""
     provider = _CapacityProvider()
-    cached = CachedLLMProvider(
-        provider, cache_dir=tmp_path, identity="stub", max_estimated_cost_usd=1.0
+    cached = closing(
+        CachedLLMProvider(provider, cache_dir=tmp_path, identity="stub", max_estimated_cost_usd=1.0)
     )
 
     with pytest.raises(

@@ -19,7 +19,7 @@ from pdf2audiobook.llm.cache import CachedLLMProvider
         {"prompt_tokens": 10**400, "completion_tokens": 2, "total_tokens": 7},
     ],
 )
-def test_incomplete_usage_cannot_authorize_cost_budget(tmp_path, usage):
+def test_incomplete_usage_cannot_authorize_cost_budget(tmp_path, usage, closing):
     def handler(request):
         return httpx.Response(
             200,
@@ -30,14 +30,16 @@ def test_incomplete_usage_cannot_authorize_cost_budget(tmp_path, usage):
         )
 
     with create_provider(Settings(), transport=httpx.MockTransport(handler)) as provider:
-        worker = CachedLLMProvider(
-            provider,
-            cache_dir=tmp_path / "cache",
-            identity="incomplete-usage-v1",
-            enabled=False,
-            max_estimated_cost_usd=1.0,
-            input_cost_usd_per_million_tokens=1.0,
-            output_cost_usd_per_million_tokens=1.0,
+        worker = closing(
+            CachedLLMProvider(
+                provider,
+                cache_dir=tmp_path / "cache",
+                identity="incomplete-usage-v1",
+                enabled=False,
+                max_estimated_cost_usd=1.0,
+                input_cost_usd_per_million_tokens=1.0,
+                output_cost_usd_per_million_tokens=1.0,
+            )
         )
         with pytest.raises(LLMError, match="verified usage"):
             worker.complete_json(instructions="test", document_text="synthetic")
@@ -45,7 +47,7 @@ def test_incomplete_usage_cannot_authorize_cost_budget(tmp_path, usage):
         assert worker._reported_cost_usd() is None
 
 
-def test_complete_consistent_usage_can_qualify_cost_budget(tmp_path):
+def test_complete_consistent_usage_can_qualify_cost_budget(tmp_path, closing):
     def handler(request):
         return httpx.Response(
             200,
@@ -56,14 +58,16 @@ def test_complete_consistent_usage_can_qualify_cost_budget(tmp_path):
         )
 
     with create_provider(Settings(), transport=httpx.MockTransport(handler)) as provider:
-        worker = CachedLLMProvider(
-            provider,
-            cache_dir=tmp_path / "cache",
-            identity="complete-usage-v1",
-            enabled=False,
-            max_estimated_cost_usd=1.0,
-            input_cost_usd_per_million_tokens=1.0,
-            output_cost_usd_per_million_tokens=1.0,
+        worker = closing(
+            CachedLLMProvider(
+                provider,
+                cache_dir=tmp_path / "cache",
+                identity="complete-usage-v1",
+                enabled=False,
+                max_estimated_cost_usd=1.0,
+                input_cost_usd_per_million_tokens=1.0,
+                output_cost_usd_per_million_tokens=1.0,
+            )
         )
         assert worker.complete_json(instructions="test", document_text="synthetic") == {"ok": True}
         assert worker.usage_verified is True

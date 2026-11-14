@@ -37,7 +37,7 @@ class FixedUsageProvider:
 @pytest.mark.parametrize("persistent", [False, True])
 @pytest.mark.parametrize("limit_kind", ["tokens", "cost"])
 def test_exact_request_bound_is_allowed_then_next_request_is_denied(
-    tmp_path: Path, persistent: bool, limit_kind: str
+    tmp_path: Path, persistent: bool, limit_kind: str, closing
 ) -> None:
     provider = FixedUsageProvider(12)
     options = (
@@ -49,12 +49,14 @@ def test_exact_request_bound_is_allowed_then_next_request_is_denied(
             "output_cost_usd_per_million_tokens": 1.0,
         }
     )
-    cached = CachedLLMProvider(
-        provider,
-        cache_dir=tmp_path / "cache",
-        identity="synthetic",
-        ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
-        **options,
+    cached = closing(
+        CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="synthetic",
+            ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
+            **options,
+        )
     )
     assert cached.complete_json(instructions="return JSON", document_text="first") == {"ok": True}
     assert provider.calls == 1
@@ -68,15 +70,17 @@ def test_exact_request_bound_is_allowed_then_next_request_is_denied(
 
 @pytest.mark.parametrize("persistent", [False, True])
 def test_preflight_upper_bound_over_token_budget_refuses_before_call(
-    tmp_path: Path, persistent: bool
+    tmp_path: Path, persistent: bool, closing
 ) -> None:
     provider = FixedUsageProvider(13)
-    cached = CachedLLMProvider(
-        provider,
-        cache_dir=tmp_path / "cache",
-        identity="synthetic",
-        ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
-        max_reported_tokens=12,
+    cached = closing(
+        CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="synthetic",
+            ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
+            max_reported_tokens=12,
+        )
     )
     with pytest.raises(LLMError, match="token budget"):
         cached.complete_json(instructions="return JSON", document_text="first")
@@ -87,14 +91,16 @@ def test_preflight_upper_bound_over_token_budget_refuses_before_call(
 
 
 @pytest.mark.parametrize("persistent", [False, True])
-def test_postflight_provider_usage_over_budget_fails_after_request(tmp_path, persistent):
+def test_postflight_provider_usage_over_budget_fails_after_request(tmp_path, persistent, closing):
     provider = FixedUsageProvider(146)
-    cached = CachedLLMProvider(
-        provider,
-        cache_dir=tmp_path / "cache",
-        identity="synthetic",
-        ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
-        max_reported_tokens=145,
+    cached = closing(
+        CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="synthetic",
+            ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
+            max_reported_tokens=145,
+        )
     )
 
     with pytest.raises(LLMError, match="token budget"):
@@ -106,7 +112,7 @@ def test_postflight_provider_usage_over_budget_fails_after_request(tmp_path, per
 @pytest.mark.parametrize("persistent", [False, True])
 @pytest.mark.parametrize("limit_kind", ["tokens", "cost"])
 def test_reported_usage_exactly_at_budget_delivers_result_then_denies_next_request(
-    tmp_path: Path, persistent: bool, limit_kind: str
+    tmp_path: Path, persistent: bool, limit_kind: str, closing
 ) -> None:
     provider = FixedUsageProvider(145)
     options = (
@@ -118,12 +124,14 @@ def test_reported_usage_exactly_at_budget_delivers_result_then_denies_next_reque
             "output_cost_usd_per_million_tokens": 1.0,
         }
     )
-    cached = CachedLLMProvider(
-        provider,
-        cache_dir=tmp_path / "cache",
-        identity="synthetic",
-        ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
-        **options,
+    cached = closing(
+        CachedLLMProvider(
+            provider,
+            cache_dir=tmp_path / "cache",
+            identity="synthetic",
+            ledger_path=tmp_path / "ledger.sqlite" if persistent else None,
+            **options,
+        )
     )
 
     assert cached.complete_json(instructions="return JSON", document_text="first") == {"ok": True}
