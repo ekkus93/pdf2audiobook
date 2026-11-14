@@ -246,6 +246,11 @@ def create_tts_provider(settings: Settings) -> TTSProvider:
     return KittenProvider(settings.tts.kitten.model)
 
 
+def analysis_workspace_folder(source: Path, settings: Settings) -> Path:
+    """The book's workspace folder; reads the book to hash it and writes nothing."""
+    return _analysis_workspace_folder(source, settings)
+
+
 def _analysis_workspace_folder(source: Path, settings: Settings) -> Path:
     try:
         if not source.is_file():

@@ -534,6 +534,32 @@ def inspect(
         fail(exc, json_output=json_output)
 
 
+@app.command(epilog="Example: pdf2audiobook workspace ./book.pdf --json")
+def workspace(
+    source: Path = typer.Argument(..., help="PDF or EPUB book."),
+    output: Path | None = typer.Option(None, "--output", help="Folder that holds workspaces."),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show the workspace folder analysis uses for a book, without creating it."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.pipeline import analysis_workspace_folder
+
+        overrides = {"general": {"output_dir": str(output)}} if output is not None else None
+        settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
+        configure_effective_logging(settings, origins)
+        folder = analysis_workspace_folder(source, settings)
+        emit({"workspace": str(folder), "exists": folder.is_dir()}, json_output)
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
 def _overrides(
     output: Path | None,
     ocr: str | None,
