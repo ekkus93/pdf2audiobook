@@ -1,6 +1,6 @@
 # Audio Verification TODO
 
-**Status:** In progress: AV0–AV4 done; AV5 (desktop) and AV6 (acceptance) open. Scope and acceptance criteria: `docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md`.
+**Status:** Complete: AV0–AV6 done (see the notes on AV2.05 and AV6.02 for what was not run). Scope and acceptance criteria: `docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md`.
 
 ## AV0 — Baseline and decisions
 
@@ -171,18 +171,77 @@
 
 ## AV5 — Tauri desktop workflow
 
-- [ ] AV5.01 Add typed bridge requests and shared schemas for readiness, verification progress/results, cancel, and selected-chapter repair.
-- [ ] AV5.02 Add per-conversion opt-in and “Verify existing audio”; show model availability and route explicit setup/download through the CLI.
-- [ ] AV5.03 Show chapter result, model votes, expected/transcribed excerpt, timestamp playback, stale state, and clear limits of ASR evidence.
-- [ ] AV5.04 Add user-controlled listen/dismiss, retry with selected voice/speed, and edit-corrected-narration then regenerate actions; preserve the previous MP3 until replacement succeeds.
-- [ ] AV5.05 Add frontend/Rust tests for opt-in defaults, unavailable models, partial votes, cancellation, stale results, privacy, playback seeking, and repair rollback.
-- [ ] AV5.06 Update desktop and main README documentation and add a deterministic end-to-end fixture covering a flagged passage and repair.
+- [x] AV5.01 Add typed bridge requests and shared schemas for readiness, verification progress/results, cancel, and selected-chapter repair.
+  - Evidence: bridge requests `asr_list`, `asr_fetch`, `verify_audio`, `audio_report`,
+    `audio_dismiss`, `resynthesize` and `ConvertOptions.verify_audio` (`engine/request.rs`), with
+    CLI commands `audio-report show`/`dismiss` added for the saved report and reviewed marks;
+    verify, dismiss and resynthesize hold the book's one write slot. Contracts `audio-report`,
+    `audio-dismiss` and `convert` (now with `audio_verification`, also `resynthesize`) with fixtures
+    from real runs (spec §14); `contracts.rs` RESULTS 19; Rust tests `audio_verification_requests`,
+    `audio_requests_refuse_empty_or_bad_values`,
+    `audio_verification_writes_only_through_the_book_lock`. Commits cdea06b, 9ca2845 (no CI runs of
+    their own; covered by 5880ed3: Python CI #877, Desktop CI #32 passed).
+- [x] AV5.02 Add per-conversion opt-in and “Verify existing audio”; show model availability and route explicit setup/download through the CLI.
+  - Evidence: the book options' *Check the new audio with speech recognition* switch (off by
+    default, sends `verify_audio`) and *Audio check → Verify existing audio* (a run of its own on
+    the Run page); the panel lists each recognizer's readiness and *Download recognizers…* shows
+    sizes and folders, then runs `asr fetch --yes` through the CLI. Tests: `bookOptions.test.ts`,
+    BookPage `checks the new audio only when that option is switched on`, AudioCheck download test.
+    Commit 5880ed3; Desktop CI #32 passed.
+- [x] AV5.03 Show chapter result, model votes, expected/transcribed excerpt, timestamp playback, stale state, and clear limits of ASR evidence.
+  - Evidence: `AudioCheck.tsx` shows each chapter's verdict, reason, the recognizers that voted and
+    partial results, each passage's kind, time, excerpt and what each model heard, confirmed vs one-
+    model disagreements, out-of-date results and the limits of ASR evidence; *Listen* plays from 2 s
+    before the passage (`Player.tsx` seek). Real-app walkthrough: the player started at 1.51 s
+    (binary) and 1.72 s (AppImage) for a passage at 3.5 s (Desktop CI #36). Commits 5880ed3,
+    ce0e558.
+- [x] AV5.04 Add user-controlled listen/dismiss, retry with selected voice/speed, and edit-corrected-narration then regenerate actions; preserve the previous MP3 until replacement succeeds.
+  - Evidence: *Sounds right* / *Not reviewed* (`audio-report dismiss`, changes no file; kept across
+    re-verification of the same audio), *Speak again…* with voice and speed (`resynthesize`, re-
+    verified, previous MP3 kept until replaced and then in `audio/.backup/`), *Correct the text*
+    (opens the review page). Tests in `AudioCheck.test.tsx`, `test_verify_audio_cli.py` (dismiss),
+    `test_resynthesize.py`, `test_chapter_audio_commit.py`. Commits cdea06b, 5880ed3.
+- [x] AV5.05 Add frontend/Rust tests for opt-in defaults, unavailable models, partial votes, cancellation, stale results, privacy, playback seeking, and repair rollback.
+  - Evidence: frontend tests (350 in all): opt-in default (`bookOptions.test.ts`, BookPage),
+    unavailable and uninstalled models, partial votes, stale results, unreadable results, engine
+    failures without book text (`AudioCheck.test.tsx`, 16), cancellation messages for verify and
+    repair (`Run.test.tsx`), playback seeking (`Player.test.tsx`; fails on the previous player).
+    Rust: request tests and `privacy::verification_excerpts_never_reach_the_app_log`. Repair
+    rollback is tested at the CLI (`test_chapter_audio_commit.py`, `test_resynthesize.py`), which
+    the app calls. Commits 9ca2845, 5880ed3.
+- [x] AV5.06 Update desktop and main README documentation and add a deterministic end-to-end fixture covering a flagged passage and repair.
+  - Evidence: desktop README "Checking the audio" and main README (desktop pointer, `audio-report`);
+    `e2e/walkthrough.mjs` verifies, finds the flagged passage in chapter 2, listens, marks it
+    reviewed and speaks the chapter again, with `e2e/fake_asr.mjs` answering from the real-output
+    fixtures and `e2e/fixtures/silence.mp3`. It found that the AppImage crashed when a chapter
+    played (no GStreamer audio sink), fixed by bundling GStreamer (ce0e558). Desktop CI #33/#34
+    failed (NaN player time in the AppImage, then the crash), #35 failed at the file dialog step
+    (flaky, before the audio check), #36 passed both walkthroughs. Commits e83ce3e, b48b9a2,
+    ce0e558.
 
 ## AV6 — Acceptance
 
-- [ ] AV6.01 Run the full Python and desktop checks; verify default conversion stays offline from ASR and unchanged.
-- [ ] AV6.02 Run the three-model local acceptance set: clean speech, a known insertion, a one-model false positive, and a repair; record versions, timings, and resource use.
-- [ ] AV6.03 Review report privacy, model licenses, package/installer size impact, and supported-machine behavior before marking complete.
+- [x] AV6.01 Run the full Python and desktop checks; verify default conversion stays offline from ASR and unchanged.
+  - Evidence: at 187f50b, Python CI #881 and Desktop CI #36 passed (all Python checks on 3.11–3.13,
+    frontend lint/types/350 tests/build, fmt/clippy/cargo test, AppImage and `.deb`, both
+    walkthroughs); locally pytest 2597 passed, 4 skipped. Default conversion stays offline and
+    unchanged: `test_ordinary_and_dry_run_conversions_load_no_asr_library` (convert, `--dry-run`,
+    `--force`: no ASR module, no network), `test_the_default_install_has_no_asr_package`,
+    `test_show_imports_no_asr_library`; `convert --json` without `--verify-audio` has no
+    `audio_verification`.
+- [x] AV6.02 Run the three-model local acceptance set: clean speech, a known insertion, a one-model false positive, and a repair; record versions, timings, and resource use.
+  - Evidence: spec §14 (real models, GPU and CPU): clean book 11/13 chapters clean in 3 min 05 s,
+    4.6 GB; one-model false positives (Vosk ch. 9 and 10, a Whisper hallucination) shown as
+    disagreements; a spliced insertion confirmed by Wav2Vec2 and Vosk at 19.9 s; `resynthesize`
+    repaired and re-verified it clean in 31.3 s with the old audio backed up; CPU-only chapter 85 s
+    for 89 s of audio, 6.7 GB. Versions recorded there. Note: recorded or accented speech, non-
+    English, macOS and Windows not run.
+- [x] AV6.03 Review report privacy, model licenses, package/installer size impact, and supported-machine behavior before marking complete.
+  - Evidence: spec §14 Review: report privacy (excerpts only by default, never in logs or errors,
+    local only), licenses (MIT, Apache-2.0, BSD; nothing redistributed), size (default install
+    unchanged; `asr` extra about 310 MB plus PyTorch; models 2.0 GB; desktop bundles no ASR,
+    AppImage grew 82.1 → 93.2 MB for GStreamer), supported machines (GPU optional, low-memory
+    warning, abstaining models, English only).
 
 ## Progress ledger
 
@@ -203,3 +262,12 @@
 | 5b58072dfa8fd8f6dface7f3901af45f1bc5df09 | AV4.01, AV4.02 | Python CI #873 [43657885423](https://github.com/ekkus93/pdf2audiobook/actions/runs/43657885423) success; Desktop CI #28 [43657885380](https://github.com/ekkus93/pdf2audiobook/actions/runs/43657885380) success |
 | 28ce7c86b9fbc65e0b12e76be74335a9e8272c4b | AV4.03, AV4.04 | Python CI #874 [43658498513](https://github.com/ekkus93/pdf2audiobook/actions/runs/43658498513) success; Desktop CI #29 [43658498503](https://github.com/ekkus93/pdf2audiobook/actions/runs/43658498503) success |
 | f03889eb74c85d99015a678e3d0993471aa22f1c | AV3.02, AV3.05 | Python CI #875 [43658734433](https://github.com/ekkus93/pdf2audiobook/actions/runs/43658734433) success; Desktop CI #30 [43658734525](https://github.com/ekkus93/pdf2audiobook/actions/runs/43658734525) success |
+| cdea06bc4e8f36b038b982732f7ba0fa2bf76534 | AV5.01, AV5.04 | no CI run of its own (pushed with 5880ed3) |
+| 9ca2845d565cefdd78c769ff899c1f107f75f229 | AV5.01 | no CI run of its own (pushed with 5880ed3) |
+| 5880ed3692d3b5c909880c5cc39ad3090bd3d377 | AV5.02-AV5.05 | Python CI #877 [43660833903](https://github.com/ekkus93/pdf2audiobook/actions/runs/43660833903) success; Desktop CI #32 [43660833929](https://github.com/ekkus93/pdf2audiobook/actions/runs/43660833929) success |
+| e83ce3e7604865e64bcd01b2b07a47f64fffe0f5 | AV5.06 | Python CI #878 [43661473129](https://github.com/ekkus93/pdf2audiobook/actions/runs/43661473129) success; Desktop CI #33 [43661473127](https://github.com/ekkus93/pdf2audiobook/actions/runs/43661473127) failure (silent MP3 not committed: ignored by .gitignore) |
+| b48b9a283dd35f880c726526e063c840606c769e | AV5.06 | Python CI #879 [43661495904](https://github.com/ekkus93/pdf2audiobook/actions/runs/43661495904) success; Desktop CI #34 [43661495870](https://github.com/ekkus93/pdf2audiobook/actions/runs/43661495870) failure (AppImage walkthrough: player time unreadable, AppImage page crashed on playback) |
+| a3c03e8afb5c5dc5b2e36d3d2dd300a12797ff2b | AV6.01 | no CI run of its own (pushed with ce0e558) |
+| 9ba09ecc157c15e8e745c88efc532b4725276089 | AV6.02, AV6.03 | no CI run of its own (pushed with ce0e558) |
+| ce0e5580276fe9b1a96239d34ec195ef680c6044 | AV5.06 | Python CI #880 [43662600932](https://github.com/ekkus93/pdf2audiobook/actions/runs/43662600932) success; Desktop CI #35 [43662600940](https://github.com/ekkus93/pdf2audiobook/actions/runs/43662600940) failure (AppImage walkthrough could not add the book through the file dialog; flaky, before the audio check) |
+| 187f50bf15b39798dafd74eea4c34ad21a56b6b2 | AV6.01 | Python CI #881 [43662616244](https://github.com/ekkus93/pdf2audiobook/actions/runs/43662616244) success; Desktop CI #36 [43662616168](https://github.com/ekkus93/pdf2audiobook/actions/runs/43662616168) success, both walkthroughs incl. AppImage playback |
