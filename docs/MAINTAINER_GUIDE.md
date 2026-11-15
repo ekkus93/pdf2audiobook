@@ -379,6 +379,11 @@ The desktop app (`docs/PDF2AUDIOBOOK_TAURI_SPEC.md`, D2) drives the CLI only thr
 outputs, so treat their shapes as contracts: add fields, never rename or remove them.
 
 - `--version` prints the version and exits 0, with or without a command after it.
+- `asr list --json` (`desktop/contracts/asr-models.schema.json`) reports each optional speech
+  recognizer's readiness without importing it; `asr fetch MODEL... --yes --json` downloads the
+  pinned weights and adds `fetched`. `verify-audio MANIFEST --json`
+  (`audio-verification.schema.json`) prints the book's verification report, also written to
+  `reports/audio_verification.json`. See `docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md`.
 - `inspect MANIFEST --json` includes `analyzed_with_llm`: `false` when the workspace's last
   analysis ran without the LLM (its `llm-analysis` fingerprint is the fixed "disabled" value),
   `true` when it used one, `null` when `reports/analysis_fingerprints.json` is missing or

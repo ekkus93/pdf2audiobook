@@ -267,6 +267,8 @@ uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remo
 uv run pdf2audiobook workspace path/to/book.pdf --json
 uv run pdf2audiobook voices --json
 uv run pdf2audiobook thumbnail path/to/book.pdf --output cover.png --width 320 --json
+uv run pdf2audiobook asr list
+uv run pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json --chapter 3
 uv run pdf2audiobook --version
 ~~~
 
@@ -458,6 +460,68 @@ file's size and SHA-256 against pinned values, and keeps nothing that doesn't ma
 to `~/.cache/pdf2audiobook/asr` (or `$XDG_CACHE_HOME/pdf2audiobook/asr`); set
 `PDF2AUDIOBOOK_ASR_DIR` to keep them elsewhere. To remove them, delete that folder. Conversion,
 `asr list` and verification never use the network.
+
+### Checking a converted book
+
+~~~bash
+uv run pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json             # every chapter
+uv run pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json --chapter 3 --details
+uv run pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json --models wav2vec2,vosk --json
+uv run pdf2audiobook convert book.pdf --verify-audio                          # convert, then check
+~~~
+
+`verify-audio` decodes each chapter MP3 with FFmpeg, has each ready model transcribe it (one
+model at a time), and compares every transcript with the narration that was actually sent to
+the voice: the chapter text with your accepted edits, pronunciations and citation handling, as
+recorded when the chapter was synthesized. Options: `--chapter N` (repeatable) or
+`--chapter-range START:END`; `--models` to use a subset; `--device cpu|cuda` (default: the GPU if
+there is one); `--keep-transcripts` to keep full transcripts in the report; `--details` to print
+the expected and heard words (by default only times and kinds are printed). `convert
+--verify-audio` checks just the chapters that conversion produced, after it has finished: a
+mismatch adds the warning `audio_possible_mismatch` and an `audio_verification` summary to the
+result, but never changes the exit code. It can't be combined with `--dry-run`.
+
+Each chapter gets one of four results:
+
+- `no_mismatch_detected`: no place where two or more models heard something different.
+- `possible_mismatch`: at least two model families heard the same difference at the same place,
+  such as an extra phrase, a missing sentence or a different word or number. Listen at the time
+  shown; it is evidence, not proof.
+- `model_disagreement`: only one model heard a difference there; usually that model's mistake
+  (for example Vosk hearing "go" for an unusual name). Worth a listen only if you want to be
+  thorough.
+- `verification_unavailable`, with a reason: `audio_missing`, `audio_stale` (the MP3 or its
+  text changed since synthesis), `no_models`, `unsupported_language` (only English voices are
+  checked), or `cancelled`.
+
+A result based on fewer than three models is marked `partial` (for example when one isn't
+installed or fails on a chapter: a failing model abstains, it is never counted as a vote). A
+model that isn't ready is listed with `model_not_installed` or `model_not_downloaded`. Small
+transcription noise is ignored: differences of one short word, near-misses such as "boat" for
+"boats", British and American spelling, compounds written as one word or two, and number
+formats ("1987" is the same as "nineteen eighty seven"); a different number always counts.
+
+`verify-audio` exits 0 whenever it ran, whatever it found; it exits non-zero only for errors (a
+locked or unreadable book, an interruption: Ctrl+C exits 130 and keeps what had finished).
+With `--json` it prints the book's whole verification state, also saved to
+`reports/audio_verification.json` (`desktop/contracts/audio-verification.schema.json`):
+`schema_version`, `created_at`, `completed_at` (null if interrupted), `keep_transcripts`, the
+`models` with their pinned revisions and package versions, a `summary` of chapters by status,
+and per chapter its `status`, `reason`, `partial`, the `audio_sha256` and `reference_sha256` it
+was judged against (a later change to either makes the result stale), each model's `outcome`,
+and its `flags`: `kind`, `confirmed`, the `models` that heard it, `expected`, `heard` per model,
+a few words `before` and `after`, `start`/`end` in seconds, and `reviewed`. Results for chapters
+you didn't check this time are kept from earlier runs.
+
+**Privacy.** The report contains book text (the flagged excerpts, and full transcripts only with
+`--keep-transcripts`), so it stays in the book's folder and is never logged or sent anywhere;
+progress and errors hold no book text. Delete `reports/audio_verification.json` to remove it.
+
+**Limits.** Only English is supported. The models listen to the narration as text; they can't
+tell whether it sounds natural, whether a name is pronounced the way you want, or whether there
+is clipping or distortion. Accuracy was measured on synthetic Kitten speech (spec §13), not on
+recordings. To fix a flagged chapter, listen first; to re-synthesize one chapter, run
+`pdf2audiobook convert book.pdf --chapter N --force`.
 
 ## Editing chapter text
 
