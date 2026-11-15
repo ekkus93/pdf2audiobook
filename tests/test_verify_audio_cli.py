@@ -505,6 +505,24 @@ def test_show_follows_the_contracts_and_loads_no_model(
     assert chapter["status"] == "possible_mismatch"
 
 
+def test_show_imports_no_asr_library(book: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+    import sys
+
+    _flagged(book, monkeypatch)
+    code = f"""
+import sys
+from typer.testing import CliRunner
+from pdf2audiobook.cli import app
+result = CliRunner().invoke(app, ["audio-report", "show", {str(book["manifest"])!r}, "--json"])
+assert result.exit_code == 0, result.output
+print(sorted(m for m in ("torch", "whisper", "vosk", "transformers") if m in sys.modules))
+"""
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.strip().splitlines()[-1] == "[]"
+
+
 def test_show_names_stale_chapters(book: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
     _flagged(book, monkeypatch)
     mp3 = next((book["workspace"] / "audio").glob("001 *.mp3"))
