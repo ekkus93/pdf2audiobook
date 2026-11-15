@@ -589,7 +589,7 @@ document environment-dependent/manual acceptance evidence.
 22.04: frontend lint, types, tests and build, `cargo fmt`, `clippy` and `cargo test`, a release
 build with the AppImage and `.deb` (uploaded as `pdf2audiobook-desktop-linux-unsigned`), and the
 `tauri-driver` walkthrough under Xvfb. It shares `ci.yml`'s uv pin (`tests/test_desktop_ci.py`
-checks both workflows together) and has its own apt cache key (`apt-…-desktop-webkit-v1`; bump
+checks both workflows together) and has its own apt cache key (`apt-…-desktop-webkit-v2`; bump
 it when that package list changes). See `desktop/README.md` for running the same checks
 locally.
 
