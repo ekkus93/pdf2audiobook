@@ -185,7 +185,11 @@ npm run tauri build -- --bundles appimage   # portable AppImage
 The installers are written to `src-tauri/target/release/bundle/deb/` and
 `src-tauri/target/release/bundle/appimage/`. A release build takes a few minutes (about 90
 seconds for the `.deb` on a 20-core machine). The first AppImage build downloads `linuxdeploy`
-from GitHub. The `.deb` is about 2 MB and the AppImage about 77 MB, since it bundles WebKitGTK.
+from GitHub. The `.deb` is about 2 MB and the AppImage about 93 MB, since it bundles WebKitGTK
+and GStreamer (`bundleMediaFramework` in `tauri.conf.json`). Without GStreamer's audio plugins
+inside it, the AppImage's page crashed as soon as a chapter played (`autoaudiosink not found`), so
+building it needs `gstreamer1.0-plugins-base` and `gstreamer1.0-plugins-good` installed; the
+walkthrough plays a chapter in the AppImage to catch this.
 Builds are unsigned for now; CI adds `-unsigned` to the installers' file names (spec D10.d).
 
 ## Layout

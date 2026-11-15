@@ -279,12 +279,19 @@ async function audioCheck(workspace, chapters) {
   await click(await find(`(${flagged}${button("Listen")})[1]`));
   await find("//*[@aria-label='Player'][contains(., 'Chapter 2')]", 30);
   // Logged, not asserted: a display without a sound device may not play at all.
-  let position = 0;
-  for (let attempt = 0; attempt < 40 && position < 1.4; attempt++) {
+  // (The AppImage's media element may have no time at all; WebDriver can't return NaN.)
+  let position = null;
+  for (let attempt = 0; attempt < 40 && !(position >= 1.4); attempt++) {
     await sleep(250);
-    position = await run("const a = document.querySelector('[data-testid=player-audio]'); return a ? a.currentTime : 0;");
+    position = await run(
+      "const a = document.querySelector('[data-testid=player-audio]'); const t = a ? a.currentTime : NaN; return Number.isFinite(t) ? t : null;",
+    );
   }
-  step(`  the player is at ${Number(position).toFixed(2)} s (the passage starts at 3.5 s; listening starts 2 s before)`);
+  step(
+    position === null
+      ? "  the player couldn't load the audio on this display"
+      : `  the player is at ${position.toFixed(2)} s (the passage starts at 3.5 s; listening starts 2 s before)`,
+  );
 
   step("audio check: mark it reviewed");
   await click(await find(`(${flagged}${button("Sounds right")})[1]`));

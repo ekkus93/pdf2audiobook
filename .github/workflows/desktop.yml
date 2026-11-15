@@ -22,7 +22,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/apt-archives
-          key: apt-${{ runner.os }}-desktop-webkit-v1
+          key: apt-${{ runner.os }}-desktop-webkit-v2
       - name: Install WebKitGTK, its WebDriver and the X tools the walkthrough uses
         timeout-minutes: 25
         working-directory: .
@@ -32,7 +32,7 @@ jobs:
           mkdir -p ~/apt-archives
           sudo cp ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           APT_OPTS="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=5 -o APT::Keep-Downloaded-Packages=true"
-          PACKAGES="libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev build-essential file patchelf webkit2gtk-driver xvfb xdotool imagemagick"
+          PACKAGES="libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev build-essential file patchelf webkit2gtk-driver xvfb xdotool imagemagick gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
           for attempt in 1 2 3; do
             if timeout 180 sudo apt-get $APT_OPTS update -q \
               && timeout 600 sudo apt-get $APT_OPTS install -y -q $PACKAGES; then
