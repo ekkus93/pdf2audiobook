@@ -55,6 +55,7 @@ from pdf2audiobook.document.structure import (
     validate_chapter_coverage as validate_chapter_coverage,
 )
 from pdf2audiobook.errors import (
+    ConfigError,
     ExtractionError,
     InputError,
     LLMError,
@@ -474,3 +475,62 @@ def _convert_analyzed_book(
         services=services,
         progress=progress,
     )
+
+
+def embedded_cover(mp3: Path) -> tuple[bytes, str] | None:
+    """The cover art already in a chapter MP3, so a retry keeps the same artwork."""
+    try:
+        from mutagen.id3 import ID3
+
+        frames = ID3(mp3).getall("APIC")
+    except Exception:
+        return None
+    if not frames:
+        return None
+    frame = frames[0]
+    return bytes(frame.data), str(frame.mime)
+
+
+def resynthesize_chapters(
+    manifest_path: Path,
+    settings: Settings,
+    numbers: list[int],
+    *,
+    cover_image: tuple[bytes, str] | None = None,
+    tts_provider: TTSProvider | None = None,
+    encoder: AudioEncoder | None = None,
+    progress: ProgressReporter | None = None,
+) -> list[Path]:
+    """Speak the given chapters again from the analyzed book, keeping the previous audio.
+
+    No analysis is repeated. Each chapter goes through the forced conversion path, so its new
+    MP3 replaces the old one only once encoded and checked, and the old MP3 and sidecar are
+    kept under `audio/.backup/` (verification spec §6, AV4.03).
+    """
+    folder = manifest_path.parent
+    bind_workspace(progress if progress is not None else current_reporter(), folder)
+    outputs: list[Path] = []
+    with workspace_lock(folder):
+        manifest = read_manifest(manifest_path)
+        known = {chapter.number: chapter for chapter in manifest.chapters}
+        if not numbers or any(number not in known for number in numbers):
+            raise ConfigError("Choose existing chapters to synthesize again")
+        if cover_image is None:
+            first = audio_output_path(manifest, known[numbers[0]], folder)
+            cover_image = embedded_cover(first) if first.is_file() else None
+        cover_identity = digest_bytes(cover_image[0]) if cover_image is not None else None
+        for number in sorted(set(numbers)):
+            outputs += _convert_analyzed_book(
+                manifest_path,
+                settings,
+                cover_image,
+                cover_identity,
+                chapter=number,
+                chapter_range=None,
+                force=True,
+                accept_review=(),
+                tts_provider=tts_provider,
+                encoder=encoder,
+                progress=progress if progress is not None else current_reporter(),
+            )
+    return outputs

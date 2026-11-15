@@ -496,6 +496,100 @@ def verify_audio(
         fail(exc, json_output=json_output)
 
 
+@app.command(
+    "resynthesize",
+    epilog="Example: pdf2audiobook resynthesize ./audiobooks/BOOK/manifest.json --chapter 3",
+)
+def resynthesize(
+    manifest_path: Path = typer.Argument(..., help="Manifest of a converted book."),
+    chapter: list[int] = typer.Option(
+        [], "--chapter", min=1, help="Chapter to speak again; repeatable."
+    ),
+    voice: str | None = typer.Option(None, "--voice", help="Voice for this retry."),
+    speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
+    cover: Path | None = typer.Option(
+        None, "--cover", help="Cover art; by default the art already in the chapter MP3 is kept."
+    ),
+    verify_audio: bool | None = typer.Option(
+        None,
+        "--verify-audio/--no-verify-audio",
+        help="Check the new audio afterwards (default: when the chapter was checked before).",
+    ),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Speak chosen chapters again from the analyzed book, keeping the previous audio."""
+    set_output_mode(json_output)
+    reporter: ProgressReporter = NullReporter()
+    try:
+        from pdf2audiobook.audio import read_cover_image
+        from pdf2audiobook.pipeline import resynthesize_chapters
+        from pdf2audiobook.verification.run import previous_chapters
+
+        if not chapter:
+            raise ConfigError("Name at least one --chapter to synthesize again")
+        preliminary, _ = load_settings(config, no_config=no_config)
+        provider = preliminary.tts.provider
+        overrides: dict[str, Any] = {}
+        if voice is not None or speed is not None:
+            overrides = {
+                "tts": {
+                    provider: {
+                        k: v for k, v in (("voice", voice), ("speed", speed)) if v is not None
+                    }
+                }
+            }
+        settings, origins = load_settings(config, no_config=no_config, overrides=overrides or None)
+        configure_effective_logging(settings, origins)
+        cover_image = read_cover_image(cover) if cover is not None else None
+        workspace = manifest_path.parent
+        checked_before = set(previous_chapters(workspace)) & set(chapter)
+        reporter = _progress_reporter(settings, json_output, "resynthesize")
+        started = time.monotonic()
+        try:
+            with use_reporter(reporter):
+                outputs = resynthesize_chapters(
+                    manifest_path,
+                    settings,
+                    list(chapter),
+                    cover_image=cover_image,
+                    progress=reporter,
+                )
+        finally:
+            reporter.close()
+        payload: dict[str, Any] = {"mp3_files": [str(path) for path in outputs]}
+        if voice is not None and any(
+            c.voice_id for c in _manifest_chapters(manifest_path) if c.number in set(chapter)
+        ):
+            payload["warnings"] = ["chapter_voice_overrides_option"]
+        verification = None
+        if verify_audio or (verify_audio is None and checked_before):
+            verification = _verify_after_convert(outputs, settings, json_output)
+        if verification is not None:
+            payload["audio_verification"], warnings, text = verification
+            payload["warnings"] = [*payload.get("warnings", []), *warnings]
+        emit(payload, json_output)
+        reporter.summary(
+            f"Synthesized {len(outputs)} chapter(s) again in {format_elapsed(time.monotonic() - started)}; "
+            "the previous audio is in audio/.backup/"
+        )
+        if verification is not None and not json_output:
+            console.print(verification[2])
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
+def _manifest_chapters(manifest_path: Path) -> list[Any]:
+    from pdf2audiobook.workspace import read_manifest
+
+    return list(read_manifest(manifest_path).chapters)
+
+
 @budget_app.command("show", epilog="Example: pdf2audiobook budget show --output ./audiobooks/BOOK")
 def budget_show(
     output: Path = typer.Option(..., "--output", help="Book workspace directory."),

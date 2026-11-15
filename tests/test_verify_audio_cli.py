@@ -18,6 +18,7 @@ from pdf2audiobook.cli import app
 from pdf2audiobook.config import load_settings
 from pdf2audiobook.verification import run as verify_run
 from pdf2audiobook.verification.contracts import Readiness, Transcript, Word
+from pdf2audiobook.verification.models import SPECS
 from pdf2audiobook.verification.reference import Reference, chapter_reference
 from pdf2audiobook.workspace import read_manifest
 
@@ -71,7 +72,7 @@ class FakeBackend:
             self.name,
             "fake",
             f"{self.name}-model",
-            "rev",
+            SPECS[self.name].revision,  # type: ignore[index]
             "pytest",
             "1" if self.ready else None,
             self.ready,

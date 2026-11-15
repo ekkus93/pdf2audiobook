@@ -281,6 +281,19 @@ def stale_chapters(
     """
     by_number = {chapter.number: chapter for chapter in manifest.chapters}
     stale: set[int] = set()
+    # Results judged with other model revisions than the pinned ones are all stale.
+    from pdf2audiobook.verification.models import SPECS
+
+    pinned = {name: spec.revision for name, spec in SPECS.items()}
+    if any(
+        isinstance(m, dict) and pinned.get(m.get("model")) not in (None, m.get("revision"))  # type: ignore[arg-type]
+        for m in report.get("models", [])
+    ):
+        return {
+            entry["number"]
+            for entry in report.get("chapters", [])
+            if isinstance(entry, dict) and isinstance(entry.get("number"), int)
+        }
     for entry in report.get("chapters", []):
         if not isinstance(entry, dict) or entry.get("audio_sha256") is None:
             continue

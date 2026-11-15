@@ -269,6 +269,7 @@ uv run pdf2audiobook voices --json
 uv run pdf2audiobook thumbnail path/to/book.pdf --output cover.png --width 320 --json
 uv run pdf2audiobook asr list
 uv run pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json --chapter 3
+uv run pdf2audiobook resynthesize ./audiobooks/BOOK/manifest.json --chapter 3
 uv run pdf2audiobook --version
 ~~~
 
@@ -520,8 +521,45 @@ progress and errors hold no book text. Delete `reports/audio_verification.json` 
 **Limits.** Only English is supported. The models listen to the narration as text; they can't
 tell whether it sounds natural, whether a name is pronounced the way you want, or whether there
 is clipping or distortion. Accuracy was measured on synthetic Kitten speech (spec §13), not on
-recordings. To fix a flagged chapter, listen first; to re-synthesize one chapter, run
-`pdf2audiobook convert book.pdf --chapter N --force`.
+recordings.
+
+### Fixing a flagged chapter
+
+Nothing is changed automatically; you choose. First listen at the time shown. Then:
+
+- **It sounds right:** leave it. A flag is evidence, not proof.
+- **The voice slipped** (a garbled or repeated phrase): speak the chapter again, with the same or
+  another voice or speed. Only that chapter is synthesized; analysis isn't repeated.
+
+  ~~~bash
+  uv run pdf2audiobook resynthesize ./audiobooks/BOOK/manifest.json --chapter 3
+  uv run pdf2audiobook resynthesize ./audiobooks/BOOK/manifest.json --chapter 3 --voice Luna --speed 0.95
+  ~~~
+
+- **A word is pronounced wrongly** (a name, an abbreviation): add a pronunciation to
+  `~/.config/pdf2audiobook/config.toml` and speak the chapter again:
+
+  ~~~toml
+  [tts.pronunciations]
+  "Quill" = "Kwill"
+  ~~~
+
+- **The text itself is wrong** (an OCR error, a misread number): correct the chapter text as in
+  [Editing chapter text](#editing-chapter-text) or on the [review page](#step-4-review-the-chapters-in-your-browser),
+  then speak the chapter again.
+
+`resynthesize` makes the new MP3 in `audio/.staging/` and replaces the chapter's MP3 only once
+it is encoded and checked; the previous MP3 and its `.cache.json` are kept in `audio/.backup/`
+(the three most recent per chapter). To go back, copy a backup pair over the chapter's MP3 and
+`.cache.json`. If the chapter was verified before, it is verified again afterwards
+(`--no-verify-audio` skips that); otherwise add `--verify-audio`. The cover art already in the
+chapter's MP3 is kept unless you pass `--cover`. A chapter voice set on the review page wins over
+`--voice` (the result then warns `chapter_voice_overrides_option`).
+
+`resynthesize` repairs audio. It is not `regenerate-chapter`, which rewrites a chapter's *text
+file* from the manifest after a conflict; that never touches audio. After changing a chapter's
+text, pronunciations or voice, its earlier verification result is reported stale until you
+verify again.
 
 ## Editing chapter text
 

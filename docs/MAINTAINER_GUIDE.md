@@ -384,6 +384,12 @@ outputs, so treat their shapes as contracts: add fields, never rename or remove 
   pinned weights and adds `fetched`. `verify-audio MANIFEST --json`
   (`audio-verification.schema.json`) prints the book's verification report, also written to
   `reports/audio_verification.json`. See `docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md`.
+- `resynthesize MANIFEST --chapter N --json` prints `mp3_files` (and `audio_verification` when
+  the chapter is re-verified). Every chapter MP3 is encoded to `audio/.staging/`, committed with
+  its sidecar through a journal (`audio/commit.py`), and the previous pair is kept in
+  `audio/.backup/` (newest three per chapter); conversion first finishes any journaled commit and
+  removes unjournaled staged files and leftover `tmp*` folders. Verification results judged with
+  other model revisions than the pinned ones are reported stale.
 - `inspect MANIFEST --json` includes `analyzed_with_llm`: `false` when the workspace's last
   analysis ran without the LLM (its `llm-analysis` fingerprint is the fixed "disabled" value),
   `true` when it used one, `null` when `reports/analysis_fingerprints.json` is missing or
