@@ -406,6 +406,59 @@ The narrator introduces the scene.
 
 The marker is omitted from speech; that voice continues until another marker or the end of the chapter. The chapter's configured voice is used before the first marker. Markers require blank-line paragraph boundaries, and their source offsets remain in the narration progress record.
 
+## Checking the audio with speech recognition (optional)
+
+After conversion you can have up to three independent speech recognizers listen to each
+chapter and compare what they hear with the text that was sent to the voice. Where two or more
+agree that something differs (an extra phrase, a missing one, a wrong word or number), the
+chapter is flagged for you to listen to. Speech recognition is evidence, not proof: a flag
+means "listen here", and no flag doesn't mean the audio is perfect (it says nothing about
+naturalness, pronunciation of names, or clipping). Everything runs on your machine; no audio or
+text is sent anywhere. Details: `docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md`.
+
+### Installing the speech recognizers
+
+Nothing here is installed by default, and ordinary conversion never loads it. Install the
+recognizers you want, then fetch their models:
+
+~~~bash
+uv sync --extra kitten --extra asr        # all three; or --extra asr-whisper / asr-wav2vec2 / asr-vosk
+uv run pdf2audiobook asr list             # what is installed and downloaded, and where
+uv run pdf2audiobook asr fetch            # asks before downloading; or name models: asr fetch whisper vosk
+~~~
+
+(`uv sync` makes the environment match exactly what you name, so list every extra you use, such
+as `kitten`.)
+
+| Model | Family | Download | Disk | Peak RAM (CPU) | Speed on CPU / NVIDIA GPU | License |
+|---|---|---|---|---|---|---|
+| `whisper` | OpenAI Whisper `medium.en` | 1.5 GB | 1.5 GB | about 7 GB | 0.77 / 0.04 x real time | MIT |
+| `wav2vec2` | Meta `wav2vec2-base-960h` | 378 MB | 360 MB | about 2 GB | 0.04 / 0.001 x real time | Apache-2.0 |
+| `vosk` | Vosk/Kaldi `en-us-0.22-lgraph` | 131 MB | 330 MB (archive kept, plus unpacked) | about 0.6 GB | 0.2 x real time (CPU only) | Apache-2.0 |
+
+Speeds were measured on a 20-core machine with an RTX 4070 Ti SUPER; "0.77 x real time" means
+about 46 minutes of compute for an hour of audio. Whisper on a CPU is the slow, memory-hungry
+one: with less than 8 GB of RAM, verify with `--models wav2vec2 vosk` instead (a result from
+fewer than three models is marked partial). The `asr-whisper` and `asr-wav2vec2` extras need
+PyTorch, which the `kitten` extra already installs (about 4.4 GB with its CUDA libraries); on its
+own `asr-vosk` adds about 25 MB. The code is MIT (`openai-whisper`), Apache-2.0
+(`transformers`, `vosk`) and BSD/Apache (PyTorch); check the model licenses above before you
+redistribute weights.
+
+Supported: Linux on x86-64 is tested (Ubuntu 22.04); the extras resolve on Python 3.11, 3.12 and
+3.13. Vosk publishes wheels for Linux, macOS and Windows and PyTorch runs on all three, but only
+Linux is tested. A GPU is optional: Whisper and Wav2Vec2 use an NVIDIA GPU through PyTorch when
+one is available, and the CPU otherwise.
+
+**Network.** Only `pdf2audiobook asr fetch` downloads anything, and only after it has shown
+each file, its size, its source and where it will be saved, and you have said yes (`--yes` skips
+the question, for scripts). It fetches from `openaipublic.azureedge.net` (Whisper),
+`huggingface.co` (Wav2Vec2, at a pinned revision) and `alphacephei.com` (Vosk), checks every
+file's size and SHA-256 against pinned values, and keeps nothing that doesn't match. Models go
+to `~/.cache/pdf2audiobook/asr` (or `$XDG_CACHE_HOME/pdf2audiobook/asr`); set
+`PDF2AUDIOBOOK_ASR_DIR` to keep them elsewhere. To remove them, delete that folder. Conversion,
+`asr list` and verification never use the network.
+
 ## Editing chapter text
 
 Chapter files are editable. After changing one, keep a backup: resume and conversion preserve
