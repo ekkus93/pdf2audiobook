@@ -129,6 +129,15 @@ pub enum Regenerate {
     AllConflicts,
 }
 
+/// A speech recognizer that audio verification can use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AsrModel {
+    Whisper,
+    Wav2vec2,
+    Vosk,
+}
+
 /// Options shared by `analyze` and `convert`. `None` leaves the CLI's own setting in force.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -165,6 +174,8 @@ pub struct ConvertOptions {
     pub cover: Option<PathBuf>,
     pub accept_review: Vec<ReviewReason>,
     pub force: bool,
+    /// Check the converted chapters with the speech recognizers afterwards (opt-in).
+    pub verify_audio: bool,
 }
 
 /// Every CLI command the app runs.
@@ -240,6 +251,41 @@ pub enum Request {
     BudgetShow {
         workspace: PathBuf,
     },
+    /// Which speech recognizers are installed and downloaded; loads none of them.
+    AsrList,
+    /// Downloads the pinned weights; the app has already shown what is fetched and asked.
+    AsrFetch {
+        models: Vec<AsrModel>,
+    },
+    /// Listens to chapter MP3s; no chapters means all of them, no models means every model.
+    VerifyAudio {
+        manifest: PathBuf,
+        #[serde(default)]
+        chapters: Vec<u32>,
+        #[serde(default)]
+        models: Vec<AsrModel>,
+    },
+    /// The saved verification report and which results are stale; loads no model.
+    AudioReport {
+        manifest: PathBuf,
+    },
+    /// Marks one flagged passage reviewed (or not); changes no audio or text.
+    AudioDismiss {
+        manifest: PathBuf,
+        chapter: u32,
+        flag: u32,
+        #[serde(default)]
+        undo: bool,
+    },
+    /// Speaks chosen chapters again, keeping the previous audio as a backup.
+    Resynthesize {
+        manifest: PathBuf,
+        chapters: Vec<u32>,
+        voice: Option<String>,
+        speed: Option<f64>,
+        /// `None` re-verifies only chapters verified before.
+        verify_audio: Option<bool>,
+    },
 }
 
 impl Request {
@@ -262,6 +308,12 @@ impl Request {
             Request::RegenerateChapter { .. } => "regenerate-chapter",
             Request::Recover { .. } => "recover",
             Request::BudgetShow { .. } => "budget show",
+            Request::AsrList => "asr list",
+            Request::AsrFetch { .. } => "asr fetch",
+            Request::VerifyAudio { .. } => "verify-audio",
+            Request::AudioReport { .. } => "audio-report show",
+            Request::AudioDismiss { .. } => "audio-report dismiss",
+            Request::Resynthesize { .. } => "resynthesize",
         }
     }
 
@@ -277,6 +329,10 @@ impl Request {
                 | Request::PackM4b { .. }
                 | Request::RegenerateChapter { .. }
                 | Request::Recover { .. }
+                // Holds the book's lock and writes its report; changes no audio or text.
+                | Request::VerifyAudio { .. }
+                | Request::AudioDismiss { .. }
+                | Request::Resynthesize { .. }
         )
     }
 
@@ -428,6 +484,65 @@ impl Request {
                 args.command(&["budget", "show"]);
                 args.path("--output", Some(workspace), "The workspace")?;
             }
+            Request::AsrList => args.command(&["asr", "list"]),
+            Request::AsrFetch { models } => {
+                args.command(&["asr", "fetch"]);
+                args.flag("--yes");
+                if models.is_empty() {
+                    return Err(RequestError::Empty("The model list"));
+                }
+                for model in models {
+                    args.positional_text(asr_name(*model), "A model")?;
+                }
+            }
+            Request::VerifyAudio {
+                manifest,
+                chapters,
+                models,
+            } => {
+                args.command(&["verify-audio"]);
+                chapter_list(&mut args, chapters)?;
+                if !models.is_empty() {
+                    let names: Vec<&str> = models.iter().map(|m| asr_name(*m)).collect();
+                    args.value("--models", names.join(","));
+                }
+                args.positional(manifest, "The manifest")?;
+            }
+            Request::AudioReport { manifest } => {
+                args.command(&["audio-report", "show"]);
+                args.positional(manifest, "The manifest")?;
+            }
+            Request::AudioDismiss {
+                manifest,
+                chapter,
+                flag,
+                undo,
+            } => {
+                args.command(&["audio-report", "dismiss"]);
+                args.number("--chapter", Some(*chapter), 1, u32::MAX, "The chapter")?;
+                args.number("--flag", Some(*flag), 0, u32::MAX, "The flag")?;
+                if *undo {
+                    args.flag("--undo");
+                }
+                args.positional(manifest, "The manifest")?;
+            }
+            Request::Resynthesize {
+                manifest,
+                chapters,
+                voice,
+                speed,
+                verify_audio,
+            } => {
+                args.command(&["resynthesize"]);
+                if chapters.is_empty() {
+                    return Err(RequestError::Empty("The chapter list"));
+                }
+                chapter_list(&mut args, chapters)?;
+                args.text("--voice", voice.as_deref(), "The voice")?;
+                speed_option(&mut args, *speed)?;
+                args.switch("verify-audio", *verify_audio);
+                args.positional(manifest, "The manifest")?;
+            }
         }
         Ok(args.finish())
     }
@@ -492,12 +607,7 @@ fn convert_options(args: &mut Args, convert: &ConvertOptions) -> Result<(), Requ
     if convert.dry_run {
         args.flag("--dry-run");
     }
-    if let Some(speed) = convert.speed {
-        if !speed.is_finite() || !(0.1..=3.0).contains(&speed) {
-            return Err(RequestError::OutOfRange("The speed"));
-        }
-        args.value("--speed", speed.to_string());
-    }
+    speed_option(args, convert.speed)?;
     args.number(
         "--sample-rate",
         convert.sample_rate,
@@ -512,7 +622,38 @@ fn convert_options(args: &mut Args, convert: &ConvertOptions) -> Result<(), Requ
     if convert.force {
         args.flag("--force");
     }
+    if convert.verify_audio {
+        if convert.dry_run {
+            return Err(RequestError::OutOfRange("Verifying a dry run"));
+        }
+        args.flag("--verify-audio");
+    }
     Ok(())
+}
+
+fn speed_option(args: &mut Args, speed: Option<f64>) -> Result<(), RequestError> {
+    if let Some(speed) = speed {
+        if !speed.is_finite() || !(0.1..=3.0).contains(&speed) {
+            return Err(RequestError::OutOfRange("The speed"));
+        }
+        args.value("--speed", speed.to_string());
+    }
+    Ok(())
+}
+
+fn chapter_list(args: &mut Args, chapters: &[u32]) -> Result<(), RequestError> {
+    for chapter in chapters {
+        args.number("--chapter", Some(*chapter), 1, u32::MAX, "The chapter")?;
+    }
+    Ok(())
+}
+
+fn asr_name(value: AsrModel) -> &'static str {
+    match value {
+        AsrModel::Whisper => "whisper",
+        AsrModel::Wav2vec2 => "wav2vec2",
+        AsrModel::Vosk => "vosk",
+    }
 }
 
 fn ocr_name(value: OcrMode) -> &'static str {
@@ -899,6 +1040,7 @@ mod tests {
                 ReviewReason::AmbiguousPageNumbers,
             ],
             force: true,
+            verify_audio: false,
         };
         let request = Request::Convert {
             book: "/books/a.pdf".into(),
@@ -1132,6 +1274,225 @@ mod tests {
         assert_eq!(
             args_of(request),
             ["--no-progress", "budget", "show", "--output=/w", "--json"]
+        );
+    }
+
+    #[test]
+    fn audio_verification_requests() {
+        let manifest = PathBuf::from("/w/manifest.json");
+        assert_eq!(
+            args_of(Request::AsrList),
+            ["--no-progress", "asr", "list", "--json"]
+        );
+        assert_eq!(
+            args_of(Request::AsrFetch {
+                models: vec![AsrModel::Whisper, AsrModel::Vosk]
+            }),
+            [
+                "--no-progress",
+                "asr",
+                "fetch",
+                "--yes",
+                "--json",
+                "--",
+                "whisper",
+                "vosk"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::VerifyAudio {
+                manifest: manifest.clone(),
+                chapters: vec![2, 5],
+                models: vec![AsrModel::Wav2vec2, AsrModel::Vosk],
+            }),
+            [
+                "--no-progress",
+                "verify-audio",
+                "--chapter=2",
+                "--chapter=5",
+                "--models=wav2vec2,vosk",
+                "--json",
+                "--",
+                "/w/manifest.json"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::VerifyAudio {
+                manifest: manifest.clone(),
+                chapters: vec![],
+                models: vec![],
+            }),
+            [
+                "--no-progress",
+                "verify-audio",
+                "--json",
+                "--",
+                "/w/manifest.json"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::AudioReport {
+                manifest: manifest.clone()
+            }),
+            [
+                "--no-progress",
+                "audio-report",
+                "show",
+                "--json",
+                "--",
+                "/w/manifest.json"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::AudioDismiss {
+                manifest: manifest.clone(),
+                chapter: 3,
+                flag: 0,
+                undo: true,
+            }),
+            [
+                "--no-progress",
+                "audio-report",
+                "dismiss",
+                "--chapter=3",
+                "--flag=0",
+                "--undo",
+                "--json",
+                "--",
+                "/w/manifest.json"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::Resynthesize {
+                manifest,
+                chapters: vec![3],
+                voice: Some("Luna".into()),
+                speed: Some(0.95),
+                verify_audio: Some(false),
+            }),
+            [
+                "--no-progress",
+                "resynthesize",
+                "--chapter=3",
+                "--voice=Luna",
+                "--speed=0.95",
+                "--no-verify-audio",
+                "--json",
+                "--",
+                "/w/manifest.json"
+            ]
+        );
+    }
+
+    #[test]
+    fn conversion_verifies_audio_only_when_asked() {
+        let convert = |verify_audio, dry_run| Request::Convert {
+            book: "/books/a.pdf".into(),
+            options: BookOptions::default(),
+            convert: ConvertOptions {
+                verify_audio,
+                dry_run,
+                ..ConvertOptions::default()
+            },
+        };
+        assert!(!args_of(convert(false, false)).contains(&"--verify-audio".to_owned()));
+        assert!(args_of(convert(true, false)).contains(&"--verify-audio".to_owned()));
+        assert_eq!(
+            convert(true, true).args(),
+            Err(RequestError::OutOfRange("Verifying a dry run"))
+        );
+        let default: ConvertOptions = serde_json::from_str("{}").unwrap();
+        assert!(!default.verify_audio);
+    }
+
+    #[test]
+    fn audio_requests_refuse_empty_or_bad_values() {
+        let manifest = PathBuf::from("/w/manifest.json");
+        assert_eq!(
+            Request::AsrFetch { models: vec![] }.args(),
+            Err(RequestError::Empty("The model list"))
+        );
+        let resynthesize = |chapters: Vec<u32>, speed| Request::Resynthesize {
+            manifest: manifest.clone(),
+            chapters,
+            voice: None,
+            speed,
+            verify_audio: None,
+        };
+        assert_eq!(
+            resynthesize(vec![], None).args(),
+            Err(RequestError::Empty("The chapter list"))
+        );
+        assert_eq!(
+            resynthesize(vec![0], None).args(),
+            Err(RequestError::OutOfRange("The chapter"))
+        );
+        assert_eq!(
+            resynthesize(vec![1], Some(f64::NAN)).args(),
+            Err(RequestError::OutOfRange("The speed"))
+        );
+        let request: Request = serde_json::from_str(
+            r#"{"command": "verify_audio", "manifest": "/w/manifest.json", "models": ["wav2vec2"]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            request,
+            Request::VerifyAudio {
+                manifest: manifest.clone(),
+                chapters: vec![],
+                models: vec![AsrModel::Wav2vec2],
+            }
+        );
+        assert!(
+            serde_json::from_str::<Request>(
+                r#"{"command": "verify_audio", "manifest": "/m", "models": ["hosted"]}"#
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn audio_verification_writes_only_through_the_book_lock() {
+        let manifest = PathBuf::from("/w/manifest.json");
+        assert!(!Request::AsrList.is_write());
+        assert!(
+            !Request::AsrFetch {
+                models: vec![AsrModel::Vosk]
+            }
+            .is_write()
+        );
+        assert!(
+            !Request::AudioReport {
+                manifest: manifest.clone()
+            }
+            .is_write()
+        );
+        assert!(
+            Request::VerifyAudio {
+                manifest: manifest.clone(),
+                chapters: vec![],
+                models: vec![],
+            }
+            .is_write()
+        );
+        assert!(
+            Request::AudioDismiss {
+                manifest: manifest.clone(),
+                chapter: 1,
+                flag: 0,
+                undo: false,
+            }
+            .is_write()
+        );
+        assert!(
+            Request::Resynthesize {
+                manifest,
+                chapters: vec![1],
+                voice: None,
+                speed: None,
+                verify_audio: None,
+            }
+            .is_write()
         );
     }
 
@@ -1394,6 +1755,7 @@ mod real_cli {
         let requests = [
             Request::Doctor { check_llm: false },
             Request::ConfigShow,
+            Request::AsrList,
             Request::Inspect {
                 source: book.clone(),
                 pdf_password_env: None,

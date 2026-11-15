@@ -233,3 +233,54 @@ fn bridge_errors_hold_no_marker() {
         );
     }
 }
+
+/// Verification results hold book text (expected and heard excerpts): they reach the
+/// frontend, but never the app's log (audio verification spec §7).
+#[test]
+fn verification_excerpts_never_reach_the_app_log() {
+    let temp = TempDir::new().unwrap();
+    let (workspace, manifest, _) = book(&temp);
+    let report = format!(
+        r#"{{"schema_version": 1, "report": {{"chapters": [{{"number": 1, "flags": [{{"expected": "{TEXT}", "heard": {{"vosk": "{TITLE}"}}, "before": "{FILE_NAME}"}}]}}]}}, "stale": [], "warnings": []}}"#
+    );
+    let cli = CliCommand::direct(write_script(
+        temp.path(),
+        "cli",
+        &format!("#!/bin/sh\necho '{report}'\n"),
+    ));
+    let log = AppLog::default();
+    log.set_folder(&temp.path().join("logs"));
+    for request in [
+        Request::AudioReport {
+            manifest: manifest.clone(),
+        },
+        Request::VerifyAudio {
+            manifest: manifest.clone(),
+            chapters: vec![1],
+            models: vec![],
+        },
+        Request::Resynthesize {
+            manifest: manifest.clone(),
+            chapters: vec![1],
+            voice: Some("Jasper".into()),
+            speed: None,
+            verify_audio: Some(true),
+        },
+    ] {
+        let done = TestRunner.run(&cli, &request.args().unwrap()).unwrap();
+        let outcome = parse(&done);
+        assert!(
+            matches!(&outcome, crate::engine::result::Outcome::Success { result } if result.to_string().contains(TEXT)),
+            "the excerpt reaches the frontend"
+        );
+        log.record(
+            Event::new("engine_command")
+                .command(request.name())
+                .finished(done.code, Duration::from_millis(5), &outcome, false),
+        );
+    }
+    let text = fs::read_to_string(temp.path().join("logs").join(applog::FILE)).unwrap();
+    assert_eq!(text.lines().count(), 3);
+    assert_clean("the app log", &text);
+    assert!(!text.contains(&*workspace.to_string_lossy()));
+}

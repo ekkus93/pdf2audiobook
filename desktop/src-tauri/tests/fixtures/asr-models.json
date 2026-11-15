@@ -14,17 +14,30 @@
       "reason": null
     },
     {
+      "model": "wav2vec2",
+      "family": "Meta Wav2Vec2",
+      "model_id": "facebook/wav2vec2-base-960h",
+      "revision": "22aad52d435eb6dbaf354bdad9b0da84ce7d6156",
+      "package": "transformers",
+      "package_version": "5.20.2",
+      "weights_present": true,
+      "size_bytes": 377610353,
+      "location": "/home/me/.cache/pdf2audiobook/asr/wav2vec2",
+      "ready": true,
+      "reason": null
+    },
+    {
       "model": "vosk",
       "family": "Vosk/Kaldi",
       "model_id": "vosk-model-en-us-0.22-lgraph",
-      "revision": "d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f",
+      "revision": "d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334",
       "package": "vosk",
-      "package_version": null,
+      "package_version": "0.3.45",
       "weights_present": true,
       "size_bytes": 130557655,
       "location": "/home/me/.cache/pdf2audiobook/asr/vosk",
-      "ready": false,
-      "reason": "model_not_installed"
+      "ready": true,
+      "reason": null
     }
   ],
   "directory": "/home/me/.cache/pdf2audiobook/asr",

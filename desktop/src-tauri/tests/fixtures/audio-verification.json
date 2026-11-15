@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "created_at": "2026-11-14T12:00:00+00:00",
-  "completed_at": "2026-11-14T12:01:00+00:00",
+  "created_at": "2026-11-15T00:49:31+00:00",
+  "completed_at": "2026-11-15T00:49:56+00:00",
   "keep_transcripts": false,
   "models": [
     {
@@ -9,68 +9,534 @@
       "model_id": "medium.en",
       "revision": "d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f",
       "package_version": "20250625"
+    },
+    {
+      "model": "wav2vec2",
+      "model_id": "facebook/wav2vec2-base-960h",
+      "revision": "22aad52d435eb6dbaf354bdad9b0da84ce7d6156",
+      "package_version": "5.20.2"
+    },
+    {
+      "model": "vosk",
+      "model_id": "vosk-model-en-us-0.22-lgraph",
+      "revision": "d9838b4aaa82a75c4a17f5aca300eaca129aaab2a7cbf951bafbb500eb9c4334",
+      "package_version": "0.3.45"
     }
   ],
   "summary": {
-    "chapters": 1,
+    "chapters": 13,
     "by_status": {
-      "possible_mismatch": 1
+      "no_mismatch_detected": 10,
+      "possible_mismatch": 1,
+      "model_disagreement": 2
     }
   },
   "chapters": [
     {
-      "number": 3,
-      "status": "possible_mismatch",
+      "number": 1,
+      "status": "no_mismatch_detected",
       "reason": null,
-      "partial": true,
-      "audio_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      "reference_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "duration_seconds": 9.5,
+      "partial": false,
+      "audio_sha256": "9ae567a891f1ccbc467871a71423ad913d8ea29e91cfc655a88d1bce82e64d9e",
+      "reference_sha256": "17506951cc043cb7fea2a40a1578fb85af0e8e4e9e2c6d3547614c789cff34be",
+      "duration_seconds": 2.05,
       "models": [
         {
           "model": "whisper",
           "outcome": "ok",
           "reason": null,
-          "seconds": 1.5,
-          "word_count": 19
+          "seconds": 4.5,
+          "word_count": 5
         },
         {
           "model": "wav2vec2",
-          "outcome": "failed",
-          "reason": "model_failed",
-          "seconds": null,
-          "word_count": null
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 1.69,
+          "word_count": 5
         },
         {
           "model": "vosk",
           "outcome": "ok",
           "reason": null,
-          "seconds": 0.7,
-          "word_count": 19
+          "seconds": 2.1,
+          "word_count": 5
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 2,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "63dbcbab29598726a1baf836ad43d05c891f5dd3b97bcab8a177d489167be451",
+      "reference_sha256": "2bab14d1318e76d663579aea22a7ef03387ff44151446f9a9aa1afdfddf38683",
+      "duration_seconds": 92.07,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.2,
+          "word_count": 261
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 261
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 11.25,
+          "word_count": 261
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 3,
+      "status": "possible_mismatch",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "70b1a4ffa58b0960a8c892d831ff8000563567863e1ff85cca3310693d71c815",
+      "reference_sha256": "00eec5e6567bd746c90981dcd096d115fd7d20d3335a91875aa2a43740e36777",
+      "duration_seconds": 93.27,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 9.67,
+          "word_count": 256
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 1.8,
+          "word_count": 267
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 12.08,
+          "word_count": 269
         }
       ],
       "flags": [
         {
-          "kind": "insertion",
+          "kind": "substitution",
           "confirmed": true,
           "models": [
-            "whisper",
+            "wav2vec2",
             "vosk"
           ],
-          "ref_start": 6,
-          "ref_end": 6,
+          "ref_start": 53,
+          "ref_end": 54,
+          "expected": "In",
+          "heard": {
+            "wav2vec2": "IN FISHING BOATS STAYED IN AND THE KEEPER WROTE THE TIDE HEIGHTS IN THE BOOK",
+            "vosk": "in fishing boats stayed in and the keeper wrote the tide heights in the book"
+          },
+          "before": "light changed over the long breakwater.",
+          "after": "February the morning opened under a",
+          "start": 19.92,
+          "end": 23.61,
+          "reviewed": false
+        },
+        {
+          "kind": "insertion",
+          "confirmed": false,
+          "models": [
+            "whisper"
+          ],
+          "ref_start": 70,
+          "ref_end": 70,
           "expected": "",
           "heard": {
-            "whisper": "and the old bell rang",
-            "vosk": "and the old bell rang"
+            "whisper": "for watching. you"
           },
-          "before": "the keeper climbed the ninety two steps",
-          "after": "and trimmed the wick of the",
-          "start": 3.5,
-          "end": 5.9,
+          "before": "a steady breeze filled the harbour.",
+          "after": "By the afternoon the pilot boat",
+          "start": 29.4,
+          "end": 29.72,
           "reviewed": false
         }
       ]
+    },
+    {
+      "number": 4,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "e50876497bc097c2a3292e9e6e2677deb44836e8cebf09181849cc447486db1f",
+      "reference_sha256": "99e0511211b6463e4fcaa8381d24eb568a17b70879274cf98b653943f4fcbfaa",
+      "duration_seconds": 87.72,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.35,
+          "word_count": 253
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 253
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 10.6,
+          "word_count": 253
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 5,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "73783d547eaadae4b3c544e464088ec5a8a68633aef311793b19c221639f1dbd",
+      "reference_sha256": "3d79613c0036b1e395e63b362369b50b288e5f2189570691624af73bbbefe690",
+      "duration_seconds": 88.87,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.42,
+          "word_count": 257
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 257
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 11.03,
+          "word_count": 257
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 6,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "058766594eb2f57fd0fcfe12f518730ac80f16d4c4cc09f1b0b23fb71c3d6e9b",
+      "reference_sha256": "dfb9ca3c7903447753e4e0994a3cfa588e42fa11c327f3e6c12b33386b98fdbb",
+      "duration_seconds": 88.07,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.54,
+          "word_count": 259
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 259
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 10.95,
+          "word_count": 259
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 7,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "c3d44b6a6f1e4be1ae6d5dca6189a82e1f9806fb9edb685197951e122f13b910",
+      "reference_sha256": "28e0a0bd8c390cdb995d5cd54bd97e8d1e9f6406f73de72370b6abfa7dec6de9",
+      "duration_seconds": 86.0,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.38,
+          "word_count": 256
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 255
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 10.7,
+          "word_count": 256
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 8,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "91d0c4386e238e4ad953866fe44b681c6c29a6c70aedb08d2554d68741731ac1",
+      "reference_sha256": "cf530af9404416ac7e775c5504e3815eb73f3f969563d7260421ae371d20e0a8",
+      "duration_seconds": 89.72,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.36,
+          "word_count": 260
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 261
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 10.95,
+          "word_count": 260
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 9,
+      "status": "model_disagreement",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "1f8ab081c7b856df850b56bd7d199542494dc2211d3f10b18b4d3b460bd442ac",
+      "reference_sha256": "3293979995bf30c773a5e3c691ec3b533cf719c2f8094423a2582e0e643f0825",
+      "duration_seconds": 88.02,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.41,
+          "word_count": 260
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 261
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 11.34,
+          "word_count": 261
+        }
+      ],
+      "flags": [
+        {
+          "kind": "substitution",
+          "confirmed": false,
+          "models": [
+            "vosk"
+          ],
+          "ref_start": 223,
+          "ref_end": 224,
+          "expected": "dropped",
+          "heard": {
+            "vosk": "shop"
+          },
+          "before": "bright, cold sky, and the wind",
+          "after": "to nothing by noon. By the",
+          "start": 75.84,
+          "end": 76.02,
+          "reviewed": false
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "status": "model_disagreement",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "b0d0a442a4a89a00887bacd06b387146bfedc2d05b460bbc2c101207707e3d8c",
+      "reference_sha256": "8a31fd1ba48c08f13071ec18dfebd1e7fed747eabda2ef551822e1ad00648c74",
+      "duration_seconds": 89.2,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.35,
+          "word_count": 260
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 260
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 11.01,
+          "word_count": 261
+        }
+      ],
+      "flags": [
+        {
+          "kind": "substitution",
+          "confirmed": false,
+          "models": [
+            "vosk"
+          ],
+          "ref_start": 165,
+          "ref_end": 166,
+          "expected": "high",
+          "heard": {
+            "vosk": "her hi"
+          },
+          "before": "opened under a sky streaked with",
+          "after": "cloud, and a soft westerly held",
+          "start": 57.75,
+          "end": 57.96,
+          "reviewed": false
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "9465276b18842ed654de2c8cc8b7a6787278793251af3c303ef56cecfcdb1b71",
+      "reference_sha256": "5fbca1a5bbfb78054c88eb4bc7abbca51434421cec1179996ff8721b153569b3",
+      "duration_seconds": 89.75,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.57,
+          "word_count": 258
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 258
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 11.47,
+          "word_count": 259
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 12,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "9dedf0ff23a3fde373836c72228f4299cbf5edb2a0a98095e14540fc9f103a69",
+      "reference_sha256": "c2c34fba850cc44d706aeb6b2288a307e61f8bf2e9418a4d494a5edd7a1bfbe0",
+      "duration_seconds": 89.65,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.38,
+          "word_count": 256
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 256
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 11.03,
+          "word_count": 256
+        }
+      ],
+      "flags": []
+    },
+    {
+      "number": 13,
+      "status": "no_mismatch_detected",
+      "reason": null,
+      "partial": false,
+      "audio_sha256": "c616c37c87503be8f4a4b3f4a7772eac3f773ae0a9c6bb344653c7103930239f",
+      "reference_sha256": "a08ec58e37295bd965cb45589b7eda86a282bc971dd571ab95c034489e12fae1",
+      "duration_seconds": 89.17,
+      "models": [
+        {
+          "model": "whisper",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 3.38,
+          "word_count": 255
+        },
+        {
+          "model": "wav2vec2",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 0.1,
+          "word_count": 255
+        },
+        {
+          "model": "vosk",
+          "outcome": "ok",
+          "reason": null,
+          "seconds": 10.87,
+          "word_count": 255
+        }
+      ],
+      "flags": []
     }
   ],
   "warnings": []
