@@ -270,6 +270,8 @@ uv run pdf2audiobook thumbnail path/to/book.pdf --output cover.png --width 320 -
 uv run pdf2audiobook asr list
 uv run pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json --chapter 3
 uv run pdf2audiobook resynthesize ./audiobooks/BOOK/manifest.json --chapter 3
+uv run pdf2audiobook audio-report show ./audiobooks/BOOK/manifest.json
+uv run pdf2audiobook audio-report dismiss ./audiobooks/BOOK/manifest.json --chapter 3 --flag 0
 uv run pdf2audiobook --version
 ~~~
 
@@ -522,6 +524,19 @@ progress and errors hold no book text. Delete `reports/audio_verification.json` 
 tell whether it sounds natural, whether a name is pronounced the way you want, or whether there
 is clipping or distortion. Accuracy was measured on synthetic Kitten speech (spec §13), not on
 recordings.
+
+**Reading the saved report later.** `audio-report show MANIFEST [--json]` prints the saved
+report without loading any model, and lists the chapters whose result is out of date because
+their audio, text, pronunciations or the pinned model revisions changed
+(`desktop/contracts/audio-report.schema.json`: `report`, null before the first check, and
+`stale`). After listening to a flagged passage that sounds right, mark it reviewed with
+`audio-report dismiss MANIFEST --chapter N --flag I` (`I` counts from 0 in the chapter's `flags`;
+`--undo` reverses it). That changes no audio or text, and the mark survives checking the same
+audio again.
+
+**In the desktop app** the same check is a switch in the book's options and an *Audio check*
+panel with *Verify existing audio*, the flagged passages, *Listen*, *Sounds right* and *Speak
+again…*; see [desktop/README.md](desktop/README.md#checking-the-audio).
 
 ### Fixing a flagged chapter
 

@@ -31,6 +31,40 @@ Install the CLI from a checkout of this repository (the app doesn't bundle Pytho
 uv tool install ".[kitten]"   # run in the repository root; provides `pdf2audiobook` on PATH
 ```
 
+For the optional audio check (below), install the speech recognizers too, with
+`uv tool install ".[kitten,asr]"`; the app offers to download their models.
+
+## Checking the audio
+
+The audio check is optional and off by default; see
+[`docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md`](../docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md)
+and the main README's [Checking the audio with speech recognition](../README.md#checking-the-audio-with-speech-recognition-optional).
+
+- **Before converting:** switch on *Check the new audio with speech recognition* in the book's
+  options (`convert --verify-audio`). The check runs after conversion, as part of the same run.
+- **Afterwards:** *Audio check → Verify existing audio* checks every converted chapter
+  (`verify-audio`), as a run of its own on the Run page; stopping it keeps the chapters already
+  checked and never touches audio.
+- **Speech recognizers:** the panel shows which of Whisper, Wav2Vec2 and Vosk are ready
+  (`asr list`). *Download recognizers…* lists each model's size and folder and, when you agree,
+  has the CLI download and check them (`asr fetch --yes`); the app itself still makes no network
+  request. Packages that aren't installed have to be installed with the CLI (above).
+- **Results** (`audio-report show`, which loads no model): chapters with no mismatch are only
+  counted. For the others the panel shows the verdict, which recognizers voted and whether fewer
+  than three did, and each passage the recognizers heard differently: the text around it, the
+  expected words, what each recognizer heard, and when. A passage counts only when two
+  recognizers agree; one recognizer alone is shown as a disagreement. Results whose audio or text
+  changed since the check are marked out of date.
+- **Actions,** none automatic: *Listen* plays the chapter from two seconds before the passage;
+  *Sounds right* marks it reviewed (`audio-report dismiss`; *Not reviewed* undoes it) without
+  changing any file; *Speak again…* synthesizes only that chapter again with the voice and speed
+  you choose (`resynthesize`), keeping its current audio playable until the new audio is ready
+  and then in `audio/.backup/`, and checks the new audio; *Correct the text* opens the review
+  page, after which *Speak again…* uses the corrected text.
+
+Transcripts and excerpts reach only this panel: never the app log or an error message
+(`src-tauri/src/privacy.rs`).
+
 ## Development
 
 ```bash
@@ -65,7 +99,12 @@ rewrite the lock with `npx npm@10 install --package-lock-only` before committing
 The end-to-end walkthrough (spec D9.d) drives a release build through `tauri-driver`: it adds
 the README demo book through the file dialog, analyzes it without the LLM, retitles chapter 1
 in review and saves, then converts with `--dry-run` (the app runs the real CLI from this
-checkout through a wrapper that adds `--dry-run`, so no speech model is needed). It needs an X
+checkout through a wrapper that adds `--dry-run`, so no speech model is needed). It then checks
+the audio: verifies the book, listens at the passage flagged in chapter 2, marks it reviewed and
+speaks the chapter again, after which no chapter is flagged. CI has no speech recognizer models,
+so the wrapper sends `asr`, `verify-audio`, `audio-report` and `resynthesize` to
+`e2e/fake_asr.mjs`, which answers from the bridge's real-output fixtures, and gives each chapter
+a short silent MP3 (`e2e/fixtures/silence.mp3`). It needs an X
 display, `xdotool`, WebKitGTK's `WebKitWebDriver` (`webkit2gtk-driver` on Ubuntu) and
 `tauri-driver` (`cargo install tauri-driver --locked`):
 

@@ -390,6 +390,13 @@ outputs, so treat their shapes as contracts: add fields, never rename or remove 
   `audio/.backup/` (newest three per chapter); conversion first finishes any journaled commit and
   removes unjournaled staged files and leftover `tmp*` folders. Verification results judged with
   other model revisions than the pinned ones are reported stale.
+- `audio-report show MANIFEST --json` (`audio-report.schema.json`) prints `report` (the saved
+  verification report or null) and `stale` without importing any ASR package;
+  `audio-report dismiss MANIFEST --chapter N --flag I [--undo] --json` (`audio-dismiss.schema.json`)
+  sets one flag's `reviewed` under the book lock. A re-verification keeps `reviewed` on flags with
+  the same kind, position and expected words in the same audio. The desktop app reads these and
+  `asr list`; its walkthrough stands in for them with `desktop/e2e/fake_asr.mjs`, built from the
+  bridge fixtures, so regenerate those fixtures from real output when these contracts change.
 - `inspect MANIFEST --json` includes `analyzed_with_llm`: `false` when the workspace's last
   analysis ran without the LLM (its `llm-analysis` fingerprint is the fixed "disabled" value),
   `true` when it used one, `null` when `reports/analysis_fingerprints.json` is missing or

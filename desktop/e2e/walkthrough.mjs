@@ -1,6 +1,8 @@
 // End-to-end walkthrough of the desktop app (spec D9.d, TD10.01), through tauri-driver:
 // add the README demo book, analyze it without the LLM, retitle chapter 1 in review and save,
-// then convert with --dry-run. Plain W3C WebDriver over fetch; no test framework needed.
+// then convert with --dry-run; then check the audio, listen at a flagged passage, mark it
+// reviewed and speak that chapter again (audio verification AV5.06; the speech recognizers are
+// stood in for by e2e/fake_asr.mjs). Plain W3C WebDriver over fetch; no test framework needed.
 // E2E_DRY_RUN=0 converts with real speech instead (manual acceptance, TD10.05; needs Kitten).
 //
 //   E2E_APP=src-tauri/target/release/pdf2audiobook-desktop \
@@ -49,10 +51,18 @@ if (made.status !== 0) throw new Error(`demo book: ${made.stderr}`);
 // The app runs this as its CLI. It is the real CLI, with --dry-run added to convert (unless
 // E2E_DRY_RUN=0), so the walkthrough needs no speech model.
 const cli = join(home, "pdf2audiobook");
+const asrState = join(home, "asr-state");
+mkdirSync(asrState);
 writeFileSync(
   cli,
   `#!/bin/sh
 set -e
+for arg in "$@"; do
+  case "$arg" in
+    --) break ;;
+    asr|verify-audio|audio-report|resynthesize) exec node ${JSON.stringify(join(DESKTOP, "e2e", "fake_asr.mjs"))} ${JSON.stringify(asrState)} "$@" ;;
+  esac
+done
 first=1
 for arg in "$@"; do
   if [ "$first" = 1 ]; then set --; first=0; fi
@@ -237,7 +247,75 @@ async function main() {
       step(`  ${name}: ${Number(probe.stdout.trim()).toFixed(1)} s`);
     }
   }
-  step(`passed: the book was added, analyzed, reviewed and converted${DRY_RUN ? " (dry run)" : " with real speech"}`);
+  await audioCheck(workspace, manifest.chapters.length);
+  step(
+    `passed: the book was added, analyzed, reviewed, converted${DRY_RUN ? " (dry run)" : " with real speech"}, checked and repaired`,
+  );
+}
+
+/** Checks the audio, listens at the flagged passage, marks it reviewed and speaks it again. */
+async function audioCheck(workspace, chapters) {
+  step("audio check: verify the book's audio");
+  const audio = join(out, workspace, "audio");
+  if (DRY_RUN) {
+    // A dry run makes no MP3s; give each chapter a short silent one to play.
+    mkdirSync(audio, { recursive: true });
+    const silence = readFileSync(join(DESKTOP, "e2e", "fixtures", "silence.mp3"));
+    for (let number = 1; number <= chapters; number++) {
+      writeFileSync(join(audio, `${String(number).padStart(3, "0")} - Chapter ${number}.mp3`), silence);
+    }
+  }
+  await click(await find(button("Back to the book")));
+  await click(await find(`${button("Verify existing audio")}[not(@disabled)]`, 60));
+  await find("//*[contains(., 'Audio check finished')]", 120);
+  await click(await find(button("Back to the book")));
+  const flagged = "//li[contains(@aria-label, 'Chapter 2: Possible mismatch')]";
+  await find(`${flagged}[contains(., 'heard by Wav2Vec2 and Vosk')]`, 60);
+  await run("document.querySelector('.check-possible_mismatch').scrollIntoView({ block: 'center', behavior: 'instant' });");
+  await sleep(500);
+  await screenshot("6-flagged");
+
+  step("audio check: listen at the flagged passage");
+  await click(await find(`(${flagged}${button("Listen")})[1]`));
+  await find("//*[@aria-label='Player'][contains(., 'Chapter 2')]", 30);
+  // Logged, not asserted: a display without a sound device may not play at all.
+  let position = 0;
+  for (let attempt = 0; attempt < 40 && position < 1.4; attempt++) {
+    await sleep(250);
+    position = await run("const a = document.querySelector('[data-testid=player-audio]'); return a ? a.currentTime : 0;");
+  }
+  step(`  the player is at ${Number(position).toFixed(2)} s (the passage starts at 3.5 s; listening starts 2 s before)`);
+
+  step("audio check: mark it reviewed");
+  await click(await find(`(${flagged}${button("Sounds right")})[1]`));
+  await find(`${flagged}[contains(., '· reviewed')]`, 30);
+
+  step("audio check: speak chapter 2 again");
+  await click(await find(`${flagged}${button("Speak again")}`));
+  await click(await find(`//md-dialog[@open]${button("Speak again")}`, 30));
+  await find("//*[contains(., 'Chapters spoken again')]", 120);
+  await click(await find(button("Back to the book")));
+  await find(`//*[contains(., '${chapters} chapters checked · ${chapters} with no mismatch detected')]`, 60);
+  const remaining = await call("POST", s("/elements"), { using: "xpath", value: flagged });
+  if (remaining.length) throw new Error("chapter 2 is still flagged after speaking it again");
+  await run("document.querySelector('.audio-check').scrollIntoView({ block: 'center', behavior: 'instant' });");
+  await sleep(500);
+  await screenshot("7-repaired");
+
+  const calls = readFileSync(join(asrState, "calls.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const sent = (word) => calls.find((args) => args.includes(word));
+  const resynthesize = sent("resynthesize");
+  const dismiss = sent("dismiss");
+  if (!sent("verify-audio")) throw new Error("verify-audio was never run");
+  if (!resynthesize || !resynthesize.includes("--chapter=2") || !resynthesize.includes("--verify-audio")) {
+    throw new Error(`resynthesize was sent as ${JSON.stringify(resynthesize)}`);
+  }
+  if (!dismiss || !dismiss.includes("--chapter=2") || !dismiss.includes("--flag=0")) {
+    throw new Error(`dismiss was sent as ${JSON.stringify(dismiss)}`);
+  }
 }
 
 let failed = false;
