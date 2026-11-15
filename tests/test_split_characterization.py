@@ -14,6 +14,7 @@ from typer.testing import CliRunner
 
 from pdf2audiobook import pipeline
 from pdf2audiobook.audio import audio_output_path, synthesize_chunks
+from pdf2audiobook.audio.commit import staged_path
 from pdf2audiobook.config import Pdf, Settings
 from pdf2audiobook.conversion import _rendering_inputs
 from pdf2audiobook.document.structure import pagination_cleanup
@@ -123,7 +124,8 @@ def test_resume_regenerates_an_unreadable_mp3_behind_a_valid_sidecar(tmp_path, m
     monkeypatch.setattr(pipeline, "encode_mp3", publish)
 
     assert pipeline.convert_book(source, settings) == [output]
-    assert regenerated == [output]
+    # Encoded to the staging path, then committed over the corrupt MP3.
+    assert regenerated == [staged_path(output)]
 
 
 @pytest.mark.parametrize("max_retries", [True, -1, 11, "2", 2.0])

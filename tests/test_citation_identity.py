@@ -120,7 +120,10 @@ def _book(tmp_path: Path) -> tuple[Path, Settings]:
 
 
 def _sidecars(tmp_path: Path) -> list[dict]:
-    return [json.loads(p.read_text()) for p in sorted((tmp_path / "out").rglob("*.cache.json"))]
+    # The live sidecars beside the chapter MP3s; replaced ones are kept in audio/.backup/.
+    return [
+        json.loads(p.read_text()) for p in sorted((tmp_path / "out").glob("*/audio/*.cache.json"))
+    ]
 
 
 @needs_ffmpeg

@@ -11,12 +11,18 @@ from pathlib import Path
 from typing import Any, Callable
 
 from pdf2audiobook.audio import AudioEncoder
+from pdf2audiobook.audio.commit import (
+    commit_chapter_audio,
+    discard_staged,
+    recover_audio_commits,
+    staged_path,
+)
 from pdf2audiobook.config import Settings
 from pdf2audiobook.errors import AudioError, PartialConversionError
 from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.progress_display import ProgressHandle, ProgressReporter
 from pdf2audiobook.tts import TTSProvider
-from pdf2audiobook.workspace import digest_file, fingerprint, write_json
+from pdf2audiobook.workspace import fingerprint, write_json
 
 
 @dataclass(frozen=True)
@@ -335,10 +341,16 @@ def _synthesize_and_encode(
         **synth_kwargs,
     )
     encode = services.encode_mp3 if run.encoder is None else run.encoder
+    # Encoded beside the chapters but not over them: the current MP3 stays until the new one
+    # is checked and committed (`audio/commit.py`).
+    try:
+        staged_path(output).parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise AudioError("Could not create the chapter audio staging folder") from None
     encode(
         samples,
         provider.sample_rate,
-        output,
+        staged_path(output),
         bitrate=settings.tts.bitrate,
         target_rate=settings.tts.sample_rate,
         title=item.title,
@@ -399,19 +411,26 @@ def _remove_obsolete_audio(run: _ConversionRun, item: Chapter, output: Path) -> 
 def _publish_chapter(
     run: _ConversionRun, item: Chapter, output: Path, record: Path, text: str, identity: str
 ) -> None:
-    """Write the chapter's sidecar, mark it complete and clean up its old audio."""
-    write_json(
-        record,
-        {
-            "chapter_id": item.id,
-            "sidecar_version": 3,
-            "rendering_inputs": _rendering_inputs(run.settings),
-            "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-            "fingerprint": identity,
-            "sha256": digest_file(output),
-            "bytes": output.stat().st_size,
-        },
-    )
+    """Commit the chapter's new MP3 and sidecar, mark it complete and clean up its old audio.
+
+    The previous MP3 and sidecar are kept under `audio/.backup/`; if committing fails, the
+    chapter fails and its previous audio stays as it was.
+    """
+    try:
+        commit_chapter_audio(
+            output,
+            record,
+            {
+                "chapter_id": item.id,
+                "sidecar_version": 3,
+                "rendering_inputs": _rendering_inputs(run.settings),
+                "text_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+                "fingerprint": identity,
+            },
+        )
+    except AudioError:
+        _fail_chapter(run, item, keep_reason=False)
+        return
     run.conversion_status[item.id]["status"] = "complete"
     run.services.log_event(
         "stage_completed", level=logging.INFO, stage="chapter_audio", count=item.number
@@ -489,8 +508,13 @@ def _convert_chapter(
             run, item, output, text, (selected_model, selected_voice, selected_speed), synth_kwargs
         )
     except AudioError:
+        discard_staged(output)
         _fail_chapter(run, item, keep_reason=True)
         return
+    except BaseException:
+        # Interrupted: the current MP3 was never touched; drop the half-made one.
+        discard_staged(output)
+        raise
     finally:
         settle()
         if streamed_wav is not None:
@@ -550,6 +574,8 @@ def _convert_analyzed_book(
         {"skip_citations": True} if settings.reading.process_citations else {}
     )
     _remove_stale_temporary_audio(manifest_path)
+    # Finish a commit a stopped run journaled; drop unjournaled staged files.
+    recover_audio_commits(manifest_path.parent / "audio")
     adapters = tuple(
         f"{role}={type(adapter).__module__}.{type(adapter).__qualname__}"
         for role, adapter in (("tts", tts_provider), ("encoder", encoder))
