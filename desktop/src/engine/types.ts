@@ -34,7 +34,11 @@ export interface ConvertOptions {
   cover?: string | null;
   accept_review?: Array<"damaged_source" | "ambiguous_page_numbers">;
   force?: boolean;
+  /** Check the converted chapters with the speech recognizers afterwards (opt-in). */
+  verify_audio?: boolean;
 }
+
+export type AsrModel = "whisper" | "wav2vec2" | "vosk";
 
 export type Request =
   | { command: "analyze"; book: string; options: BookOptions }
@@ -55,7 +59,79 @@ export type Request =
   | { command: "config_show" }
   | { command: "inspect"; source: string; pdf_password_env?: string | null }
   | { command: "workspace"; book: string; output?: string | null }
-  | { command: "voices"; tts_provider?: "kitten" | "piper" | null; tts_model?: string | null };
+  | { command: "voices"; tts_provider?: "kitten" | "piper" | null; tts_model?: string | null }
+  | { command: "asr_list" }
+  | { command: "asr_fetch"; models: AsrModel[] }
+  | { command: "verify_audio"; manifest: string; chapters?: number[]; models?: AsrModel[] }
+  | { command: "audio_report"; manifest: string }
+  | { command: "audio_dismiss"; manifest: string; chapter: number; flag: number; undo?: boolean }
+  | { command: "resynthesize"; manifest: string; chapters: number[]; voice: string | null; speed: number | null; verify_audio: boolean | null };
+
+/** One speech recognizer's readiness (`asr list --json`, contracts/asr-models.schema.json). */
+export interface AsrReadiness {
+  model: AsrModel;
+  family: string;
+  model_id: string;
+  revision: string;
+  package: string;
+  package_version: string | null;
+  weights_present: boolean;
+  size_bytes: number;
+  location: string;
+  ready: boolean;
+  reason: string | null;
+}
+
+export interface AsrModels {
+  models: AsrReadiness[];
+}
+
+export type ChapterVerdict = "no_mismatch_detected" | "possible_mismatch" | "model_disagreement" | "verification_unavailable";
+
+/** A passage the models heard differently from the narration. */
+export interface VerificationFlag {
+  kind: "insertion" | "omission" | "substitution";
+  confirmed: boolean;
+  models: AsrModel[];
+  ref_start: number;
+  ref_end: number;
+  expected: string;
+  heard: Partial<Record<AsrModel, string>>;
+  before: string;
+  after: string;
+  start: number | null;
+  end: number | null;
+  reviewed: boolean;
+}
+
+export interface ChapterVerification {
+  number: number;
+  status: ChapterVerdict;
+  reason: string | null;
+  partial: boolean;
+  audio_sha256: string | null;
+  duration_seconds: number | null;
+  models: Array<{ model: AsrModel; outcome: "ok" | "unavailable" | "failed"; reason: string | null; seconds: number | null; word_count: number | null }>;
+  flags: VerificationFlag[];
+}
+
+/** `reports/audio_verification.json` (contracts/audio-verification.schema.json). */
+export interface VerificationReport {
+  schema_version: 1;
+  created_at: string;
+  completed_at: string | null;
+  models: Array<{ model: AsrModel; model_id: string; revision: string; package_version: string | null }>;
+  chapters: ChapterVerification[];
+  warnings: string[];
+}
+
+/** `audio-report show --json` (contracts/audio-report.schema.json). */
+export interface AudioReport {
+  schema_version: 1;
+  report: VerificationReport | null;
+  stale: number[];
+  warnings: string[];
+}
 
 export interface EngineError {
   type: string;

@@ -51,6 +51,7 @@ describe("defaults", () => {
       firstChapter: "1",
       lastChapter: "12",
       cover: null,
+      verifyAudio: false,
     });
   });
 
@@ -112,8 +113,17 @@ describe("requests", () => {
       command: "convert",
       book: "/books/a.pdf",
       options,
-      convert: { voice: "Luna", speed: 1.15, cover: "/art/c.png", chapters: null },
+      convert: { voice: "Luna", speed: 1.15, cover: "/art/c.png", verify_audio: false, chapters: null },
     });
+  });
+
+  it("verify the audio only when the box is ticked", () => {
+    const off = requests("/b.pdf", FORM, null).convert;
+    expect(off.command === "convert" && off.convert.verify_audio).toBe(false);
+    const on = requests("/b.pdf", { ...FORM, verifyAudio: true }, null).convert;
+    expect(on.command === "convert" && on.convert.verify_audio).toBe(true);
+    // Analysis never verifies.
+    expect(requests("/b.pdf", { ...FORM, verifyAudio: true }, null).analyze).not.toHaveProperty("convert");
   });
 
   it("pass only --no-llm when the LLM is off, and consent only for OpenAI", () => {

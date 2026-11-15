@@ -148,6 +148,51 @@ describe("Run", () => {
     expect(screen.getByText(/Finished chapters are kept/)).toBeInTheDocument();
   });
 
+  it("shows an audio check as its own task, and stopping it keeps the audio", async () => {
+    sequence(
+      {
+        state: "running",
+        status: status(3, {
+          command: "verify-audio",
+          stage: { name: "Listening with whisper", detail: null, unit: "chapter", done: 3, total: 13, elapsed_seconds: 40, estimated_remaining_seconds: 130 },
+          completed_stages: [],
+        }),
+        cancelling: false,
+      },
+      {
+        state: "finished",
+        status: null,
+        outcome: { outcome: "failed", error: { type: "Interrupted", code: 130, message: "Interrupted" }, warnings: [] },
+        cancelled: true,
+      },
+    );
+    render(<Run run={{ ...RUN, command: "verify_audio" }} pollMs={5} />);
+    expect(screen.getByText("Checking the audio")).toBeInTheDocument();
+    expect(await screen.findByText("Stopped")).toBeInTheDocument();
+    expect(screen.getByText(/Chapters already checked are kept in the report; no audio was changed/)).toBeInTheDocument();
+  });
+
+  it("names a finished audio check and a stopped repair", async () => {
+    sequence({
+      state: "finished",
+      status: { ...status(13), state: "completed", stage: null, elapsed_seconds: 185 },
+      outcome: { outcome: "success", result: {} },
+      cancelled: false,
+    });
+    const { unmount } = render(<Run run={{ ...RUN, command: "verify_audio" }} pollMs={5} />);
+    expect(await screen.findByText("Audio check finished in 3m 05s")).toBeInTheDocument();
+    unmount();
+    sequence({
+      state: "finished",
+      status: null,
+      outcome: { outcome: "failed", error: { type: "Interrupted", code: 130, message: "Interrupted" }, warnings: [] },
+      cancelled: true,
+    });
+    render(<Run run={{ ...RUN, command: "resynthesize" }} pollMs={5} />);
+    expect(screen.getByText("Speaking chapters again")).toBeInTheDocument();
+    expect(await screen.findByText(/keeps its previous audio until its new audio is ready/)).toBeInTheDocument();
+  });
+
   it("reports the engine's error, and a fixed message for an unreadable result", async () => {
     sequence({
       state: "finished",

@@ -11,6 +11,10 @@ export interface Queue {
   workspace: string;
   files: AudioFile[];
   index: number;
+  /** Seconds into the chapter to start from (a flagged passage); applied once per `seek`. */
+  start?: number;
+  /** Changes for every new "listen here" request, so the same place can be played again. */
+  seek?: number;
 }
 
 /** "001 - The Keeper.mp3" → "The Keeper". */
@@ -45,6 +49,27 @@ export function Player({ queue, onChange }: { queue: Queue | null; onChange: (qu
   const [failed, setFailed] = useState(false);
   const file = queue ? queue.files[queue.index] : undefined;
   const workspace = queue?.workspace;
+  // Where to start once the chapter's metadata is loaded; cleared once applied.
+  const pending = useRef<number | null>(null);
+  // The chapter whose audio the element holds, so a seek never lands in the previous chapter.
+  const loadedName = useRef<string | null>(null);
+  const start = queue?.start;
+  const seek = queue?.seek;
+
+  useEffect(() => {
+    if (start === undefined) {
+      pending.current = null;
+      return;
+    }
+    const element = audio.current;
+    if (element && element.readyState >= 1 && loadedName.current === file?.name) {
+      element.currentTime = start;
+      void element.play()?.catch(() => setPlaying(false));
+    } else {
+      pending.current = start;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a new seek request, not a new file
+  }, [start, seek]);
 
   useEffect(() => {
     const element = audio.current;
@@ -58,18 +83,20 @@ export function Player({ queue, onChange }: { queue: Queue | null; onChange: (qu
         url = loaded;
         if (!current) return URL.revokeObjectURL(loaded);
         element.src = loaded;
+        loadedName.current = file.name;
         return element.play()?.catch(() => setPlaying(false));
       })
       .catch(() => current && setFailed(true));
     return () => {
       current = false;
+      loadedName.current = null;
       element.pause();
       if (url) URL.revokeObjectURL(url);
     };
   }, [file, workspace]);
 
   if (!queue || !file) return null;
-  const go = (index: number) => onChange({ ...queue, index });
+  const go = (index: number) => onChange({ ...queue, index, start: undefined });
   return (
     <>
       <audio
@@ -77,6 +104,11 @@ export function Player({ queue, onChange }: { queue: Queue | null; onChange: (qu
         data-testid="player-audio"
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
+        onLoadedMetadata={(event) => {
+          if (pending.current === null) return;
+          event.currentTarget.currentTime = pending.current;
+          pending.current = null;
+        }}
         onTimeUpdate={(event) => {
           const element = event.currentTarget;
           setPosition(element.duration ? element.currentTime / element.duration : 0);

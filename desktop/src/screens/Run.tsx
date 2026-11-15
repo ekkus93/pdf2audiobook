@@ -11,7 +11,7 @@ import "./run.css";
 export interface ActiveRun {
   id: number;
   title: string;
-  command: "analyze" | "convert";
+  command: "analyze" | "convert" | "verify_audio" | "resynthesize";
   workspace: string;
   manifest: string;
   /** The request that started the run, to start again from the reason actions. */
@@ -30,6 +30,34 @@ export function duration(seconds: number): string {
   if (minutes) return `${minutes}m ${String(rest).padStart(2, "0")}s`;
   return `${rest}s`;
 }
+
+const TASKS: Record<ActiveRun["command"], string> = {
+  analyze: "Analyzing",
+  convert: "Converting to audio",
+  verify_audio: "Checking the audio",
+  resynthesize: "Speaking chapters again",
+};
+
+const DONE: Record<ActiveRun["command"], string> = {
+  analyze: "Analysis finished",
+  convert: "Conversion finished",
+  verify_audio: "Audio check finished",
+  resynthesize: "Chapters spoken again",
+};
+
+const ICONS: Record<ActiveRun["command"], "auto_stories" | "graphic_eq" | "hearing"> = {
+  analyze: "auto_stories",
+  convert: "graphic_eq",
+  verify_audio: "hearing",
+  resynthesize: "graphic_eq",
+};
+
+const STOPPED: Record<ActiveRun["command"], string> = {
+  analyze: "The run stopped. Finished chapters are kept; run it again to continue.",
+  convert: "The run stopped. Finished chapters are kept; run it again to continue.",
+  verify_audio: "The check stopped. Chapters already checked are kept in the report; no audio was changed.",
+  resynthesize: "The run stopped. Each chapter keeps its previous audio until its new audio is ready.",
+};
 
 const UNITS: Record<string, string> = { char: "characters", request: "LLM requests", page: "pages", chapter: "chapters" };
 
@@ -101,13 +129,13 @@ export function Run({ run, onDone, onReview, pollMs = 1000, onRestart, onOpenSet
     );
   }
 
-  const task = run.command === "convert" ? "Converting to audio" : "Analyzing";
+  const task = TASKS[run.command];
   const status = progress?.status ?? null;
   return (
     <div className="screen run">
       <div className="run-header">
         <span className="run-art" aria-hidden="true">
-          <Icon name={run.command === "convert" ? "graphic_eq" : "auto_stories"} size={32} />
+          <Icon name={ICONS[run.command]} size={32} />
         </span>
         <div>
           <h2 className="headline-small run-title">{run.title}</h2>
@@ -119,7 +147,7 @@ export function Run({ run, onDone, onReview, pollMs = 1000, onRestart, onOpenSet
       {progress?.state === "running" ? (
         <Running status={status} cancelling={progress.cancelling} onCancel={() => void cancelRun(run.id)} />
       ) : null}
-      {progress?.state === "finished" ? <Finished progress={progress} task={task} onDone={onDone} /> : null}
+      {progress?.state === "finished" ? <Finished progress={progress} command={run.command} onDone={onDone} /> : null}
       {needsReview && onReview ? (
         <section className="recover" aria-label="Review">
           <div className="title-medium">This book's chapters need your review</div>
@@ -209,16 +237,16 @@ function Running({ status, cancelling, onCancel }: { status: RunStatus | null; c
   );
 }
 
-function Finished({ progress, task, onDone }: { progress: Extract<Progress, { state: "finished" }>; task: string; onDone?: () => void }) {
+function Finished({ progress, command, onDone }: { progress: Extract<Progress, { state: "finished" }>; command: ActiveRun["command"]; onDone?: () => void }) {
   const { outcome, cancelled, status } = progress;
   const elapsed = status ? ` in ${duration(status.elapsed_seconds)}` : "";
   let icon: "task_alt" | "stop" | "error" = "task_alt";
-  let heading = `${task === "Analyzing" ? "Analysis" : "Conversion"} finished${elapsed}`;
+  let heading = `${DONE[command]}${elapsed}`;
   let message: string | null = null;
   if (cancelled) {
     icon = "stop";
     heading = "Stopped";
-    message = "The run stopped. Finished chapters are kept; run it again to continue.";
+    message = STOPPED[command];
   } else if (outcome.outcome === "failed") {
     icon = "error";
     heading = "The run stopped with a problem";

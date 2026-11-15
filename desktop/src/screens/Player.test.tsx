@@ -123,6 +123,46 @@ describe("Player", () => {
     expect(screen.getByRole("region", { name: "Player" })).toHaveTextContent("The Storm");
   });
 
+  it("starts a chapter at a flagged passage once its audio is loaded, and again on each request", async () => {
+    const queue: Queue = { book: "Lighthouse", workspace: BOOK, files: FILES, index: 1, start: 42, seek: 1 };
+    const { rerender } = render(<Player queue={queue} onChange={vi.fn()} />);
+    await waitFor(() => expect(audio().src).toBe("blob:chapter-1"));
+    const element = audio();
+    let time = 0;
+    let ready = 0;
+    Object.defineProperty(element, "currentTime", { configurable: true, get: () => time, set: (value: number) => void (time = value) });
+    Object.defineProperty(element, "readyState", { configurable: true, get: () => ready });
+    // Not before the metadata: the element can't seek yet.
+    expect(time).toBe(0);
+    await act(async () => {
+      ready = 1;
+      element.dispatchEvent(new Event("loadedmetadata"));
+    });
+    expect(time).toBe(42);
+    // The same chapter and place again: seeks at once, without reloading the chapter.
+    time = 80;
+    rerender(<Player queue={{ ...queue, seek: 2 }} onChange={vi.fn()} />);
+    expect(time).toBe(42);
+    expect(fetched).toHaveLength(1);
+    // Another place in the same chapter.
+    rerender(<Player queue={{ ...queue, start: 7, seek: 3 }} onChange={vi.fn()} />);
+    expect(time).toBe(7);
+  });
+
+  it("doesn't carry a passage's start into the next chapter", async () => {
+    render(<Harness start={{ book: "Lighthouse", workspace: BOOK, files: FILES, index: 0, start: 30, seek: 1 }} />);
+    await waitFor(() => expect(audio().src).toBe("blob:chapter-1"));
+    await press("Next chapter");
+    await waitFor(() => expect(audio().src).toBe("blob:chapter-2"));
+    const element = audio();
+    let time = 0;
+    Object.defineProperty(element, "currentTime", { configurable: true, get: () => time, set: (value: number) => void (time = value) });
+    await act(async () => {
+      element.dispatchEvent(new Event("loadedmetadata"));
+    });
+    expect(time).toBe(0);
+  });
+
   it("shows play or pause from the element's state, and closes", async () => {
     render(<Harness start={{ book: "Lighthouse", workspace: BOOK, files: FILES, index: 0 }} />);
     await act(async () => {

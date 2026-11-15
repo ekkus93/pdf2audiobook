@@ -98,8 +98,8 @@ describe("BookPage", () => {
     });
     render(<BookPage book={BOOK} outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={vi.fn()} />);
     expect(await screen.findByText("The options couldn't be loaded")).toBeInTheDocument();
-    // Pending edits report the same engine failure in their own section.
-    expect(screen.getAllByText("Invalid configuration")).toHaveLength(2);
+    // Pending edits and the audio check report the same engine failure in their own sections.
+    expect(await screen.findAllByText("Invalid configuration")).toHaveLength(3);
   });
 
   it("starts analysis and conversion with the chosen options", async () => {
@@ -115,6 +115,31 @@ describe("BookPage", () => {
       expect.objectContaining({ command: "convert", convert: expect.objectContaining({ voice: "Jasper", speed: 1 }) }),
       "/out/lighthouse-1",
     );
+  });
+
+  it("checks the new audio only when that option is switched on", async () => {
+    const onStart = await renderPage();
+    const check = screen.getByText("Check the new audio with speech recognition").closest("label")?.querySelector("md-switch") as HTMLElement & {
+      selected: boolean;
+    };
+    expect(check.selected).toBeFalsy();
+    click(button("Convert to audio"));
+    expect(onStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: "convert", convert: expect.objectContaining({ verify_audio: false }) }),
+      "/out/lighthouse-1",
+    );
+    act(() => {
+      check.selected = true;
+      check.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    click(button("Convert to audio"));
+    expect(onStart).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: "convert", convert: expect.objectContaining({ verify_audio: true }) }),
+      "/out/lighthouse-1",
+    );
+    // Analysis never checks audio.
+    click(button("Analyze again"));
+    expect(onStart.mock.lastCall?.[0]).not.toHaveProperty("convert");
   });
 
   it("a book analyzed without the LLM starts with it off and converts with --no-llm", async () => {

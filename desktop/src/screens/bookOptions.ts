@@ -14,6 +14,8 @@ export interface OptionsForm {
   firstChapter: string;
   lastChapter: string;
   cover: string | null;
+  /** Check the new audio with the speech recognizers afterwards; off unless chosen. */
+  verifyAudio: boolean;
 }
 
 export type OptionsErrors = Partial<Record<keyof OptionsForm, string>>;
@@ -58,6 +60,7 @@ export function defaults(
     firstChapter: "1",
     lastChapter: chapters ? String(chapters) : "1",
     cover: null,
+    verifyAudio: false,
   };
 }
 
@@ -120,6 +123,7 @@ export function requests(book: string, form: OptionsForm, output: string | null)
     voice: form.voice || null,
     speed: form.speed,
     cover: form.cover,
+    verify_audio: form.verifyAudio,
     chapters: form.allChapters
       ? null
       : Number(form.firstChapter) === Number(form.lastChapter)

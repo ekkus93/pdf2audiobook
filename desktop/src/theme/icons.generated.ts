@@ -22,6 +22,7 @@ export const ICONS = {
   folder_open: 0xe2c8,
   graphic_eq: 0xe1b8,
   headphones: 0xf01f,
+  hearing: 0xe023,
   hourglass_top: 0xea5b,
   info: 0xe88e,
   library_books: 0xe02f,
@@ -42,6 +43,7 @@ export const ICONS = {
   task_alt: 0xe2e6,
   terminal: 0xeb8e,
   tune: 0xe429,
+  undo: 0xe166,
   volume_up: 0xe050,
   warning: 0xf083,
 } as const;

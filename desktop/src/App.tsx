@@ -94,14 +94,16 @@ export default function App() {
   };
 
   const start = async (request: Request, workspace: string, options: { waitForLock?: boolean; title?: string } = {}) => {
-    if (request.command !== "analyze" && request.command !== "convert") return;
+    const long = ["analyze", "convert", "verify_audio", "resynthesize"] as const;
+    if (!(long as readonly string[]).includes(request.command)) return;
+    const command = request.command as (typeof long)[number];
     const title = options.title ?? (open ? summarize(open.book, open.library.min_boundary_confidence).title : "Book");
     try {
       const id = await startRun(request, workspace);
       setRun({
         id,
         title,
-        command: request.command,
+        command,
         workspace,
         manifest: `${workspace}/manifest.json`,
         request,
@@ -129,8 +131,15 @@ export default function App() {
               book={open.book}
               reviewing={reviewing === open.book.workspace}
               onChanged={refreshOpenBook}
-              onPlay={(files, index) =>
-                setQueue({ book: open.book.inspect?.title ?? "", workspace: open.book.workspace, files, index })
+              onPlay={(files, index, start) =>
+                setQueue((current) => ({
+                  book: open.book.inspect?.title ?? "",
+                  workspace: open.book.workspace,
+                  files,
+                  index,
+                  start,
+                  seek: (current?.seek ?? 0) + 1,
+                }))
               }
               onReviewOpened={() => setReviewing(open.book.workspace)}
               outputDir={open.library.output_dir}

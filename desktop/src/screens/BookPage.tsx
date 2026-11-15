@@ -12,6 +12,7 @@ import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
 import { defaults, modelFor, requests, validate, type OptionsForm, type Preferences } from "./bookOptions";
 import { PendingEdits } from "./PendingEdits";
+import { AudioCheck } from "./AudioCheck";
 import { ChaptersAudio } from "./ChaptersAudio";
 import { summarize } from "./bookState";
 import "./screens.css";
@@ -23,8 +24,8 @@ interface BookPageProps {
   reviewing?: boolean;
   /** Called after the book changed here (an edit accepted or rejected). */
   onChanged?: () => void;
-  /** Plays chapter `index` of the book's chapter files. */
-  onPlay?: (files: AudioFile[], index: number) => void;
+  /** Plays chapter `index` of the book's chapter files, from `start` seconds if given. */
+  onPlay?: (files: AudioFile[], index: number, start?: number) => void;
   onReviewOpened?: () => void;
   outputDir: string;
   minConfidence: number;
@@ -119,6 +120,23 @@ export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, o
           cover={form?.cover ?? null}
           onPlay={(files, index) => onPlay?.(files, index)}
           onContinueConverting={() => form && onStart(requests(source, form, outputDir).convert, book.workspace)}
+        />
+      ) : null}
+      {book.analyzed && book.inspect ? (
+        <AudioCheck
+          manifest={book.manifest}
+          workspace={book.workspace}
+          inspect={book.inspect}
+          voices={loaded.phase === "ready" ? loaded.voices : null}
+          voice={form?.voice ?? ""}
+          speed={form?.speed ?? 1}
+          onStart={(request) => onStart(request, book.workspace)}
+          onPlay={(files, index, start) => onPlay?.(files, index, start)}
+          onEditNarration={() =>
+            void openReview(book.manifest, book.workspace, summary.title)
+              .then(() => onReviewOpened?.())
+              .catch(() => undefined)
+          }
         />
       ) : null}
       {loaded.phase === "loading" ? (
@@ -263,6 +281,14 @@ function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, boo
               <TextField label="Last" type="number" value={form.lastChapter} onChange={(value) => set("lastChapter", value)} errorText={errors.lastChapter} min={1} />
             </div>
           ) : null}
+        </section>
+        <section className="options-group" aria-labelledby="options-check">
+          <h3 id="options-check" className="title-medium">Audio check</h3>
+          <Switch label="Check the new audio with speech recognition" selected={form.verifyAudio} onChange={(value) => set("verifyAudio", value)} />
+          <p className="body-medium on-surface-variant">
+            Optional. After converting, local speech recognizers listen to each new chapter and flag passages that may not match the
+            text. It takes longer and needs the recognizers set up (see Audio check).
+          </p>
         </section>
         <section className="options-group" aria-labelledby="options-cover">
           <h3 id="options-cover" className="title-medium">Cover art</h3>
