@@ -159,3 +159,60 @@ With these rules all 18 planted edits were confirmed (6 insertions, 6 omissions,
 **Resource limits.** One model at a time, loaded for a run and released before the next. Torch backends use the GPU when one is available, else the CPU with 4 threads (`--device cpu|cuda` overrides). Peak memory is about 7 GB on CPU (Whisper), so the CLI warns, before loading Whisper on a machine with less than 8 GB of RAM, that it may be slow or fail.
 
 **Cancellation.** The audio is fed to each model in windows of at most 30 s, split at the quietest point near each boundary so no word is cut, and a stop request is checked between windows (and between Vosk's 0.25 s frames). Expected latency is one window's compute: under 2 s on GPU; up to about 25 s for Whisper on CPU; well under 10 s for the others. Completed chapter results are kept; a cancelled chapter is reported `verification_unavailable` with reason `cancelled`.
+
+## 14. Acceptance and review (AV6)
+
+**Machine.** Linux x86-64, 20 CPU threads, 62 GB RAM, NVIDIA RTX 4070 Ti SUPER; Python 3.11.14,
+torch 2.14.1, transformers 5.20.2, openai-whisper 20250625, vosk 0.3.45. Models as pinned in
+§12: Whisper `medium.en` (SHA-256 `d7440d1d…ab4f`), `facebook/wav2vec2-base-960h` at
+`22aad52d…6156`, Vosk `en-us-0.22-lgraph` (archive SHA-256 `d9838b4a…4334`). Book: a copy of the
+Harbour demo converted with Kitten, 13 chapters, 1,069.5 s of audio. Wall time and peak memory
+from `/usr/bin/time`; per-model time from the report.
+
+**Three-model acceptance (AV6.02).**
+
+| Case | Command | Result | Wall time | Peak RSS |
+|---|---|---|---|---|
+| Clean speech | `verify-audio` (whole book, GPU) | 11 chapters `no_mismatch_detected`; 2 `model_disagreement` | 3 min 05 s (models: Whisper 45.1 s, Wav2Vec2 2.9 s, Vosk 134.6 s) | 4.6 GB |
+| One-model false positives | (same run) | Vosk alone heard "dropped" as "shop" (ch. 9, 75.8 s) and "high" as "her hi" (ch. 10, 57.8 s): shown, not confirmed | | |
+| Known insertion | 4 s of chapter 5's speech spliced into chapter 3 at 20 s, sidecar updated; `verify-audio --chapter 3` | `possible_mismatch`: Wav2Vec2 and Vosk both heard "in fishing boats stayed in and the keeper wrote the tide heights in the book" at 19.9–23.6 s. Whisper skipped the spliced words and instead heard "for watching. you" at 29.4 s, which no other model heard: a one-model disagreement | 25.3 s | 4.7 GB |
+| Repair | `resynthesize --chapter 3` (real Kitten; chapter was verified before, so it is re-verified) | chapter 3 `no_mismatch_detected`; the spliced MP3 and its sidecar kept in `audio/.backup/`; a reviewed mark on chapter 9 kept | 31.3 s including verification | 5.2 GB |
+| CPU only | `verify-audio --chapter 3 --device cpu`, no GPU visible | `no_mismatch_detected`; Whisper 67.4 s, Wav2Vec2 5.0 s, Vosk 11.7 s for 89.2 s of audio | 85.1 s | 6.7 GB |
+
+The desktop flow (verify, flagged passage, listen, mark reviewed, speak again) was run in the
+release app through `desktop/e2e/walkthrough.mjs`, with the recognizers stood in for by
+`e2e/fake_asr.mjs`; the player started 1.74 s into chapter 2 for a passage at 3.5 s (2 s lead-in).
+The outputs of these runs, with paths replaced, are the bridge fixtures in
+`desktop/src-tauri/tests/fixtures/` (`asr-models.json`, `audio-verification.json`,
+`audio-report.json`, `audio-dismiss.json`, `resynthesize.json`).
+
+Not covered: recorded or accented human speech, non-English books (refused as
+`unsupported_language`), macOS and Windows (not run; support follows the packages' wheels), and
+machines with under 8 GB of RAM (the `whisper_low_memory` warning is tested, the slowdown isn't
+measured).
+
+**Review (AV6.03).**
+
+- **Report privacy.** The report holds book text only as flagged excerpts (a few words before
+  and after, the expected words and what each model heard); full transcripts only with
+  `--keep-transcripts`. It stays in the book's `reports/` folder. Progress, `run_status.json`,
+  errors and the CLI's logs hold no book text (`test_human_output_keeps_book_text_out_unless_asked`,
+  the privacy marker tests); `audio-report dismiss` prints only numbers. In the desktop app the
+  excerpts reach only the Audio check panel, never the app log or an error
+  (`privacy::verification_excerpts_never_reach_the_app_log`). Nothing is sent anywhere: inference
+  is local and the only network use is an explicit `asr fetch`.
+- **Licenses.** Whisper code and weights MIT; `wav2vec2-base-960h` Apache-2.0; the Vosk model and
+  package Apache-2.0; transformers Apache-2.0; PyTorch BSD-style. Nothing is redistributed: the
+  packages are optional extras, and the weights are downloaded by the user from their upstream
+  URLs and checked against pinned SHA-256 values.
+- **Size.** The default install is unchanged: no ASR package (`test_the_default_install_has_no_asr_package`)
+  and no import of one by `convert` or `--dry-run` (`test_ordinary_and_dry_run_conversions_load_no_asr_library`);
+  the wheel is 253,883 bytes. The `asr` extra adds about 310 MB of packages on top of PyTorch
+  (llvmlite 172 MB, transformers 61 MB, vosk 25 MB, numba 24 MB, tokenizers 12 MB, others about
+  20 MB) and PyTorch itself (about 1.1 GB) when the `kitten` extra hasn't already installed it;
+  the models are 2.0 GB to download (1.5 GB, 378 MB, 131 MB). The desktop installer bundles no ASR
+  code or model; it grows only by the Audio check panel and 2,016 bytes of icon font.
+- **Supported machines.** A GPU is optional: on CPU a chapter takes about as long as it plays,
+  mostly Whisper. With under 8 GB of RAM the CLI warns before loading Whisper. A missing package
+  or model abstains and makes the result partial; with fewer than two models nothing can be
+  confirmed, only shown as a disagreement. Only English voices are checked.
