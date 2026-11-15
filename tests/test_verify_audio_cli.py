@@ -322,3 +322,107 @@ def test_transcripts_are_kept_only_on_request(
     assert "transcripts" not in json.loads(_verify(book, "--json").stdout)["chapters"][0]
     kept = json.loads(_verify(book, "--keep-transcripts", "--json").stdout)
     assert kept["keep_transcripts"] and len(kept["chapters"][0]["transcripts"]["whisper"]) > 5
+
+
+def _convert(book: dict[str, Any], *args: str) -> Any:
+    manifest = read_manifest(book["manifest"])
+    source = book["manifest"].parent.parent.parent / Path(manifest.source_path).name
+    return runner.invoke(
+        app,
+        [
+            "convert",
+            str(source),
+            "--no-llm",
+            "--ocr",
+            "never",
+            "--output",
+            str(book["workspace"].parent),
+            *args,
+            "--json",
+        ],
+    )
+
+
+def test_convert_verify_audio_adds_a_summary_and_a_warning(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    changed, clean = _scripts(book, insert_into=2), _scripts(book)
+    _use(
+        monkeypatch,
+        {
+            "whisper": FakeBackend("whisper", changed),
+            "wav2vec2": FakeBackend("wav2vec2", changed),
+            "vosk": FakeBackend("vosk", clean),
+        },
+    )
+    result = _convert(book, "--verify-audio")
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert len(payload["mp3_files"]) == 2
+    summary = payload["audio_verification"]
+    assert summary["report"] == "reports/audio_verification.json"
+    assert [(c["number"], c["status"], c["flags"]) for c in summary["chapters"]] == [
+        (1, "no_mismatch_detected", 0),
+        (2, "possible_mismatch", 1),
+    ]
+    assert "audio_possible_mismatch" in payload["warnings"]
+
+
+def test_convert_verify_audio_checks_only_the_converted_chapters(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clean = _scripts(book)
+    backends = {m: FakeBackend(m, clean) for m in ("whisper", "wav2vec2", "vosk")}
+    _use(monkeypatch, backends)
+    result = _convert(book, "--chapter", "2", "--force", "--verify-audio")
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert [c["number"] for c in payload["audio_verification"]["chapters"]] == [2]
+    assert all(b.heard == [2] for b in backends.values())
+    assert "audio_possible_mismatch" not in payload["warnings"]
+
+
+def test_convert_verify_audio_needs_real_audio(book: dict[str, Any]) -> None:
+    result = _convert(book, "--dry-run", "--verify-audio")
+    assert result.exit_code == 2
+    assert "--dry-run" in json.loads(result.stderr)["error"]["message"]
+
+
+def test_ordinary_and_dry_run_conversions_load_no_asr_library(
+    book: dict[str, Any], tmp_path: Path
+) -> None:
+    import subprocess
+    import sys
+
+    manifest = read_manifest(book["manifest"])
+    source = book["manifest"].parent.parent.parent / Path(manifest.source_path).name
+    code = f"""
+import sys, urllib.request
+import numpy as np
+import pdf2audiobook.pipeline as pipeline
+from typer.testing import CliRunner
+from pdf2audiobook.cli import app
+class Kitten:
+    sample_rate = 24000
+    supports_voice_listing = True
+    max_chars_per_chunk = 350
+    def __init__(self, model): pass
+    def list_voices(self): return ["Jasper"]
+    def generate(self, text, *, voice, speed): return np.ones(4800, dtype=np.float32) * 0.03
+pipeline.KittenProvider = Kitten
+def no_network(*args, **kwargs): raise AssertionError("no download during conversion")
+urllib.request.urlopen = no_network
+base = ["convert", {str(source)!r}, "--no-llm", "--ocr", "never", "--output", {str(tmp_path / "fresh")!r}, "--json"]
+for extra in ([], ["--dry-run"], ["--force"]):
+    result = CliRunner().invoke(app, base + extra)
+    assert result.exit_code == 0, result.output
+print(sorted(m for m in ("whisper", "vosk", "transformers") if m in sys.modules))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        env={**__import__("os").environ},
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.strip().splitlines()[-1] == "[]"

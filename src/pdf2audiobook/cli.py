@@ -1160,6 +1160,7 @@ def _run_convert(
     accept_review: tuple[str, ...],
     json_output: bool,
     started: float,
+    verify_audio: bool = False,
 ) -> None:
     """Convert the book and report its MP3 files and elapsed time."""
     from pdf2audiobook.pipeline import convert_book
@@ -1178,10 +1179,68 @@ def _run_convert(
         raise WorkspaceError("Cannot create the output workspace") from None
     finally:
         reporter.close()
-    emit({"mp3_files": [str(path) for path in outputs]}, json_output)
+    payload: dict[str, Any] = {"mp3_files": [str(path) for path in outputs]}
+    verification = _verify_after_convert(outputs, settings, json_output) if verify_audio else None
+    if verification is not None:
+        payload["audio_verification"], warnings, text = verification
+        payload["warnings"] = warnings
+    emit(payload, json_output)
     reporter.summary(
         f"Finished {len(outputs)} chapter(s) in {format_elapsed(time.monotonic() - started)}"
     )
+    if verification is not None and not json_output:
+        console.print(verification[2])
+
+
+def _verify_after_convert(
+    outputs: list[Path], settings: Settings, json_output: bool
+) -> tuple[dict[str, Any], list[str], str] | None:
+    """`convert --verify-audio`: verify the chapters this conversion produced (spec §3, §12).
+
+    The conversion has already succeeded; a mismatch adds a warning, never a failure.
+    """
+    from pdf2audiobook.audio import audio_output_path
+    from pdf2audiobook.verification.report import report_text
+    from pdf2audiobook.verification.run import verify_book
+    from pdf2audiobook.workspace import read_manifest, workspace_lock
+
+    if not outputs:
+        return None
+    workspace = outputs[0].parent.parent
+    produced = {path.resolve() for path in outputs}
+    reporter = _progress_reporter(settings, json_output, "verify-audio")
+    try:
+        with workspace_lock(workspace):
+            manifest = read_manifest(workspace / "manifest.json")
+            chosen = [
+                chapter
+                for chapter in manifest.chapters
+                if audio_output_path(manifest, chapter, workspace).resolve() in produced
+            ]
+            bind_workspace(reporter, workspace)
+            with use_reporter(reporter):
+                report = verify_book(workspace, manifest, settings, chosen, reporter=reporter)
+    finally:
+        reporter.close()
+    numbers = {chapter.number for chapter in chosen}
+    chapters = [c for c in report["chapters"] if c["number"] in numbers]
+    summary = {
+        "report": "reports/audio_verification.json",
+        "chapters": [
+            {
+                "number": c["number"],
+                "status": c["status"],
+                "reason": c["reason"],
+                "partial": c["partial"],
+                "flags": sum(1 for f in c["flags"] if f["confirmed"]),
+            }
+            for c in chapters
+        ],
+    }
+    warnings = list(report["warnings"])
+    if any(c["status"] == "possible_mismatch" for c in chapters):
+        warnings.append("audio_possible_mismatch")
+    return summary, warnings, report_text(report, numbers=numbers)
 
 
 @app.command(
@@ -1247,6 +1306,11 @@ def convert(
     ),
     resume: bool | None = typer.Option(None, "--resume/--no-resume"),
     force: bool = typer.Option(False, "--force", help="Regenerate selected chapter audio."),
+    verify_audio: bool = typer.Option(
+        False,
+        "--verify-audio",
+        help="Then check the converted chapters with the local speech recognizers (asr extras).",
+    ),
     allow_single_chapter: bool | None = typer.Option(
         None, "--allow-single-chapter/--no-allow-single-chapter"
     ),
@@ -1282,6 +1346,10 @@ def convert(
         )
         if chapter is not None and chapter_range is not None:
             raise ConfigError("--chapter and --chapter-range cannot be combined")
+        if dry_run and verify_audio:
+            raise ConfigError(
+                "--verify-audio needs real audio; it can't be combined with --dry-run"
+            )
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
         _check_accept_review(accept_review)
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
@@ -1312,6 +1380,7 @@ def convert(
                 accept_review=tuple(accept_review),
                 json_output=json_output,
                 started=started,
+                verify_audio=verify_audio,
             )
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
