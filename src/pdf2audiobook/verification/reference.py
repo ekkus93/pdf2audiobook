@@ -44,10 +44,13 @@ class Unavailable:
 
 
 def _inside(path: Path, folder: Path) -> bool:
-    """Whether `path` is a regular file in `folder` itself, not a symlink to elsewhere."""
+    """Whether `path` is a regular file in `folder` itself; neither may be a symlink elsewhere."""
     try:
         return (
-            path.is_file() and not path.is_symlink() and path.resolve().parent == folder.resolve()
+            not folder.is_symlink()
+            and path.is_file()
+            and not path.is_symlink()
+            and path.resolve().parent == folder.resolve()
         )
     except OSError:
         return False

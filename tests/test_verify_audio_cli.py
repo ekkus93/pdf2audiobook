@@ -234,6 +234,35 @@ def test_a_symlinked_mp3_is_not_read(
     assert all(1 not in b.heard for b in backends.values())
 
 
+def test_an_audio_folder_linked_outside_the_workspace_is_not_read(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    audio = book["workspace"] / "audio"
+    outside = tmp_path / "outside-audio"
+    shutil.move(audio, outside)
+    audio.symlink_to(outside, target_is_directory=True)
+    backends = {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")}
+    _use(monkeypatch, backends)
+    result = _verify(book, "--json")
+    assert str(outside) not in result.output
+    report = json.loads(result.stdout)
+    assert {c["reason"] for c in report["chapters"]} == {"audio_missing"}
+    assert all(not b.heard for b in backends.values())
+
+
+def test_a_chapter_title_cannot_lead_outside_the_audio_folder(book: dict[str, Any]) -> None:
+    from pdf2audiobook.audio import audio_output_path
+    from pdf2audiobook.verification.reference import Unavailable
+
+    manifest = read_manifest(book["manifest"])
+    chapter = manifest.chapters[0].model_copy(update={"title": "../../../etc/passwd"})
+    target = audio_output_path(manifest, chapter, book["workspace"])
+    assert target.parent == book["workspace"] / "audio"
+    settings, _ = load_settings()
+    result = chapter_reference(book["workspace"], manifest, chapter, settings)
+    assert isinstance(result, Unavailable) and result.reason == "audio_missing"
+
+
 def test_unknown_chapters_and_bad_ranges_are_refused(book: dict[str, Any]) -> None:
     for args in (
         ["--chapter", "9"],
