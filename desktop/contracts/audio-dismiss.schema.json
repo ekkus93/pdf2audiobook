@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdf2audiobook.local/contracts/audio-dismiss.schema.json",
+  "title": "audio-report dismiss --json",
+  "description": "One flagged passage marked reviewed (or not, with --undo); no audio or text changes.",
+  "type": "object",
+  "required": [
+    "chapter",
+    "flag",
+    "reviewed",
+    "warnings"
+  ],
+  "properties": {
+    "chapter": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "flag": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "reviewed": {
+      "type": "boolean"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

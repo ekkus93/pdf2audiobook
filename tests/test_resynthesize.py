@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import fitz
+import jsonschema
 import numpy as np
 import pytest
 from mutagen.id3 import ID3
@@ -168,6 +169,8 @@ def test_a_chapter_checked_before_is_checked_again_after_repair(
     result = _resynthesize(book, "--chapter", "2")
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
+    contract = Path(__file__).parent.parent / "desktop" / "contracts" / "convert.schema.json"
+    jsonschema.validate(payload, json.loads(contract.read_text()))
     assert [c["number"] for c in payload["audio_verification"]["chapters"]] == [2]
     after = json.loads(report_path.read_text())
     old = next(c for c in before["chapters"] if c["number"] == 2)

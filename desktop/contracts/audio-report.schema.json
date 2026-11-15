@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdf2audiobook.local/contracts/audio-report.schema.json",
+  "title": "audio-report show --json",
+  "description": "A book's saved audio verification report, read without loading any model, and the chapters whose result no longer matches their audio or expected narration.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "report",
+    "stale",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "report": {
+      "description": "The saved report, following audio-verification.schema.json; null when the book has not been verified or the report is unreadable.",
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "stale": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "uniqueItems": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

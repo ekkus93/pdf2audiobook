@@ -276,5 +276,7 @@ def test_every_contract_has_a_test() -> None:
         "edits-list", "review-address", "error", "budget-show",
         # Tested in test_verification_contracts.py.
         "asr-models", "audio-verification",
+        # Tested in test_verify_audio_cli.py.
+        "audio-report", "audio-dismiss",
     }  # fmt: skip
     assert contracts == tested

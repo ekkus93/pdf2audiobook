@@ -388,6 +388,7 @@ def test_convert_verify_audio_adds_a_summary_and_a_warning(
     result = _convert(book, "--verify-audio")
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
+    jsonschema.validate(payload, _schema("convert"))
     assert len(payload["mp3_files"]) == 2
     summary = payload["audio_verification"]
     assert summary["report"] == "reports/audio_verification.json"
@@ -456,3 +457,99 @@ print(sorted(m for m in ("whisper", "vosk", "transformers") if m in sys.modules)
     )
     assert result.returncode == 0, result.stderr[-2000:]
     assert result.stdout.strip().splitlines()[-1] == "[]"
+
+
+# audio-report show / dismiss: the saved report for the desktop app (AV5.01, AV5.04).
+_CONTRACTS = Path(__file__).parent.parent / "desktop" / "contracts"
+
+
+def _schema(name: str) -> dict[str, Any]:
+    return json.loads((_CONTRACTS / f"{name}.schema.json").read_text())
+
+
+def _show(book: dict[str, Any]) -> dict[str, Any]:
+    result = runner.invoke(app, ["audio-report", "show", str(book["manifest"]), "--json"])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.stdout)
+
+
+def _dismiss(book: dict[str, Any], *args: str) -> Any:
+    return runner.invoke(app, ["audio-report", "dismiss", str(book["manifest"]), *args, "--json"])
+
+
+def _flagged(book: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> dict[str, FakeBackend]:
+    inserted = _scripts(book, insert_into=2)
+    backends = {m: FakeBackend(m, inserted) for m in ("whisper", "wav2vec2", "vosk")}
+    _use(monkeypatch, backends)
+    assert _verify(book, "--json").exit_code == 0
+    return backends
+
+
+def test_an_unverified_book_shows_no_report(book: dict[str, Any]) -> None:
+    payload = _show(book)
+    jsonschema.validate(payload, _schema("audio-report"))
+    assert payload["report"] is None and payload["stale"] == []
+
+
+def test_show_follows_the_contracts_and_loads_no_model(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    backends = _flagged(book, monkeypatch)
+    heard = [list(b.heard) for b in backends.values()]
+    payload = _show(book)
+    jsonschema.validate(payload, _schema("audio-report"))
+    jsonschema.validate(payload["report"], _schema("audio-verification"))
+    assert [list(b.heard) for b in backends.values()] == heard
+    assert payload["stale"] == []
+    chapter = next(c for c in payload["report"]["chapters"] if c["number"] == 2)
+    assert chapter["status"] == "possible_mismatch"
+
+
+def test_show_names_stale_chapters(book: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    _flagged(book, monkeypatch)
+    mp3 = next((book["workspace"] / "audio").glob("001 *.mp3"))
+    mp3.write_bytes(mp3.read_bytes() + b"\0")
+    assert _show(book)["stale"] == [1]
+
+
+def test_dismissing_marks_one_flag_reviewed_and_changes_no_audio(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _flagged(book, monkeypatch)
+    audio = {p.name: p.read_bytes() for p in (book["workspace"] / "audio").glob("*.mp3")}
+    result = _dismiss(book, "--chapter", "2", "--flag", "0")
+    assert result.exit_code == 0, result.output
+    jsonschema.validate(json.loads(result.stdout), _schema("audio-dismiss"))
+    assert json.loads(result.stdout)["reviewed"] is True
+    chapter = next(c for c in _show(book)["report"]["chapters"] if c["number"] == 2)
+    assert chapter["flags"][0]["reviewed"] is True
+    assert {p.name: p.read_bytes() for p in (book["workspace"] / "audio").glob("*.mp3")} == audio
+    assert _dismiss(book, "--chapter", "2", "--flag", "0", "--undo").exit_code == 0
+    chapter = next(c for c in _show(book)["report"]["chapters"] if c["number"] == 2)
+    assert chapter["flags"][0]["reviewed"] is False
+
+
+def test_a_reviewed_flag_stays_reviewed_when_the_same_audio_is_verified_again(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _flagged(book, monkeypatch)
+    assert _dismiss(book, "--chapter", "2", "--flag", "0").exit_code == 0
+    assert _verify(book, "--chapter", "2", "--json").exit_code == 0
+    chapter = next(c for c in _show(book)["report"]["chapters"] if c["number"] == 2)
+    assert chapter["flags"][0]["reviewed"] is True
+
+
+@pytest.mark.parametrize(
+    "args", [["--chapter", "1", "--flag", "0"], ["--chapter", "2", "--flag", "9"]]
+)
+def test_dismissing_a_flag_that_does_not_exist_is_refused(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch, args: list[str]
+) -> None:
+    _flagged(book, monkeypatch)
+    result = _dismiss(book, *args)
+    assert result.exit_code == 2
+    assert json.loads(result.stderr)["error"]["message"]
+
+
+def test_dismissing_without_a_report_is_refused(book: dict[str, Any]) -> None:
+    assert _dismiss(book, "--chapter", "1", "--flag", "0").exit_code == 2

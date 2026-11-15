@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "convert --json",
-  "description": "The chapter MP3s that exist after conversion.",
+  "description": "The chapter MP3s that exist after conversion. `resynthesize --json` prints the same shape.",
   "type": "object",
   "required": [
     "mp3_files",
@@ -19,6 +19,62 @@
       "items": {
         "type": "string"
       }
+    },
+    "audio_verification": {
+      "description": "Only with --verify-audio (or resynthesize of a chapter verified before): the chapters just checked; the full result is in `report`.",
+      "type": "object",
+      "required": [
+        "report",
+        "chapters"
+      ],
+      "properties": {
+        "report": {
+          "const": "reports/audio_verification.json"
+        },
+        "chapters": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "number",
+              "status",
+              "reason",
+              "partial",
+              "flags"
+            ],
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "status": {
+                "enum": [
+                  "no_mismatch_detected",
+                  "possible_mismatch",
+                  "model_disagreement",
+                  "verification_unavailable"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "partial": {
+                "type": "boolean"
+              },
+              "flags": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many passages two or more models confirmed."
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

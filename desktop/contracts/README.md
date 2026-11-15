@@ -19,3 +19,7 @@ renamed, removed or change type without updating these files and both sides' tes
 | `review-address` | the first stdout line of `review --json` |
 | `error` | the last JSON line on stderr of any failed command |
 | `run-status` | `reports/run_status.json` in a workspace |
+| `asr-models` | `asr list --json` and `asr fetch MODEL... --yes --json` (adds `fetched`) |
+| `audio-verification` | `verify-audio MANIFEST --json` and `reports/audio_verification.json` |
+| `audio-report`, `audio-dismiss` | `audio-report show MANIFEST --json`, `audio-report dismiss MANIFEST --chapter N --flag I --json` |
+| `convert` (again) | `resynthesize MANIFEST --chapter N --json`, with `audio_verification` when it re-verifies |

@@ -194,6 +194,53 @@ def previous_chapters(workspace: Path) -> dict[int, dict[str, Any]]:
     }
 
 
+def _flag_key(flag: dict[str, Any]) -> tuple[Any, ...]:
+    return (flag.get("kind"), flag.get("ref_start"), flag.get("ref_end"), flag.get("expected"))
+
+
+def keep_reviewed(old: dict[str, Any] | None, new: dict[str, Any]) -> dict[str, Any]:
+    """Carry "reviewed" marks to the same flags found again in the same audio (spec §6)."""
+    if not old or old.get("audio_sha256") != new.get("audio_sha256"):
+        return new
+    reviewed = {
+        _flag_key(f) for f in old.get("flags", []) if isinstance(f, dict) and f.get("reviewed")
+    }
+    for flag in new["flags"]:
+        if _flag_key(flag) in reviewed:
+            flag["reviewed"] = True
+    return new
+
+
+def saved_report(workspace: Path) -> dict[str, Any] | None:
+    """The saved report, if present and of this version; never raises for bad files."""
+    data = load_bounded_json(workspace / REPORT, max_bytes=REPORT_MAX_BYTES, max_depth=16)
+    if (
+        not isinstance(data, dict)
+        or data.get("schema_version") != 1
+        or not isinstance(data.get("chapters"), list)
+    ):
+        return None
+    return data
+
+
+def mark_reviewed(workspace: Path, number: int, index: int, *, reviewed: bool = True) -> None:
+    """Mark one flag of a chapter's saved result reviewed (or not); no audio or text changes."""
+    report = saved_report(workspace)
+    chapter = next(
+        (
+            c
+            for c in (report or {}).get("chapters", [])
+            if isinstance(c, dict) and c.get("number") == number
+        ),
+        None,
+    )
+    flags = chapter.get("flags") if isinstance(chapter, dict) else None
+    if report is None or not isinstance(flags, list) or not 0 <= index < len(flags):
+        raise ConfigError("That chapter has no such flag in the saved verification report")
+    flags[index]["reviewed"] = reviewed
+    write_json(workspace / REPORT, report)
+
+
 def verify_book(
     workspace: Path,
     manifest: BookManifest,
@@ -249,9 +296,8 @@ def verify_book(
     previous = previous_chapters(workspace)
     tokens = {item.chapter.number: item.tokens for item in items}
     for number, result in results.items():
-        previous[number] = chapter_json(
-            result, tokens.get(number, []), keep_transcripts=keep_transcripts
-        )
+        fresh = chapter_json(result, tokens.get(number, []), keep_transcripts=keep_transcripts)
+        previous[number] = keep_reviewed(previous.get(number), fresh)
     report = report_json(
         [previous[n] for n in sorted(previous)],
         [states[name] for name in models],

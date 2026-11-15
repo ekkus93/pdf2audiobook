@@ -79,6 +79,11 @@ asr_app = typer.Typer(
     epilog="Example: pdf2audiobook asr list",
 )
 app.add_typer(asr_app, name="asr")
+audio_report_app = typer.Typer(
+    help="Read a book's saved audio verification report and mark flags reviewed.",
+    no_args_is_help=True,
+)
+app.add_typer(audio_report_app, name="audio-report")
 console = Console(stderr=True)
 # Largest reports/conversion_status.json that `inspect` will read.
 CONVERSION_STATUS_MAX_BYTES = 1024 * 1024
@@ -493,6 +498,74 @@ def verify_audio(
         raise
     except Exception as exc:
         reporter.close()
+        fail(exc, json_output=json_output)
+
+
+@audio_report_app.command(
+    "show", epilog="Example: pdf2audiobook audio-report show ./audiobooks/BOOK/manifest.json --json"
+)
+def audio_report_show(
+    manifest_path: Path = typer.Argument(..., help="Manifest of a converted book."),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show the saved verification report and which results are stale; loads no model."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.verification.report import report_text
+        from pdf2audiobook.verification.run import saved_report, stale_chapters
+        from pdf2audiobook.workspace import read_manifest
+
+        settings, origins = load_settings(config, no_config=no_config)
+        configure_effective_logging(settings, origins)
+        workspace = manifest_path.parent
+        manifest = read_manifest(manifest_path)
+        report = saved_report(workspace)
+        stale = sorted(stale_chapters(workspace, manifest, settings, report)) if report else []
+        payload = {"schema_version": 1, "report": report, "stale": stale}
+        if json_output:
+            emit(payload, json_output)
+        elif report is None:
+            typer.echo("This book has not been verified yet.")
+        else:
+            typer.echo(report_text(report))
+            if stale:
+                typer.echo("Out of date (verify again): chapter(s) " + ", ".join(map(str, stale)))
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
+@audio_report_app.command(
+    "dismiss",
+    epilog="Example: pdf2audiobook audio-report dismiss ./audiobooks/BOOK/manifest.json "
+    "--chapter 3 --flag 0",
+)
+def audio_report_dismiss(
+    manifest_path: Path = typer.Argument(..., help="Manifest of a converted book."),
+    chapter: int = typer.Option(..., "--chapter", min=1),
+    flag: int = typer.Option(..., "--flag", min=0, help="The flag's position in the chapter."),
+    undo: bool = typer.Option(False, "--undo", help="Mark the flag not reviewed again."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Mark a flagged passage reviewed after listening; changes no audio or text."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook.verification.run import mark_reviewed
+        from pdf2audiobook.workspace import workspace_lock
+
+        with workspace_lock(manifest_path.parent):
+            mark_reviewed(manifest_path.parent, chapter, flag, reviewed=not undo)
+        payload = {"chapter": chapter, "flag": flag, "reviewed": not undo}
+        if json_output:
+            emit(payload, json_output)
+        else:
+            typer.echo("Marked reviewed." if not undo else "Marked not reviewed.")
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
         fail(exc, json_output=json_output)
 
 
