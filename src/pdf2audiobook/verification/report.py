@@ -122,3 +122,53 @@ def report_json(
         "chapters": list(chapters),
         "warnings": list(warnings),
     }
+
+
+_STATUS_TEXT = {
+    "no_mismatch_detected": "no mismatch detected",
+    "possible_mismatch": "possible mismatch",
+    "model_disagreement": "models disagree",
+    "verification_unavailable": "not verified",
+}
+
+
+def _clock(seconds: float | None) -> str:
+    if seconds is None:
+        return "?"
+    minutes, rest = divmod(int(seconds), 60)
+    return f"{minutes}:{rest:02d}"
+
+
+def report_text(
+    report: dict[str, Any], *, numbers: set[int] | None = None, details: bool = False
+) -> str:
+    """`verify-audio` for people. Book text (expected and heard words) only with `details`."""
+    lines = []
+    for chapter in report["chapters"]:
+        if numbers is not None and chapter["number"] not in numbers:
+            continue
+        voted = [m["model"] for m in chapter["models"] if m["outcome"] == "ok"]
+        text = f"Chapter {chapter['number']}: {_STATUS_TEXT[chapter['status']]}"
+        if chapter["reason"]:
+            text += f" ({chapter['reason'].replace('_', ' ')})"
+        elif chapter["partial"]:
+            text += f" (partial: {len(voted)} of 3 models)"
+        lines.append(text)
+        for flag in chapter["flags"]:
+            if not flag["confirmed"] and not details:
+                continue
+            where = f"{_clock(flag['start'])}-{_clock(flag['end'])}"
+            agreed = ", ".join(flag["models"])
+            line = f"  {where} {flag['kind']} heard by {agreed}"
+            if not flag["confirmed"]:
+                line += " only"
+            if details:
+                line += f": expected {flag['expected']!r}, heard " + "; ".join(
+                    f"{model} {heard!r}" for model, heard in flag["heard"].items()
+                )
+            lines.append(line)
+    lines.append(
+        "A flag means listen there; speech recognition is evidence, not proof. "
+        "Report: reports/audio_verification.json"
+    )
+    return "\n".join(lines)

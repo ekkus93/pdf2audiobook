@@ -1,0 +1,324 @@
+"""`verify-audio`: contract, voting, abstention, privacy, paths, cancellation and stale reports
+(audio verification AV3.01-AV3.05). Fake backends stand in for the real models."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+from typing import Any
+
+import fitz
+import jsonschema
+import numpy as np
+import pytest
+from typer.testing import CliRunner
+
+from pdf2audiobook.cli import app
+from pdf2audiobook.config import load_settings
+from pdf2audiobook.verification import run as verify_run
+from pdf2audiobook.verification.contracts import Readiness, Transcript, Word
+from pdf2audiobook.verification.reference import Reference, chapter_reference
+from pdf2audiobook.workspace import read_manifest
+
+CONTRACT = (
+    Path(__file__).resolve().parents[1] / "desktop" / "contracts" / "audio-verification.schema.json"
+)
+MARKER = "QUILLMARKER"
+LINES = [
+    f"Mara {MARKER} kept the light at the point for eleven long winters by the sea.",
+    "Each evening she climbed the ninety two steps and trimmed the wick of the lamp.",
+]
+runner = CliRunner()
+
+
+class _Kitten:
+    sample_rate = 24000
+    supports_voice_listing = True
+    max_chars_per_chunk = 350
+
+    def __init__(self, model: str) -> None:
+        pass
+
+    def list_voices(self) -> list[str]:
+        return ["Jasper"]
+
+    def generate(self, text: str, *, voice: str, speed: float) -> np.ndarray:
+        return np.ones(4800, dtype=np.float32) * 0.03
+
+
+class FakeBackend:
+    """Hears each chapter's narration, optionally changed, from a script per chapter number."""
+
+    def __init__(
+        self,
+        name: str,
+        script: dict[int, str],
+        *,
+        ready: bool = True,
+        fail: bool = False,
+        stop_at: int | None = None,
+    ) -> None:
+        self.name = name
+        self.script = script
+        self.ready = ready
+        self.fail = fail
+        self.stop_at = stop_at
+        self.heard: list[int] = []
+
+    def readiness(self) -> Readiness:
+        return Readiness(
+            self.name,
+            "fake",
+            f"{self.name}-model",
+            "rev",
+            "pytest",
+            "1" if self.ready else None,
+            self.ready,
+            1,
+            "/models",
+            None if self.ready else "model_not_installed",
+        )  # type: ignore[arg-type]
+
+    def transcribe(self, wav: Path, *, should_stop: Any) -> Transcript:
+        number = int(wav.stem.split("-")[1])
+        if self.stop_at == number:
+            raise KeyboardInterrupt
+        if self.fail:
+            raise RuntimeError(f"model crashed reading {MARKER}")
+        self.heard.append(number)
+        words = self.script[number].split()
+        return Transcript(
+            self.name, tuple(Word(w, 1.0 + i * 0.5, 1.4 + i * 0.5) for i, w in enumerate(words))
+        )  # type: ignore[arg-type]
+
+
+@pytest.fixture
+def book(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    if not shutil.which("ffmpeg"):
+        pytest.skip("FFmpeg not installed")
+    monkeypatch.setattr("pdf2audiobook.pipeline.KittenProvider", _Kitten)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "no-config"))
+    source = tmp_path / "book.pdf"
+    pdf = fitz.open()
+    for index, line in enumerate(LINES):
+        page = pdf.new_page()
+        page.insert_text((80, 60), f"Chapter {index + 1}")
+        page.insert_text((80, 115), line)
+    pdf.save(source)
+    pdf.close()
+    out = tmp_path / "out"
+    converted = runner.invoke(
+        app, ["convert", str(source), "--no-llm", "--ocr", "never", "--output", str(out), "--json"]
+    )
+    assert converted.exit_code == 0, converted.output
+    manifest = next(out.glob("*/manifest.json"))
+    settings, _ = load_settings()
+    parsed = read_manifest(manifest)
+    narration = {}
+    for chapter in parsed.chapters:
+        reference = chapter_reference(manifest.parent, parsed, chapter, settings)
+        assert isinstance(reference, Reference)
+        narration[chapter.number] = reference.text
+    return {"manifest": manifest, "workspace": manifest.parent, "narration": narration}
+
+
+def _use(monkeypatch: pytest.MonkeyPatch, backends: dict[str, FakeBackend]) -> None:
+    monkeypatch.setattr(verify_run, "make_backend", lambda name, **options: backends[name])
+
+
+def _scripts(book: dict[str, Any], insert_into: int | None = None) -> dict[int, str]:
+    script = dict(book["narration"])
+    if insert_into is not None:
+        words = script[insert_into].split()
+        script[insert_into] = " ".join(
+            [*words[:6], "and the old ferry bell rang twice", *words[6:]]
+        )
+    return script
+
+
+def _verify(book: dict[str, Any], *args: str) -> Any:
+    return runner.invoke(app, ["verify-audio", str(book["manifest"]), *args])
+
+
+def test_json_follows_the_contract_and_votes(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    changed, clean = _scripts(book, insert_into=2), _scripts(book)
+    _use(
+        monkeypatch,
+        {
+            "whisper": FakeBackend("whisper", changed),
+            "wav2vec2": FakeBackend("wav2vec2", clean),
+            "vosk": FakeBackend("vosk", changed),
+        },
+    )
+    result = _verify(book, "--json")
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.stdout)
+    jsonschema.validate(report, json.loads(CONTRACT.read_text(encoding="utf-8")))
+    statuses = {c["number"]: c["status"] for c in report["chapters"]}
+    assert statuses[2] == "possible_mismatch"
+    assert {statuses[n] for n in statuses if n != 2} == {"no_mismatch_detected"}
+    flag = next(c for c in report["chapters"] if c["number"] == 2)["flags"][0]
+    assert flag["models"] == ["whisper", "vosk"] and flag["kind"] == "insertion"
+    assert not any(c["partial"] for c in report["chapters"])
+    # The report on disk is the same document.
+    assert json.loads((book["workspace"] / "reports" / "audio_verification.json").read_text()) == {
+        **report,
+        "warnings": [],
+    }
+
+
+def test_a_model_subset_is_partial(book: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
+    clean = _scripts(book)
+    backends = {"whisper": FakeBackend("whisper", clean), "vosk": FakeBackend("vosk", clean)}
+    _use(monkeypatch, backends)
+    report = json.loads(_verify(book, "--models", "whisper,vosk", "--json").stdout)
+    assert all(c["partial"] for c in report["chapters"])
+    assert [m["model"] for m in report["chapters"][0]["models"]] == ["whisper", "vosk"]
+
+
+def test_unavailable_and_failed_models_abstain(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    changed = _scripts(book, insert_into=1)
+    _use(monkeypatch, {
+        "whisper": FakeBackend("whisper", changed),
+        "wav2vec2": FakeBackend("wav2vec2", changed, ready=False),
+        "vosk": FakeBackend("vosk", changed, fail=True),
+    })  # fmt: skip
+    result = _verify(book, "--json")
+    assert result.exit_code == 0
+    chapter = json.loads(result.stdout)["chapters"][0]
+    outcomes = {m["model"]: (m["outcome"], m["reason"]) for m in chapter["models"]}
+    assert outcomes == {
+        "whisper": ("ok", None),
+        "wav2vec2": ("unavailable", "model_not_installed"),
+        "vosk": ("failed", "model_failed"),
+    }
+    # One voting model alone can't confirm the insertion.
+    assert chapter["status"] == "model_disagreement" and chapter["partial"]
+    assert MARKER not in result.stderr
+
+
+def test_human_output_keeps_book_text_out_unless_asked(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    script = _scripts(book)
+    script[1] = script[1].replace("kept the light", "lost the kitchen door")
+    _use(monkeypatch, {m: FakeBackend(m, script) for m in ("whisper", "wav2vec2", "vosk")})
+    # --verbose adds debug events on stderr; they must hold no book text either.
+    plain = runner.invoke(app, ["--verbose", "verify-audio", str(book["manifest"])])
+    assert plain.exit_code == 0, plain.output
+    assert "Chapter 1: possible mismatch" in plain.stdout
+    assert MARKER not in plain.stdout and "kitchen" not in plain.stdout
+    assert MARKER not in plain.stderr and "kitchen" not in plain.stderr
+    detailed = _verify(book, "--details")
+    assert "kitchen" in detailed.stdout
+
+
+def test_a_symlinked_mp3_is_not_read(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mp3 = next((book["workspace"] / "audio").glob("001 *.mp3"))
+    moved = tmp_path / "elsewhere.mp3"
+    shutil.move(mp3, moved)
+    mp3.symlink_to(moved)
+    backends = {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")}
+    _use(monkeypatch, backends)
+    report = json.loads(_verify(book, "--json").stdout)
+    first = report["chapters"][0]
+    assert (first["status"], first["reason"]) == ("verification_unavailable", "audio_missing")
+    assert all(1 not in b.heard for b in backends.values())
+
+
+def test_unknown_chapters_and_bad_ranges_are_refused(book: dict[str, Any]) -> None:
+    for args in (
+        ["--chapter", "9"],
+        ["--chapter-range", "2:1"],
+        ["--chapter-range", "x"],
+        ["--models", "deepspeech"],
+        ["--device", "tpu"],
+    ):
+        result = _verify(book, *args, "--json")
+        assert result.exit_code == 2, args
+
+
+def test_interrupting_keeps_what_finished(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clean = _scripts(book)
+    _use(monkeypatch, {
+        "whisper": FakeBackend("whisper", clean),
+        "wav2vec2": FakeBackend("wav2vec2", clean, stop_at=2),
+        "vosk": FakeBackend("vosk", clean),
+    })  # fmt: skip
+    result = _verify(book, "--json")
+    assert result.exit_code == 130
+    assert json.loads(result.stderr)["error"]["type"] == "Interrupted"
+    report = json.loads((book["workspace"] / "reports" / "audio_verification.json").read_text())
+    assert report["completed_at"] is None
+    first, second = report["chapters"]
+
+    def outcomes(chapter: dict) -> dict:
+        return {m["model"]: (m["outcome"], m["reason"]) for m in chapter["models"]}
+
+    # Whisper heard both chapters; wav2vec2 was stopped on chapter 2; vosk never ran.
+    assert outcomes(first) == {
+        "whisper": ("ok", None),
+        "wav2vec2": ("ok", None),
+        "vosk": ("failed", "cancelled"),
+    }
+    assert outcomes(second) == {
+        "whisper": ("ok", None),
+        "wav2vec2": ("failed", "cancelled"),
+        "vosk": ("failed", "cancelled"),
+    }
+    assert first["partial"] and second["partial"]
+    assert (first["status"], second["status"]) == ("no_mismatch_detected", "no_mismatch_detected")
+    # The chapter MP3s are untouched.
+    assert all(mp3.stat().st_size > 0 for mp3 in (book["workspace"] / "audio").glob("*.mp3"))
+
+
+def test_a_malformed_report_is_replaced_and_others_are_kept(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report_path = book["workspace"] / "reports" / "audio_verification.json"
+    report_path.write_text("{not json", encoding="utf-8")
+    clean = _scripts(book)
+    _use(monkeypatch, {m: FakeBackend(m, clean) for m in ("whisper", "wav2vec2", "vosk")})
+    assert _verify(book, "--chapter", "1", "--json").exit_code == 0
+    assert [c["number"] for c in json.loads(report_path.read_text())["chapters"]] == [1]
+    # Verifying chapter 2 later keeps chapter 1's result.
+    assert _verify(book, "--chapter", "2", "--json").exit_code == 0
+    assert [c["number"] for c in json.loads(report_path.read_text())["chapters"]] == [1, 2]
+
+
+def test_results_go_stale_when_audio_or_narration_change(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clean = _scripts(book)
+    _use(monkeypatch, {m: FakeBackend(m, clean) for m in ("whisper", "wav2vec2", "vosk")})
+    report = json.loads(_verify(book, "--json").stdout)
+    settings, _ = load_settings()
+    manifest = read_manifest(book["manifest"])
+    assert verify_run.stale_chapters(book["workspace"], manifest, settings, report) == set()
+    # New pronunciations change what chapter 2 ("...of the lamp") should sound like.
+    tts = settings.tts.model_copy(update={"pronunciations": {"lamp": "lantern"}})
+    changed = settings.model_copy(update={"tts": tts})
+    assert verify_run.stale_chapters(book["workspace"], manifest, changed, report) == {2}
+    # Changed audio makes chapter 1 stale under the original settings.
+    mp3 = next((book["workspace"] / "audio").glob("001 *.mp3"))
+    mp3.write_bytes(mp3.read_bytes() + b"\0")
+    assert verify_run.stale_chapters(book["workspace"], manifest, settings, report) == {1}
+
+
+def test_transcripts_are_kept_only_on_request(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clean = _scripts(book)
+    _use(monkeypatch, {m: FakeBackend(m, clean) for m in ("whisper", "wav2vec2", "vosk")})
+    assert "transcripts" not in json.loads(_verify(book, "--json").stdout)["chapters"][0]
+    kept = json.loads(_verify(book, "--keep-transcripts", "--json").stdout)
+    assert kept["keep_transcripts"] and len(kept["chapters"][0]["transcripts"]["whisper"]) > 5

@@ -432,6 +432,70 @@ def asr_fetch(
         fail(exc, json_output=json_output)
 
 
+@app.command(
+    "verify-audio",
+    epilog="Example: pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json --chapter 3",
+)
+def verify_audio(
+    manifest_path: Path = typer.Argument(..., help="Manifest of a converted book."),
+    chapter: list[int] = typer.Option([], "--chapter", min=1, help="Chapter to check; repeatable."),
+    chapter_range: str | None = typer.Option(None, "--chapter-range", help="START:END, inclusive."),
+    models: list[str] = typer.Option(
+        [],
+        "--models",
+        help="whisper, wav2vec2, vosk or all (default); repeatable or comma-separated.",
+    ),
+    device: str = typer.Option(
+        "auto", "--device", help="auto, cpu or cuda for Whisper and Wav2Vec2."
+    ),
+    keep_transcripts: bool = typer.Option(
+        False, "--keep-transcripts", help="Keep full transcripts in the report, not just excerpts."
+    ),
+    details: bool = typer.Option(False, "--details", help="Show expected and heard words."),
+    config: Path | None = typer.Option(None, "--config"),
+    no_config: bool = typer.Option(False, "--no-config"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Listen to chapter MP3s with local speech recognizers and flag possible mismatches."""
+    set_output_mode(json_output)
+    reporter: ProgressReporter = NullReporter()
+    try:
+        from pdf2audiobook.verification.models import resolve_names
+        from pdf2audiobook.verification.report import report_text
+        from pdf2audiobook.verification.run import select_chapters, verify_book
+        from pdf2audiobook.workspace import read_manifest, workspace_lock
+
+        if device not in {"auto", "cpu", "cuda"}:
+            raise ConfigError("--device must be auto, cpu or cuda")
+        names = resolve_names([part for value in models for part in value.split(",") if part])
+        settings, origins = load_settings(config, no_config=no_config)
+        configure_effective_logging(settings, origins)
+        with workspace_lock(manifest_path.parent):
+            manifest = read_manifest(manifest_path)
+            chosen = select_chapters(manifest, chapter, chapter_range)
+            reporter = _progress_reporter(settings, json_output, "verify-audio")
+            bind_workspace(reporter, manifest_path.parent)
+            with use_reporter(reporter):
+                report = verify_book(
+                    manifest_path.parent, manifest, settings, chosen,
+                    models=names, device=device, keep_transcripts=keep_transcripts,
+                    reporter=reporter,
+                )  # fmt: skip
+        reporter.close()
+        if json_output:
+            emit(report, json_output)
+        else:
+            typer.echo(report_text(report, numbers={c.number for c in chosen}, details=details))
+    except KeyboardInterrupt:
+        reporter.close()
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        reporter.close()
+        fail(exc, json_output=json_output)
+
+
 @budget_app.command("show", epilog="Example: pdf2audiobook budget show --output ./audiobooks/BOOK")
 def budget_show(
     output: Path = typer.Option(..., "--output", help="Book workspace directory."),
