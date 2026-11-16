@@ -397,6 +397,11 @@ outputs, so treat their shapes as contracts: add fields, never rename or remove 
   the same kind, position and expected words in the same audio. The desktop app reads these and
   `asr list`; its walkthrough stands in for them with `desktop/e2e/fake_asr.mjs`, built from the
   bridge fixtures, so regenerate those fixtures from real output when these contracts change.
+- Audio verification review fixes (`docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_REVIEW_FIXES_SPEC.md`): the
+  reason codes `narration_not_spoken` and `audio_undecodable` and the `ffmpeg_missing` warning are in
+  `verification/contracts.py` and both report schemas; `report_json`/`saved_report` are the only places
+  the transcript-retention rule is applied; `compare.vote` groups by anchor; `backends.iter_windows`
+  is the only way chapter audio is read. Keep these in step with `scripts/asr_benchmark.py score`.
 - `inspect MANIFEST --json` includes `analyzed_with_llm`: `false` when the workspace's last
   analysis ran without the LLM (its `llm-analysis` fingerprint is the fixed "disabled" value),
   `true` when it used one, `null` when `reports/analysis_fingerprints.json` is missing or

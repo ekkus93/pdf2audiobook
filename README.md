@@ -488,14 +488,19 @@ Each chapter gets one of four results:
 
 - `no_mismatch_detected`: no place where two or more models heard something different.
 - `possible_mismatch`: at least two model families heard the same difference at the same place,
-  such as an extra phrase, a missing sentence or a different word or number. Listen at the time
-  shown; it is evidence, not proof.
+  such as an extra phrase, a missing sentence or a different word or number. "The same place"
+  means within two words of the first difference found there, so a run of separate differences
+  never adds up to agreement. Listen at the time shown; it is evidence, not proof.
 - `model_disagreement`: only one model heard a difference there; usually that model's mistake
   (for example Vosk hearing "go" for an unusual name). Worth a listen only if you want to be
   thorough.
 - `verification_unavailable`, with a reason: `audio_missing`, `audio_stale` (the MP3 or its
-  text changed since synthesis), `no_models`, `unsupported_language` (only English voices are
-  checked), or `cancelled`.
+  text changed since synthesis), `narration_not_spoken` (the chapter text or a pronunciation
+  changed since the chapter was spoken, so the audio isn't compared against text it doesn't
+  contain; speak the chapter again first), `audio_undecodable` (FFmpeg couldn't read the MP3;
+  the source is left alone), `no_models`, `unsupported_language` (only English voices are
+  checked), or `cancelled`. Without FFmpeg, the report's `warnings` holds `ffmpeg_missing` and
+  every chapter is `audio_undecodable`.
 
 A result based on fewer than three models is marked `partial` (for example when one isn't
 installed or fails on a chapter: a failing model abstains, it is never counted as a vote). A
@@ -519,6 +524,21 @@ you didn't check this time are kept from earlier runs.
 **Privacy.** The report contains book text (the flagged excerpts, and full transcripts only with
 `--keep-transcripts`), so it stays in the book's folder and is never logged or sent anywhere;
 progress and errors hold no book text. Delete `reports/audio_verification.json` to remove it.
+
+**Transcript retention.** Full transcripts are kept only by a run that says `--keep-transcripts`.
+A run without it removes full transcripts from every chapter of the report it rewrites, including
+chapters it didn't verify, and the report's `keep_transcripts` field is true only while some
+chapter still holds transcripts. Reads (`audio-report show`, and the desktop app) never show full
+transcripts, whichever run kept them; excerpts and vote metadata are always shown. A report
+written before this rule still has its old transcripts until the next verification or review
+mark rewrites it, and reads hide them from the start: no other migration is needed.
+
+**Memory.** Chapter audio is streamed in windows of at most 30 seconds, with a search of the last
+5 seconds of each window for the quietest moment to cut, so the audio held in memory at once is
+about 1.9 MB (one window of 16 kHz float32 samples, plus a transient copy while a block is
+added) however long the chapter is. The decoded 16 kHz WAV is kept in a temporary folder while
+the chapter is checked and removed afterwards; it takes about 32 KB per second of audio on disk.
+The recognizer's own memory is separate (see the table above).
 
 **Limits.** Only English is supported. The models listen to the narration as text; they can't
 tell whether it sounds natural, whether a name is pronounced the way you want, or whether there

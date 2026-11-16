@@ -216,3 +216,15 @@ measured).
   mostly Whisper. With under 8 GB of RAM the CLI warns before loading Whisper. A missing package
   or model abstains and makes the result partial; with fewer than two models nothing can be
   confirmed, only shown as a disagreement. Only English voices are checked.
+
+## 15. Review fixes (AVF)
+
+`PDF2AUDIOBOOK_AUDIO_VERIFICATION_REVIEW_FIXES_SPEC.md` records four fixes after the review of §§1–14; the behavior below replaces what those sections said where they differ.
+
+- **Narration must be what was spoken (§5).** A chapter whose reference isn't an exact match of the synthesis ledger is `verification_unavailable` with reason `narration_not_spoken`; no model listens to it and it counts as stale. The fix chose to refuse the comparison rather than recover the historical reference.
+- **Undecodable audio (§5, §13).** A chapter FFmpeg can't decode is `verification_unavailable` with reason `audio_undecodable`; the source MP3 is only read. If FFmpeg isn't installed the report's `warnings` holds `ffmpeg_missing` and every chapter gets `audio_undecodable`.
+- **Transcripts (§12).** Full transcripts are kept only by a run given `--keep-transcripts`. A run without it removes transcripts from every chapter of the report it writes. `keep_transcripts` is true only while some chapter holds transcripts. Reads never return transcripts.
+- **Consensus (§5).** Differences are grouped around the first difference of each group (the anchor): a difference joins only if it is within `SLACK_WORDS` of the anchor. Two model families must agree within that tolerance to confirm a flag. Before, a chain of nearby differences could join into one flag.
+- **Memory (§13).** Decoded chapter audio is streamed in 30 s windows with a 5 s search for the cut and a 1 s read block; the audio held at once is about 1.9 MB regardless of length.
+
+**Report migration.** The report keeps `schema_version` 1. Its `reason` enums grew by `narration_not_spoken` and `audio_undecodable`, and `warnings` may hold `ffmpeg_missing`. Older reports are read unchanged, except that their transcripts are hidden on read and removed on the next write.

@@ -55,6 +55,8 @@ and the main README's [Checking the audio with speech recognition](../README.md#
   expected words, what each recognizer heard, and when. A passage counts only when two
   recognizers agree; one recognizer alone is shown as a disagreement. Results whose audio or text
   changed since the check are marked out of date.
+- **Chapters not compared:** a chapter whose text or pronunciations changed since it was spoken, or whose
+  MP3 FFmpeg can't read, shows why no comparison was made, and *Speak again…* is the way to check it again.
 - **Actions,** none automatic: *Listen* plays the chapter from two seconds before the passage;
   *Sounds right* marks it reviewed (`audio-report dismiss`; *Not reviewed* undoes it) without
   changing any file; *Speak again…* synthesizes only that chapter again with the voice and speed
