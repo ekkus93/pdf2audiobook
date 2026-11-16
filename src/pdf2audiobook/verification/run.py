@@ -38,7 +38,12 @@ from pdf2audiobook.verification.contracts import (
     Word,
 )
 from pdf2audiobook.verification.reference import Reference, Unavailable, chapter_reference
-from pdf2audiobook.verification.report import chapter_json, report_json
+from pdf2audiobook.verification.report import (
+    chapter_json,
+    report_json,
+    retains_transcripts,
+    without_transcripts,
+)
 from pdf2audiobook.workspace import digest_file, write_json
 
 REPORT = Path("reports") / "audio_verification.json"
@@ -211,8 +216,7 @@ def keep_reviewed(old: dict[str, Any] | None, new: dict[str, Any]) -> dict[str, 
     return new
 
 
-def saved_report(workspace: Path) -> dict[str, Any] | None:
-    """The saved report, if present and of this version; never raises for bad files."""
+def _saved(workspace: Path) -> dict[str, Any] | None:
     data = load_bounded_json(workspace / REPORT, max_bytes=REPORT_MAX_BYTES, max_depth=16)
     if (
         not isinstance(data, dict)
@@ -223,9 +227,23 @@ def saved_report(workspace: Path) -> dict[str, Any] | None:
     return data
 
 
+def saved_report(workspace: Path) -> dict[str, Any] | None:
+    """The saved report for display, if present and of this version; never raises for bad files.
+
+    Reads never show full transcripts, whichever run kept them (AVF2): the copy has none and
+    says so in its retention field.
+    """
+    data = _saved(workspace)
+    if data is None:
+        return None
+    chapters = [without_transcripts(c) if isinstance(c, dict) else c for c in data["chapters"]]
+    return {**data, "chapters": chapters, "keep_transcripts": False}
+
+
 def mark_reviewed(workspace: Path, number: int, index: int, *, reviewed: bool = True) -> None:
     """Mark one flag of a chapter's saved result reviewed (or not); no audio or text changes."""
-    report = saved_report(workspace)
+    # Rewrites the file as it is: a review mark is not a verification run (AVF2).
+    report = _saved(workspace)
     chapter = next(
         (
             c
@@ -301,12 +319,17 @@ def verify_book(
     for number, result in results.items():
         fresh = chapter_json(result, tokens.get(number, []), keep_transcripts=keep_transcripts)
         previous[number] = keep_reviewed(previous.get(number), fresh)
+    chapters = [previous[n] for n in sorted(previous)]
+    # Retention is this run's explicit choice (AVF2): chapters this run didn't verify must not
+    # keep full transcripts from an earlier retaining run.
+    if not keep_transcripts:
+        chapters = [without_transcripts(chapter) for chapter in chapters]
     report = report_json(
-        [previous[n] for n in sorted(previous)],
+        chapters,
         [states[name] for name in models],
         created_at=created,
         completed_at=None if interrupted else datetime.now(UTC).isoformat(timespec="seconds"),
-        keep_transcripts=keep_transcripts,
+        keep_transcripts=retains_transcripts(chapters),
         warnings=warnings,
     )
     try:

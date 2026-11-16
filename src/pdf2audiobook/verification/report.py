@@ -91,6 +91,16 @@ def chapter_json(
     return chapter
 
 
+def without_transcripts(chapter: dict[str, Any]) -> dict[str, Any]:
+    """A chapter with its full transcripts removed; excerpts and vote metadata stay (AVF2)."""
+    return {key: value for key, value in chapter.items() if key != "transcripts"}
+
+
+def retains_transcripts(chapters: Sequence[dict[str, Any]]) -> bool:
+    """Whether any chapter of a report carries full transcripts: the report's retention field."""
+    return any("transcripts" in chapter for chapter in chapters)
+
+
 def report_json(
     chapters: Sequence[dict[str, Any]],
     models: Sequence[Readiness],

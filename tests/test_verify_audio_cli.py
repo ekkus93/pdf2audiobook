@@ -603,3 +603,53 @@ def test_changed_pronunciations_are_not_compared_with_the_audio(
     assert (
         next(c for c in again["chapters"] if c["number"] == 2)["status"] == "no_mismatch_detected"
     )
+
+
+def _transcript_keys(text: str) -> int:
+    return text.count('"transcripts"')
+
+
+def test_a_partial_run_without_retention_removes_earlier_transcripts(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clean = _scripts(book)
+    _use(monkeypatch, {m: FakeBackend(m, clean) for m in ("whisper", "wav2vec2", "vosk")})
+    kept = _verify(book, "--keep-transcripts", "--json")
+    assert kept.exit_code == 0 and _transcript_keys(kept.stdout) == 2
+    saved = (book["workspace"] / "reports" / "audio_verification.json").read_text(encoding="utf-8")
+    assert _transcript_keys(saved) == 2  # explicit retention is kept on disk
+
+    # A partial run without retention: chapter 1 is re-verified, chapter 2 is not.
+    partial = _verify(book, "--chapter", "1", "--json")
+    assert partial.exit_code == 0
+    report = json.loads(partial.stdout)
+    assert report["keep_transcripts"] is False
+    assert _transcript_keys(partial.stdout) == 0
+    rewritten = (book["workspace"] / "reports" / "audio_verification.json").read_text(
+        encoding="utf-8"
+    )
+    assert _transcript_keys(rewritten) == 0
+    assert json.loads(rewritten)["keep_transcripts"] is False
+    # Chapter 2 keeps its verdict and excerpts, without its old transcripts.
+    second = next(c for c in report["chapters"] if c["number"] == 2)
+    assert second["status"] == "no_mismatch_detected" and "transcripts" not in second
+
+
+def test_explicit_retention_still_keeps_transcripts_and_reads_never_show_them(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clean = _scripts(book)
+    _use(monkeypatch, {m: FakeBackend(m, clean) for m in ("whisper", "wav2vec2", "vosk")})
+    assert _verify(book, "--keep-transcripts", "--json").exit_code == 0
+    again = json.loads(_verify(book, "--keep-transcripts", "--json").stdout)
+    assert again["keep_transcripts"] is True
+    assert all("transcripts" in c for c in again["chapters"])
+    shown = runner.invoke(app, ["audio-report", "show", str(book["manifest"]), "--json"])
+    assert shown.exit_code == 0
+    assert _transcript_keys(shown.stdout) == 0
+    assert json.loads(shown.stdout)["report"]["keep_transcripts"] is False
+    # Marking a flag reviewed rewrites the file as it is: it doesn't start or stop retention.
+    kept_on_disk = (book["workspace"] / "reports" / "audio_verification.json").read_text(
+        encoding="utf-8"
+    )
+    assert _transcript_keys(kept_on_disk) == 2
