@@ -15,7 +15,7 @@ Use uv only; never install into the system interpreter. These mirror `.github/wo
 - `uv run --extra dev pytest -q -ra` (includes skip reasons in the result summary)
 - CI runs on Python 3.11, 3.12 and 3.13 and runs mypy once per version (`mypy --python-version X`). `/verify` checks only 3.11; run `uv run --extra dev mypy --python-version 3.12` (and 3.13) to match CI.
 - CI also runs a CLI smoke (`--help`, `config show --json`, `doctor --json`) and a clean-venv wheel/sdist install smoke using `--no-config`. `/verify` doesn't cover the packaging smoke, so packaging regressions only show up in CI.
-- `tests/conftest.py` has an autouse fixture that stubs `OpenAICompatibleProvider._ollama_served_context` (defined in `llm/provider.py`). Mark a test `@pytest.mark.ollama_context` to exercise the real lookup.
+- `tests/conftest.py` has an autouse fixture that stubs `OpenAICompatibleProvider._ollama_served_context` (defined in `llm/provider_server.py`, a mixin of `OpenAICompatibleProvider` in `llm/provider.py`). Mark a test `@pytest.mark.ollama_context` to exercise the real lookup.
 - Kitten TTS needs `uv sync --extra kitten --extra dev`; tests mock it.
 - Tests needing `ffmpeg`/`tesseract`/`node` (Node 22 in CI) skip silently when the binaries are absent — check the `-ra` skip summary before claiming coverage.
 - `tests/test_ci_uv_pin.py` cross-checks `ci.yml` (uv pin, exact `pytest -q -ra` line, Node 22), `uv.lock` revision, and the uv version in `docs/MAINTAINER_GUIDE.md`; change them together.

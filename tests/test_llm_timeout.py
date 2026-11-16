@@ -98,7 +98,7 @@ def test_context_lookup_uses_a_short_timeout_but_model_load_uses_the_configured_
 def test_a_read_timeout_is_retried_then_reported_with_the_setting_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("pdf2audiobook.llm.provider.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("pdf2audiobook.llm.provider_request.time.sleep", lambda _seconds: None)
     attempts = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -117,7 +117,7 @@ def test_a_read_timeout_is_retried_then_reported_with_the_setting_name(
 def test_a_connect_timeout_is_still_an_unbilled_transport_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("pdf2audiobook.llm.provider.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("pdf2audiobook.llm.provider_request.time.sleep", lambda _seconds: None)
 
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectTimeout("unreachable", request=request)
