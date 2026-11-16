@@ -136,6 +136,55 @@ async function llmOff() {
   if (await run("return arguments[0].selected;", [{ [ELEMENT]: llm }])) await click(llm);
 }
 
+/** Visible X windows, by ID (the file chooser shows up as a new one). */
+function visibleWindows() {
+  const found = spawnSync("xdotool", ["search", "--onlyvisible", "--name", "."], { encoding: "utf8" });
+  return new Set(found.stdout.split(/\s+/).filter(Boolean));
+}
+
+/**
+ * Adds the demo book through the native file chooser. The chooser can be slow to appear and to
+ * fill its file list under CI's AppImage run, so this waits for the window itself, lets it load,
+ * and tries again (closing the chooser first) if the book card doesn't appear.
+ */
+async function addDemoBook() {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const before = visibleWindows();
+    await click(await find(button("Add book")));
+    let dialog = null;
+    for (let tries = 0; tries < 120 && !dialog; tries++) {
+      dialog = [...visibleWindows()].find((id) => !before.has(id)) ?? null;
+      if (!dialog) await sleep(250);
+    }
+    if (!dialog) throw new Error("the file chooser did not open");
+    spawnSync("xdotool", ["windowactivate", "--sync", dialog]);
+    spawnSync("xdotool", ["windowfocus", "--sync", dialog]);
+    // GTK completes paths as they're typed; a fresh temporary folder has no look-alike siblings.
+    await sleep(3000);
+    const typed = spawnSync("xdotool", ["type", "--delay", "60", book], { encoding: "utf8" });
+    if (typed.status !== 0) throw new Error(`xdotool: ${typed.stderr}`);
+    await sleep(500);
+    spawnSync("xdotool", ["key", "Return"]);
+    const added = await findOptional(
+      "//li[contains(@class, 'book-card')][contains(., 'lighthouse')]",
+      20,
+    );
+    if (added) return;
+    step(`  the book did not appear (attempt ${attempt}); trying again`);
+    spawnSync("xdotool", ["key", "Escape"]);
+    await sleep(1000);
+  }
+  throw new Error("the demo book was not added after 3 attempts");
+}
+
+async function findOptional(xpath, seconds) {
+  try {
+    return await find(xpath, seconds);
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   for (let attempt = 0; ; attempt++) {
     try {
@@ -158,13 +207,7 @@ async function main() {
   await screenshot("1-library");
 
   step("add the demo book through the file dialog");
-  await click(await find(button("Add book")));
-  await sleep(2500);
-  // GTK completes paths as they're typed; a fresh temporary folder has no look-alike siblings.
-  const typed = spawnSync("xdotool", ["type", "--delay", "60", book], { encoding: "utf8" });
-  if (typed.status !== 0) throw new Error(`xdotool: ${typed.stderr}`);
-  await sleep(500);
-  spawnSync("xdotool", ["key", "Return"]);
+  await addDemoBook();
   const card = await find(
     "//li[contains(@class, 'book-card')][contains(., 'lighthouse')]//button[contains(@class, 'book-open')]",
     30,
