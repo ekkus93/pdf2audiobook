@@ -270,3 +270,70 @@ def test_no_voting_model_means_unavailable() -> None:
     assert chapter_outcome(runs, []) == ("verification_unavailable", "no_models", True)
     cancelled = [ModelRun("whisper", "failed", "cancelled")]
     assert chapter_outcome(cancelled, []) == ("verification_unavailable", "cancelled", True)
+
+
+def _at(model: str, start: int, end: int | None = None, *, heard: str = "x") -> Difference:
+    end = start + 1 if end is None else end
+    return Difference(model, "substitution", start, end, "word", heard, float(start), float(end))
+
+
+def test_a_chain_of_nearby_differences_does_not_become_one_consensus() -> None:
+    # Positions 0, 2 and 4 with a two-word tolerance: 0 and 2 agree (two families, co-located);
+    # the one at 4 is only near the one at 2, which doesn't make it part of the same place.
+    reference = ref()
+    found = {
+        "whisper": [_at("whisper", 0)],
+        "wav2vec2": [_at("wav2vec2", 2)],
+        "vosk": [_at("vosk", 4)],
+    }
+    flags = vote(reference, found)
+    assert not any(len(flag.models) == 3 for flag in flags)
+    vosk_alone = next(flag for flag in flags if flag.models == ("vosk",))
+    assert not vosk_alone.confirmed and vosk_alone.ref_start == 4
+    pair = next(flag for flag in flags if len(flag.models) == 2)
+    assert pair.confirmed and pair.ref_start == 0 and "vosk" not in pair.models
+    assert len(flags) == 2
+
+
+def test_a_bridging_third_model_cannot_manufacture_a_majority() -> None:
+    # Whisper at 0 and Vosk at 4 never agree with each other; Wav2Vec2 at 2 bridges them.
+    reference = ref()
+    flags = vote(
+        reference,
+        {
+            "whisper": [_at("whisper", 0)],
+            "wav2vec2": [_at("wav2vec2", 2)],
+            "vosk": [_at("vosk", 4)],
+        },
+    )
+    assert all(
+        not (flag.confirmed and "whisper" in flag.models and "vosk" in flag.models)
+        for flag in flags
+    )
+
+
+def test_co_located_differences_from_two_families_still_confirm() -> None:
+    reference = ref()
+    flags = vote(reference, {"whisper": [_at("whisper", 5)], "vosk": [_at("vosk", 6)]})
+    assert len(flags) == 1 and flags[0].confirmed and flags[0].models == ("whisper", "vosk")
+
+
+def test_one_model_alone_never_confirms_however_many_of_its_differences_sit_together() -> None:
+    reference = ref()
+    flags = vote(reference, {"whisper": [_at("whisper", 0), _at("whisper", 1), _at("whisper", 2)]})
+    assert flags and not any(flag.confirmed for flag in flags)
+
+
+def test_the_same_differences_give_the_same_flags_in_any_order() -> None:
+    reference = ref()
+    one = {
+        "whisper": [_at("whisper", 0)],
+        "wav2vec2": [_at("wav2vec2", 1)],
+        "vosk": [_at("vosk", 9)],
+    }
+    two = {
+        "vosk": [_at("vosk", 9)],
+        "wav2vec2": [_at("wav2vec2", 1)],
+        "whisper": [_at("whisper", 0)],
+    }
+    assert vote(reference, one) == vote(reference, two)

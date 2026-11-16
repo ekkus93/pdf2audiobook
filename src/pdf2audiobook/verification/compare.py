@@ -403,14 +403,23 @@ def vote(reference: Sequence[Token], found: Mapping[ModelName, Sequence[Differen
     """Group differences by place; two or more model families make a confirmed flag.
 
     Only models in `found` voted; a failed or unavailable model is simply absent (spec §5).
+
+    Grouping is anchored (AVF3): differences are taken in position order, and a difference
+    joins a group only if it is within `SLACK_WORDS` of the group's first difference (the
+    anchor), never merely of a later member. So a chain of nearby differences can't join into
+    one place: with differences at 0, 2 and 4 and a tolerance of 2, the 0 and 2 may agree, and
+    the one at 4 stands alone. Ties in position are broken by model order, so the result is
+    deterministic.
     """
+    order = {name: index for index, name in enumerate(found)}
     pool = sorted(
-        (d for diffs in found.values() for d in diffs), key=lambda d: (d.ref_start, d.ref_end)
+        (d for diffs in found.values() for d in diffs),
+        key=lambda d: (d.ref_start, d.ref_end, order[d.model]),
     )
     groups: list[list[Difference]] = []
     for difference in pool:
         for group in groups:
-            if any(_near(member, difference) for member in group):
+            if _near(group[0], difference):
                 group.append(difference)
                 break
         else:
