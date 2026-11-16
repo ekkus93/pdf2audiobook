@@ -35,6 +35,7 @@ const VERDICTS: Record<ChapterVerification["status"], string> = {
 const REASONS: Record<string, string> = {
   audio_missing: "no audio to check",
   audio_stale: "the audio no longer matches its chapter text; convert it again first",
+  narration_not_spoken: "the chapter text or pronunciations changed since it was spoken, so it wasn't compared; speak it again first",
   no_models: "no speech recognizer was available",
   unsupported_language: "only English voices can be checked",
   model_not_installed: "the recognizer isn't installed",

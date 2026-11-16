@@ -245,6 +245,23 @@ describe("AudioCheck", () => {
     expect(document.body).not.toHaveTextContent("breakwater");
   });
 
+  it("explains a chapter that wasn't compared because its narration changed", async () => {
+    const current = report.report;
+    if (!current) throw new Error("the fixture has a report");
+    report.report = {
+      ...current,
+      chapters: current.chapters.map((item) =>
+        item.number === 9
+          ? { ...item, status: "verification_unavailable", reason: "narration_not_spoken", flags: [], partial: true, models: [] }
+          : item,
+      ),
+    };
+    setup();
+    await waitFor(() => expect(chapter(9)).toHaveTextContent("Not checked"));
+    expect(chapter(9)).toHaveTextContent("wasn't compared");
+    expect(chapter(9)).toHaveTextContent("speak it again first");
+  });
+
   it("an unreadable result is reported, not shown half-parsed", async () => {
     report = { schema_version: 1, report: { chapters: [{ number: 3 }] }, stale: [] } as never;
     setup();

@@ -114,6 +114,7 @@
             "enum": [
               "audio_missing",
               "audio_stale",
+              "narration_not_spoken",
               "no_models",
               "unsupported_language",
               "model_not_installed",
@@ -174,6 +175,7 @@
                   "enum": [
                     "audio_missing",
                     "audio_stale",
+                    "narration_not_spoken",
                     "no_models",
                     "unsupported_language",
                     "model_not_installed",

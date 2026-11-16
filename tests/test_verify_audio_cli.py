@@ -571,3 +571,35 @@ def test_dismissing_a_flag_that_does_not_exist_is_refused(
 
 def test_dismissing_without_a_report_is_refused(book: dict[str, Any]) -> None:
     assert _dismiss(book, "--chapter", "1", "--flag", "0").exit_code == 2
+
+
+def test_changed_pronunciations_are_not_compared_with_the_audio(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The audio was spoken with "lamp"; the configuration now says "lantern": the chapter's
+    # narration is no longer what was spoken, so no model may listen to it (AVF1.02).
+    config = tmp_path / "changed.toml"
+    config.write_text('[tts.pronunciations]\n"lamp" = "lantern"\n', encoding="utf-8")
+    backends = {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")}
+    _use(monkeypatch, backends)
+    result = _verify(book, "--config", str(config), "--json")
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.stdout)
+    second = next(c for c in report["chapters"] if c["number"] == 2)
+    assert (second["status"], second["reason"]) == (
+        "verification_unavailable",
+        "narration_not_spoken",
+    )
+    assert all(2 not in b.heard for b in backends.values())
+    # Chapter 1 is unchanged and still verified normally.
+    first = next(c for c in report["chapters"] if c["number"] == 1)
+    assert first["status"] == "no_mismatch_detected"
+    # The check says why, in the human output too.
+    text = _verify(book, "--config", str(config)).output
+    assert "narration not spoken" in text
+    # With the original settings the spoken narration matches again and it verifies normally.
+    _use(monkeypatch, {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")})
+    again = json.loads(_verify(book, "--json").stdout)
+    assert (
+        next(c for c in again["chapters"] if c["number"] == 2)["status"] == "no_mismatch_detected"
+    )

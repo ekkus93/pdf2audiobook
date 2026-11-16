@@ -276,6 +276,9 @@ def verify_book(
         reference = chapter_reference(workspace, manifest, chapter, settings)
         if isinstance(reference, Unavailable):
             results[chapter.number] = _unavailable(chapter, reference.reason, models)
+        elif not reference.exact:
+            # Not what the speech engine was given: no model listens, nothing is voted (AVF1).
+            results[chapter.number] = _unavailable(chapter, "narration_not_spoken", models)
         else:
             items.append(_Chapter(chapter, reference, compare.tokenize_text(reference.text)))
     for item in items:
@@ -345,9 +348,13 @@ def stale_chapters(
             continue
         chapter = by_number.get(entry.get("number"))  # type: ignore[arg-type]
         reference = chapter_reference(workspace, manifest, chapter, settings) if chapter else None
-        if not isinstance(reference, Reference) or (
-            reference.audio_sha256 != entry["audio_sha256"]
-            or reference.sha256 != entry.get("reference_sha256")
+        if (
+            not isinstance(reference, Reference)
+            or not reference.exact
+            or (
+                reference.audio_sha256 != entry["audio_sha256"]
+                or reference.sha256 != entry.get("reference_sha256")
+            )
         ):
             stale.add(entry["number"])
     return stale

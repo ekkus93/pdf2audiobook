@@ -26,6 +26,9 @@ ModelOutcome = Literal["ok", "unavailable", "failed"]
 REASONS = (
     "audio_missing",  # no MP3 for the chapter
     "audio_stale",  # the MP3 no longer matches the chapter text or settings
+    # The chapter file or its pronunciations differ from what was spoken (synthesis ledger):
+    # comparing would judge the audio against text that was never said (AVF1).
+    "narration_not_spoken",
     "no_models",  # no model was ready to run
     "unsupported_language",  # the voice isn't English (spec §12)
     "model_not_installed",  # the backend's package is missing
