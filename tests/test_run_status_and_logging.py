@@ -208,7 +208,7 @@ class _Inner:
 def events(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int, dict[str, Any]]]:
     seen: list[tuple[str, int, dict[str, Any]]] = []
     monkeypatch.setattr(
-        "pdf2audiobook.llm.cache.log_event",
+        "pdf2audiobook.llm.cache_telemetry.log_event",
         lambda event, *, level=logging.INFO, **fields: seen.append((event, level, fields)),
     )
     return seen
