@@ -335,6 +335,12 @@ try {
 } finally {
   if (session) await call("DELETE", `/session/${session}`).catch(() => undefined);
   driver.kill();
-  rmSync(home, { recursive: true, force: true });
+  // The app may still be writing its logs for a moment after the session closes; retry, and
+  // report rather than fail a run that already passed.
+  try {
+    rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
+  } catch (error) {
+    console.error(`e2e: could not remove ${home}: ${error.message}`);
+  }
 }
 process.exit(failed ? 1 : 0);
