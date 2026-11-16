@@ -29,6 +29,7 @@ REASONS = (
     # The chapter file or its pronunciations differ from what was spoken (synthesis ledger):
     # comparing would judge the audio against text that was never said (AVF1).
     "narration_not_spoken",
+    "audio_undecodable",  # FFmpeg couldn't read the chapter's MP3 (AVF4)
     "no_models",  # no model was ready to run
     "unsupported_language",  # the voice isn't English (spec §12)
     "model_not_installed",  # the backend's package is missing

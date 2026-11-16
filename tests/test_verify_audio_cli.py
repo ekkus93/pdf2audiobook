@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -653,3 +654,68 @@ def test_explicit_retention_still_keeps_transcripts_and_reads_never_show_them(
         encoding="utf-8"
     )
     assert _transcript_keys(kept_on_disk) == 2
+
+
+def _garble_mp3(book: dict[str, Any], number: int) -> Path:
+    """Replace a chapter's MP3 with bytes FFmpeg can't read, and update its sidecar to match."""
+    import hashlib
+
+    mp3 = next((book["workspace"] / "audio").glob(f"{number:03d} *.mp3"))
+    mp3.write_bytes(b"this is not an MPEG audio frame" * 64)
+    sidecar = mp3.with_suffix(".cache.json")
+    record = json.loads(sidecar.read_text())
+    record["sha256"] = hashlib.sha256(mp3.read_bytes()).hexdigest()
+    record["bytes"] = mp3.stat().st_size
+    sidecar.write_text(json.dumps(record))
+    return mp3
+
+
+def test_an_undecodable_chapter_is_reported_and_the_audio_is_left_alone(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    mp3 = _garble_mp3(book, 2)
+    before = mp3.read_bytes()
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    backends = {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")}
+    _use(monkeypatch, backends)
+    result = _verify(book, "--json")
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.stdout)
+    second = next(c for c in report["chapters"] if c["number"] == 2)
+    assert (second["status"], second["reason"]) == ("verification_unavailable", "audio_undecodable")
+    first = next(c for c in report["chapters"] if c["number"] == 1)
+    assert first["status"] == "no_mismatch_detected"
+    assert 2 not in backends["whisper"].heard
+    assert mp3.read_bytes() == before  # the source audio is only read
+    assert list(scratch.iterdir()) == []  # decoded scratch audio is removed
+    assert "ffmpeg_missing" not in report["warnings"]
+
+
+def test_a_missing_ffmpeg_is_said_once_and_no_chapter_is_listened_to(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", "")  # no FFmpeg anywhere: the lookup and the decode both fail
+    backends = {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")}
+    _use(monkeypatch, backends)
+    report = json.loads(_verify(book, "--json").stdout)
+    assert report["warnings"] == ["ffmpeg_missing"]
+    assert {c["reason"] for c in report["chapters"]} == {"audio_undecodable"}
+    assert all(not b.heard for b in backends.values())
+
+
+def test_stopping_removes_the_decoded_scratch_audio(
+    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    clean = _scripts(book)
+    _use(monkeypatch, {
+        "whisper": FakeBackend("whisper", clean),
+        "wav2vec2": FakeBackend("wav2vec2", clean, stop_at=2),
+        "vosk": FakeBackend("vosk", clean),
+    })  # fmt: skip
+    assert _verify(book, "--json").exit_code == 130
+    assert list(scratch.iterdir()) == []

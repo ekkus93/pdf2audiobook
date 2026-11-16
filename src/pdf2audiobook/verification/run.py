@@ -10,6 +10,7 @@ logs book text or transcripts.
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import time
 from collections.abc import Callable, Sequence
@@ -104,10 +105,28 @@ def _uses_cpu(device: str) -> bool:
         return True
 
 
-def _decode_all(items: list[_Chapter], folder: Path) -> None:
+def _decode_all(
+    items: list[_Chapter],
+    folder: Path,
+    results: dict[int, ChapterResult],
+    models: Sequence[ModelName],
+) -> list[_Chapter]:
+    """Decode each chapter to a scratch WAV; a chapter that won't decode is reported, not fatal.
+
+    The source MP3 is only read. Returns the chapters that decoded.
+    """
+    decoded: list[_Chapter] = []
     for item in items:
-        item.wav = decode(item.reference.audio, folder / f"chapter-{item.chapter.number:04d}.wav")
+        try:
+            item.wav = decode(
+                item.reference.audio, folder / f"chapter-{item.chapter.number:04d}.wav"
+            )
+        except AudioError:
+            results[item.chapter.number] = _unavailable(item.chapter, "audio_undecodable", models)
+            continue
         item.duration = item.wav.stat().st_size / 32_000  # 16 kHz, 16-bit, mono
+        decoded.append(item)
+    return decoded
 
 
 def _listen(
@@ -304,10 +323,13 @@ def verify_book(
             if not states[name].ready:
                 item.runs[name] = ModelRun(name, "unavailable", states[name].reason)
     interrupted: BaseException | None = None
+    if items and ready and shutil.which("ffmpeg") is None:
+        # Every chapter needs FFmpeg to decode; say so once, not per chapter (AVF4).
+        warnings.append("ffmpeg_missing")
     with tempfile.TemporaryDirectory(prefix="verify-") as scratch:
         try:
             if items and ready:
-                _decode_all(items, Path(scratch))
+                items = _decode_all(items, Path(scratch), results, models)
             for name in ready:
                 _listen(name, items, backends[name], reporter, should_stop)
         except (Cancelled, KeyboardInterrupt) as stop:
@@ -319,17 +341,17 @@ def verify_book(
     for number, result in results.items():
         fresh = chapter_json(result, tokens.get(number, []), keep_transcripts=keep_transcripts)
         previous[number] = keep_reviewed(previous.get(number), fresh)
-    chapters = [previous[n] for n in sorted(previous)]
+    merged = [previous[n] for n in sorted(previous)]
     # Retention is this run's explicit choice (AVF2): chapters this run didn't verify must not
     # keep full transcripts from an earlier retaining run.
     if not keep_transcripts:
-        chapters = [without_transcripts(chapter) for chapter in chapters]
+        merged = [without_transcripts(chapter) for chapter in merged]
     report = report_json(
-        chapters,
+        merged,
         [states[name] for name in models],
         created_at=created,
         completed_at=None if interrupted else datetime.now(UTC).isoformat(timespec="seconds"),
-        keep_transcripts=retains_transcripts(chapters),
+        keep_transcripts=retains_transcripts(merged),
         warnings=warnings,
     )
     try:

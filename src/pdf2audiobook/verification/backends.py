@@ -37,6 +37,8 @@ RATE = 16_000
 WINDOW_SECONDS = 30.0
 # Look this far back from a window's end for the quietest place to cut.
 SEARCH_SECONDS = 5.0
+# Samples are read from the decoded WAV this many seconds at a time (AVF4).
+BLOCK_SECONDS = 1.0
 DEFAULT_THREADS = 4
 
 
@@ -61,16 +63,32 @@ def decode(source: Path, target: Path) -> Path:
     return target
 
 
-def read_wav(path: Path) -> np.ndarray:
-    with wave.open(str(path), "rb") as source:
+def open_wav(path: Path) -> wave.Wave_read:
+    """Open a decoded WAV, refusing any format the backends weren't built for. Reads nothing."""
+    source = wave.open(str(path), "rb")  # noqa: SIM115 - the caller closes it
+    try:
         if (
             source.getframerate() != RATE
             or source.getnchannels() != 1
             or source.getsampwidth() != 2
         ):
             raise AudioError("Verification audio must be 16 kHz mono 16-bit")
-        frames = source.readframes(source.getnframes())
-    return np.frombuffer(frames, dtype="<i2").astype(np.float32) / 32768.0
+    except BaseException:
+        source.close()
+        raise
+    return source
+
+
+def _cut(samples: np.ndarray, origin: int, start: int, size: int, search: int, frame: int) -> int:
+    """The quietest 20 ms in the last `search` samples before `start + size`.
+
+    `samples[0]` is absolute sample `origin`; the search never reaches before `start + size -
+    search`, so a streaming caller needs only the samples from there on.
+    """
+    lo, hi = start + size - search, start + size
+    segment = samples[lo - origin : hi - origin]
+    energy = np.square(segment[: len(segment) // frame * frame]).reshape(-1, frame).mean(axis=1)
+    return lo + int(np.argmin(energy)) * frame + frame // 2
 
 
 def windows(audio: np.ndarray, window: float = WINDOW_SECONDS) -> list[tuple[int, int]]:
@@ -79,15 +97,58 @@ def windows(audio: np.ndarray, window: float = WINDOW_SECONDS) -> list[tuple[int
     spans: list[tuple[int, int]] = []
     start = 0
     while len(audio) - start > size:
-        lo, hi = start + size - search, start + size
-        energy = (
-            np.square(audio[lo:hi][: (hi - lo) // frame * frame]).reshape(-1, frame).mean(axis=1)
-        )
-        cut = lo + int(np.argmin(energy)) * frame + frame // 2
+        cut = _cut(audio, 0, start, size, search, frame)
         spans.append((start, cut))
         start = cut
     spans.append((start, len(audio)))
     return spans
+
+
+def iter_windows(
+    path: Path,
+    window: float = WINDOW_SECONDS,
+    *,
+    observe: Callable[[int], None] | None = None,
+) -> Iterator[tuple[int, np.ndarray]]:
+    """Yield `(start_sample, samples)` for each window of a decoded WAV, reading as it goes.
+
+    The same split points as `windows()`, but the chapter is never held whole: the buffer
+    keeps one window, the search region before its end and one read block, so its peak size
+    is about `window + SEARCH_SECONDS + BLOCK_SECONDS` seconds of audio however long the file
+    is. `observe`, if given, receives the buffer's length after each read (for tests). Closing
+    the generator closes the file.
+    """
+    size, search, frame = int(window * RATE), int(SEARCH_SECONDS * RATE), RATE // 50
+    block = int(BLOCK_SECONDS * RATE)
+    with contextlib.closing(open_wav(path)) as source:
+        total = source.getnframes()
+        buffer = np.empty(0, dtype=np.float32)
+        origin = 0  # absolute sample index of buffer[0]
+        read_to = 0  # absolute sample index of the next sample to read
+        start = 0  # absolute start of the next window
+
+        def fill(upto: int) -> None:
+            nonlocal buffer, read_to
+            target = min(upto, total)
+            while read_to < target:
+                data = source.readframes(min(block, target - read_to))
+                if not data:
+                    break
+                chunk = np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
+                buffer = np.concatenate((buffer, chunk))
+                read_to += len(chunk)
+                if observe is not None:
+                    observe(len(buffer))
+
+        while total - start > size:
+            fill(start + size)
+            cut = _cut(buffer, origin, start, size, search, frame)
+            yield start, buffer[start - origin : cut - origin].copy()
+            # The next window starts at the cut; nothing before it is needed again.
+            buffer = buffer[cut - origin :]
+            origin = start = cut
+        fill(total)
+        yield start, buffer[start - origin :].copy()
 
 
 def _threads(threads: int) -> None:
@@ -134,11 +195,10 @@ class _Base:
     def _windows(
         self, wav: Path, should_stop: Callable[[], bool]
     ) -> Iterator[tuple[float, np.ndarray]]:
-        audio = read_wav(wav)
-        for start, end in windows(audio):
+        for start, piece in iter_windows(wav):
             if should_stop():
                 raise Cancelled
-            yield start / RATE, audio[start:end]
+            yield start / RATE, piece
 
 
 class WhisperBackend(_Base):
@@ -251,7 +311,7 @@ class VoskBackend(_Base):
             for item in json.loads(result).get("result", []):
                 words.append(Word(item["word"], float(item["start"]), float(item["end"])))
 
-        with wave.open(str(wav), "rb") as source:
+        with contextlib.closing(open_wav(wav)) as source:
             while data := source.readframes(self.FRAMES):
                 if should_stop():
                     raise Cancelled

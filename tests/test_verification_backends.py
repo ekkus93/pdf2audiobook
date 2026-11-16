@@ -18,7 +18,14 @@ import numpy as np
 import pytest
 
 from pdf2audiobook.verification import backends
-from pdf2audiobook.verification.backends import RATE, backend, decode, read_wav, windows
+from pdf2audiobook.verification.backends import (
+    RATE,
+    backend,
+    decode,
+    iter_windows,
+    open_wav,
+    windows,
+)
 from pdf2audiobook.verification.compare import differences, tokenize, tokenize_text
 from pdf2audiobook.verification.contracts import Cancelled
 
@@ -30,6 +37,13 @@ def _write(path: Path, audio: np.ndarray, rate: int = RATE) -> Path:
         out.setframerate(rate)
         out.writeframes((np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes())
     return path
+
+
+def _samples(path: Path) -> np.ndarray:
+    """The whole decoded file, for test expectations only: production never reads it whole."""
+    with open_wav(path) as source:
+        data = source.readframes(source.getnframes())
+    return np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768.0
 
 
 def _speechlike(seconds: float, quiet_at: list[float]) -> np.ndarray:
@@ -59,13 +73,13 @@ def test_short_audio_is_one_window() -> None:
 def test_decode_makes_16khz_mono(tmp_path: Path) -> None:
     tone = 0.3 * np.sin(2 * np.pi * 220 * np.arange(2 * 24000) / 24000)
     source = _write(tmp_path / "source.wav", tone.astype(np.float32), rate=24000)
-    audio = read_wav(decode(source, tmp_path / "decoded.wav"))
+    audio = _samples(decode(source, tmp_path / "decoded.wav"))
     assert abs(len(audio) / RATE - 2.0) < 0.05
 
 
 def test_reading_other_formats_is_refused(tmp_path: Path) -> None:
     with pytest.raises(Exception, match="16 kHz mono"):
-        read_wav(_write(tmp_path / "fast.wav", np.zeros(100, dtype=np.float32), rate=24000))
+        open_wav(_write(tmp_path / "fast.wav", np.zeros(100, dtype=np.float32), rate=24000))
 
 
 class _CountingWhisper(backends.WhisperBackend):
@@ -158,3 +172,64 @@ def test_real_backend_transcribes_kitten_speech(spoken: Path, name: str) -> None
     )
     found = differences(name, tokenize_text(SENTENCE), tokenize(transcript.words))
     assert [d for d in found if d.kind != "substitution"] == [], found
+
+
+def test_streaming_windows_are_the_same_as_the_whole_file_split(tmp_path: Path) -> None:
+    audio = _speechlike(200, quiet_at=[27.0, 56.5, 90.0, 121.3, 150.0])
+    wav = _write(tmp_path / "long.wav", audio)
+    streamed = [(start, start + len(piece)) for start, piece in iter_windows(wav)]
+    assert streamed == windows(audio)
+    # Each window's samples are exactly the file's samples there.
+    decoded = _samples(wav)
+    for start, piece in iter_windows(wav):
+        assert np.array_equal(piece, decoded[start : start + len(piece)])
+
+
+def _peak_buffer(path: Path) -> int:
+    peak = 0
+
+    def observe(length: int) -> None:
+        nonlocal peak
+        peak = max(peak, length)
+
+    for _ in iter_windows(path, observe=observe):
+        pass
+    return peak
+
+
+def test_the_buffer_does_not_grow_with_the_chapter(tmp_path: Path) -> None:
+    short = _write(tmp_path / "two.wav", _speechlike(120, quiet_at=[27.0]))
+    long = _write(tmp_path / "ten.wav", _speechlike(600, quiet_at=[27.0, 300.0]))
+    limit = int((30 + 5 + 1) * RATE)  # window + search region + one read block
+    assert _peak_buffer(short) == _peak_buffer(long)
+    assert _peak_buffer(long) <= limit + RATE // 50
+
+
+def test_peak_allocations_stay_small_for_a_long_chapter(tmp_path: Path) -> None:
+    import tracemalloc
+
+    wav = _write(tmp_path / "ten.wav", _speechlike(600, quiet_at=[27.0, 300.0]))
+    whole_file_bytes = 600 * RATE * 4  # float32 samples, if the chapter were read whole
+    tracemalloc.start()
+    try:
+        for _piece in iter_windows(wav):
+            pass
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < whole_file_bytes / 4
+
+
+@pytest.mark.skipif(not os.path.isdir("/proc/self/fd"), reason="needs /proc to count open files")
+def test_stopping_early_releases_the_decoded_file(tmp_path: Path) -> None:
+    wav = _write(tmp_path / "long.wav", _speechlike(120, quiet_at=[27.0]))
+
+    def open_files() -> int:
+        return len(os.listdir("/proc/self/fd"))
+
+    before = open_files()
+    windows_seen = iter_windows(wav)
+    next(windows_seen)
+    assert open_files() > before  # the file is open while windows are read
+    windows_seen.close()
+    assert open_files() == before
