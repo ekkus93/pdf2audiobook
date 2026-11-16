@@ -12,7 +12,7 @@ def test_runtime_error_is_content_free_for_all_commands(monkeypatch, tmp_path, c
     secret = "SECRET BOOK SENTENCE /private/book.pdf"
     if command == "config show":
         monkeypatch.setattr(
-            "pdf2audiobook.cli.load_settings",
+            "pdf2audiobook.cli.info.load_settings",
             lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError(secret)),
         )
         args = ["config", "show"]

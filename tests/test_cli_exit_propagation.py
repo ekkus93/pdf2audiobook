@@ -10,6 +10,19 @@ from typer.testing import CliRunner
 
 from pdf2audiobook.cli import app
 
+# The cli module each command's output goes through, where its `emit` must be patched.
+EMIT_MODULE = {
+    "config-show": "info",
+    "budget-show": "budget",
+    "budget-resolve": "budget",
+    "doctor": "info",
+    "inspect": "info",
+    "analyze": "analyze",
+    "convert": "convert",
+    "batch": "batch",
+    "pack-m4b": "pack",
+}
+
 
 class _FakeLedger:
     def __init__(self, _path: Path) -> None:
@@ -99,7 +112,9 @@ def test_commands_reraise_nonzero_typer_exit(monkeypatch, tmp_path, command):
         )
         (tmp_path / "manifest.json").write_text("{}", encoding="utf-8")
     if command != "review":
-        monkeypatch.setattr("pdf2audiobook.cli.emit", raise_exit)
+        # Each command looks `emit` up in its own module of the cli package (see its docstring).
+        module = EMIT_MODULE[command]
+        monkeypatch.setattr(f"pdf2audiobook.cli.{module}.emit", raise_exit)
 
     arguments = {
         "config-show": ["config", "show", "--no-config"],

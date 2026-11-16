@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This Python 3.11+ CLI package uses a `src` layout. Runtime code lives in `src/pdf2audiobook/`: `document/` handles structure, `audio/` and `tts/` handle speech output, and `llm/` contains model adapters. The CLI entry point is `cli.py`; conversion is coordinated by `pipeline.py`. Pytest tests are in `tests/`; specifications and maintainer guidance are in `docs/`.
+This Python 3.11+ CLI package uses a `src` layout. Runtime code lives in `src/pdf2audiobook/`: `document/` handles structure, `audio/` and `tts/` handle speech output, and `llm/` contains model adapters. The CLI entry point is `cli/__init__.py` (`main`), with one module per command family under `cli/`; conversion is coordinated by `pipeline.py`. Pytest tests are in `tests/`; specifications and maintainer guidance are in `docs/`.
 
 ## Build, Test, and Development Commands
 

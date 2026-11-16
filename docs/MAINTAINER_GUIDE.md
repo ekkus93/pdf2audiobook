@@ -348,7 +348,7 @@ remaining chapters. Voice markers are honored only in approved chapters.
 Failed chapter details stay in `reports/conversion_status.json` and are shown
 by `inspect`; transient provider errors alone are retried. `inspect` reads that
 file through one handle, at most `CONVERSION_STATUS_MAX_BYTES` (1 MiB, in
-`cli.py`) plus one byte, and fails with "Conversion status file exceeds safe
+`cli/` package) plus one byte, and fails with "Conversion status file exceeds safe
 size limit" (exit 3) when the read goes over the limit. The decision is made
 from the bytes read, so a file that grows or is replaced before it is read is
 still reported. A missing, unreadable, malformed, non-object or over-depth
@@ -455,7 +455,7 @@ and retained for review. A difference of exactly 2pt is sufficient to select
 the nearer candidate.
 
 The executable `pdf2audiobook` maps to `pdf2audiobook.cli:main`
-(`src/pdf2audiobook/cli.py`), which makes SIGTERM stop a run exactly as Ctrl+C does (exit 130,
+(`src/pdf2audiobook/cli/`, handler in `cli/_core.py`), which makes SIGTERM stop a run exactly as Ctrl+C does (exit 130,
 `run_status.json` left as `stopped`, the workspace lock released) and then runs the Typer
 `app`. Tests that call `app` in-process don't install that handler. Modules and their boundaries:
 

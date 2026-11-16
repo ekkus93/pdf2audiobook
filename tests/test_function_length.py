@@ -15,7 +15,7 @@ ALLOWLIST = {
     # Out of scope: the split spec leaves functions under 200 lines alone (§1).
     "pdf2audiobook/review_ui.py::create_review_server": 163,
     "pdf2audiobook/llm/__init__.py::propose_llm_narration": 142,
-    "pdf2audiobook/cli.py::pack_m4b": 134,
+    "pdf2audiobook/cli/pack.py::pack_m4b": 134,
     "pdf2audiobook/audio/encoding.py::encode_m4b": 132,
     "pdf2audiobook/llm/__init__.py::propose_llm_cleanup": 126,
     "pdf2audiobook/llm/structure.py::detect_llm_headings": 116,
@@ -25,7 +25,7 @@ ALLOWLIST = {
     "pdf2audiobook/reading_order.py::order_two_columns": 108,
     "pdf2audiobook/llm/equations.py::propose_llm_equation_readings": 107,
     "pdf2audiobook/llm/budget.py::BookLLMBudgetLedger._stats": 107,
-    "pdf2audiobook/cli.py::batch": 106,
+    "pdf2audiobook/cli/batch.py::batch": 106,
 }
 
 
