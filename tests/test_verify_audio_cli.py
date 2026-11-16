@@ -597,7 +597,7 @@ def test_changed_pronunciations_are_not_compared_with_the_audio(
     assert first["status"] == "no_mismatch_detected"
     # The check says why, in the human output too.
     text = _verify(book, "--config", str(config)).output
-    assert "narration not spoken" in text
+    assert "so it wasn't compared" in text
     # With the original settings the spoken narration matches again and it verifies normally.
     _use(monkeypatch, {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")})
     again = json.loads(_verify(book, "--json").stdout)

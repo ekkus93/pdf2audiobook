@@ -149,6 +149,22 @@ def _clock(seconds: float | None) -> str:
     return f"{minutes}:{rest:02d}"
 
 
+_REASON_TEXT = {
+    "audio_missing": "no audio to check; convert the chapter first",
+    "audio_stale": "the audio no longer matches its chapter text; convert the chapter again",
+    "narration_not_spoken": (
+        "the chapter text or pronunciations changed since it was spoken, so it wasn't compared; "
+        "speak the chapter again first"
+    ),
+    "audio_undecodable": "FFmpeg couldn't read this chapter's MP3; check that FFmpeg is installed",
+    "cancelled": "the check was stopped",
+}
+_WARNING_TEXT = {
+    "ffmpeg_missing": "FFmpeg was not found, so no chapter could be checked; install FFmpeg",
+    "whisper_low_memory": "Whisper on this CPU needs about 8 GB of RAM; it may be slow or fail",
+}
+
+
 def report_text(
     report: dict[str, Any], *, numbers: set[int] | None = None, details: bool = False
 ) -> str:
@@ -160,7 +176,7 @@ def report_text(
         voted = [m["model"] for m in chapter["models"] if m["outcome"] == "ok"]
         text = f"Chapter {chapter['number']}: {_STATUS_TEXT[chapter['status']]}"
         if chapter["reason"]:
-            text += f" ({chapter['reason'].replace('_', ' ')})"
+            text += f" ({_REASON_TEXT.get(chapter['reason'], chapter['reason'].replace('_', ' '))})"
         elif chapter["partial"]:
             text += f" (partial: {len(voted)} of 3 models)"
         lines.append(text)
@@ -177,6 +193,8 @@ def report_text(
                     f"{model} {heard!r}" for model, heard in flag["heard"].items()
                 )
             lines.append(line)
+    for code in report.get("warnings", []):
+        lines.append(_WARNING_TEXT.get(code, code.replace("_", " ")))
     lines.append(
         "A flag means listen there; speech recognition is evidence, not proof. "
         "Report: reports/audio_verification.json"
