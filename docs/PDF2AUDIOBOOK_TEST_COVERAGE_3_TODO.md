@@ -67,16 +67,17 @@
 
 ## Phase TC4 — CLI refusals (R5)
 
-- [ ] TC4.01 `asr`: unknown model name and declined download (`cli/asr.py` lines 28–33, 69, 71).
-  - Evidence: not run yet.
-- [ ] TC4.02 `regenerate-chapter` and `recover`: refused options and missing manifest (`cli/repair.py` lines 45, 58, 61, 63, 90, 93, 95).
-  - Evidence: not run yet.
-- [ ] TC4.03 `batch`: refused option combinations and a per-book failure reported without stopping the run (`cli/batch.py` lines 63, 70, 85, 91, 126–129, 136, 143, 159).
-  - Evidence: not run yet.
-- [ ] TC4.04 `verify-audio`: refusals and the report output branches (`cli/verify.py` lines 96, 127–136, 163, 165, 183, 293, 306, 308, 310).
-  - Evidence: not run yet.
+- [x] TC4.01 `asr`: unknown model name and declined download (`cli/asr.py` lines 28–33, 69, 71).
+  - Evidence: `test_asr_fetch_refuses_an_unknown_model_name` (non-zero exit; the input name is not echoed); `test_asr_fetch_declined_download_exits_1_and_downloads_nothing` (answer `n`: exit 1, no fetch); `test_asr_list_interrupted_exits_130_with_a_json_error` and `test_asr_fetch_interrupted_exits_130` (lines 28–29, 71); `test_asr_fetch_prints_the_list_when_nothing_needs_downloading` (line 69); `test_asr_list_failure_names_no_path` (lines 32–33). Passes on the head.
+- [x] TC4.02 `regenerate-chapter` and `recover`: refused options and missing manifest (`cli/repair.py` lines 45, 58, 61, 63, 90, 93, 95).
+  - Evidence: `test_regenerate_chapter_refuses_an_unknown_footnote_policy` (line 45, exit 2, fixed wording); `test_regenerate_chapter_lists_its_backups_in_the_human_output` (line 58); `test_regenerate_chapter_passes_interrupts_and_exits_through` (lines 61, 63); `test_recover_lists_its_backups_in_the_human_output` (line 90); `test_recover_passes_interrupts_and_exits_through` (lines 93, 95); `test_regenerate_chapter_refuses_a_missing_manifest` and `test_recover_refuses_a_missing_manifest` (no path in output). Passes on the head.
+- [x] TC4.03 `batch`: refused option combinations and a per-book failure reported without stopping the run (`cli/batch.py` lines 63, 70, 85, 91, 126–129, 136, 143, 159).
+  - Evidence: `test_batch_refuses_a_source_that_is_not_a_folder` (line 63); `test_batch_refuses_a_folder_without_pdfs` (line 70); `test_batch_applies_the_provider_and_cover_options` (lines 85, 91); `test_batch_refuses_per_book_tts_settings_that_do_not_validate` (lines 126–129, a Piper voice that is not a number); `test_batch_interrupted_while_converting_exits_130` (line 136); `test_batch_interrupted_before_any_book_exits_130` (line 159); `test_batch_reports_a_failed_book_and_still_converts_the_next` (line 143: an OS failure on the first book, the second is still converted; no path in output). Passes on the head.
+- [x] TC4.04 `verify-audio`: refusals and the report output branches (`cli/verify.py` lines 96, 127–136, 163, 165, 183, 293, 306, 308, 310).
+  - Evidence: `test_verify_audio_passes_an_exit_code_through` (96); `test_audio_report_says_when_a_book_is_not_verified_yet` (127–128); `test_audio_report_shows_its_out_of_date_chapters` (130–132); `test_audio_report_show_passes_an_exit_code_through` (133–134); `test_audio_report_show_failure_names_no_path` (135–136); `test_audio_report_dismiss_confirms_in_the_human_output` (163); `test_audio_report_dismiss_passes_an_exit_code_through` (165); `test_the_convert_verify_hook_does_nothing_without_outputs` (183); `test_resynthesize_warns_when_a_chapter_voice_overrides_the_option` (293); `test_resynthesize_prints_the_verification_summary_in_the_human_output` (306); `test_resynthesize_passes_interrupts_and_exits_through` (308, 310); `test_verify_audio_interrupted_exits_130` (92–94). Passes on the head.
 - [ ] TC4.05 Every test in TC4 asserts the exit code, the fixed message or JSON error, and that no path, file name or book title appears.
-  - Evidence: not run yet.
+  - Evidence: 35 tests in `tests/test_cli_refusals.py`; every refusal, failure and human-output test asserts its wording or exit code and, for the failure tests, that the path marker and the temporary folder are absent.
+  - Note: not met as written, so unchecked. Several tests assert only the exit code, because the command prints no message on that path: the interrupt and exit-passthrough tests (`test_*_interrupts_*`, `test_*_passes_an_exit_code_through`, `test_*_interrupted_*`, and `test_verify_audio_interrupted_exits_130`). Adding a JSON-error assertion to each would meet the item literally; that is a small follow-up, not done here.
 
 ## Phase TC5 — Acceptance
 
