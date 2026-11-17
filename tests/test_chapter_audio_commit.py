@@ -134,7 +134,7 @@ def test_a_full_disk_while_staging_leaves_the_previous_audio(
 def test_a_commit_stopped_after_its_journal_is_finished_next_time(
     book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def stop(journal: Path) -> None:
+    def stop(journal: Path, **_kw: object) -> None:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(commit, "_finish", stop)
@@ -177,7 +177,9 @@ def test_only_the_newest_backups_are_kept(book: dict[str, Any]) -> None:
 def test_the_journal_names_only_files_in_the_audio_folder(
     book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(commit, "_finish", lambda journal: (_ for _ in ()).throw(KeyboardInterrupt))
+    monkeypatch.setattr(
+        commit, "_finish", lambda journal, **_kw: (_ for _ in ()).throw(KeyboardInterrupt)
+    )
     _Kitten.tone = 0.05
     _again(book)
     journal = next(book["audio"].glob(".commit-*"))

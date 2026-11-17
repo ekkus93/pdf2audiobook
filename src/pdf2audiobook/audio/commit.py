@@ -101,26 +101,53 @@ def commit_chapter_audio(output: Path, record: Path, sidecar: dict[str, Any]) ->
         raise AudioError(
             "Could not stage the new chapter audio; the previous audio is kept"
         ) from None
-    _finish(journal)
+    _finish(journal, require_staged=True)
     return backup
 
 
-def _finish(journal: Path) -> None:
-    """Rename the staged MP3, then its sidecar, into place; then drop the journal."""
+def _published(output: Path, staged_record: Path) -> bool:
+    """Whether `output` already holds the MP3 that `staged_record` describes."""
+    if not staged_record.is_file() or not output.is_file():
+        return False
+    try:
+        recorded = json.loads(staged_record.read_text(encoding="utf-8")).get("sha256")
+        return isinstance(recorded, str) and digest_file(output) == recorded
+    except (OSError, ValueError):
+        return False
+
+
+def _finish(journal: Path, *, require_staged: bool) -> bool:
+    """Publish a journaled commit's MP3 and sidecar; return whether the commit was published.
+
+    The MP3 is renamed first. A commit whose staged MP3 has gone is never published over the
+    previous audio (TC3.02): a normal commit fails, and recovery finishes it only if the MP3 is
+    already in place with the hash the staged sidecar recorded. Otherwise both staged files and
+    the journal are discarded and the previous audio stays.
+    """
     entry = json.loads(journal.read_text(encoding="utf-8"))
     folder = journal.parent
     output, record = folder / entry["output"], folder / entry["record"]
     staged = staged_path(output)
+    staged_record = staged.with_suffix(".cache.json")
+    if not staged.is_file():
+        if require_staged or not _published(output, staged_record):
+            _cleanup_staged(staged)
+            journal.unlink(missing_ok=True)
+            if require_staged:
+                raise AudioError("The new chapter audio is missing; the previous audio is kept")
+            return False
+        # The MP3 was published before the stop: only the sidecar is left to publish.
     try:
         if staged.exists():
             os.replace(staged, output)
-        if staged.with_suffix(".cache.json").exists():
-            os.replace(staged.with_suffix(".cache.json"), record)
+        if staged_record.exists():
+            os.replace(staged_record, record)
     except OSError:
         raise AudioError(
             "Could not publish the new chapter audio; run the conversion again"
         ) from None
     journal.unlink(missing_ok=True)
+    return True
 
 
 def recover_audio_commits(audio_folder: Path) -> int:
@@ -133,8 +160,8 @@ def recover_audio_commits(audio_folder: Path) -> int:
         return 0
     for journal in sorted(audio_folder.glob(f"{_JOURNAL_PREFIX}*.json")):
         try:
-            _finish(journal)
-            finished += 1
+            if _finish(journal, require_staged=False):
+                finished += 1
         except (OSError, ValueError, KeyError, AudioError):
             log_event("audio_commit_recovery_failed", level=logging.WARNING)
     staging = audio_folder / STAGING

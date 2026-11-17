@@ -196,11 +196,6 @@ def test_a_chapter_whose_voice_engine_cannot_start_keeps_its_audio(
     assert str(converted_book["audio"]) not in result.output
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="a staged MP3 that vanishes mid-commit is skipped silently, so the new sidecar is "
-    "published over the previous MP3 (see 'Found while testing' in the TODO)",
-)
 def test_a_staged_mp3_that_vanishes_mid_commit_fails_and_keeps_the_old_sidecar(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -219,3 +214,51 @@ def test_a_staged_mp3_that_vanishes_mid_commit_fails_and_keeps_the_old_sidecar(
         commit.commit_chapter_audio(output, record, {"sidecar": 4})
 
     assert _state(output, record) == before
+
+
+def _journaled_commit(output: Path, record: Path, *, published: bool) -> bytes:
+    """A stopped commit: staged sidecar written, staged MP3 gone, journal left. Returns the new bytes."""
+    import hashlib
+
+    new_bytes = b"new mp3"
+    staged = commit.staged_path(output)
+    staged.with_suffix(".cache.json").write_text(
+        json.dumps({"sha256": hashlib.sha256(new_bytes).hexdigest(), "bytes": len(new_bytes)}),
+        encoding="utf-8",
+    )
+    staged.unlink()
+    if published:
+        output.write_bytes(new_bytes)  # the rename happened before the stop
+    commit._journal(output).write_text(
+        json.dumps({"output": output.name, "record": record.name}), encoding="utf-8"
+    )
+    return new_bytes
+
+
+def test_a_journal_whose_staged_mp3_is_gone_drops_the_commit_and_keeps_the_previous_audio(
+    tmp_path: Path,
+) -> None:
+    output, record = _previous(tmp_path)
+    _journaled_commit(output, record, published=False)
+    before = _state(output, record)
+
+    finished = commit.recover_audio_commits(output.parent)
+
+    assert finished == 0  # no commit was finished: the new MP3 was never published
+    assert _state(output, record) == before
+    assert not commit._journal(output).exists()
+    assert not commit.staged_path(output).with_suffix(".cache.json").exists()
+
+
+def test_a_journal_whose_mp3_was_already_published_finishes_the_sidecar(tmp_path: Path) -> None:
+    output, record = _previous(tmp_path)
+    new_bytes = _journaled_commit(output, record, published=True)
+    staged_record = commit.staged_path(output).with_suffix(".cache.json")  # gone after recovery
+
+    finished = commit.recover_audio_commits(output.parent)
+
+    assert finished == 1
+    assert output.read_bytes() == new_bytes
+    assert json.loads(record.read_text(encoding="utf-8"))["sha256"]  # the new sidecar is in place
+    assert not commit._journal(output).exists()
+    assert not staged_record.exists()
