@@ -51,16 +51,19 @@
 
 ## Phase TC3 — Commit recovery and conversion faults (R3, R4)
 
-- [ ] TC3.01 A read-only audio folder during staging: the previous MP3 and sidecar are unchanged, and the error holds no path (`audio/commit.py` lines 48–49).
-  - Evidence: not run yet.
+- [x] TC3.01 A read-only audio folder during staging: the previous MP3 and sidecar are unchanged, and the error holds no path (`audio/commit.py` lines 48–49).
+  - Evidence: `test_a_read_only_audio_folder_leaves_the_previous_audio` (folder chmod 0o500; the backup folder cannot be made; `AudioError` raised; previous MP3 and sidecar byte-identical; the path is absent from the message; the staged MP3 is removed). `test_the_backup_copies_the_previous_audio_when_a_hard_link_is_refused` covers lines 48–49, the copy fallback: the read-only test reaches the error path at the backup step, not those lines. Both pass on the head (skipped when run as root).
 - [ ] TC3.02 A staged file removed before the rename: the commit fails safely and the previous audio stays (lines 119–120).
-  - Evidence: not run yet.
+  - Evidence: `test_a_failed_publish_says_so_and_names_no_path` reaches lines 119–120 (the rename fails because the destination is a folder) and checks the fixed message and that no path appears. Passes on the head. The scenario the item describes, a staged MP3 removed before the rename, is a different path and fails the stated outcome: see `test_a_staged_mp3_that_vanishes_mid_commit_fails_and_keeps_the_old_sidecar` (strict xfail) and "Found while testing".
+  - Note: not met, so unchecked. The commit reports success and publishes the new sidecar over the previous MP3. Fixing it changes `audio/commit.py`, which is outside this round's tests-only rule.
 - [ ] TC3.03 A journal left behind by a stopped commit whose staged files are gone: recovery drops it and reports no commit finished (lines 138–139, 146).
-  - Evidence: not run yet.
-- [ ] TC3.04 A TTS provider that cannot be created: the chapter is marked failed, its previous audio and sidecar are unchanged, and no staged file remains (`conversion.py` lines 475–478).
-  - Evidence: not run yet.
+  - Evidence: `test_recovery_skips_an_unreadable_journal_and_keeps_it` reaches lines 138–139 (a journal that can't be read is logged and kept; the count is 0). `test_recovery_removes_leftover_staged_files_and_folders` reaches line 146 (a stray folder inside `.staging` is removed). Both pass on the head.
+  - Note: not met as written, so unchecked. A journal whose staged files are gone does not reach lines 138–139: `_finish` finds nothing to rename, returns normally, and recovery counts it as finished (checked directly: the function returns 1). The item's expected outcome ("reports no commit finished") therefore contradicts the code. Which outcome is right is a decision for the owner.
+- [x] TC3.04 A TTS provider that cannot be created: the chapter is marked failed, its previous audio and sidecar are unchanged, and no staged file remains (`conversion.py` lines 475–478).
+  - Evidence: `test_a_chapter_whose_voice_engine_cannot_start_keeps_its_audio` (a converted book, then `--chapter 2 --force` with `create_tts_provider` raising `AudioError`: non-zero exit, MP3 and sidecar byte-identical, no staged MP3, no path in the output). A measured run of the TC3 tests alone shows `conversion.py` lines 475–478 are no longer missing. Passes on the head.
 - [ ] TC3.05 Mutation check (R6): skip the staged-file cleanup and show TC3.04 fails. Revert.
-  - Evidence: not run yet.
+  - Evidence: on a scratch edit of `audio/commit.py` (`_cleanup_staged` made a no-op; `git checkout` restored it, no diff afterwards): `test_a_read_only_audio_folder_leaves_the_previous_audio` fails (the staged MP3 is left behind). `test_a_chapter_whose_voice_engine_cannot_start_keeps_its_audio` still passes, because no staged MP3 exists yet when the provider fails to start.
+  - Note: not met as written, so unchecked. The mutation is caught by TC3.01, not TC3.04. TC3.04 can't fail this way, since the provider fails before anything is staged.
 
 ## Phase TC4 — CLI refusals (R5)
 
@@ -86,4 +89,5 @@
 
 ## Found while testing
 
+- **TC3.02, a vanished staged MP3 publishes the new sidecar.** `commit_chapter_audio` (`audio/commit.py`, `_finish`) skips the MP3 rename when the staged MP3 is missing, but still renames the staged sidecar. The commit then returns success, with the previous MP3 and the sidecar of audio that was never published. The stale check would flag the mismatch, but the module's own promise ("never left with an MP3 and a sidecar that don't belong together") does not hold. Test: `test_a_staged_mp3_that_vanishes_mid_commit_fails_and_keeps_the_old_sidecar` (strict xfail). The fix is a source change for the owner to decide.
 - **TC1.06, backend load errors are not content-free.** `WhisperBackend._load` (`verification/backends.py`) lets the library's load exception through unchanged. With a message that includes the weights path, the path reaches the caller (`RuntimeError: cannot read weights at <path>`). The run layer masks it in reports, but the backend's error does not meet `CLAUDE.md`'s content-free rule. Test: `test_a_model_that_fails_to_load_raises_a_content_free_error` (xfail, strict). The fix (wrap load errors in `AudioError` with fixed text) is a source change, not a test change, so it is for the owner to decide.
