@@ -40,14 +40,14 @@
 
 ## Phase TC2 — LLM decision branches (R2)
 
-- [ ] TC2.01 A narration proposal equal to the source text is rejected with reason `no_change`, the block's text is unchanged, and the decision is recorded (lines 343–352).
-  - Evidence: not run yet.
-- [ ] TC2.02 A classification below 0.75 confidence is rejected with reason `low_confidence` and a warning naming the block (lines 479–489).
-  - Evidence: not run yet.
-- [ ] TC2.03 Book text placed in the mocked response appears in neither the warnings nor the decision records.
-  - Evidence: not run yet.
-- [ ] TC2.04 Mutation check (R6): invert the confidence comparison and make the no-change check always false; show TC2.01 and TC2.02 fail.
-  - Evidence: not run yet.
+- [x] TC2.01 A narration proposal equal to the source text is rejected with reason `no_change`, the block's text is unchanged, and the decision is recorded (lines 343–352).
+  - Evidence: `test_a_narration_identical_to_its_source_is_rejected_as_no_change` (decision `narration` / `rejected` / `no_change`, no warning, source text unchanged). Passes on the head.
+- [x] TC2.02 A classification below 0.75 confidence is rejected with reason `low_confidence` and a warning naming the block (lines 479–489).
+  - Evidence: `test_a_classification_below_the_threshold_is_rejected_and_warned_about` (warning `LLM classification low confidence: b1`, decision `classification` / `rejected` / `low_confidence`); `test_a_classification_at_the_threshold_is_kept` (0.75 is accepted). Passes on the head.
+- [x] TC2.03 Book text placed in the mocked response appears in neither the warnings nor the decision records.
+  - Evidence: the same two tests place a secret string in the mocked `reason` field and the source text, and assert neither appears in the warnings or in the serialized decision records (`model_dump_json`). Passes on the head.
+- [x] TC2.04 Mutation check (R6): invert the confidence comparison and make the no-change check always false; show TC2.01 and TC2.02 fail.
+  - Evidence: on scratch edits of `llm/__init__.py` (restored with `git checkout`, no diff afterwards): inverting the classification threshold (`< 0.75` → `> 0.75`) fails `test_a_classification_below_the_threshold_is_rejected_and_warned_about`; disabling the no-change check fails `test_a_narration_identical_to_its_source_is_rejected_as_no_change`.
 
 ## Phase TC3 — Commit recovery and conversion faults (R3, R4)
 
