@@ -482,8 +482,9 @@ The executable `pdf2audiobook` maps to `pdf2audiobook.cli:main`
    metadata); it keeps only the output paths and the cover image.
 6. `workspace.py`: SHA-256 identities and atomic JSON writes;
    `pipeline.py`: the facade and entry points (`analyze_book`,
-   `convert_book`), stage fingerprints and chapter selection; `analysis.py`:
-   the analysis steps and approved-edit protection; `conversion.py`: resumable
+   `convert_book`), stage fingerprints and chapter selection; `analysis/`:
+   the analysis steps (state, extraction, cleanup, LLM proposals, hand edits, review and writing,
+   and the orchestrator) and approved-edit protection; `conversion.py`: resumable
    synthesis and output checksums.
 
 Typical call path:
@@ -516,7 +517,7 @@ before anything is reserved, sent or written.
   6. `_merge_hand_edits`: the hand-edit merge, using `_HandEditMerge`.
   7. `_chapter_review`, then `_write_analysis`.
 
-  `tests/test_patch_targets.py` fails if `analysis.py` or `conversion.py`
+  `tests/test_patch_targets.py` fails if any `analysis/` module or `conversion.py`
   calls a name that tests patch on `pipeline` directly instead of through its
   services record.
 - Conversion, `conversion._convert_analyzed_book` (state in `_ConversionRun`;
@@ -637,7 +638,7 @@ before retrying. Do not delete an unresolved journal as a recovery shortcut.
 Transactions larger than 512 MiB are rejected before commit; the encoded journal includes the
 manifest and any generated chapter files being published.
 
-`pipeline.py` is the entry point: it delegates analysis to `analysis.py` and chapter conversion to `conversion.py`.
+`pipeline.py` is the entry point: it delegates analysis to the `analysis/` package and chapter conversion to `conversion.py`.
 `analysis_state.py` preserves reviewed decisions, `chapter_selection.py` applies review gates,
 and `tts/selection.py` resolves profiles and model identities. The document package separates
 chapter detection (`structure.py`), pagination, coverage, list classification and narration.

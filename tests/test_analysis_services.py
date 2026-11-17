@@ -1,7 +1,7 @@
 """A name patched on `pipeline` reaches the analysis code (module split MS4.03).
 
 Each test wraps a `pipeline` name with a recorder, runs `analyze_book`, and
-asserts that code in `pdf2audiobook.analysis` called the patched object. If
+asserts that code in the `pdf2audiobook.analysis` package called the patched object. If
 `pipeline._analysis_services()` passed the original instead, the recorder
 would never see a call from analysis.
 """
@@ -17,6 +17,11 @@ from pdf2audiobook.config import LLM, General, Settings
 from pdf2audiobook.models import Chapter, DocumentBlock
 
 ANALYSIS = "pdf2audiobook.analysis"
+
+
+def _called_from_analysis(callers):
+    """Whether a call came from the analysis package (any of its modules)."""
+    return any(caller == ANALYSIS or caller.startswith(ANALYSIS + ".") for caller in callers)
 
 
 def _record_callers(monkeypatch, name, replacement=None):
@@ -53,7 +58,7 @@ def test_patched_name_is_called_by_analysis(tmp_path, monkeypatch, name):
 
     pipeline.analyze_book(source, settings)
 
-    assert ANALYSIS in callers
+    assert _called_from_analysis(callers)
 
 
 def test_patched_read_manifest_is_called_when_analysis_is_reused(tmp_path, monkeypatch):
@@ -63,7 +68,7 @@ def test_patched_read_manifest_is_called_when_analysis_is_reused(tmp_path, monke
 
     pipeline.analyze_book(source, settings)
 
-    assert ANALYSIS in callers
+    assert _called_from_analysis(callers)
 
 
 class _Provider:
@@ -110,4 +115,4 @@ def test_patched_cached_llm_provider_wraps_the_analysis_provider(tmp_path, monke
 
     pipeline.analyze_book(source, settings)
 
-    assert ANALYSIS in callers
+    assert _called_from_analysis(callers)

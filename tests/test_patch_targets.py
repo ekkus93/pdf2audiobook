@@ -17,7 +17,15 @@ PATCH = re.compile(r"""setattr\(\s*(?:"pdf2audiobook\.pipeline\.(\w+)"|pipeline\
 DIRECT_USE_ALLOWED = {
     # The tests that patch these on `pipeline` exercise analysis only.
     "conversion.py": {"digest_file", "write_json"},
-    "analysis.py": set(),
+    # The analysis package: none of its modules may use a patched pipeline name directly.
+    "analysis/__init__.py": set(),
+    "analysis/state.py": set(),
+    "analysis/start.py": set(),
+    "analysis/cleanup.py": set(),
+    "analysis/llm.py": set(),
+    "analysis/hand_edits.py": set(),
+    "analysis/review.py": set(),
+    "analysis/analyze.py": set(),
 }
 
 
