@@ -1,6 +1,6 @@
 # PDF2Audiobook — Test Coverage TODO, Round 3
 
-**Status:** In progress. Phases TC0–TC5 are worked; six items are open and need a decision or a push (TC1.06, TC3.02, TC3.03, TC3.05, TC4.05, TC5.03), see the Notes and "Found while testing". Scope and requirements: `docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_SPEC.md` (R1–R7).
+**Status:** Complete as of `a42a718`: every item is checked, and CI passes on that commit (Python CI #901 and Desktop CI #56). Caveats are kept in the Notes: the one unreproduced coverage-run failure (TC5.02), and the test suite's sensitivity to forced colour (TC5.02 Note). Scope and requirements: `docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_SPEC.md` (R1–R7).
 **Date:** 2026-11-17
 **Baseline:** master head 5bbe03e (branch `tauri`), 95% statement coverage, 2612 passed, 4 skipped.
 **Specification:** `docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_SPEC.md`
@@ -89,13 +89,21 @@
 - [x] TC5.02 Full Python suite passes with the same skips as before (the opt-in smoke tests only); ruff, format and mypy on 3.11–3.13 are clean.
   - Evidence: at the head after TC4: `pytest -q -ra` → 2669 passed, 4 skipped (the same four opt-in smoke tests as before: `test_kitten_real_smoke.py`, three in `test_verification_backends.py`), 2 xfailed (the two defects in "Found while testing"). `ruff check .` and `ruff format --check .` clean. mypy clean on 3.12 and 3.13 (and 3.11 in the earlier checks of this round). Mypy on 3.11 was not repeated after the last test additions; tests are outside mypy's file list.
   - Evidence (final head): `ruff check .` and `ruff format --check .` clean; mypy `--python-version` 3.11, 3.12 and 3.13: no issues in 101 source files; `pytest -q -ra` → 2678 passed, 4 skipped (the opt-in smoke tests only), 0 failed, 0 xfailed.
-  - Note: one earlier coverage run (of four) failed one test, and the test's name was not recorded. Three more runs of the same state, and the final run, passed in full. The failure is not explained and is not reproduced; it is noted here rather than hidden.
+  - Note: one earlier coverage run (of four) failed one test, and the test's name was not recorded. Three more runs of the same state, and the final run, passed in full. The failure is not explained and is not reproduced; it is noted here rather than hidden. Separately, with `FORCE_COLOR=1` set, 21 tests in files outside this round (for example `test_workspace_failures_privacy.py`, `test_review_gate_current_state.py`) fail because they compare raw output that includes colour codes. They pass in CI and in the default run, so they were left alone.
 
-- [ ] TC5.03 CI passes on the final commit; ledger rows added to this file and to `docs/PDF2AUDIOBOOK_TODO.md` with the full SHA and run IDs.
-  - Evidence: not run yet.
-  - Note: blocked. CI runs only after a push, and this loop doesn't push without being asked. Once the user says to push, CI can be read with `gh api` and the ledger rows written in a separate `docs:` commit.
+- [x] TC5.03 CI passes on the final commit; ledger rows added to this file and to `docs/PDF2AUDIOBOOK_TODO.md` with the full SHA and run IDs.
+  - Evidence: CI on the final commit `a42a71834f50bf98fcca07beb0470dfb5a19731b`: Python CI #901 [44042422897](https://github.com/ekkus93/pdf2audiobook/actions/runs/44042422897) success on 3.11, 3.12 and 3.13; Desktop CI #56 [44042422948](https://github.com/ekkus93/pdf2audiobook/actions/runs/44042422948) success. Ledger rows are in the "Progress ledger" below and in `docs/PDF2AUDIOBOOK_TODO.md`, with the failed attempts on `9212df7` (#899) and `3e76569` (#900).
+  - Note: the first two pushes failed CI on one CLI test (footnote-policy wording). The cause was width and colour in CI's output, not the product. The test now pins the width and strips colour codes, and the final run passed.
 
 ## Found while testing
 
 - **TC3.02, a vanished staged MP3 publishes the new sidecar (resolved).** `commit_chapter_audio` (`audio/commit.py`, `_finish`) skips the MP3 rename when the staged MP3 is missing, but still renames the staged sidecar. The commit then returns success, with the previous MP3 and the sidecar of audio that was never published. The stale check would flag the mismatch, but the module's own promise ("never left with an MP3 and a sidecar that don't belong together") does not hold. Test: `test_a_staged_mp3_that_vanishes_mid_commit_fails_and_keeps_the_old_sidecar` (strict xfail). Resolved in `audio/commit.py` on the owner's instruction; see TC3.02 and TC3.03.
 - **TC1.06, backend load errors are not content-free (resolved).** `WhisperBackend._load` (`verification/backends.py`) lets the library's load exception through unchanged. With a message that includes the weights path, the path reaches the caller (`RuntimeError: cannot read weights at <path>`). The run layer masks it in reports, but the backend's error does not meet `CLAUDE.md`'s content-free rule. Test: `test_a_model_that_fails_to_load_raises_a_content_free_error` (xfail, strict). The fix (wrap load errors in `AudioError` with fixed text) is a source change, not a test change, so it is for the owner to decide.
+
+## Progress ledger
+
+| Date | Master SHA | Completed tasks | Tests/CI | Blockers |
+| --- | --- | --- | --- | --- |
+| 2026-11-17 | 9212df79774611fcd01fc2142079d178bf427847 | Test coverage round 3 TC1.06, TC3.02–TC3.05, TC4.05 (docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_TODO.md), pushed with 451386a…9212df7 | Python CI #899 [44040242466](https://github.com/ekkus93/pdf2audiobook/actions/runs/44040242466) failure (CLI footnote-policy test: Typer's usage panel was cut at CI's width); Desktop CI #54 [44040242399](https://github.com/ekkus93/pdf2audiobook/actions/runs/44040242399) success | None |
+| 2026-11-17 | 3e76569e1651864524ef993b78666067cc1559d9 | Test coverage round 3: pin the terminal width in the CLI tests (docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_TODO.md) | Python CI #900 [44041360736](https://github.com/ekkus93/pdf2audiobook/actions/runs/44041360736) failure (same test: CI forces colour, so codes split the expected text); Desktop CI #55 [44041360829](https://github.com/ekkus93/pdf2audiobook/actions/runs/44041360829) success | None |
+| 2026-11-17 | a42a71834f50bf98fcca07beb0470dfb5a19731b | Test coverage round 3: compare error text without colour codes; final head of round 3 (docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_TODO.md) | Python CI #901 [44042422897](https://github.com/ekkus93/pdf2audiobook/actions/runs/44042422897) success (3.11, 3.12, 3.13); Desktop CI #56 [44042422948](https://github.com/ekkus93/pdf2audiobook/actions/runs/44042422948) success | None |
