@@ -359,7 +359,7 @@ def test_a_model_that_fails_to_load_raises_a_content_free_error(
     with pytest.raises(AudioError) as raised:
         WhisperBackend(tmp_path).transcribe(wav, should_stop=lambda: False)
 
-    assert str(tmp_path) not in str(raised.value)
+    assert str(raised.value) == "The Whisper speech recognizer could not be loaded"
 
 
 @pytest.mark.parametrize("raised", [KeyboardInterrupt, AudioError("already a fixed message")])
