@@ -27,6 +27,11 @@ def _output(result: Any) -> str:
     return result.output + getattr(result, "stderr", "")
 
 
+def _interrupt_error(result: Any) -> str:
+    """The error type of a JSON-mode command's final stderr line."""
+    return json.loads(result.stderr.strip().splitlines()[-1])["error"]["type"]
+
+
 def _pdf(path: Path, pages: int = 1) -> Path:
     document = fitz.open()
     for index in range(pages):
@@ -103,6 +108,7 @@ def test_asr_fetch_interrupted_exits_130(monkeypatch: pytest.MonkeyPatch) -> Non
     result = runner.invoke(app, ["asr", "fetch", "whisper", "--json"])
 
     assert result.exit_code == 130
+    assert _interrupt_error(result) == "Interrupted"
 
 
 # --- TC4.02: regenerate-chapter and recover ----------------------------------------------
@@ -158,6 +164,10 @@ def test_regenerate_chapter_passes_interrupts_and_exits_through(
     result = runner.invoke(app, ["regenerate-chapter", str(manifest), "--chapter", "1", "--json"])
 
     assert result.exit_code == expected_exit
+    if expected_exit == 130:
+        assert _interrupt_error(result) == "Interrupted"
+    else:
+        assert str(tmp_path) not in _output(result)
 
 
 def test_recover_lists_its_backups_in_the_human_output(
@@ -192,6 +202,10 @@ def test_recover_passes_interrupts_and_exits_through(
     result = runner.invoke(app, ["recover", str(manifest), "--json"])
 
     assert result.exit_code == expected_exit
+    if expected_exit == 130:
+        assert _interrupt_error(result) == "Interrupted"
+    else:
+        assert str(tmp_path) not in _output(result)
 
 
 # --- TC4.03: batch -----------------------------------------------------------------------
@@ -284,6 +298,7 @@ def test_batch_interrupted_while_converting_exits_130(
     result = runner.invoke(app, ["batch", str(books), "--no-config", "--json"])
 
     assert result.exit_code == 130
+    assert _interrupt_error(result) == "Interrupted"
 
 
 def test_batch_interrupted_before_any_book_exits_130(
@@ -300,6 +315,7 @@ def test_batch_interrupted_before_any_book_exits_130(
     result = runner.invoke(app, ["batch", str(books), "--no-config", "--json"])
 
     assert result.exit_code == 130
+    assert _interrupt_error(result) == "Interrupted"
 
 
 def test_batch_records_an_os_failure_as_a_failed_book(
@@ -344,6 +360,7 @@ def test_verify_audio_interrupted_exits_130(
     result = runner.invoke(app, ["verify-audio", str(manifest), "--json"])
 
     assert result.exit_code == 130
+    assert _interrupt_error(result) == "Interrupted"
 
 
 def test_verify_audio_passes_an_exit_code_through(
@@ -359,6 +376,7 @@ def test_verify_audio_passes_an_exit_code_through(
     result = runner.invoke(app, ["verify-audio", str(manifest), "--json"])
 
     assert result.exit_code == 4
+    assert str(tmp_path) not in _output(result)
 
 
 def test_audio_report_says_when_a_book_is_not_verified_yet(
@@ -436,6 +454,7 @@ def test_audio_report_dismiss_passes_an_exit_code_through(
     )
 
     assert result.exit_code == 5
+    assert str(tmp_path) not in _output(result)
 
 
 def test_the_convert_verify_hook_does_nothing_without_outputs() -> None:
@@ -514,6 +533,10 @@ def test_resynthesize_passes_interrupts_and_exits_through(
     )
 
     assert result.exit_code == expected_exit
+    if expected_exit == 130:
+        assert _interrupt_error(result) == "Interrupted"
+    else:
+        assert str(tmp_path) not in _output(result)
 
 
 def test_audio_report_show_passes_an_exit_code_through(
@@ -531,6 +554,7 @@ def test_audio_report_show_passes_an_exit_code_through(
     result = runner.invoke(app, ["audio-report", "show", str(manifest), "--json"])
 
     assert result.exit_code == 7
+    assert str(tmp_path) not in _output(result)
 
 
 def test_audio_report_show_failure_names_no_path(
