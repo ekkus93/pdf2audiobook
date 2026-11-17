@@ -22,8 +22,11 @@ On Ubuntu 22.04 or newer, install Tauri's system libraries with:
 ```bash
 sudo apt install pkg-config libwebkit2gtk-4.1-dev libsoup-3.0-dev \
   libayatana-appindicator3-dev librsvg2-dev libssl-dev libgtk-3-dev \
-  build-essential file patchelf libxdo-dev
+  build-essential file patchelf libxdo-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good
 ```
+
+The AppImage build bundles these GStreamer plugins, so they must be installed before building
+(see [Building an installer](#building-an-installer)). CI installs these GStreamer packages too.
 
 Install the CLI from a checkout of this repository (the app doesn't bundle Python):
 

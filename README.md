@@ -12,8 +12,9 @@ nothing it suggests reaches the audio until you approve it.
 
 **Status:** Working CLI with offline end-to-end fixture coverage. Real Kitten synthesis is an opt-in smoke test; live OpenAI and llama-server acceptance remains deferred. See the [specification](docs/PDF2AUDIOBOOK_SPEC.md), [implementation TODO](docs/PDF2AUDIOBOOK_TODO.md), and [installation/maintainer guide](docs/MAINTAINER_GUIDE.md).
 
-**Desktop app:** a Tauri desktop app is being built on the `tauri` branch; see
-[desktop/README.md](desktop/README.md).
+**Desktop app:** a Tauri desktop app in [`desktop/`](desktop/README.md). It runs this CLI, so
+install the CLI first. It is in development and Linux-only for now. To build an AppImage or a
+`.deb`, follow [Building an installer](desktop/README.md#building-an-installer).
 
 **Contents:**
 [Requirements](#requirements) ·
@@ -36,6 +37,7 @@ nothing it suggests reaches the audio until you approve it.
 | Kitten TTS | The default voice | A Python extra: `uv sync --extra kitten`. The first conversion downloads the model. |
 | Ollama | Optional LLM assistance | Not needed with `--no-llm`. See [Using a local LLM](#using-a-local-llm-ollama). |
 | Node 22 | A few page-script tests | Those tests skip when `node` isn't installed. |
+| Desktop app | Building or running the desktop app | Rust, Node 22 and Tauri's Linux libraries. See [desktop/README.md](desktop/README.md). |
 
 Piper is an alternative voice that you install separately; see [Voices and speech](#voices-and-speech).
 
@@ -310,6 +312,10 @@ failure: `review_required`, `review_acknowledgement_required`, `workspace_locked
 `pending_recovery`, `chapter_conflict`, `llm_unreachable`, `llm_context_too_small`,
 `llm_output_cap` or `budget_exhausted`. For example, exit 6 with `review_required` means "open
 the review page", while exit 6 without a reason is an audio failure.
+
+Some commands (for example `verify-audio` and `resynthesize`) stop with the exit code of the
+check they ran. Then the message is the fixed line `The command stopped with exit code N.`, and
+with `--json` its error `type` is `Stopped`, with the same `code`.
 
 ### PDF and EPUB input
 
