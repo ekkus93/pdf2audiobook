@@ -21,6 +21,18 @@ def _served_ollama_context(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _wide_terminal(monkeypatch):
+    # Rich wraps human-mode error text to the terminal width; CI has no terminal, so pin a wide one
+    # and keep colour codes out of the captured text (CI run 44040242466). The CLI's module-level
+    # console reads its width at import, so it is pinned directly; Typer's own consoles read the env.
+    from pdf2audiobook.cli import _core
+
+    monkeypatch.setenv("COLUMNS", "200")
+    monkeypatch.setenv("NO_COLOR", "1")
+    monkeypatch.setattr(_core.console, "width", 200)
+
+
+@pytest.fixture(autouse=True)
 def _default_event_policy():
     """Start every test from the CLI's default logging policy, as a fresh process would."""
     from pdf2audiobook.logging import configure_logging, use_default_event_policy
