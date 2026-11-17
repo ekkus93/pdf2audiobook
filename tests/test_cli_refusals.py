@@ -32,6 +32,19 @@ def _interrupt_error(result: Any) -> str:
     return json.loads(result.stderr.strip().splitlines()[-1])["error"]["type"]
 
 
+def _stopped(result: Any) -> dict[str, Any]:
+    """The error object of a JSON-mode command's final stderr line."""
+    return json.loads(result.stderr.strip().splitlines()[-1])["error"]
+
+
+def _stopped_message(code: int) -> dict[str, Any]:
+    return {
+        "type": "Stopped",
+        "code": code,
+        "message": f"The command stopped with exit code {code}.",
+    }
+
+
 def _pdf(path: Path, pages: int = 1) -> Path:
     document = fitz.open()
     for index in range(pages):
@@ -167,6 +180,7 @@ def test_regenerate_chapter_passes_interrupts_and_exits_through(
     if expected_exit == 130:
         assert _interrupt_error(result) == "Interrupted"
     else:
+        assert _stopped(result) == _stopped_message(expected_exit)
         assert str(tmp_path) not in _output(result)
 
 
@@ -205,6 +219,7 @@ def test_recover_passes_interrupts_and_exits_through(
     if expected_exit == 130:
         assert _interrupt_error(result) == "Interrupted"
     else:
+        assert _stopped(result) == _stopped_message(expected_exit)
         assert str(tmp_path) not in _output(result)
 
 
@@ -376,7 +391,25 @@ def test_verify_audio_passes_an_exit_code_through(
     result = runner.invoke(app, ["verify-audio", str(manifest), "--json"])
 
     assert result.exit_code == 4
+    assert _stopped(result) == _stopped_message(4)
     assert str(tmp_path) not in _output(result)
+
+
+def test_a_passthrough_exit_prints_the_fixed_message_in_human_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    manifest = _manifest(tmp_path / "book")
+    _stub_manifest(monkeypatch)
+
+    def stop(*args: Any, **kwargs: Any) -> None:
+        raise typer.Exit(4)
+
+    monkeypatch.setattr("pdf2audiobook.verification.run.verify_book", stop)
+    result = runner.invoke(app, ["verify-audio", str(manifest)])
+
+    assert result.exit_code == 4
+    assert "The command stopped with exit code 4." in result.output
+    assert str(tmp_path) not in result.output
 
 
 def test_audio_report_says_when_a_book_is_not_verified_yet(
@@ -454,6 +487,7 @@ def test_audio_report_dismiss_passes_an_exit_code_through(
     )
 
     assert result.exit_code == 5
+    assert _stopped(result) == _stopped_message(5)
     assert str(tmp_path) not in _output(result)
 
 
@@ -536,6 +570,7 @@ def test_resynthesize_passes_interrupts_and_exits_through(
     if expected_exit == 130:
         assert _interrupt_error(result) == "Interrupted"
     else:
+        assert _stopped(result) == _stopped_message(expected_exit)
         assert str(tmp_path) not in _output(result)
 
 
@@ -554,6 +589,7 @@ def test_audio_report_show_passes_an_exit_code_through(
     result = runner.invoke(app, ["audio-report", "show", str(manifest), "--json"])
 
     assert result.exit_code == 7
+    assert _stopped(result) == _stopped_message(7)
     assert str(tmp_path) not in _output(result)
 
 

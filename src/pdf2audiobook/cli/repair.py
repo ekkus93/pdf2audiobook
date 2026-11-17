@@ -13,6 +13,7 @@ from pdf2audiobook.cli._core import (
     emit,
     fail,
     fail_interrupted,
+    stop_with_message,
 )
 from pdf2audiobook.logging import (
     set_output_mode,
@@ -59,8 +60,8 @@ def regenerate_chapter(
         emit(payload, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
-    except (typer.Exit, ClickExit):
-        raise
+    except (typer.Exit, ClickExit) as exc:
+        stop_with_message(exc, json_output=json_output)
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -91,7 +92,7 @@ def recover(
         emit(payload, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
-    except (typer.Exit, ClickExit):
-        raise
+    except (typer.Exit, ClickExit) as exc:
+        stop_with_message(exc, json_output=json_output)
     except Exception as exc:
         fail(exc, json_output=json_output)

@@ -18,6 +18,7 @@ from pdf2audiobook.cli._core import (
     emit,
     fail,
     fail_interrupted,
+    stop_with_message,
 )
 from pdf2audiobook.config import Settings, load_settings
 from pdf2audiobook.errors import (
@@ -92,8 +93,8 @@ def verify_audio(
     except KeyboardInterrupt:
         reporter.close()
         fail_interrupted(json_output=json_output)
-    except (typer.Exit, ClickExit):
-        raise
+    except (typer.Exit, ClickExit) as exc:
+        stop_with_message(exc, json_output=json_output)
     except Exception as exc:
         reporter.close()
         fail(exc, json_output=json_output)
@@ -130,8 +131,8 @@ def audio_report_show(
             typer.echo(report_text(report))
             if stale:
                 typer.echo("Out of date (verify again): chapter(s) " + ", ".join(map(str, stale)))
-    except (typer.Exit, ClickExit):
-        raise
+    except (typer.Exit, ClickExit) as exc:
+        stop_with_message(exc, json_output=json_output)
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -161,8 +162,8 @@ def audio_report_dismiss(
             emit(payload, json_output)
         else:
             typer.echo("Marked reviewed." if not undo else "Marked not reviewed.")
-    except (typer.Exit, ClickExit):
-        raise
+    except (typer.Exit, ClickExit) as exc:
+        stop_with_message(exc, json_output=json_output)
     except Exception as exc:
         fail(exc, json_output=json_output)
 
@@ -306,7 +307,7 @@ def resynthesize(
             console.print(verification[2])
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
-    except (typer.Exit, ClickExit):
-        raise
+    except (typer.Exit, ClickExit) as exc:
+        stop_with_message(exc, json_output=json_output)
     except Exception as exc:
         fail(exc, json_output=json_output)

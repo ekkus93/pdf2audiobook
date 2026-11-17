@@ -132,6 +132,35 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
     raise typer.Exit(code=code) from exc
 
 
+def stop_with_message(exc: BaseException, *, json_output: bool = False) -> None:
+    """Pass a deliberate exit code through, with a fixed message saying what happened.
+
+    A command that stops with a non-zero exit code says so, in the same JSON or human form as
+    `fail`, and exits with the same code. The message holds the code only, never a path.
+    """
+    code = int(getattr(exc, "exit_code", 0) or 0)
+    if code == 0:
+        raise exc
+    message = f"The command stopped with exit code {code}."
+    log_event("command_stopped", level=logging.WARNING, error_code=code)
+    if json_output:
+        warnings = take_warning_codes()
+        typer.echo(
+            json.dumps(
+                {
+                    "ok": False,
+                    "error": {"type": "Stopped", "code": code, "message": message},
+                    "warnings": warnings,
+                },
+                ensure_ascii=False,
+            ),
+            err=True,
+        )
+    else:
+        console.print(f"[red]Error:[/red] {message}")
+    raise typer.Exit(code=code) from exc
+
+
 def fail_interrupted(*, json_output: bool = False) -> None:
     """Exit cleanly and privately when the operator interrupts a command."""
     message = "Interrupted"
