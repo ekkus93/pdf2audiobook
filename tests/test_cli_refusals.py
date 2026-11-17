@@ -8,6 +8,7 @@ inside its body are replaced with stand-ins, the same way the existing CLI tests
 from __future__ import annotations
 
 import json
+import re
 import types
 from pathlib import Path
 from typing import Any
@@ -23,8 +24,12 @@ runner = CliRunner()
 MARKER = "PRIVATE-PATH-MARKER-4471"
 
 
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def _output(result: Any) -> str:
-    return result.output + getattr(result, "stderr", "")
+    # Colour codes are stripped: CI forces colour, and they split words the tests look for.
+    return _ANSI.sub("", result.output + getattr(result, "stderr", ""))
 
 
 def _interrupt_error(result: Any) -> str:
@@ -408,8 +413,8 @@ def test_a_passthrough_exit_prints_the_fixed_message_in_human_output(
     result = runner.invoke(app, ["verify-audio", str(manifest)])
 
     assert result.exit_code == 4
-    assert "The command stopped with exit code 4." in result.output
-    assert str(tmp_path) not in result.output
+    assert "The command stopped with exit code 4." in _output(result)
+    assert str(tmp_path) not in _output(result)
 
 
 def test_audio_report_says_when_a_book_is_not_verified_yet(
