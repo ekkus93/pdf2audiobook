@@ -1,6 +1,6 @@
 # Test Coverage Specification, Round 3
 
-**Status:** Proposed. Adds tests for the code paths a coverage run found untested at the current head. It changes no behavior and, unless a test exposes a defect, no code under `src/`.
+**Status:** Complete. The coverage work and any fixes for defects exposed by its tests are recorded in `PDF2AUDIOBOOK_TEST_COVERAGE_3_TODO.md`.
 **Date:** 2026-11-17
 **Baseline:** master head 5bbe03e (branch `tauri`). Coverage measured with `pytest --cov=pdf2audiobook --cov-report=term-missing` plus `pytest-cov`: 10,201 statements, 483 missed, 95% overall.
 **Companion:** `docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_TODO.md`. Earlier rounds: `PDF2AUDIOBOOK_TEST_COVERAGE_SPEC.md` and `..._2_SPEC.md`.
