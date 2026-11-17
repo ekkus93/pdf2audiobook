@@ -1,6 +1,6 @@
 # PDF2Audiobook — Test Coverage TODO, Round 3
 
-**Status:** Not started. Scope and requirements: `docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_SPEC.md` (R1–R7).
+**Status:** In progress. Phases TC0–TC5 are worked; six items are open and need a decision or a push (TC1.06, TC3.02, TC3.03, TC3.05, TC4.05, TC5.03), see the Notes and "Found while testing". Scope and requirements: `docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_SPEC.md` (R1–R7).
 **Date:** 2026-11-17
 **Baseline:** master head 5bbe03e (branch `tauri`), 95% statement coverage, 2612 passed, 4 skipped.
 **Specification:** `docs/PDF2AUDIOBOOK_TEST_COVERAGE_3_SPEC.md`
@@ -81,12 +81,13 @@
 
 ## Phase TC5 — Acceptance
 
-- [ ] TC5.01 Re-run the coverage command and record each target's new statements missed / total, and the overall figure (R7). Name any target still short, with the reason.
-  - Evidence: not run yet.
-- [ ] TC5.02 Full Python suite passes with the same skips as before (the opt-in smoke tests only); ruff, format and mypy on 3.11–3.13 are clean.
-  - Evidence: not run yet.
+- [x] TC5.01 Re-run the coverage command and record each target's new statements missed / total, and the overall figure (R7). Name any target still short, with the reason.
+  - Evidence: the same command as TC0.01 at the head after TC4 (commit e7cf441 plus the two factory and readiness tests): 10,201 statements, 353 missed, 97% overall (was 483 missed, 95%). Target modules, missed before → after: `verification/backends.py` 73 → 1 (line 136, an end-of-file guard that doesn't normally run); `llm/__init__.py` 7 → 2 (lines 170–171: a no-change rejection in `propose_llm_cleanup`, which is not one of the §2 targets); `audio/commit.py` 7 → 0; `conversion.py` 20 → 16 (the §2 line 475–478 is covered; the remaining lines are outside §2); `cli/verify.py` 17 → 0; `cli/batch.py` 11 → 1 (line 127, a re-raise of `typer.Exit` inside an exception handler); `cli/repair.py` 7 → 0; `cli/asr.py` 8 → 1 (line 31, the same re-raise). Partial-branch counts were not measured. Shortfalls: the single lines named above, all with the reasons given.
+- [x] TC5.02 Full Python suite passes with the same skips as before (the opt-in smoke tests only); ruff, format and mypy on 3.11–3.13 are clean.
+  - Evidence: at the head after TC4: `pytest -q -ra` → 2669 passed, 4 skipped (the same four opt-in smoke tests as before: `test_kitten_real_smoke.py`, three in `test_verification_backends.py`), 2 xfailed (the two defects in "Found while testing"). `ruff check .` and `ruff format --check .` clean. mypy clean on 3.12 and 3.13 (and 3.11 in the earlier checks of this round). Mypy on 3.11 was not repeated after the last test additions; tests are outside mypy's file list.
 - [ ] TC5.03 CI passes on the final commit; ledger rows added to this file and to `docs/PDF2AUDIOBOOK_TODO.md` with the full SHA and run IDs.
   - Evidence: not run yet.
+  - Note: blocked. CI runs only after a push, and this loop doesn't push without being asked. Once the user says to push, CI can be read with `gh api` and the ledger rows written in a separate `docs:` commit.
 
 ## Found while testing
 

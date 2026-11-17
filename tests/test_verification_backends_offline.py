@@ -365,3 +365,21 @@ def test_a_model_that_fails_to_load_raises_a_content_free_error(
         WhisperBackend(tmp_path).transcribe(wav, should_stop=lambda: False)
 
     assert str(tmp_path) not in str(raised.value)
+
+
+def test_the_backend_factory_builds_each_family_with_its_options(tmp_path: Path) -> None:
+    from pdf2audiobook.verification.backends import backend
+
+    built = backend("whisper", tmp_path, device="cpu", threads=2)
+
+    assert isinstance(built, WhisperBackend)
+    assert (built.device, built.threads) == ("cpu", 2)
+
+
+def test_readiness_reports_missing_weights_without_loading_the_library(tmp_path: Path) -> None:
+    # No library is installed for this test, and no weights exist under tmp_path: the report says so
+    # and nothing is imported or loaded.
+    state = WhisperBackend(tmp_path).readiness()
+
+    assert state.ready is False
+    assert state.reason is not None
