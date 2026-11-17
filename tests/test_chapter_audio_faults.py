@@ -262,3 +262,27 @@ def test_a_journal_whose_mp3_was_already_published_finishes_the_sidecar(tmp_path
     assert json.loads(record.read_text(encoding="utf-8"))["sha256"]  # the new sidecar is in place
     assert not commit._journal(output).exists()
     assert not staged_record.exists()
+
+
+def test_a_journal_with_no_staged_sidecar_keeps_the_previous_audio(tmp_path: Path) -> None:
+    output, record = _previous(tmp_path)
+    _journaled_commit(output, record, published=False)
+    commit.staged_path(output).with_suffix(".cache.json").unlink()
+    before = _state(output, record)
+
+    assert commit.recover_audio_commits(output.parent) == 0
+    assert _state(output, record) == before
+    assert not commit._journal(output).exists()
+
+
+def test_a_journal_with_an_unreadable_staged_sidecar_keeps_the_previous_audio(
+    tmp_path: Path,
+) -> None:
+    output, record = _previous(tmp_path)
+    _journaled_commit(output, record, published=False)
+    commit.staged_path(output).with_suffix(".cache.json").write_text("{not json", encoding="utf-8")
+    before = _state(output, record)
+
+    assert commit.recover_audio_commits(output.parent) == 0
+    assert _state(output, record) == before
+    assert not commit._journal(output).exists()
