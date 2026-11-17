@@ -362,6 +362,27 @@ def test_a_model_that_fails_to_load_raises_a_content_free_error(
     assert str(tmp_path) not in str(raised.value)
 
 
+@pytest.mark.parametrize("raised", [KeyboardInterrupt, AudioError("already a fixed message")])
+def test_a_load_that_is_stopped_or_already_fixed_passes_through_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raised: object
+) -> None:
+    _install_torch(monkeypatch)
+
+    def load_model(path: str, device: str) -> None:
+        raise raised  # type: ignore[misc]
+
+    whisper = types.ModuleType("whisper")
+    whisper.load_model = load_model  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "whisper", whisper)
+    wav = _write(tmp_path / "short.wav", _long_audio(2))
+
+    expected = raised if isinstance(raised, type) else type(raised)
+    with pytest.raises(expected) as caught:
+        WhisperBackend(tmp_path).transcribe(wav, should_stop=lambda: False)
+    if isinstance(raised, AudioError):
+        assert str(caught.value) == "already a fixed message"
+
+
 def test_the_backend_factory_builds_each_family_with_its_options(tmp_path: Path) -> None:
     from pdf2audiobook.verification.backends import backend
 
