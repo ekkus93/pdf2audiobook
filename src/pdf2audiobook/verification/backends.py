@@ -47,6 +47,17 @@ def _quiet() -> contextlib.redirect_stdout[io.StringIO]:
     return contextlib.redirect_stdout(io.StringIO())
 
 
+@contextlib.contextmanager
+def _loading(label: str) -> Iterator[None]:
+    """Turn a model-load failure into a fixed message: the library's text can hold a path (TC1.06)."""
+    try:
+        yield
+    except (Cancelled, KeyboardInterrupt, AudioError):
+        raise
+    except Exception:
+        raise AudioError(f"The {label} speech recognizer could not be loaded") from None
+
+
 def decode(source: Path, target: Path) -> Path:
     """Decode any audio FFmpeg reads to 16 kHz mono 16-bit WAV."""
     try:
@@ -207,7 +218,7 @@ class WhisperBackend(_Base):
     def _load(self) -> Any:
         if self._model is None:
             _threads(self.threads)
-            with _quiet():
+            with _loading("Whisper"), _quiet():
                 import whisper
 
                 device = _torch_device(self.device, self.threads)
@@ -244,7 +255,7 @@ class Wav2Vec2Backend(_Base):
     def _load(self) -> Any:
         if self._model is None:
             _threads(self.threads)
-            with _quiet():
+            with _loading("Wav2Vec2"), _quiet():
                 import transformers
 
                 transformers.logging.set_verbosity_error()
@@ -293,7 +304,7 @@ class VoskBackend(_Base):
 
     def _load(self) -> Any:
         if self._model is None:
-            with _quiet():
+            with _loading("Vosk"), _quiet():
                 from vosk import Model, SetLogLevel
 
                 SetLogLevel(-1)

@@ -343,11 +343,6 @@ def test_close_on_cpu_leaves_the_gpu_cache_alone(
 # --- TC1.06: a model that fails to load --------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the Whisper backend re-raises the library's load error unchanged, so its path can reach "
-    "the message (see 'Found while testing' in the TODO)",
-)
 def test_a_model_that_fails_to_load_raises_a_content_free_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
