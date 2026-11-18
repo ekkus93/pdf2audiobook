@@ -11,9 +11,9 @@ def _desktop() -> str:
     return (WORKFLOWS / "desktop.yml").read_text(encoding="utf-8")
 
 
-def test_it_runs_on_the_tauri_branch_and_pull_requests() -> None:
+def test_it_runs_on_master_and_pull_requests() -> None:
     workflow = _desktop()
-    assert re.search(r"^  push:\s+branches: \[master, tauri\]$", workflow, re.MULTILINE)
+    assert re.search(r"^  push:\s+branches: \[master\]$", workflow, re.MULTILINE)
     assert re.search(r"^  pull_request:$", workflow, re.MULTILINE)
 
 
