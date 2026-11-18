@@ -20,6 +20,7 @@ install the CLI first. It is in development and Linux-only for now. To build an 
 [Requirements](#requirements) ·
 [Development setup](#development-setup) ·
 [Linting and tests](#linting-type-checking-and-tests) ·
+[Desktop app](#desktop-app) ·
 [Walkthrough](#walkthrough-from-pdf-to-audiobook) ·
 [Using a local LLM](#using-a-local-llm-ollama) ·
 [Command reference](#command-reference) ·
@@ -87,6 +88,24 @@ uv run --extra dev pytest -q -ra       # the full test suite, with a summary of 
 
 CI also runs a CLI smoke test (`--help`, `config show --json`, `doctor --json`) and installs the
 built wheel and sdist into a clean virtual environment.
+
+## Desktop app
+
+The desktop app (Tauri 2, React and TypeScript) lives in [`desktop/`](desktop/README.md). It runs
+this CLI, so the CLI must be installed first. It is in development and Linux-only for now.
+
+~~~bash
+uv tool install ".[kitten]"              # the CLI the app runs (from the repository root)
+cd desktop
+npm ci && npm run tauri dev              # start the app with hot reload
+npm run tauri build -- --bundles appimage   # AppImage; use --bundles deb for a .deb
+~~~
+
+Install Tauri's Linux libraries, Rust, Node 22 and the GStreamer plugins before building; the
+[desktop README](desktop/README.md#requirements) lists the exact packages. The AppImage needs the
+GStreamer plugins to play audio, so [building an installer](desktop/README.md#building-an-installer)
+explains what to install first. The desktop README also covers the checks, the end-to-end
+walkthrough and the security notes.
 
 ## Walkthrough: from PDF to audiobook
 
