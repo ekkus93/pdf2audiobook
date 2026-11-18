@@ -3,7 +3,7 @@ name: Desktop CI
 # AppImage and .deb artifacts (D10.b, unsigned per D10.d), and the end-to-end walkthrough (D9.d).
 on:
   push:
-    branches: [master, tauri]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 permissions:
