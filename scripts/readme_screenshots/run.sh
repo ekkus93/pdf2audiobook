@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerate the README walkthrough images in docs/images/readme/.
+# Regenerate the docs/guides/getting-started.md walkthrough images in docs/images/readme/.
 #
 # Builds a small demo book in a temporary folder, runs each walkthrough step on it
 # with default settings (your own config is ignored) and saves the screenshots.
@@ -51,4 +51,4 @@ server=
 cap step-5-convert.svg -- convert lighthouse.pdf --no-llm
 cap step-6-pack-m4b.svg -- pack-m4b "$workspace/manifest.json" --output lighthouse.m4b
 echo "Workspace shown in the screenshots: $workspace"
-echo "If it changed, update the review and pack-m4b commands in README.md to match."
+echo "If it changed, update the review and pack-m4b commands in docs/guides/getting-started.md to match."

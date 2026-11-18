@@ -41,7 +41,7 @@ For the optional audio check (below), install the speech recognizers too, with
 
 The audio check is optional and off by default; see
 [`docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md`](../docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md)
-and the main README's [Checking the audio with speech recognition](../README.md#checking-the-audio-with-speech-recognition-optional).
+and the [audio verification guide](../docs/guides/audio-verification.md).
 
 - **Before converting:** switch on *Check the new audio with speech recognition* in the book's
   options (`convert --verify-audio`). The check runs after conversion, as part of the same run.
@@ -124,7 +124,8 @@ The "Desktop CI" workflow (`.github/workflows/desktop.yml`) runs all of the abov
 22.04, builds the AppImage and `.deb`, and uploads them as the `pdf2audiobook-desktop-linux-unsigned`
 artifact.
 
-The Python side has its own checks (see the main [README](../README.md#linting-type-checking-and-tests)).
+The Python side has its own checks; see
+[development and validation](../docs/guides/development.md#linting-type-checking-and-tests).
 `tests/test_desktop_versions.py` there fails if this app's version differs from `pyproject.toml`,
 so change the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml` and
 `src-tauri/tauri.conf.json` together with it.

@@ -1,0 +1,35 @@
+# Copy to ~/.config/pdf2audiobook/config.toml (or under $XDG_CONFIG_HOME).
+# Only settings you change need to be present; omitted fields use built-in defaults.
+# Store credentials in environment variables, never in this file.
+
+[general]
+output_dir = "./audiobooks"
+resume = true
+progress = "auto"
+
+[pdf]
+ocr = "auto"
+ocr_language = "eng"
+footnotes = "warn"
+
+[llm]
+# Start without LLM assistance. See llm.md before enabling local Ollama.
+# The application's built-in default is enabled = true.
+enabled = false
+provider = "ollama"
+allow_remote_content = false
+
+[tts]
+provider = "kitten"
+bitrate = "128k"
+sample_rate = 24000
+
+[tts.kitten]
+model = "mini"
+voice = "Jasper"
+speed = 1.0
+
+[reading]
+process_citations = true
+# Equation proposals need an LLM. When LLM assistance is disabled, the omitted
+# process_equations setting becomes inactive automatically.
