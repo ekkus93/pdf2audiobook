@@ -34,6 +34,12 @@ LINES = [
 runner = CliRunner()
 
 
+@pytest.fixture(autouse=True)
+def _host_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fake-backend CLI tests must not depend on the test machine's RAM."""
+    monkeypatch.setattr(verify_run, "_memory_bytes", lambda: 16 * 1024**3)
+
+
 class _Kitten:
     sample_rate = 24000
     supports_voice_listing = True
@@ -170,6 +176,37 @@ def test_json_follows_the_contract_and_votes(
         **report,
         "warnings": [],
     }
+
+
+@pytest.mark.parametrize(
+    ("memory", "device", "ready", "warnings"),
+    [
+        (4 * 1024**3, "cpu", True, ["whisper_low_memory"]),
+        (8 * 1024**3, "cpu", True, []),
+        (16 * 1024**3, "cpu", True, []),
+        (None, "cpu", True, []),
+        (4 * 1024**3, "cuda", True, []),
+        (4 * 1024**3, "cpu", False, []),
+    ],
+)
+def test_whisper_memory_warning_depends_on_ram_device_and_readiness(
+    book: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    memory: int | None,
+    device: str,
+    ready: bool,
+    warnings: list[str],
+) -> None:
+    monkeypatch.setattr(verify_run, "_memory_bytes", lambda: memory)
+    backend = FakeBackend("whisper", _scripts(book), ready=ready)
+    _use(monkeypatch, {"whisper": backend})
+    result = _verify(book, "--models", "whisper", "--device", device, "--json")
+    assert result.exit_code == 0, result.output
+    report = json.loads(result.stdout)
+    assert report["warnings"] == warnings
+    saved = book["workspace"] / "reports" / "audio_verification.json"
+    assert json.loads(saved.read_text())["warnings"] == warnings
+    assert bool(backend.heard) is ready
 
 
 def test_a_model_subset_is_partial(book: dict[str, Any], monkeypatch: pytest.MonkeyPatch) -> None:
@@ -693,14 +730,25 @@ def test_an_undecodable_chapter_is_reported_and_the_audio_is_left_alone(
     assert "ffmpeg_missing" not in report["warnings"]
 
 
+@pytest.mark.parametrize(
+    ("memory", "warnings"),
+    [
+        (16 * 1024**3, ["ffmpeg_missing"]),
+        (4 * 1024**3, ["whisper_low_memory", "ffmpeg_missing"]),
+    ],
+)
 def test_a_missing_ffmpeg_is_said_once_and_no_chapter_is_listened_to(
-    book: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    book: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    memory: int,
+    warnings: list[str],
 ) -> None:
+    monkeypatch.setattr(verify_run, "_memory_bytes", lambda: memory)
     monkeypatch.setenv("PATH", "")  # no FFmpeg anywhere: the lookup and the decode both fail
     backends = {m: FakeBackend(m, _scripts(book)) for m in ("whisper", "wav2vec2", "vosk")}
     _use(monkeypatch, backends)
-    report = json.loads(_verify(book, "--json").stdout)
-    assert report["warnings"] == ["ffmpeg_missing"]
+    report = json.loads(_verify(book, "--device", "cpu", "--json").stdout)
+    assert report["warnings"] == warnings
     assert {c["reason"] for c in report["chapters"]} == {"audio_undecodable"}
     assert all(not b.heard for b in backends.values())
 
