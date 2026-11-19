@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 dependencies = ["typer>=0.12,<1", "pydantic>=2.7,<3", "rich>=13,<15", "PyMuPDF>=1.24,<2", "mutagen>=1.47,<2", "numpy>=1.26,<3", "httpx>=0.27,<1", "tqdm>=4.66,<5"]
 
 [project.optional-dependencies]
-kitten = ["kittenml>=0.9.4,<0.10"]
+kitten = ["kittenml==0.9.6"]
 # Optional speech recognizers for `verify-audio` (docs/PDF2AUDIOBOOK_AUDIO_VERIFICATION_SPEC.md §12).
 asr-whisper = ["openai-whisper==20250625"]
 asr-wav2vec2 = ["transformers>=4.40,<6", "torch>=2.4,<3"]
@@ -24,6 +24,9 @@ pdf2audiobook = "pdf2audiobook.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+pdf2audiobook = ["tts/kitten2_manifest.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -70,6 +73,8 @@ files = [
     "src/pdf2audiobook/llm/cache_request.py",
     "src/pdf2audiobook/tts/__init__.py",
     "src/pdf2audiobook/tts/selection.py",
+    "src/pdf2audiobook/tts/catalog.py",
+    "src/pdf2audiobook/tts/private.py",
     "src/pdf2audiobook/document/structure.py",
     "src/pdf2audiobook/document/labels.py",
     "src/pdf2audiobook/document/contents.py",

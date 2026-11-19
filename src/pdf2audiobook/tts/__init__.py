@@ -20,7 +20,11 @@ KITTEN_MODEL_ALIASES = {
     "mini": "KittenML/kitten-tts-mini-0.8",
     "micro": "KittenML/kitten-tts-micro-0.8",
     "nano": "KittenML/kitten-tts-nano-0.8",
+    "kitten2": "KittenML/kitten-tts-2",
 }
+
+
+KITTEN_BUILTIN_VOICES = ("Bella", "Jasper", "Luna", "Bruno", "Rosie", "Hugo", "Kiki", "Leo")
 
 
 @runtime_checkable

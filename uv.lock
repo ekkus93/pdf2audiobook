@@ -1963,7 +1963,7 @@ kitten = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.27,<1" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.23,<5" },
-    { name = "kittenml", marker = "extra == 'kitten'", specifier = ">=0.9.4,<0.10" },
+    { name = "kittenml", marker = "extra == 'kitten'", specifier = "==0.9.6" },
     { name = "mutagen", specifier = ">=1.47,<2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10,<2" },
     { name = "numpy", specifier = ">=1.26,<3" },
