@@ -30,8 +30,8 @@ def test_the_default_install_has_no_asr_package() -> None:
     required = " ".join(_project()["dependencies"]).lower()
     for package in ASR_PACKAGES:
         assert package not in required, package
-    # The Kitten extra, which already brings torch and transformers, is unchanged.
-    assert _project()["optional-dependencies"]["kitten"] == ["kittenml>=0.9.4,<0.10"]
+    # Voice cloning pins the optional SDK; no ASR package becomes mandatory.
+    assert _project()["optional-dependencies"]["kitten"] == ["kittenml==0.9.6"]
 
 
 def test_importing_the_cli_and_verification_loads_no_asr_library() -> None:
