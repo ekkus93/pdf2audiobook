@@ -34,7 +34,8 @@ All invariants still hold: content-free errors and logs, private reference media
 
 **Acceptance:**
 - `git status` shows only the intentionally untracked `.serena/` and `audiobooks/`, and no voice-cloning paths.
-- Every feature commit has a green CI run, recorded in the ledger.
+- *Amendment (2026-11-20, decided by the user):* every commit on `master` is either green in CI, or it has a recorded exception in the ledger that names the commit, the failed run, the corrective commit, and the reason. Failed runs are never erased or relabelled.
+- Acceptance for R1.2 is met by this rule. The only exception recorded so far is `ed160e6b7ce509ab3c914281207add10bee7739b` (Python CI #913, 44636305313; corrected by `0cd79d6084da8491047135eb4b7408968ee731cf`, CI #914 green).
 
 ### R2: Warm resume with an unchanged reference
 
@@ -136,10 +137,10 @@ The directory is created before the check, so an escaping path is created and th
 
 ## 4. Known limitations (documented, not solved here)
 
-- R1's strict historical green-CI criterion remains open for
-  `ed160e6b7ce509ab3c914281207add10bee7739b`: Python #913 (44636305313) failed
-  because the updated optional-SDK assertion was staged later. Corrective
-  `0cd79d6084da8491047135eb4b7408968ee731cf` is green; history was not rewritten.
+- R1's green-CI criterion is met through the amended rule in section 2: the one red
+  commit, `ed160e6b7ce509ab3c914281207add10bee7739b` (Python #913, 44636305313), is a recorded
+  exception. Its corrective `0cd79d6084da8491047135eb4b7408968ee731cf` is green; history was not
+  rewritten.
 - R5 reproduced an additional completed-conversion reuse gap against `a01cfdc`:
   removing optional backend metadata while the recording and transcript remain
   present attempts synthesis again. VC5.05 is reopened and its strict expected

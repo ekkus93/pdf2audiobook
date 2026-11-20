@@ -23,7 +23,7 @@
 ## 1. Commit the feature (R1)
 
 - [x] 1.1 Plan the commit series from the VC0–VC8 sections of the existing TODO, in dependency order, with the files for each commit listed in the ledger before committing.
-- [ ] 1.2 For each commit, run lint, format, mypy on 3.11–3.13 and the tests that cover its files; push; check CI; record the run in the ledger.
+- [x] 1.2 For each commit, run lint, format, mypy on 3.11–3.13 and the tests that cover its files; push; check CI; record the run in the ledger.
 - [x] 1.3 Confirm that `git status` shows only `.serena/` and `audiobooks/` and that no private media, weights, caches or workspaces are tracked.
 
 ## 2. Warm resume with an unchanged reference (R2)
@@ -67,12 +67,7 @@
 
 ## Unresolved limitations
 
-- **R1.2 historical acceptance:** all commit checks and exact-head CI evidence are
-  recorded, but `ed160e6b7ce509ab3c914281207add10bee7739b` has failed Python
-  CI #913 (44636305313) because an existing SDK test update was staged later.
-  Corrective `0cd79d6084da8491047135eb4b7408968ee731cf` is green. History was
-  not rewritten. The spec's literal “Every feature commit has a green CI run”
-  needs an accepted historical exception; a green successor cannot satisfy it.
+- **R1.2 historical exception (accepted by the user; criterion reworded):** the only red commit on `master` is `ed160e6b7ce509ab3c914281207add10bee7739b` (Python CI #913, 44636305313), because an existing SDK test update was staged later. Corrective `0cd79d6084da8491047135eb4b7408968ee731cf` is green. History was not rewritten. R1's criterion now reads "green, or a recorded exception" (spec section 2). There is no other branch: `master` is the only branch.
 - **Original VC5.05 (resolved in `282f6f0`; see the VC5.05 TODO):** dependency-free completed conversion can attempt synthesis
   when optional backend metadata is removed while the recording and transcript
   remain. The strict expected-failure test and partial audit verdict retain this
