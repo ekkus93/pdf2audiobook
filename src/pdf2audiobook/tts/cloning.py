@@ -293,9 +293,13 @@ def complete_transcript(reference: ReferenceVoice) -> None:
 
     text, asr = transcribe_reference(reference.wav)
     reference.transcript = normalize_transcript(text)
+    digest = hashlib.sha256(reference.transcript.encode()).hexdigest()
+    if digest == reference.identity.get("reference_text_sha256"):
+        # Rehydrating the same words must retain the saved conditioning provenance.
+        return
     reference.identity = {
         **reference.identity,
-        "reference_text_sha256": hashlib.sha256(reference.transcript.encode()).hexdigest(),
+        "reference_text_sha256": digest,
         "transcription": asr,
     }
 

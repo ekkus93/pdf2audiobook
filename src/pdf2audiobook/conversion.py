@@ -744,9 +744,13 @@ def _synthesize_selected(run: _ConversionRun) -> list[Path]:
 
             reference = settings._clone_reference
             if reference.transcript is None:
+                recorded_digest = reference.identity.get("reference_text_sha256")
                 complete_transcript(reference)
                 _initial_status(run)
                 outputs, pending, chapter_chars, cached_chars = _plan_synthesis(run)
+                if reference.identity.get("reference_text_sha256") != recorded_digest:
+                    for item, *_ in pending:
+                        run.conversion_status[item.id]["reason_code"] = "voice_reference_changed"
         if (
             pending
             and run.provider is None
