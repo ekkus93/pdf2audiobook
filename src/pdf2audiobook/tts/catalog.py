@@ -169,9 +169,10 @@ def fetch_model(
     base = (root or model_directory()).resolve()
     for artifact in missing_files(base):
         destination = artifact_path(artifact, base)
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        if not destination.parent.resolve().is_relative_to(base):
+        # Resolve existing ancestors and any symlinks before creating a missing suffix.
+        if not destination.parent.resolve(strict=False).is_relative_to(base):
             raise ConfigError("The model cache contains an unsafe directory")
+        destination.parent.mkdir(parents=True, exist_ok=True)
         if on_file:
             on_file(artifact)
         url = (
