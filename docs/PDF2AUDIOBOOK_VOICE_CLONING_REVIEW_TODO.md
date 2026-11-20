@@ -32,7 +32,7 @@
 - [x] 2.2 Regression test, run against the parent commit: unchanged reference, no transcript, a chapter that needs synthesis. Record the failing test ID.
 - [x] 2.3 Regression test: a missing local ASR backend never downloads or loads a model.
 - [x] 2.4 Regression test: the recorded identity is unchanged unless new transcription produces a different digest.
-- [x] 2.5 Implement the chosen option in `conversion.py` (`_clone_preparation`) and keep the refusal content-free.
+- [x] 2.5 Implement the chosen option in `conversion.py` (`_voice_run` / `_synthesize_selected`) and keep the refusal content-free.
 
 ## 3. Containment before directory creation (R3)
 
@@ -56,8 +56,8 @@
 
 ## 6. Honest provenance (R6)
 
-- [ ] 6.1 Label each finding in the ledger as reproduced by a failing test, or as read from code and not reproduced, with the reason.
-- [ ] 6.2 Label carried-forward timing and real-model results as recorded evidence from 2026-11-19, not re-measured.
+- [x] 6.1 Label each finding in the ledger as reproduced by a failing test, or as read from code and not reproduced, with the reason.
+- [x] 6.2 Label carried-forward timing and real-model results as recorded evidence from 2026-11-19, not re-measured.
 
 ## 7. Finish
 
@@ -344,3 +344,20 @@ only synthetic regression test source and content-free findings enter the reposi
   run and passed; only the real-model Rust bridge is unrun in this review.
   Native dark/light controls were captured and visually inspected; playback
   controls/seek ran under Xvfb, without assessing physical speaker output.
+
+- R6 provenance reconciliation: the review spec now distinguishes the original
+  non-reproduced refusal inference from the three reproduced R2 failures, corrects
+  the integration function name, records parent-before-fix R3 evidence, and names
+  the independently reproduced VC5.05 gap. Git/CI inspection establishes R1;
+  historical counter inspection establishes R4; all 40 source/test rows establish
+  R5 coverage. Carried CPU/model/timing/listening results are explicitly recorded
+  2026-11-19 evidence, not re-measured. The main feature spec retains its reuse
+  requirement while documenting that the new VC5.05 case remains unmet.
+
+- Finding classifications: R1 is reproduced by read-only Git status/history
+  inspection (not a runtime unit-test failure). R2's original refusal is read
+  from code/not reproduced because later lazy transcription exists; its actual
+  identity/reporting failures were reproduced before the fix. R3 is reproduced
+  by two parent-commit failures before its fix. R4/R5 are observed documentation
+  inconsistencies/coverage gaps, not claimed runtime failures. The extra VC5.05
+  runtime boundary is reproduced by a failing parent test and remains open.

@@ -1,6 +1,6 @@
 # PDF2Audiobook Voice Cloning Review Follow-up Specification
 
-**Status:** Proposed
+**Status:** Follow-up implemented; historical R1 green-CI criterion remains unresolved
 **Date:** 2026-11-19
 **Companion:** [Voice Cloning Review Follow-up TODO](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_TODO.md)
 **Baseline:** `master` at `451551c`, plus the uncommitted voice-cloning working tree reviewed on 2026-11-19
@@ -11,7 +11,7 @@
 A review of the voice cloning work against its TODO found four problems to fix, plus one gap in the review itself:
 
 1. **Nothing is committed.** The feature is 62 modified and about 34 new files, with no commit or CI run. That breaks CLAUDE.md's per-task commit rule and leaves no history to bisect or revert.
-2. **Warm-resume gap.** When the reference audio is unchanged and no transcript is supplied, the code reuses the recorded identity and skips ASR. A later chapter that needs synthesis then fails with a misleading "provide the original voice reference" message, although a local ASR backend could supply the transcript.
+2. **Warm-resume identity/reporting gap.** The initial review inferred a later refusal from a saved-identity branch, but parent-commit tests did not reproduce it: `_synthesize_selected` already transcribed locally when pending synthesis needed text. Tests instead reproduced changed provenance with an unchanged transcript digest, and a missing regeneration reason when the digest differed.
 3. **Containment check runs after `mkdir`.** `tts/catalog.py` `fetch_model` creates the destination directory before it checks that the directory stays inside the model cache. The paths come from the pinned manifest, so the risk is small, but the check belongs first.
 4. **Ledger inconsistency.** The checkpoint notes give several different full-suite totals as the run progressed, and the reader cannot tell which one is current.
 5. **Review coverage.** The review spot-checked the TODO's tasks rather than verifying each one. This spec covers a complete per-task verification pass.
@@ -38,13 +38,25 @@ All invariants still hold: content-free errors and logs, private reference media
 
 ### R2: Warm resume with an unchanged reference
 
-**Problem.** `conversion.py` `_clone_preparation` (around line 290) takes this branch when the reference audio is unchanged and the transcript is absent:
+**Problem and reproduction.** The original review referred to `_clone_preparation`,
+but the integration context is actually `conversion.py` `_voice_run`. It restores
+saved conditioning metadata when an unchanged recording has no supplied transcript:
 
 ```python
 reference.identity = recorded
 ```
 
-Here `reference.transcript` stays `None`. If a chapter then needs synthesis, for example after a speed change, `KittenCloneProvider.__init__` refuses with "Provide the original voice reference to synthesize new audio". That refusal is correct, but its message sends the user to the wrong fix. ASR is not run on this path (`transcribe=False`), even when a local Whisper backend is ready.
+The initial claim that this later refuses synthesis was **read from code, not
+reproduced**. Tests against `a01cfdcdd6a4b7907abe53d06b8ce24ec0abfeee` show that
+`_synthesize_selected` already calls `complete_transcript` for pending synthesis.
+They reproduce two narrower defects: unchanged normalized transcript SHA-256 still
+changed ASR provenance, and changed-text regeneration recorded no reason. Missing
+local ASR already refused before worker/model/network activity.
+
+**Resolution.** Retain option (a), the existing lazy local path. Commit
+`c1523415034f2563178e2dfe90fe5cb2c9ad4ac8` preserves saved identity for the same
+normalized digest and records `voice_reference_changed` when changed text causes
+regeneration. The following requirements preserve the original acceptance intent.
 
 **Requirement.**
 - Decide the intended behavior first, then implement it. The choice is between:
@@ -124,6 +136,15 @@ The directory is created before the check, so an escaping path is created and th
 
 ## 4. Known limitations (documented, not solved here)
 
+- R1's strict historical green-CI criterion remains open for
+  `ed160e6b7ce509ab3c914281207add10bee7739b`: Python #913 (44636305313) failed
+  because the updated optional-SDK assertion was staged later. Corrective
+  `0cd79d6084da8491047135eb4b7408968ee731cf` is green; history was not rewritten.
+- R5 reproduced an additional completed-conversion reuse gap against `a01cfdc`:
+  removing optional backend metadata while the recording and transcript remain
+  present attempts synthesis again. VC5.05 is reopened and its strict expected
+  failure is not passed acceptance. Fixing this separate boundary is outside R2/R3.
+
 - Accelerator acceptance (VC0.03, VC8.04) remains open until a supported device is available.
 - Timing measurements on the 7.1-GiB host reflect paging and are not a performance promise.
 - The real-model runs are recorded evidence from 2026-11-19 and are not repeated by this follow-up.
@@ -134,3 +155,18 @@ The directory is created before the check, so an escaping path is created and th
 - Run `/verify` and the Python 3.12 and 3.13 mypy checks for each commit.
 - Run the desktop checks (lint, type checks, Vitest, production build, Rust fmt, clippy and tests) for any commit touching `desktop/`.
 - Check CI after each push.
+
+## 6. Verification record
+
+R1's uncommitted state was reproduced by Git inspection; its per-SHA CI results,
+including failed attempts, are retained in the [follow-up ledger](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_TODO.md).
+R2's original refusal was not reproduced for the reason above; the narrower failures
+were tested before the fix. R3's traversal and outside-symlink directory creation
+was reproduced against immediate parent `c152341`, then fixed in `8888b4e`.
+R4's counter inconsistency was observed in the historical prose and resolved with
+the [current validation table](PDF2AUDIOBOOK_VOICE_CLONING_TODO.md#current-validation-state).
+R5 covers all 40 tasks in the [source-linked audit](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_AUDIT.md):
+37 verified, one partially verified/open, two open hardware gates. The final CPU real-model,
+timing/memory/cancellation and user listening results carried forward here are recorded
+evidence from 2026-11-19, not re-measured by this follow-up. New software counters name final code
+`99416560b9081dd61f8fecd1c52d870fdc0a4c0f`; fake providers do not establish speaker similarity.

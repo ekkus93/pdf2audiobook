@@ -1,6 +1,6 @@
 # PDF2Audiobook Voice Cloning Specification
 
-**Status:** CLI and Tauri implementation present; real-model release acceptance remains open.
+**Status:** CLI and Tauri implementation present; VC5.05 resume and accelerator acceptance remain open.
 **Date:** 2026-11-18
 **Companion:** [Voice Cloning TODO](PDF2AUDIOBOOK_VOICE_CLONING_TODO.md)
 **Baseline:** `master` at `451551c`, plus the working-tree configuration initializer and Settings editor.
@@ -209,6 +209,12 @@ require cloning dependencies or the original recording. Repairs/new synthesis re
 reproducible clone selection. If a repair would otherwise substitute a built-in voice for
 recorded clone audio without explicit intent, stop with guidance to provide the reference or
 explicitly choose `--no-clone-voice`. Never reconstruct a reference from a digest.
+
+The 2026-11-20 review reopened VC5.05: if the recording and transcript still exist,
+removing optional backend metadata can cause completed conversion to attempt synthesis
+again. The requirement above remains unmet for that case; it is recorded by a strict
+expected-failure test and the [task audit](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_AUDIT.md).
+Playback, packaging and ASR narration inspection remain verified independently.
 
 Voice selection changes affect synthesis, not chapter analysis, boundaries, approvals, or text.
 ASR comparison still uses exact narration and audio hashes; it does not assess voice similarity.
