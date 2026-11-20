@@ -1,6 +1,6 @@
 # PDF2Audiobook Voice Cloning Review Follow-up TODO
 
-**Status:** R2–R6 complete; R1.2 remains open only for a historical green-CI acceptance exception
+**Status:** R1–R6 complete; R1.2 closed by the reworded green-CI rule (`ed160e6` recorded as an exception)
 **Date:** 2026-11-19
 **Last reviewed:** 2026-11-20
 **Baseline:** `master` at `451551c` plus the uncommitted voice-cloning working tree
