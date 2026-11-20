@@ -1,0 +1,238 @@
+name: Real-model checks
+# Started by hand only. These download pinned models and run them on CPU, so this workflow
+# never runs on push or pull request and is not a required check. See
+# docs/PDF2AUDIOBOOK_REAL_MODELS_CI_SPEC.md.
+on:
+  workflow_dispatch:
+    inputs:
+      suites:
+        description: "Comma-separated suites: kitten, asr, clone-short, clone-long"
+        required: true
+        default: "kitten,asr,clone-short,clone-long"
+        type: string
+      asr_models:
+        description: "Comma-separated ASR models: wav2vec2, vosk, whisper"
+        required: true
+        default: "wav2vec2,vosk,whisper"
+        type: string
+permissions:
+  contents: read
+env:
+  UV_VERSION: "0.12.9"
+  PYTHON_VERSION: "3.12"
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      asr_matrix: ${{ steps.plan.outputs.asr_matrix }}
+    steps:
+      - name: Turn the ASR model input into a matrix
+        id: plan
+        env:
+          ASR_MODELS: ${{ inputs.asr_models }}
+        run: |
+          set -euo pipefail
+          allowed="wav2vec2 vosk whisper"
+          models=$(echo "$ASR_MODELS" | tr ',' '\n' | tr -d ' ' | sed '/^$/d')
+          for model in $models; do
+            case " $allowed " in
+              *" $model "*) ;;
+              *) echo "Unknown ASR model: $model" >&2; exit 1 ;;
+            esac
+          done
+          echo "asr_matrix=$(echo "$models" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  kitten:
+    if: contains(inputs.suites, 'kitten')
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+          python-version: "3.12"
+      - name: Runner resources
+        run: |
+          nproc
+          free -h
+          df -h "$HOME"
+      - name: Install locked dependencies
+        run: uv sync --locked --extra kitten --extra dev
+      - name: Install the CPU build of torch at the locked versions
+        run: ./.github/scripts/install-cpu-torch.sh
+      - name: Restore model cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/huggingface
+          key: real-kitten-${{ hashFiles('uv.lock') }}
+      - name: Kitten real-model smoke test
+        env:
+          PDF2AUDIOBOOK_KITTEN_SMOKE: "1"
+        run: uv run --no-sync pytest -q -ra -p no:cacheprovider tests/test_kitten_real_smoke.py | tee kitten.log
+
+  asr:
+    if: contains(inputs.suites, 'asr')
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        model: ${{ fromJSON(needs.plan.outputs.asr_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+          python-version: "3.12"
+      - name: Install FFmpeg
+        run: |
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+      - name: Runner resources and memory floor
+        run: |
+          nproc
+          free -h
+          df -h "$HOME"
+          # Whisper medium.en needs about 7 GB peak on CPU; refuse smaller runners up front.
+          if [ "${{ matrix.model }}" = "whisper" ]; then
+            gib=$(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo)
+            if [ "$gib" -lt 8 ]; then
+              echo "Whisper needs at least 8 GiB RAM; this runner has ${gib} GiB" >&2
+              exit 1
+            fi
+          fi
+      - name: Install locked dependencies for this model
+        run: |
+          extra="asr-${{ matrix.model }}"
+          case "${{ matrix.model }}" in
+            wav2vec2|vosk) uv sync --locked --extra kitten --extra dev --extra "$extra" ;;
+            whisper) uv sync --locked --extra kitten --extra dev --extra asr-whisper ;;
+          esac
+      - name: Install the CPU build of torch at the locked versions
+        run: ./.github/scripts/install-cpu-torch.sh
+      - name: Restore model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pdf2audiobook/asr
+          key: real-asr-${{ matrix.model }}-${{ hashFiles('src/pdf2audiobook/verification/models.py') }}
+      - name: Fetch the pinned model
+        run: uv run --no-sync pdf2audiobook asr fetch "${{ matrix.model }}" --yes
+      - name: Real ASR smoke test
+        env:
+          PDF2AUDIOBOOK_ASR_SMOKE: "1"
+        run: |
+          uv run --no-sync pytest -q -ra -p no:cacheprovider tests/test_verification_backends.py \
+            -k "real_backend and ${{ matrix.model }}" | tee "asr-${{ matrix.model }}.log"
+
+  clone-short:
+    if: contains(inputs.suites, 'clone-short')
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+          python-version: "3.12"
+      - name: Install FFmpeg
+        run: |
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+      - name: Runner resources
+        run: |
+          nproc
+          free -h
+          df -h "$HOME"
+      - name: Install locked dependencies
+        run: uv sync --locked --extra kitten --extra dev
+      - name: Install the CPU build of torch at the locked versions
+        run: ./.github/scripts/install-cpu-torch.sh
+      - name: Restore Kitten 2 model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pdf2audiobook/tts
+          key: real-kitten2-${{ hashFiles('src/pdf2audiobook/tts/kitten2_manifest.json') }}
+      - name: Fetch the pinned Kitten 2 model
+        run: uv run --no-sync pdf2audiobook tts fetch kitten2 --yes
+      - name: Stage the public reference and its transcript
+        run: ./.github/scripts/stage-reference.sh
+      - name: Short real clone test
+        run: |
+          uv run --no-sync pytest -q -ra -p no:cacheprovider \
+            "tests/test_voice_cloning_real.py::test_real_local_clone_and_warm_resume" | tee clone-short.log
+      - name: Clean up staged reference
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/reference"
+
+  clone-long:
+    if: ${{ always() && contains(inputs.suites, 'clone-long') && needs.plan.result == 'success' }}
+    needs: [plan, clone-short]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.9"
+          python-version: "3.12"
+      - name: Install FFmpeg
+        run: |
+          sudo rm -f /var/lib/man-db/auto-update
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+      - name: Runner resources
+        run: |
+          nproc
+          free -h
+          df -h "$HOME"
+      - name: Install locked dependencies
+        run: uv sync --locked --extra kitten --extra dev
+      - name: Install the CPU build of torch at the locked versions
+        run: ./.github/scripts/install-cpu-torch.sh
+      - name: Restore Kitten 2 model cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pdf2audiobook/tts
+          key: real-kitten2-${{ hashFiles('src/pdf2audiobook/tts/kitten2_manifest.json') }}
+      - name: Fetch the pinned Kitten 2 model
+        run: uv run --no-sync pdf2audiobook tts fetch kitten2 --yes
+      - name: Stage the public reference and its transcript
+        run: ./.github/scripts/stage-reference.sh
+      - name: Long-form clone test
+        env:
+          PDF2AUDIOBOOK_TEST_CLONE_LONG_FORM: "1"
+        run: |
+          /usr/bin/time -v uv run --no-sync pytest -q -ra -p no:cacheprovider \
+            "tests/test_voice_cloning_real.py::test_real_local_clone_multiple_chunks" \
+            2> clone-long.time | tee clone-long.log
+      - name: Clean up staged reference
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/reference"
+
+  summary:
+    if: always()
+    needs: [plan, kitten, asr, clone-short, clone-long]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Report suite results
+        run: |
+          {
+            echo "## Real-model checks"
+            echo "Commit: \`$GITHUB_SHA\`"
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| plan | ${{ needs.plan.result }} |"
+            echo "| kitten | ${{ needs.kitten.result }} |"
+            echo "| asr | ${{ needs.asr.result }} |"
+            echo "| clone-short | ${{ needs['clone-short'].result }} |"
+            echo "| clone-long | ${{ needs['clone-long'].result }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

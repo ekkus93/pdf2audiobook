@@ -19,7 +19,7 @@ Use uv only; never install into the system interpreter. These mirror `.github/wo
 - Kitten TTS needs `uv sync --extra kitten --extra dev`; tests mock it.
 - Tests needing `ffmpeg`/`tesseract`/`node` (Node 22 in CI) skip silently when the binaries are absent — check the `-ra` skip summary before claiming coverage.
 - `tests/test_ci_uv_pin.py` cross-checks `ci.yml` (uv pin, exact `pytest -q -ra` line, Node 22), `uv.lock` revision, and the uv version in `docs/MAINTAINER_GUIDE.md`; change them together.
-- Live LLM smoke (`python -m pdf2audiobook.llm.smoke ... --execute`) is opt-in and never part of CI; CI must not depend on the network.
+- Live LLM smoke (`python -m pdf2audiobook.llm.smoke ... --execute`) is opt-in and never part of CI; CI must not depend on the network. The one exception is `.github/workflows/real-models.yml`, which real-model tests run from only when started by hand (`workflow_dispatch`). It never gates a change, and the main CI stays offline.
 
 ## Invariants that are easy to break
 

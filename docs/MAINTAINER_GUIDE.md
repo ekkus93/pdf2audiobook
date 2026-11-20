@@ -617,6 +617,33 @@ directory. If FFmpeg or Kitten is unavailable, install the missing dependency
 and check `doctor` before rerunning. Keep secrets and full book text out of
 bug reports.
 
+## Real-model workflow
+
+`.github/workflows/real-models.yml` runs the opt-in real-model tests on GitHub-hosted runners.
+It is started by hand only (`workflow_dispatch`); it never runs on push, pull request or
+schedule, and it is not a required check. Main CI (`ci.yml`) stays offline.
+
+Start it from `master` with the Actions UI, or:
+
+```bash
+gh workflow run real-models.yml --ref master \
+  -f suites=kitten,asr,clone-short,clone-long -f asr_models=wav2vec2,vosk,whisper
+```
+
+Suites: `kitten` (Kitten smoke test), `asr` (one job per model in `asr_models`; Whisper needs
+8 GiB of RAM and fails fast on smaller runners), `clone-short` and `clone-long` (CPU voice
+cloning; the long-form job runs even if the short one fails). The reference voice and its
+transcript come from the pinned Kitten 2 voices file and are staged in a runner temporary
+folder that is deleted afterwards. Nothing is uploaded as an artifact.
+
+Torch is replaced by its CPU build at the locked versions after `uv sync --locked`
+(`.github/scripts/install-cpu-torch.sh`); the job fails if a CUDA build remains. `uv.lock` is
+not changed. Model caches are keyed by the pinned manifests.
+
+A green run shows that the real models load and produce output on a clean runner. It does
+not show speaker similarity, pacing or audible quality; those need a person listening. The
+accelerator gates (VC0.03, VC8.04) still need a GPU machine.
+
 ## Outstanding release gates
 
 The TODO remains authoritative: capable-model
