@@ -123,3 +123,23 @@ def test_sidecars_written_before_the_fix_keep_their_identity(cloned_book, constr
     assert result.exit_code == 0, result.output
     assert {p.name: p.read_bytes() for p in audio.glob("*.cache.json")} == sidecars
     assert {p.name: p.stat().st_mtime_ns for p in audio.glob("*.mp3")} == stamps
+
+
+@pytest.mark.parametrize(
+    ("installed", "accepted"),
+    [({"torch": "2.6.0"}, True), ({}, True), ({"torch": "9.9.9"}, False)],
+)
+def test_a_recorded_identity_is_rejected_only_by_a_different_installed_backend(
+    monkeypatch, installed, accepted
+):
+    from pdf2audiobook.tts import cloning
+
+    identity = {
+        **cloning.GENERATION,
+        "reference_audio_sha256": "a" * 64,
+        "reference_text_sha256": "b" * 64,
+        "transcription": None,
+        "backend_versions": {"torch": "2.6.0"},
+    }
+    monkeypatch.setattr("pdf2audiobook.tts.cloning.package_versions", lambda: installed)
+    assert cloning.valid_recorded_identity(identity) is accepted
