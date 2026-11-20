@@ -43,16 +43,22 @@ Conversion stops for unresolved review issues. Read the reported issue and use t
 [review guide](docs/guides/editing-and-review.md) before retrying. Finished chapters are reused
 when you run conversion again.
 
+Optional [local voice cloning](docs/guides/voice-cloning.md) uses the full KittenTTS 2 model;
+the default small model keeps its built-in voices.
+
 ## Configuration
 
 Save recurring settings in `~/.config/pdf2audiobook/config.toml` (or under `XDG_CONFIG_HOME`).
-The [configuration guide](docs/guides/configuration.md) explains how to create the file from a
-[starter config](docs/guides/config.example.toml), select voices and LLMs, and override settings.
-To inspect the effective values and their sources:
+The [configuration guide](docs/guides/configuration.md) explains how to create the file, select
+voices and LLMs, and override settings. Create it once, then inspect the effective values:
 
 ```bash
+uv run pdf2audiobook config init       # or: uv run pdf2audiobook --init
 uv run pdf2audiobook config show --sources
 ```
+
+Existing files are kept. The desktop app creates missing configuration on startup and offers
+a TOML editor in **Settings → CLI configuration**.
 
 ## Documentation
 

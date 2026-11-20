@@ -93,3 +93,9 @@ The narrator introduces the scene.
 The marker is omitted from speech; that voice continues until another marker or the end of the
 chapter. The chapter's configured voice is used before the first marker. Markers require blank-line
 paragraph boundaries, and their source offsets remain in the narration progress record.
+
+## Clone a local voice
+
+Full KittenTTS 2 supports a recording-based voice selection through `--tts-model kitten2
+--clone-voice`. Other models retain built-in voices. Follow the [voice cloning guide](voice-cloning.md)
+for explicit model setup, recording limits, transcripts, desktop controls and acceptance status.

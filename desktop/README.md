@@ -130,6 +130,18 @@ The Python side has its own checks; see
 so change the version in `package.json`, `package-lock.json`, `src-tauri/Cargo.toml` and
 `src-tauri/tauri.conf.json` together with it.
 
+## Configuration
+
+The app creates its preferences file on first startup and, after finding the CLI, runs
+`pdf2audiobook config init --json` to create any missing shared TOML config. Existing files
+are preserved. No models are downloaded by initialization.
+
+Open **Settings → CLI configuration** to edit the shared file. Saving validates the draft
+with the CLI, keeps comments, and replaces the file atomically. An invalid draft or a file
+changed externally is not saved. **Reload from disk** discards the draft and loads the latest
+file. The effective-settings table shows environment overrides; app preferences above it
+remain separate. See the [configuration guide](../docs/guides/configuration.md).
+
 ## Security and privacy
 
 - **Permissions.** The main window may call the app's own commands, listen to its events and
@@ -207,3 +219,21 @@ Builds are unsigned for now; CI adds `-unsigned` to the installers' file names (
 | `src-tauri/capabilities/` | Permissions the frontend gets; kept to the minimum |
 | `src-tauri/tauri.conf.json` | Window, bundle and security settings |
 | `scripts/` | Icon subsetting and the no-network launcher |
+
+## Local voice cloning
+
+Book options and **Speak again** offer **Voice source → Clone a voice (KittenTTS 2)**.
+Use native pickers for a 5–30 second WAV/FLAC/MP3 and an optional transcript file, or type
+its transcript. The CLI performs validation and local inference. Model setup shows pinned
+sources, size and destination before an explicit, cancelable download. Settings can apply
+voice defaults to the shared TOML editor; only **Save configuration** persists them.
+Typed transcripts stay transient and use private files only while a CLI child runs.
+See the [voice cloning guide](../docs/guides/voice-cloning.md) and
+[release acceptance ledger](../docs/PDF2AUDIOBOOK_VOICE_CLONING_TODO.md).
+
+For the native clone walkthrough, use `E2E_CLONE=1 bash e2e/isolated.sh` from `desktop/`,
+with the usual `E2E_APP` and driver paths. The helper creates a separate D-Bus session, Xvfb
+screen, runtime directory and GTK file chooser; it preserves the host desktop's session.
+It needs `dbus-run-session`, `xvfb-run`, `xdotool`, FFmpeg, `x11-utils`,
+`xdg-desktop-portal` and `xdg-desktop-portal-gtk`. CI runs it for the executable and AppImage.
+Screenshots include dark and light clone controls; all reference/speech data are synthetic.

@@ -99,6 +99,11 @@ pins the exact JSON keys. The app depends only on these documented shapes.
   | `llm_context_too_small` | The served context is too small | Explain `num_ctx` and the context setting |
   | `llm_output_cap` | An answer hit the output cap | Suggest a larger output cap |
   | `budget_exhausted` | A configured LLM budget is reached | Show the budget screen |
+  | `voice_clone_unsupported` | The selected provider/model cannot clone | Return to book voice options |
+  | `voice_clone_unavailable` | Dependencies, weights, local ASR or inference are unavailable | Show setup guidance and voice options |
+  | `voice_reference_invalid` | The local recording/transcript is invalid | Return to the reference controls |
+  | `voice_reference_changed` | A reference changed during capture | Re-select it and retry |
+  | `voice_selection_conflict` | Clone mode conflicts with another voice override | Clear overrides or explicitly choose built-in narration |
 
   Existing `type`, `code` and `message` values don't change. A test runs each failure and
   checks its `reason`.
@@ -168,9 +173,14 @@ terminal.
 7. **Chapters and audio**: each chapter's title, length and audio state, an audio player, "open
    folder", "make M4B" and "export zip" (§9).
 8. **Settings**: CLI location, output folder, default voice with the README voice samples, and
-   LLM provider settings. The app writes only its own settings file; it shows the effective
-   CLI configuration (`config show --sources --json`) read-only and explains where to change
-   it.
+   LLM provider settings. On first startup, the app creates its own preferences file and uses
+   `config init --json` to create any missing shared CLI configuration after locating the CLI.
+   Existing files are preserved. A TOML editor writes the shared file only after
+   `config validate --config FILE --json` succeeds without environment overrides. Saves are
+   atomic, preserve comments, and reject externally changed files. The app also shows effective
+   CLI configuration (`config show --sources --json`) with each value's source; app preferences
+   and environment overrides remain separate. Config text must never appear in command arguments
+   or logs; validation uses a private temporary file.
 
 ## 7. D5 — Progress and long runs
 
@@ -367,3 +377,12 @@ All five were decided by the owner on 2026-11-14:
   pending new maintainers", so it will get few fixes and no new components. Pin its version;
   keep every use behind small React wrapper components so a replacement touches only the
   wrappers.
+
+## Voice cloning extension
+
+The [voice cloning specification](PDF2AUDIOBOOK_VOICE_CLONING_SPEC.md) defines local reference
+selection in book options, shared Settings defaults and selective repair. Typed transcript
+drafts use private backend-owned files held until child exit; reference paths are redacted
+in command Details and logs. Setup uses explicit cancelable CLI downloads. No microphone or
+network capability is added to the frontend. See the [feature backlog](PDF2AUDIOBOOK_VOICE_CLONING_TODO.md)
+for integration, native walkthrough and real-model acceptance evidence.

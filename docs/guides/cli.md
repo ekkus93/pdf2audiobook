@@ -17,7 +17,9 @@ Persistent settings are described in [configuration](configuration.md).
 
 ~~~bash
 uv run pdf2audiobook doctor
+uv run pdf2audiobook config init
 uv run pdf2audiobook config show --sources
+uv run pdf2audiobook config validate --config ./my-config.toml
 uv run pdf2audiobook inspect path/to/book.pdf
 uv run pdf2audiobook analyze path/to/book.pdf --no-llm
 uv run pdf2audiobook convert path/to/book.pdf --no-llm --allow-single-chapter
@@ -46,6 +48,10 @@ server is listening. These and the error `reason` codes below exist so that othe
 such as the desktop app, can drive the CLI.
 
 Every command has `--help` with its options and an example.
+
+`--init` is a shortcut for `config init` at the default path and exits after initialization.
+Use `config init --config FILE --json` for a custom path or JSON output. An existing config
+is never overwritten. See [configuration setup](configuration.md#create-your-config-file).
 
 ### Analysis and audio
 
@@ -201,3 +207,13 @@ is too generous.
 By default (`general.progress = "auto"`, or `PDF2AUDIOBOOK_PROGRESS=auto|always|never`) bars
 appear only when stderr is a terminal. `--json` and `--quiet` always turn them off, so machine
 output stays parseable; bars never go to stdout and never include book text, titles or paths.
+
+## Voice cloning and model setup
+
+`tts models [--json]` reports capabilities and local readiness; `tts fetch kitten2 [--yes]
+[--json]` explicitly downloads pinned artifacts. `convert`, `batch` and `resynthesize` accept
+`--clone-voice/--no-clone-voice`, `--reference-audio PATH` and `--reference-text-file PATH`.
+Choose `--tts-model kitten2`; repair also accepts `--tts-provider`. See the
+[complete examples and privacy rules](voice-cloning.md). Stable clone error reasons are
+`voice_clone_unsupported`, `voice_clone_unavailable`, `voice_reference_invalid`,
+`voice_reference_changed` and `voice_selection_conflict`; existing exit-code families apply.

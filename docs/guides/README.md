@@ -11,6 +11,7 @@ these guides assume you are in the repository root and run the CLI through `uv r
 | [Installation and first audiobook](getting-started.md) | Install prerequisites and follow the illustrated conversion walkthrough |
 | [Configuration](configuration.md) | Create a config file, understand overrides and troubleshoot settings |
 | [CLI reference](cli.md) | Look up commands, exit codes, batch conversion and progress output |
+| [Voice cloning](voice-cloning.md) | Set up KittenTTS 2, prepare a local reference and use CLI/desktop cloning |
 | [Voices and speech](voices.md) | Listen to voice samples, select a model and adjust pronunciation |
 | [LLM assistance](llm.md) | Set up Ollama and manage context, timeouts, budgets and privacy |
 | [Editing and review](editing-and-review.md) | Review chapters, protect edits and recover interrupted updates |

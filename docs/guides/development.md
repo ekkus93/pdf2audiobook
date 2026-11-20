@@ -63,3 +63,38 @@ or available. The runner returns a JSON success/error result with sanitized
 provider details and usage metadata, but never echoes the synthetic request
 body or credentials. Real backend acceptance remains pending until these
 checks are executed against actual reachable services.
+
+## Voice cloning acceptance
+
+Offline coverage uses `tests/test_voice_cloning*.py`, shared JSON contracts, Rust bridge/lifecycle
+fixtures and desktop clone controls. Native coverage uses the actual CLI and FFmpeg with an
+explicit synthetic backend: `E2E_CLONE=1 npm --prefix desktop run e2e` (provide the app/driver
+paths described in the desktop guide). This exercises selection, typed drafts, resume, repair,
+cancellation and private-file cleanup without a real speaker or model.
+
+Real-model tests remain opt-in. Install the optional Kitten dependencies, explicitly fetch the
+model, and supply an authorized reference and its transcript outside the repository:
+
+```bash
+PDF2AUDIOBOOK_TEST_CLONE_REFERENCE=/private/speaker.wav \
+PDF2AUDIOBOOK_TEST_CLONE_TRANSCRIPT=/private/speaker.txt \
+PDF2AUDIOBOOK_TEST_CLONE_OUTPUT=/private/acceptance-audio \
+uv run --extra kitten --extra dev pytest -q tests/test_voice_cloning_real.py
+```
+
+Set `PDF2AUDIOBOOK_TEST_CLONE_LONG_FORM=1` to also generate the longer, multi-chunk
+continuity sample under the chosen output directory. It validates assembly and chunk completion;
+listen separately for consistent speaker identity and transitions.
+
+Without a transcript this needs an already ready local Whisper installation. No model is fetched
+by the test. Repeat on CPU and an available supported accelerator; measure cold/warm runtime,
+peak memory, stopping inference and selective repair. Listen to reference similarity and chunk
+continuity, including a long-form book. Record actual results in the feature TODO and leave
+unavailable hardware or listening checks open. ASR word accuracy cannot replace that review.
+
+The Rust request builder also has an opt-in real-model bridge test. Set
+`PDF2AUDIOBOOK_TEST_CLONE_CLI` to a CLI executable whose environment already contains the
+optional dependencies, plus the reference/transcript variables above, then run
+`cargo test --manifest-path desktop/src-tauri/Cargo.toml clone_bridge_real_model -- --ignored`.
+It generates a text PDF, converts it, and checks warm reuse. This is separate from
+`cargo test -- --ignored real_cli`, which uses synthetic speech for bridge coverage.

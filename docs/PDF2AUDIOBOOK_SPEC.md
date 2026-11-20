@@ -400,3 +400,11 @@ Out of initial scope: DRM circumvention, translating a book, generating alternat
 ## 12. Engineering principles
 
 **No invented text; auditable edits; one MP3 per chapter; manual review when uncertain; local-first privacy; content-addressed resume; provider-swappable internals; no network-dependent CI.** This specification is authoritative for the linked dependency-ordered TODO.
+
+## Optional voice cloning extension
+
+The [voice cloning specification](PDF2AUDIOBOOK_VOICE_CLONING_SPEC.md) extends CLI conversion,
+batch processing, resynthesis and Tauri with a disabled-by-default local KittenTTS 2 reference
+voice. It preserves existing small-model/Piper defaults, analysis identity, MP3 transaction
+semantics and legacy audio identities at the same SDK. Implementation and real-model acceptance
+are recorded separately in its [backlog](PDF2AUDIOBOOK_VOICE_CLONING_TODO.md).

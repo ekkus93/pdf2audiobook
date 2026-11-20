@@ -3,13 +3,14 @@
 [Home](../../README.md) · [All guides](README.md)
 
 Use a TOML file for recurring settings and command flags for one-off changes. No config file
-is required: omitted fields use built-in defaults. The [starter config](config.example.toml)
-selects local Kitten speech and disables LLM assistance for an initial run.
+is required: omitted fields use built-in defaults. `config init` creates an editable file of
+common defaults: local Kitten speech and local Ollama assistance.
 
 - [Create your config file](#create-your-config-file)
 - [Check the effective settings](#check-the-effective-settings)
 - [Override settings](#override-settings)
 - [Common settings](#common-settings)
+- [Desktop configuration editor](#desktop-configuration-editor)
 - [Password-protected PDFs](#password-protected-pdfs)
 - [Troubleshooting](#troubleshooting)
 
@@ -17,16 +18,27 @@ selects local Kitten speech and disables LLM assistance for an initial run.
 
 The default path is `~/.config/pdf2audiobook/config.toml`. An absolute `XDG_CONFIG_HOME` changes
 it to `$XDG_CONFIG_HOME/pdf2audiobook/config.toml`; a relative value is ignored.
-From the repository root, copy the starter file without replacing an existing config:
+Create it with either command:
 
 ```bash
-config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/pdf2audiobook"
-mkdir -p "$config_dir"
-cp -n docs/guides/config.example.toml "$config_dir/config.toml"
+uv run pdf2audiobook config init
+uv run pdf2audiobook --init
 ```
 
-Use an absolute `XDG_CONFIG_HOME` or leave it unset before running those commands. Open
-`config.toml` in your editor. For example, to change the voice, edit its existing table:
+Both commands print the selected path and whether they created it. Parent directories are
+created automatically. Existing files, including malformed files, remain untouched. Initialization
+writes built-in values, never environment overrides or credentials, and does not download models
+or contact providers. For another path or machine-readable output:
+
+```bash
+uv run pdf2audiobook config init --config ./my-config.toml --json
+```
+
+The generated file preserves the application's defaults. Use `--no-llm` for a run without
+Ollama, or change `[llm] enabled` to `false`. The optional
+[offline starter example](config.example.toml) already disables LLM assistance.
+
+Open `config.toml` in your editor. For example, to change the voice, edit its existing table:
 
 ```toml
 [tts.kitten]
@@ -49,7 +61,9 @@ uv run pdf2audiobook doctor
 
 `config show` validates the file and displays the merged values; `--sources` identifies each
 value's origin. `doctor` checks installed programs, OCR languages and selected providers.
-It does not synthesize audio or test an LLM request. For a local Ollama context check, use
+`config validate --config FILE` checks a file independently of environment overrides, without
+changing it or contacting providers.
+`doctor` does not synthesize audio or test an LLM request. For a local Ollama context check, use
 `doctor --check-llm` after [setting up the model](llm.md#using-a-local-llm-ollama); this loads
 the model.
 
@@ -95,11 +109,27 @@ selection has additional rules; see [voices and speech](voices.md).
 | `[reading]` | Citation skipping and approved equation readings; see [citations and equations](editing-and-review.md#citations-and-equations) |
 | `[audio]` | `cover_image` supplies default JPEG/PNG artwork, up to 5 MiB |
 
-The starter config disables LLM assistance. To use Ollama, change `[llm] enabled` to `true`
-and follow [the local LLM guide](llm.md#using-a-local-llm-ollama) to install and size the model.
+The generated default config enables local Ollama. Follow
+[the local LLM guide](llm.md#using-a-local-llm-ollama) to install and size the model.
 Keep API keys in environment variables; provider `api_key_env` fields hold a variable name,
 such as `"OPENAI_API_KEY"`. Remote book content requires explicit consent; see
 [local and remote provider setup](llm.md#other-providers).
+
+## Desktop configuration editor
+
+On startup, the desktop app creates its own `settings.json` if absent. Once it finds the CLI,
+it also runs the shared initializer, so CLI and desktop use the same TOML path and defaults.
+Later launches preserve existing files.
+
+Open **Settings → CLI configuration** to edit the shared TOML file. **Save configuration**
+validates the draft and replaces the file atomically only when valid. Invalid drafts stay
+in the editor for correction. If another editor changed the file, saving is refused; use
+**Reload from disk** to load those changes (this discards your unsaved draft). Symlinked
+configs should be edited in your external text editor.
+
+The effective-settings table refreshes after saving and shows environment overrides.
+App preferences above it are saved separately with **Save settings** and may override shared
+values for desktop runs. Changes apply to new runs; running conversions keep their settings.
 
 ## Password-protected PDFs
 
@@ -128,3 +158,11 @@ language packs and reports any missing languages requested by the configuration.
   disabling the LLM, or set it to `false`. Explicit `true` requires LLM assistance.
 - **Missing speech or OCR support:** follow [installation](getting-started.md#installation)
   and rerun `doctor`. Editing config does not install providers or model files.
+
+## Voice cloning defaults
+
+Cloning starts disabled. `[tts.voice_clone]` accepts `enabled`, `reference_audio` and
+`reference_text_file`; book profiles accept `clone_voice`, `reference_audio` and
+`reference_text_file`. Environment mappings, precedence and recording/transcript pairing are
+documented in the [voice cloning guide](voice-cloning.md#shared-defaults-and-desktop-controls).
+`config show` redacts reference paths. Configuration validation never loads a model or recording.

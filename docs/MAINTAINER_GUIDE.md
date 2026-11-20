@@ -739,3 +739,24 @@ unknown (a pseudo-terminal reporting 0x0), explicit dimensions are passed becaus
 otherwise draw nothing.
 On platforms without POSIX locking, the existing lock implementation does not serialize processes;
 directory fsync is unavailable on Windows. Avoid concurrent workspace operations there.
+
+## Voice cloning contracts
+
+`tts/catalog.py` ships a pinned model/decoder manifest and explicit, integrity-checked setup.
+`tts/cloning.py` owns typed selections, bounded canonical snapshots and public hash identities;
+`tts/clone_provider.py` binds one reference to a `worker_client` subprocess. `clone_worker` is
+offline and receives content only through private pipes. Keep the Kitten 0.8 and Piper paths
+unchanged when cloning is inactive. Model preparation may take 15 minutes; cancellation terminates
+and reaps the worker after a short grace period, with a Linux parent-death signal for force stops.
+
+Clone fields belong only in active audio identities, never analysis identities. Sidecars carry
+only digests and generation settings. Resume may restore recorded identity to reuse valid audio
+without loading the SDK or original reference. New synthesis must prepare a real snapshot.
+Repair uses existing staging/backups and requires explicit intent to change from a clone.
+
+Rust flattens reference options into conversion/repair requests. Typed drafts are written to
+restricted files and captured by the child exit hook; Details and Debug redact reference fields.
+Startup sweeps only marked unlocked private jobs. React keeps drafts in session memory; shared
+configuration paths are saved explicitly. Update CLI schemas, Rust fixtures, TypeScript options
+and privacy/lifecycle tests together. Real-model/listening checks are tracked separately in the
+[voice cloning backlog](PDF2AUDIOBOOK_VOICE_CLONING_TODO.md).
