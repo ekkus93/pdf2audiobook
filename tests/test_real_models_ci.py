@@ -1,27 +1,34 @@
-"""The real-model workflow stays manual, read-only and free of uploads (W1, W5)."""
+"""The real-model workflow stays manual, read-only and free of uploads (W1, W5).
 
+The checks read the workflow text directly, so they need no YAML parser (PyYAML is not a
+declared dependency).
+"""
+
+import re
 import stat
 from pathlib import Path
-
-import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 REAL = WORKFLOWS / "real-models.yml"
 
 
-def _load(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
-
-
-def _triggers(data: dict) -> set[str]:
-    # PyYAML reads the bare key `on` as the boolean True.
-    block = data.get("on", data.get(True))
-    return set(block) if isinstance(block, dict) else set(block or [])
+def _top_level_block(text: str, key: str) -> list[str]:
+    """Lines indented under a top-level key such as `on:` or `permissions:`."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.rstrip() == f"{key}:")
+    block = []
+    for line in lines[start + 1 :]:
+        if line and not line.startswith(" ") and not line.startswith("#"):
+            break
+        block.append(line)
+    return block
 
 
 def test_the_workflow_is_started_by_hand_only():
-    assert _triggers(_load(REAL)) == {"workflow_dispatch"}
+    block = _top_level_block(REAL.read_text(encoding="utf-8"), "on")
+    triggers = [line.strip() for line in block if re.match(r"^  [a-z_]+:\s*$", line)]
+    assert triggers == ["workflow_dispatch:"]
 
 
 def test_the_main_workflows_never_reference_it():
@@ -31,7 +38,7 @@ def test_the_main_workflows_never_reference_it():
 
 def test_permissions_are_read_only_and_the_default_token_is_the_only_credential():
     text = REAL.read_text(encoding="utf-8")
-    assert _load(REAL)["permissions"] == {"contents": "read"}
+    assert [line.strip() for line in _top_level_block(text, "permissions")] == ["contents: read"]
     assert "secrets." not in text
 
 
@@ -40,9 +47,9 @@ def test_nothing_is_uploaded_as_an_artifact():
 
 
 def test_the_uv_pin_matches_the_main_ci():
-    pinned = _load(REAL)["env"]["UV_VERSION"]
-    assert pinned == "0.12.9"
-    assert f'version: "{pinned}"' in (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
+    text = REAL.read_text(encoding="utf-8")
+    assert 'UV_VERSION: "0.12.9"' in text
+    assert 'version: "0.12.9"' in (WORKFLOWS / "ci.yml").read_text(encoding="utf-8")
 
 
 def test_the_helper_scripts_exist_and_are_executable():
