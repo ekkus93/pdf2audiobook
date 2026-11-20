@@ -1,6 +1,6 @@
 # PDF2Audiobook Voice Cloning Review Follow-up TODO
 
-**Status:** In progress — feature and R2/R3 fixes committed; acceptance audit and final checks
+**Status:** R2–R6 complete; R1.2 remains open only for a historical green-CI acceptance exception
 **Date:** 2026-11-19
 **Last reviewed:** 2026-11-20
 **Baseline:** `master` at `451551c` plus the uncommitted voice-cloning working tree
@@ -61,13 +61,30 @@
 
 ## 7. Finish
 
-- [ ] 7.1 Run the full offline Python suite, the CLI smoke, the wheel and sdist smokes, and the desktop checks on the final commit. Record counts in the table from 4.1.
-- [ ] 7.2 Confirm that VC0.03 and VC8.04 remain open and that the ledger says why.
-- [ ] 7.3 Record unresolved limitations below.
+- [x] 7.1 Run the full offline Python suite, the CLI smoke, the wheel and sdist smokes, and the desktop checks on the final commit. Record counts in the table from 4.1.
+- [x] 7.2 Confirm that VC0.03 and VC8.04 remain open and that the ledger says why.
+- [x] 7.3 Record unresolved limitations below.
 
 ## Unresolved limitations
 
-(Filled in by 7.3.)
+- **R1.2 historical acceptance:** all commit checks and exact-head CI evidence are
+  recorded, but `ed160e6b7ce509ab3c914281207add10bee7739b` has failed Python
+  CI #913 (44636305313) because an existing SDK test update was staged later.
+  Corrective `0cd79d6084da8491047135eb4b7408968ee731cf` is green. History was
+  not rewritten. The spec's literal “Every feature commit has a green CI run”
+  needs an accepted historical exception; a green successor cannot satisfy it.
+- **Original VC5.05:** dependency-free completed conversion can attempt synthesis
+  when optional backend metadata is removed while the recording and transcript
+  remain. The strict expected-failure test and partial audit verdict retain this
+  gap; the original task is unticked. Fixing this extra boundary is outside R2/R3.
+- **Original VC0.03 / VC8.04:** supported-accelerator measurements remain deferred
+  to another machine. The current host's AMD device is not an accessible tested
+  cloning accelerator, and the prepared environment is CPU-only. No GPU run is
+  claimed. CPU, listening, continuity, repair and cancellation results are recorded
+  evidence from 2026-11-19, not re-measured; pacing was slower but speaker identity
+  and consistency were confirmed by the user.
+- Native software playback/seek was exercised under Xvfb; physical speaker output
+  was not measured in this review. The worker remains POSIX-only as documented.
 
 ## Progress ledger
 
@@ -88,7 +105,7 @@
 | 2026-11-20 | `f981812c51613f6ca02a859a2b1bd6faebd4ff01` | R1 VC8 setup, configuration and voice-cloning guides | Exact-head Python #923 (44710034100) and Desktop #78 (44710034119) passed, including clean wheel/sdist and both native clone walkthroughs. Local 39 Python, 383 Vitest, 119 Rust unit + seven permission tests, all three mypy targets and remaining static/build/CLI checks passed; six documentation placeholders/environment-name scanner flags reviewed. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
 | 2026-11-20 | `c1523415034f2563178e2dfe90fe5cb2c9ad4ac8` | R2 warm-resume identity and regeneration reason | Parent a01cfdc reproduced three failures/one pass before the fix; isolated corrected subset 89 passed with all Python static/CLI gates and mypy 110 modules on 3.11–3.13, secret scan 0. Python #925 (44710917499) passed all versions with 2,778 passed/6 skipped each, CLI and wheel/sdist smokes. Desktop #80 (44710917478) passed both clone-enabled native walkthroughs. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
 | 2026-11-20 | `8888b4e716e8ca307b887db6aed5928fded1f1de` | R3 containment before directory creation | Immediate-parent traversal/symlink tests both failed before the fix; isolated 83 passed and all Python static/CLI gates plus 110-module mypy on 3.11–3.13 passed; secret scan 0. Python #926 (44711393593) passed all versions with 2,780 passed/6 skipped each and CLI/wheel/sdist smokes. Desktop #81 (44711393418) passed both clone-enabled native flows. | VC5.05 known resume limitation; VC0.03/VC8.04 hardware gates; historical R1 ed160e6 CI exception. |
-| 2026-11-20 | `99416560b9081dd61f8fecd1c52d870fdc0a4c0f` | R5 additional acceptance coverage and reopened VC5.05; R4 final-code counters | Local full suite 2,807 passed/6 skipped/1 strict expected failure; lock/Ruff/format, three 110-module mypy targets, CLI, clean wheel/sdist installs, 384 Vitest, 120 Rust unit + seven permission tests, three explicit real-CLI integrations and 70.39-s native synthetic walkthrough passed. Python #928 (44713371948) confirms the same full-suite counts on all three versions. Desktop #83 (44713371693) pending, not counted as passed. Two old documentation placeholder scanner findings reviewed. | VC5.05 known resume limitation; VC0.03/VC8.04 hardware gates; historical R1 ed160e6 CI exception. |
+| 2026-11-20 | `99416560b9081dd61f8fecd1c52d870fdc0a4c0f` | R5 additional acceptance coverage and reopened VC5.05; R4 final-code counters | Local full suite 2,807 passed/6 skipped/1 strict expected failure; lock/Ruff/format, three 110-module mypy targets, CLI, clean wheel/sdist installs, 384 Vitest, 120 Rust unit + seven permission tests, three explicit real-CLI integrations and 70.39-s native synthetic walkthrough passed. Python #928 (44713371948) confirms the same full-suite counts on all three versions. Desktop #83 (44713371693) passed, including both clone-enabled native flows. Two old documentation placeholder scanner findings reviewed. | VC5.05 known resume limitation; VC0.03/VC8.04 hardware gates; historical R1 ed160e6 CI exception. |
 
 ## R1 commit plan (recorded before staging)
 
@@ -361,3 +378,22 @@ only synthetic regression test source and content-free findings enter the reposi
   by two parent-commit failures before its fix. R4/R5 are observed documentation
   inconsistencies/coverage gaps, not claimed runtime failures. The extra VC5.05
   runtime boundary is reproduced by a failing parent test and remains open.
+
+### Final review verification (2026-11-20)
+
+- Final code `99416560b9081dd61f8fecd1c52d870fdc0a4c0f` has green exact-head
+  Python #928 (44713371948) and Desktop #83 (44713371693). Python 3.11,
+  3.12 and 3.13 each report **2,807 passed, 6 skipped, 1 xfailed** with mypy,
+  CLI and installed wheel/sdist smokes. Desktop CI confirms **384 Vitest tests**,
+  **120 Rust unit + seven permission tests**, production installers, and both
+  executable/AppImage clone walkthroughs. Default-ignored offline Rust CLI tests
+  were also run locally: clone conversion/resume/repair, shared config and
+  read-only requests, **three passed**. Only the real-model bridge was not repeated.
+- The authoritative table records every gate on that exact code revision after
+  the last code change. Subsequent commits are documentation records, with their
+  own scoped Python/static/CLI verification and CI checks. No code changed after
+  final validation. The complete audit resolves all 40 original task clauses.
+- VC0.03 and VC8.04 remain open with hardware prerequisites recorded; VC5.05 is
+  additionally reopened. Remaining strict R1.2 qualification is isolated above.
+  No private media/weights/caches/workspaces entered Git, and owned native
+  processes/ports were cleaned after the successful local walkthrough.

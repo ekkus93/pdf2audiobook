@@ -16,8 +16,8 @@
 
 ## Current validation state
 
-Final code revision: `99416560b9081dd61f8fecd1c52d870fdc0a4c0f`. All rows below were measured on its
-exact exported Git tree after the last code change, then committed unchanged. Later
+Final code revision: `99416560b9081dd61f8fecd1c52d870fdc0a4c0f`. Local checks used its exact exported Git tree after the last code change; the code
+was committed unchanged and exact-head CI then confirmed the applicable gates. Later
 documentation commits record this evidence and do not change the tested code. Local logs,
 package artifacts and synthetic screenshots are retained outside Git under the review
 validation cache (`review-2026-11-19/r5/`). Commands below reproduce the corresponding gates.
@@ -34,15 +34,15 @@ validation cache (`review-2026-11-19/r5/`). Commands below reproduce the corresp
 | CLI smoke | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 3/3 passed | `--help`, `config show --json`, `doctor --json`; isolated configuration; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
 | Wheel smoke | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 wheel built; clean install/import and 3/3 CLI smokes passed | `uv build --wheel`; separate fresh venv; installed-source location verified; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
 | sdist smoke | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 sdist built; clean install/import and 3/3 CLI smokes passed | `uv build --sdist`; separate fresh venv; installed-source location verified; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
-| Desktop lint | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 0 errors/warnings | `npm run lint` in the exported desktop source |
-| Desktop types | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 3 TypeScript configurations passed | `npm run typecheck` |
-| Desktop Vitest | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 384 tests passed in 21 files | `npm test` |
-| Frontend production build | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 production build passed | `npm run build`; existing Vite bundle-size advisory |
-| Rust format | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 crate passed | `cargo fmt --check` |
-| Rust clippy | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | All targets passed; 0 warnings | `cargo clippy --all-targets -- -D warnings` |
-| Rust default tests | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 120 unit + 7 permission tests passed; 4 opt-ins ignored | `cargo test` |
+| Desktop lint | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 0 errors/warnings | `npm run lint` in the exported desktop source; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) |
+| Desktop types | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 3 TypeScript configurations passed | `npm run typecheck`; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) |
+| Desktop Vitest | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 384 tests passed in 21 files | `npm test`; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) |
+| Frontend production build | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 production build passed | `npm run build`; existing Vite bundle-size advisory; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) |
+| Rust format | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 crate passed | `cargo fmt --check`; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) |
+| Rust clippy | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | All targets passed; 0 warnings | `cargo clippy --all-targets -- -D warnings`; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) |
+| Rust default tests | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 120 unit + 7 permission tests passed; 4 opt-ins ignored | `cargo test`; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) |
 | Rust real-CLI integrations | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 3/3 explicit opt-ins passed | Synthetic clone convert/resume/repair; shared-config initialize/validate/save; read-only bridge requests; each run with `--ignored` |
-| Native walkthrough | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1/1 local synthetic walkthrough passed (70.39 s) | Native picker, typed draft, actual CLI MP3s, resume, selected repair, cancellation/cleanup and dark/light captures; Desktop CI #83 pending |
+| Native walkthrough | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1/1 local synthetic walkthrough passed (70.39 s); CI executable/AppImage 2/2 passed | Native picker, typed draft, actual CLI MP3s, resume, selected repair, cancellation/cleanup and dark/light captures; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) passed |
 
 The six pytest skips are one optional Kitten smoke, three real-ASR opt-ins and two
 real-clone opt-ins; none is caused by missing FFmpeg, Tesseract or Node. The strict
@@ -51,8 +51,8 @@ resume gap, **not passed acceptance**. Default Rust ignores four opt-ins; three 
 CLI integrations were run explicitly, while the real-model bridge was not repeated.
 The Xvfb walkthrough exercises playback controls/seek, not physical speaker output.
 
-**Supersession:** every older software counter and individual timing observation in the
-progress prose below is historical and superseded by this table for current validation.
+**Supersession:** older offline software gate counters and their test-run timings in
+the progress prose below are historical and superseded by this table for current validation.
 The history is retained. Real-model, listening and resource/timing results from 2026-11-19
 are recorded evidence, not re-measured here; accelerator tasks VC0.03/VC8.04 remain open.
 
