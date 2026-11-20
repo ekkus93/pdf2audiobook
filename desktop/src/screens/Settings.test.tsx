@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AppSettings, Request } from "../engine/types";
 
@@ -7,6 +7,8 @@ vi.mock("../engine/api", async (original) => ({
   run: vi.fn(),
   getSettings: vi.fn(),
   saveSettings: vi.fn(),
+  readCliConfig: vi.fn(),
+  saveCliConfig: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 // The setup check has its own tests (Setup.test.tsx).
@@ -34,6 +36,7 @@ const SOURCES = {
 };
 
 beforeEach(() => {
+  vi.mocked(api.readCliConfig).mockResolvedValue({ path: "/home/me/.config/pdf2audiobook/config.toml", text: "[llm]\nenabled=true\n" });
   vi.mocked(api.getSettings).mockResolvedValue(SAVED);
   vi.mocked(api.saveSettings).mockResolvedValue(undefined);
   vi.mocked(api.run).mockImplementation(async (request: Request) => {
@@ -222,14 +225,15 @@ describe("Settings", () => {
     expect(await screen.findByText("The sample couldn't be played")).toBeInTheDocument();
   });
 
-  it("shows the CLI configuration read-only with where each value comes from", async () => {
+  it("shows effective configuration sources alongside an editable shared file", async () => {
     await ready();
     const table = screen.getByRole("table", { name: "CLI configuration" });
     const row = within(table).getByText("general.output_dir").closest("tr") as HTMLElement;
     expect(row).toHaveTextContent(CONFIG.general.output_dir);
     expect(row).toHaveTextContent("Config file (/home/me/.config/pdf2audiobook/config.toml)");
     expect(table.querySelector("input, md-outlined-text-field")).toBeNull();
-    expect(screen.getByText("~/.config/pdf2audiobook/config.toml")).toBeInTheDocument();
+    expect(await screen.findByRole("textbox", { name: "Configuration file (TOML)" })).toHaveValue("[llm]\nenabled=true\n");
+    expect(screen.getByText("/home/me/.config/pdf2audiobook/config.toml")).toBeInTheDocument();
   });
 
   it("still edits the app's settings when the CLI can't be reached", async () => {
@@ -239,6 +243,26 @@ describe("Settings", () => {
     expect(field("CLI location")).toBeInTheDocument();
     expect(select("Voice")).toHaveTextContent("The CLI's voice");
     expect(screen.queryByRole("table", { name: "CLI configuration" })).not.toBeInTheDocument();
+  });
+
+  it("refreshes effective settings after saving the shared file without discarding app edits", async () => {
+    await ready();
+    await choose("Theme", "light");
+    const text = "[tts.kitten]\nvoice='Luna'\n";
+    vi.mocked(api.saveCliConfig).mockResolvedValue({ path: "/config/config.toml", text });
+    vi.mocked(api.run).mockResolvedValue({ outcome: "success", result: {
+      ...CONFIG, tts: { ...CONFIG.tts, kitten: { ...CONFIG.tts.kitten, voice: "Luna" } }, _sources: SOURCES,
+    } });
+    const editor = await screen.findByRole("textbox", { name: "Configuration file (TOML)" });
+    fireEvent.change(editor, { target: { value: text } });
+    await press(button("Save configuration"));
+    expect(await screen.findByText("Configuration saved. New runs use these settings.")).toBeInTheDocument();
+    await waitFor(() => {
+      const table = screen.getByRole("table", { name: "CLI configuration" });
+      expect(within(table).getByText("tts.kitten.voice").closest("tr")).toHaveTextContent("Luna");
+    });
+    expect(select("Theme").value).toBe("light");
+    expect(button("Save settings")).not.toHaveAttribute("disabled");
   });
 
   it("reports settings that couldn't be saved", async () => {

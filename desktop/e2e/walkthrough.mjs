@@ -24,8 +24,10 @@ const TAURI_DRIVER = process.env.E2E_TAURI_DRIVER ?? "tauri-driver";
 const ARTIFACTS = resolve(process.env.E2E_ARTIFACTS ?? join(DESKTOP, "e2e", "artifacts"));
 const PORT = 4444;
 const NEW_TITLE = "The Keeper (reviewed)";
+const CLONE = process.env.E2E_CLONE === "1";
 const DRY_RUN = process.env.E2E_DRY_RUN !== "0";
 
+const shellQuote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
 function step(text) {
@@ -57,10 +59,13 @@ writeFileSync(
   cli,
   `#!/bin/sh
 set -e
+case " $* " in
+  *" --clone-voice "*) exec uv run --project ${shellQuote(REPO)} python ${shellQuote(join(DESKTOP, "e2e", "fake_clone.py"))} ${shellQuote(asrState)} "$@" ;;
+esac
 for arg in "$@"; do
   case "$arg" in
     --) break ;;
-    asr|verify-audio|audio-report|resynthesize) exec node ${JSON.stringify(join(DESKTOP, "e2e", "fake_asr.mjs"))} ${JSON.stringify(asrState)} "$@" ;;
+    asr|verify-audio|audio-report|resynthesize) exec node ${shellQuote(join(DESKTOP, "e2e", "fake_asr.mjs"))} ${shellQuote(asrState)} "$@" ;;
   esac
 done
 first=1
@@ -69,7 +74,7 @@ for arg in "$@"; do
   set -- "$@" "$arg"
   if [ "$arg" = convert ] && [ ${DRY_RUN ? 1 : 0} = 1 ]; then set -- "$@" --dry-run; fi
 done
-exec uv run --project ${JSON.stringify(REPO)} pdf2audiobook "$@"
+exec uv run --project ${shellQuote(REPO)} pdf2audiobook "$@"
 `,
 );
 chmodSync(cli, 0o755);
@@ -80,7 +85,7 @@ writeFileSync(
 
 // --- WebDriver ---
 
-const env = { ...process.env, XDG_CONFIG_HOME: config, XDG_DATA_HOME: join(home, "data"), HF_HUB_OFFLINE: "1" };
+const env = { ...process.env, XDG_CONFIG_HOME: config, XDG_DATA_HOME: join(home, "data"), XDG_CACHE_HOME: join(home, "cache"), HF_HUB_OFFLINE: "1" };
 const driver = spawn(TAURI_DRIVER, ["--port", String(PORT), "--native-driver", NATIVE_DRIVER], {
   env,
   stdio: ["ignore", "inherit", "inherit"],
@@ -112,7 +117,11 @@ async function find(xpath, seconds = 30) {
   }
 }
 
-const click = (id) => call("POST", s(`/element/${id}/click`), {});
+const click = async (id) => {
+  await run("arguments[0].scrollIntoView({block:'center',inline:'center',behavior:'instant'});", [{[ELEMENT]:id}]);
+  await sleep(100);
+  return call("POST", s(`/element/${id}/click`), {});
+};
 const run = (script, args = []) => call("POST", s("/execute/sync"), { script, args });
 
 /**
@@ -120,7 +129,9 @@ const run = (script, args = []) => call("POST", s("/execute/sync"), { script, ar
  * own screenshot command doesn't answer under Xvfb.)
  */
 async function screenshot(name) {
-  spawnSync("import", ["-window", "root", join(ARTIFACTS, `${name}.png`)], { timeout: 15_000 });
+  const display = spawnSync("xdpyinfo", [], { encoding: "utf8" });
+  const dimensions = (display.stdout ?? "").match(/dimensions:\s+(\d+x\d+)\s+pixels/)?.[1] ?? "1280x800";
+  spawnSync("ffmpeg", ["-nostdin", "-v", "error", "-f", "x11grab", "-video_size", dimensions, "-i", process.env.DISPLAY, "-frames:v", "1", "-y", join(ARTIFACTS, `${name}.png`)], { timeout: 15_000 });
 }
 
 /**
@@ -161,6 +172,8 @@ async function addDemoBook() {
     spawnSync("xdotool", ["windowfocus", "--sync", dialog]);
     // GTK completes paths as they're typed; a fresh temporary folder has no look-alike siblings.
     await sleep(3000);
+    spawnSync("xdotool", ["key", "ctrl+l"]);
+    await sleep(200);
     const typed = spawnSync("xdotool", ["type", "--delay", "60", book], { encoding: "utf8" });
     if (typed.status !== 0) throw new Error(`xdotool: ${typed.stderr}`);
     await sleep(500);
@@ -291,6 +304,7 @@ async function main() {
     }
   }
   await audioCheck(workspace, manifest.chapters.length);
+  if (CLONE) await cloneCheck(workspace);
   step(
     `passed: the book was added, analyzed, reviewed, converted${DRY_RUN ? " (dry run)" : " with real speech"}, checked and repaired`,
   );
@@ -366,6 +380,83 @@ async function audioCheck(workspace, chapters) {
   if (!dismiss || !dismiss.includes("--chapter=2") || !dismiss.includes("--flag=0")) {
     throw new Error(`dismiss was sent as ${JSON.stringify(dismiss)}`);
   }
+}
+
+/** Real CLI/MP3 transactions with synthetic speech, through the native clone controls. */
+async function cloneCheck(workspace) {
+  step("cloning: select a reference through the native file picker");
+  const prepared = spawnSync("uv", ["run", "--project", REPO, "python", join(DESKTOP, "e2e", "fake_clone.py"), asrState, "--prepare"], { encoding: "utf8" });
+  if (prepared.status !== 0) throw new Error(`synthetic reference: ${prepared.stderr}`);
+  const selection = await find("//md-outlined-select[.//*[contains(text(), 'Clone a voice (KittenTTS 2)')]]");
+  await run("arguments[0].value='clone'; arguments[0].dispatchEvent(new Event('change', {bubbles:true}));", [{[ELEMENT]:selection}]);
+  await run("document.querySelector('.clone-controls').scrollIntoView({block:'center',behavior:'instant'});");
+  const before = visibleWindows();
+  await click(await find(button("Choose recording")));
+  let picked = false;
+  for (let attempt=0; attempt<3 && !picked; attempt++) {
+    let dialog = null;
+    for (let n=0; n<100 && !dialog; n++) {
+      dialog = [...visibleWindows()].find((id)=>!before.has(id)) ?? null;
+      if (!dialog) await sleep(100);
+    }
+    if (!dialog) throw new Error("reference file chooser did not open");
+    spawnSync("xdotool", ["windowfocus", "--sync", dialog]);
+    spawnSync("xdotool", ["key", "ctrl+l"]); await sleep(500);
+    spawnSync("xdotool", ["key", "ctrl+a"]);
+    spawnSync("xdotool", ["type", "--clearmodifiers", "--delay", "60", join(asrState,"reference.wav")]);
+    await sleep(500); spawnSync("xdotool", ["key", "Return"]);
+    for (let n=0; n<100 && !picked; n++) {
+      picked = await run("return [...document.querySelectorAll('md-outlined-text-field')].some((field)=>field.label==='Reference recording' && field.value===arguments[0]);", [join(asrState,"reference.wav")]);
+      if (!picked) await sleep(100);
+    }
+  }
+  if (!picked) throw new Error("reference picker did not return the chosen recording");
+  const transcript = await find("//textarea[contains(@id, 'r')]");
+  await call("POST", s(`/element/${transcript}/value`), {text:"Synthetic reference transcript."});
+  await screenshot("8-clone-options");
+  const originalTheme = await run("const theme=document.documentElement.dataset.theme; document.documentElement.dataset.theme='light'; return theme;");
+  await screenshot("8-clone-options-light");
+  await run("document.documentElement.dataset.theme=arguments[0] ?? 'dark';", [originalTheme]);
+  await click(await find(button("Convert to audio")));
+  await find("//*[contains(., 'Conversion finished')]", 180);
+  const audio = join(out,workspace,"audio");
+  const sidecars = readdirSync(audio).filter((name)=>name.endsWith(".cache.json"));
+  if (!sidecars.length || sidecars.some((name)=>!JSON.parse(readFileSync(join(audio,name),"utf8")).rendering_inputs.voice_clone)) throw new Error("cloned MP3 sidecars missing");
+  const beforeResume = readFileSync(join(asrState,"generation.jsonl"),"utf8");
+  await click(await find(button("Back to the book")));
+  await click(await find(button("Convert to audio")));
+  await find("//*[contains(., 'Conversion finished')]", 180);
+  if (readFileSync(join(asrState,"generation.jsonl"),"utf8") !== beforeResume) throw new Error("clone resume repeated synthesis");
+  await click(await find(button("Back to the book")));
+  // Introduce one verification flag via the existing deterministic ASR fixture.
+  rmSync(join(asrState,"repaired"), {force:true});
+  await click(await find(`${button("Verify existing audio")}[not(@disabled)]`));
+  await find("//*[contains(., 'Audio check finished')]",120);
+  await click(await find(button("Back to the book")));
+  const retry = await find("//li[contains(@aria-label, 'Chapter 2:')]"+button("Speak again"));
+  await click(retry);
+  await click(await find("//md-dialog[@open]"+button("Speak again")));
+  await find("//*[contains(., 'Chapters spoken again')]",180);
+  await screenshot("9-clone-repaired");
+  if (!readdirSync(join(audio,".backup")).some((name)=>name.startsWith("002") && name.endsWith(".mp3"))) throw new Error("clone repair backup missing");
+  await click(await find(button("Back to the book")));
+  writeFileSync(join(asrState,"slow"),"");
+  // Force a changed transcript so the next conversion must synthesize.
+  const draft = await find("//textarea");
+  await call("POST", s(`/element/${draft}/clear`), {});
+  await call("POST", s(`/element/${draft}/value`), {text:"Another synthetic transcript."});
+  await click(await find(button("Convert to audio")));
+  for (let n=0; n<300 && !readdirSync(asrState).includes("inference-started"); n++) await sleep(100);
+  await click(await find(button("Stop")));
+  await find("//*[contains(., 'The run stopped') or contains(., 'Stopped')]",60);
+  // Typed transcript drafts and canonical reference snapshots must both be gone.
+  const privateFolders = [join(home,"cache/pdf2audiobook/desktop-voice"),join(home,"cache/pdf2audiobook/private-voice")];
+  for (const folder of privateFolders) {
+    try { if (readdirSync(folder).some((name)=>/^(draft-|job-)/.test(name))) throw new Error("private clone files survived cancellation"); }
+    catch(error) { if (error.code !== "ENOENT") throw error; }
+  }
+  await screenshot("10-clone-cancelled");
+  step("cloning passed: picker, typed draft, real CLI synthesis/MP3s, resume, repair, cancellation and cleanup (synthetic backend)");
 }
 
 let failed = false;

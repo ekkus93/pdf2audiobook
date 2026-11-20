@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { CloneControls } from "./CloneControls";
+import { cloneRequest, cloneErrors, isCloning, type CloneForm } from "./bookOptions";
 import { bookAudio, errorMessage, run } from "../engine/api";
 import type {
   AsrModel,
@@ -91,6 +93,8 @@ export function chaptersToShow(report: AudioReport): ChapterVerification[] {
 }
 
 interface AudioCheckProps {
+  cloneForm?: CloneForm;
+  onCloneChange?: (form: CloneForm) => void;
   manifest: string;
   workspace: string;
   inspect: InspectManifest;
@@ -150,7 +154,7 @@ async function load(manifest: string): Promise<Loaded> {
  * audio", each chapter's result with the passages the models heard differently, and the repair
  * actions of §6. Nothing here changes audio or text by itself.
  */
-export function AudioCheck({ manifest, workspace, inspect, voices, voice, speed, onStart, onPlay, onEditNarration }: AudioCheckProps) {
+export function AudioCheck({ cloneForm, onCloneChange, manifest, workspace, inspect, voices, voice, speed, onStart, onPlay, onEditNarration }: AudioCheckProps) {
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
   const [files, setFiles] = useState<AudioFile[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
@@ -286,6 +290,8 @@ export function AudioCheck({ manifest, workspace, inspect, voices, voice, speed,
       <SetupDialog open={setup} models={models} onClose={() => setSetup(false)} onDone={() => setReload((value) => value + 1)} />
       {retry !== null ? (
         <RetryDialog
+          cloneForm={cloneForm}
+          onCloneChange={onCloneChange}
           key={retry}
           chapter={retry}
           voices={voices}
@@ -488,6 +494,8 @@ function SetupDialog({
 }
 
 interface RetryProps {
+  cloneForm?: CloneForm;
+  onCloneChange?: (form: CloneForm) => void;
   chapter: number;
   voices: Voices | null;
   voice: string;
@@ -498,7 +506,9 @@ interface RetryProps {
   onStart: (request: Omit<Extract<Request, { command: "resynthesize" }>, "manifest">) => void;
 }
 
-function RetryDialog({ chapter, voices, voice, speed, verify, onClose, onStart }: RetryProps) {
+function RetryDialog({ cloneForm, onCloneChange, chapter, voices, voice, speed, verify, onClose, onStart }: RetryProps) {
+  const [clone, setClone] = useState<CloneForm>(cloneForm ?? { voiceMode: "inherit" });
+  const changeClone = (next: CloneForm) => { setClone(next); onCloneChange?.(next); };
   const [chosenVoice, setVoice] = useState(voice);
   const [chosenSpeed, setSpeed] = useState(speed);
   const options = (voices?.listable ? voices.voices : [voice]).filter(Boolean).map((name) => ({ value: name, label: name }));
@@ -514,11 +524,13 @@ function RetryDialog({ chapter, voices, voice, speed, verify, onClose, onStart }
           </Button>
           <Button
             icon="replay"
+            disabled={Object.keys(cloneErrors(clone)).length > 0}
             onClick={() =>
               onStart({
                 command: "resynthesize",
                 chapters: [chapter],
-                voice: chosenVoice || null,
+                ...cloneRequest(clone),
+                voice: isCloning(clone) ? null : chosenVoice || null,
                 speed: chosenSpeed,
                 verify_audio: verify ? true : null,
               })
@@ -534,7 +546,8 @@ function RetryDialog({ chapter, voices, voice, speed, verify, onClose, onStart }
         then kept as a backup in the book's <code>audio/.backup</code> folder.
         {verify ? " The new audio is checked afterwards." : ""}
       </p>
-      {options.length > 0 ? <Select label="Voice" value={chosenVoice} options={options} onChange={setVoice} /> : null}
+      <CloneControls form={clone} onChange={changeClone} />
+      {!isCloning(clone) && options.length > 0 ? <Select label="Voice" value={chosenVoice} options={options} onChange={setVoice} /> : null}
       <div className="slider-row">
         <span className="label-large">Speed</span>
         <Slider label="Speed" value={chosenSpeed} min={0.5} max={2} step={0.05} onChange={setSpeed} />

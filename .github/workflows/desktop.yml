@@ -32,7 +32,7 @@ jobs:
           mkdir -p ~/apt-archives
           sudo cp ~/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
           APT_OPTS="-o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::Retries=5 -o APT::Keep-Downloaded-Packages=true"
-          PACKAGES="libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev build-essential file patchelf webkit2gtk-driver xvfb xdotool imagemagick gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
+          PACKAGES="libwebkit2gtk-4.1-dev libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev build-essential file patchelf webkit2gtk-driver xvfb xdotool ffmpeg x11-utils xdg-desktop-portal xdg-desktop-portal-gtk gstreamer1.0-plugins-base gstreamer1.0-plugins-good"
           for attempt in 1 2 3; do
             if timeout 180 sudo apt-get $APT_OPTS update -q \
               && timeout 600 sudo apt-get $APT_OPTS install -y -q $PACKAGES; then
@@ -105,18 +105,20 @@ jobs:
         run: cargo install tauri-driver --locked
       - name: End-to-end walkthrough
         env:
+          E2E_CLONE: "1"
           E2E_NATIVE_DRIVER: /usr/bin/WebKitWebDriver
           E2E_ARTIFACTS: ${{ runner.temp }}/e2e
-        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run e2e
+        run: bash e2e/isolated.sh
       - name: End-to-end walkthrough of the AppImage itself
         env:
+          E2E_CLONE: "1"
           E2E_NATIVE_DRIVER: /usr/bin/WebKitWebDriver
           E2E_ARTIFACTS: ${{ runner.temp }}/e2e-appimage
           # Runners may lack FUSE; the AppImage then unpacks itself and runs.
           APPIMAGE_EXTRACT_AND_RUN: "1"
         run: |
           export E2E_APP="$(ls "$PWD"/src-tauri/target/release/bundle/appimage/*-unsigned.AppImage)"
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run e2e
+          bash e2e/isolated.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:

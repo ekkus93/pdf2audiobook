@@ -39,6 +39,8 @@ describe("defaults", () => {
 
   it("start from the CLI's own configuration", () => {
     expect(FORM).toEqual({
+      voiceMode: "inherit", inheritedClone: false, inheritedReference: false, inheritedTranscript: false,
+      referenceAudio: "", referenceText: "", referenceTextFile: "",
       llm: true,
       provider: "ollama",
       model: "qwen3.5:9b",

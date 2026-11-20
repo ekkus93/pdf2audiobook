@@ -297,3 +297,28 @@ describe("BookPage", () => {
     expect(api.bookAudio).not.toHaveBeenCalled();
   });
 });
+
+it("restores transient clone drafts and clears paired text when picking a new recording", async () => {
+  const change = vi.fn();
+  const onStart = vi.fn();
+  const { defaults } = await import("./bookOptions");
+  vi.mocked(api.run).mockImplementation(async (request: Request) => {
+    if (request.command === "config_show") return { outcome: "success", result: CONFIG };
+    if (request.command === "tts_models") return { outcome: "success", result: { models: [] } };
+    if (request.command === "edits_list") return { outcome: "success", result: { edits: [] } };
+    return { outcome: "success", result: { voices: ["Jasper"], listable: true } };
+  });
+  const draft = { ...defaults(CONFIG, 2), llm: false, voiceMode: "clone" as const, referenceAudio: "/clips/old.wav", referenceText: "PRIVATE DRAFT" };
+  const rendered = render(<BookPage book={BOOK} outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={onStart} draft={draft} onDraftChange={change} />);
+  expect(await screen.findByLabelText("Reference transcript (optional)")).toHaveValue("PRIVATE DRAFT");
+  // A failed start keeps the mounted form and its transient draft.
+  click(button("Convert to audio"));
+  expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ convert: expect.objectContaining({ reference_text: "PRIVATE DRAFT", voice: null }) }), BOOK.workspace);
+  expect(screen.getByLabelText("Reference transcript (optional)")).toHaveValue("PRIVATE DRAFT");
+  rendered.unmount();
+  render(<BookPage book={BOOK} outputDir="/out" minConfidence={0.75} onBack={vi.fn()} onStart={onStart} draft={draft} onDraftChange={change} />);
+  expect(await screen.findByLabelText("Reference transcript (optional)")).toHaveValue("PRIVATE DRAFT");
+  vi.mocked(open).mockResolvedValue("/clips/new.wav");
+  await act(async () => button("Choose recording").dispatchEvent(new Event("click", { bubbles: true })));
+  expect(change).toHaveBeenCalledWith(expect.objectContaining({ referenceAudio: "/clips/new.wav", referenceText: "", referenceTextFile: "" }));
+});

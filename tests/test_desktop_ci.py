@@ -29,7 +29,7 @@ def test_it_runs_the_frontend_and_rust_checks_the_build_and_the_walkthrough() ->
         "cargo clippy --all-targets -- -D warnings",
         "cargo test",
         "npx tauri build --bundles appimage,deb",
-        'xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run e2e',
+        "bash e2e/isolated.sh",
     ]:
         assert command in commands, command
 
@@ -49,7 +49,8 @@ def test_the_walkthrough_also_runs_the_shipped_appimage() -> None:
     step = step.split("\n      - ", 1)[0]
     assert 'APPIMAGE_EXTRACT_AND_RUN: "1"' in step
     assert "bundle/appimage/*-unsigned.AppImage" in step
-    assert "npm run e2e" in step
+    assert "bash e2e/isolated.sh" in step
+    assert 'E2E_CLONE: "1"' in step
 
 
 def test_installers_are_uploaded_and_named_unsigned() -> None:

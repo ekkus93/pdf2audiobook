@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { errorMessage, getSettings, library, onCloseRequested, onReviewClosed, openReview, quitApp, startRun } from "./engine/api";
 import type { Library as LibraryData, LibraryBook, Request } from "./engine/types";
+import type { OptionsForm } from "./screens/bookOptions";
 import { BookPage } from "./screens/BookPage";
 import { Player, type Queue } from "./screens/Player";
 import { summarize } from "./screens/bookState";
@@ -25,6 +26,7 @@ const DESTINATIONS: ReadonlyArray<Destination<Page>> = [
 const TITLES: Record<Page, string> = { library: "Library", run: "Run", settings: "Settings" };
 
 export default function App() {
+  const [drafts, setDrafts] = useState<Record<string, OptionsForm>>({});
   const [page, setPage] = useState<Page>("library");
   const [open, setOpen] = useState<{ book: LibraryBook; library: LibraryData } | null>(null);
   const [run, setRun] = useState<ActiveRun | null>(null);
@@ -94,7 +96,7 @@ export default function App() {
   };
 
   const start = async (request: Request, workspace: string, options: { waitForLock?: boolean; title?: string } = {}) => {
-    const long = ["analyze", "convert", "verify_audio", "resynthesize"] as const;
+    const long = ["analyze", "convert", "verify_audio", "resynthesize", "tts_fetch"] as const;
     if (!(long as readonly string[]).includes(request.command)) return;
     const command = request.command as (typeof long)[number];
     const title = options.title ?? (open ? summarize(open.book, open.library.min_boundary_confidence).title : "Book");
@@ -129,6 +131,8 @@ export default function App() {
           {page === "library" && open ? (
             <BookPage
               book={open.book}
+              draft={drafts[open.book.workspace]}
+              onDraftChange={(draft) => setDrafts((current) => ({ ...current, [open.book.workspace]: draft }))}
               reviewing={reviewing === open.book.workspace}
               onChanged={refreshOpenBook}
               onPlay={(files, index, start) =>

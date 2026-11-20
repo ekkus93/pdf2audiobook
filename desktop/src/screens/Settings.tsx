@@ -7,6 +7,7 @@ import { Select } from "../ui/Select";
 import { TextField } from "../ui/TextField";
 import { blobUrl } from "./Player";
 import { Setup } from "./Setup";
+import { CliConfigEditor } from "./CliConfigEditor";
 import "./settings.css";
 
 /** The README's Kitten voice samples (docs/audio/voices), bundled with the app. */
@@ -77,6 +78,26 @@ type Loaded =
   | { phase: "failed"; message: string }
   | { phase: "ready"; config: CliConfigWithSources | null; configProblem: string | null; voices: Voices | null };
 
+async function loadCliConfiguration(): Promise<Extract<Loaded, { phase: "ready" }>> {
+  let config: CliConfigWithSources | null = null;
+  let configProblem: string | null = null;
+  try {
+    const outcome = await run<CliConfigWithSources>({ command: "config_show" });
+    if (outcome.outcome === "success") config = outcome.result;
+    else configProblem = outcome.outcome === "failed" ? outcome.error.message : "The engine returned an unreadable result";
+  } catch (error) {
+    configProblem = errorMessage(error);
+  }
+  let voices: Voices | null = null;
+  try {
+    const outcome = await run<Voices>({ command: "voices" });
+    if (outcome.outcome === "success") voices = outcome.result;
+  } catch {
+    // Without the list the samples' voices are offered.
+  }
+  return { phase: "ready", config, configProblem, voices };
+}
+
 /** Settings (spec D4.8): the app's own settings file, the setup check, and the CLI's configuration. */
 export function Settings() {
   const [saved, setSaved] = useState<AppSettings | null>(null);
@@ -86,6 +107,10 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const sample = useRef<HTMLAudioElement>(null);
   const sampleUrl = useRef<string | null>(null);
+
+  const refreshCliConfig = async () => {
+    setLoaded(await loadCliConfiguration());
+  };
 
   useEffect(() => {
     let current = true;
@@ -99,23 +124,8 @@ export function Settings() {
         if (current) setLoaded({ phase: "failed", message: errorMessage(error) });
         return;
       }
-      let config: CliConfigWithSources | null = null;
-      let configProblem: string | null = null;
-      try {
-        const outcome = await run<CliConfigWithSources>({ command: "config_show" });
-        if (outcome.outcome === "success") config = outcome.result;
-        else configProblem = outcome.outcome === "failed" ? outcome.error.message : "The engine returned an unreadable result";
-      } catch (error) {
-        configProblem = errorMessage(error);
-      }
-      let voices: Voices | null = null;
-      try {
-        const outcome = await run<Voices>({ command: "voices" });
-        if (outcome.outcome === "success") voices = outcome.result;
-      } catch {
-        // Without the list the samples' voices are offered.
-      }
-      if (current) setLoaded({ phase: "ready", config, configProblem, voices });
+      const next = await loadCliConfiguration();
+      if (current) setLoaded(next);
     })();
     return () => {
       current = false;
@@ -294,11 +304,7 @@ export function Settings() {
 
       <section className="settings-group" aria-labelledby="settings-cli">
         <h3 id="settings-cli" className="title-medium">CLI configuration</h3>
-        <p className="body-medium on-surface-variant">
-          The CLI's own settings, read-only: the app never changes them. To change one, edit{" "}
-          <code>~/.config/pdf2audiobook/config.toml</code> or set the matching <code>PDF2AUDIOBOOK_…</code>{" "}
-          environment variable; the Source column says where each value comes from.
-        </p>
+        <CliConfigEditor onSaved={() => void refreshCliConfig()} />
         {loaded.phase === "ready" && loaded.configProblem ? (
           <p className="body-medium settings-problem">{loaded.configProblem}</p>
         ) : null}

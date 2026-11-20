@@ -11,6 +11,8 @@ import { Slider } from "../ui/Slider";
 import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
 import { defaults, modelFor, requests, validate, type OptionsForm, type Preferences } from "./bookOptions";
+import { CloneControls } from "./CloneControls";
+import { isCloning } from "./bookOptions";
 import { PendingEdits } from "./PendingEdits";
 import { AudioCheck } from "./AudioCheck";
 import { ChaptersAudio } from "./ChaptersAudio";
@@ -19,6 +21,8 @@ import "./screens.css";
 import "./book.css";
 
 interface BookPageProps {
+  draft?: OptionsForm;
+  onDraftChange?: (form: OptionsForm) => void;
   book: LibraryBook;
   /** True while this book's review window is open. */
   reviewing?: boolean;
@@ -65,11 +69,12 @@ const PROVIDERS: ReadonlyArray<{ value: LlmProvider; label: string }> = [
 ];
 
 /** One book: its options (spec D4.3) and the actions that start analysis or conversion. */
-export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, onPlay, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
+export function BookPage({ draft, onDraftChange, book, reviewing = false, onReviewOpened, onChanged, onPlay, outputDir, minConfidence, onBack, onStart }: BookPageProps) {
   const summary = summarize(book, minConfidence);
   const source = book.inspect?.source_path ?? book.source ?? "";
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
-  const [form, setForm] = useState<OptionsForm | null>(null);
+  const [form, setLocalForm] = useState<OptionsForm | null>(draft ?? null);
+  const setForm = (next: OptionsForm) => { setLocalForm(next); onDraftChange?.(next); };
   const analyzedWithLlm = book.inspect?.analyzed_with_llm ?? null;
 
   useEffect(() => {
@@ -78,13 +83,14 @@ export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, o
       if (!current) return;
       setLoaded(next);
       if (next.phase === "ready") {
-        setForm(defaults(next.config, summary.chapters, next.preferences, analyzedWithLlm));
+        const initial = defaults(next.config, summary.chapters, next.preferences, analyzedWithLlm, source);
+        setLocalForm((current) => current ? { ...current, llm: analyzedWithLlm ?? current.llm, inheritedClone: initial.inheritedClone, inheritedReference: initial.inheritedReference, inheritedTranscript: initial.inheritedTranscript } : initial);
       }
     });
     return () => {
       current = false;
     };
-  }, [summary.chapters, analyzedWithLlm]);
+  }, [summary.chapters, analyzedWithLlm, source]);
 
   return (
     <div className="screen book-page">
@@ -130,6 +136,8 @@ export function BookPage({ book, reviewing = false, onReviewOpened, onChanged, o
           voices={loaded.phase === "ready" ? loaded.voices : null}
           voice={form?.voice ?? ""}
           speed={form?.speed ?? 1}
+          cloneForm={form ?? undefined}
+          onCloneChange={(change) => form && setForm({ ...form, ...change })}
           onStart={(request) => onStart(request, book.workspace)}
           onPlay={(files, index, start) => onPlay?.(files, index, start)}
           onEditNarration={() =>
@@ -261,7 +269,8 @@ function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, boo
         </section>
         <section className="options-group" aria-labelledby="options-voice">
           <h3 id="options-voice" className="title-medium">Voice</h3>
-          {voiceOptions.length > 0 ? (
+          <CloneControls form={form} onChange={(change) => onChange({ ...form, ...change })} onDownload={() => onStart({ command: "tts_fetch" })} />
+          {!isCloning(form) && voiceOptions.length > 0 ? (
             <Select label="Voice" value={form.voice} options={voiceOptions} onChange={(value) => set("voice", value)} />
           ) : (
             <p className="body-medium on-surface-variant">This voice engine has no voice list; the configured voice is used.</p>

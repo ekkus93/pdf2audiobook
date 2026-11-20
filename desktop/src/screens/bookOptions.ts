@@ -1,7 +1,36 @@
-import type { BookOptions, CliConfig, ConvertOptions, LlmProvider, Request } from "../engine/types";
+import type { BookOptions, CliConfig, ConvertOptions, LlmProvider, Request, VoiceCloneOptions } from "../engine/types";
 
 /** What the Book options form edits (spec D4.3). Nothing here is stored per book. */
-export interface OptionsForm {
+export interface CloneForm {
+  voiceMode?: "inherit" | "builtin" | "clone";
+  referenceAudio?: string;
+  referenceTextFile?: string;
+  referenceText?: string;
+  inheritedClone?: boolean;
+  inheritedReference?: boolean;
+  inheritedTranscript?: boolean;
+}
+export const isCloning = (form: CloneForm) => form.voiceMode === "clone" || (form.voiceMode !== "builtin" && !!form.inheritedClone);
+export function cloneRequest(form: CloneForm): VoiceCloneOptions & { tts_provider?: "kitten"; tts_model?: string } {
+  if (form.voiceMode === "builtin") return { clone_voice: false };
+  if (!isCloning(form)) return {};
+  return {
+    ...(form.voiceMode === "clone" ? { clone_voice: true, tts_provider: "kitten" as const, tts_model: "kitten2" } : {}),
+    ...(form.referenceAudio?.trim() ? { reference_audio: form.referenceAudio } : {}),
+    ...(form.referenceTextFile?.trim() ? { reference_text_file: form.referenceTextFile } : {}),
+    ...(form.referenceText?.trim() ? { reference_text: form.referenceText } : {}),
+  };
+}
+export function cloneErrors(form: CloneForm): Partial<Record<keyof CloneForm, string>> {
+  if (!isCloning(form)) return {};
+  const errors: Partial<Record<keyof CloneForm, string>> = {};
+  if (!form.referenceAudio?.trim() && !form.inheritedReference) errors.referenceAudio = "Choose a 5–30 second recording";
+  if (form.referenceText && new TextEncoder().encode(form.referenceText).length > 65536) errors.referenceText = "At most 64 KiB of UTF-8 text";
+  if (form.referenceText?.includes("\0")) errors.referenceText = "Remove NUL characters";
+  if (form.referenceText?.trim() && form.referenceTextFile?.trim()) errors.referenceText = "Use typed text or a transcript file";
+  return errors;
+}
+export interface OptionsForm extends CloneForm {
   llm: boolean;
   provider: LlmProvider;
   model: string;
@@ -44,18 +73,28 @@ export function defaults(
   chapters: number | null,
   preferences: Preferences = {},
   analyzedWithLlm: boolean | null = null,
+  source: string = "",
 ): OptionsForm {
-  const tts = config.tts.provider === "piper" ? config.tts.piper : config.tts.kitten;
+  const name = source.split(/[\\/]/).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  const profile = config.tts.profiles?.[dot > 0 ? name.slice(0, dot) : name];
+  const ttsProvider = profile?.provider ?? config.tts.provider;
+  const tts = ttsProvider === "piper" ? config.tts.piper : config.tts.kitten;
   const provider = preferences.llm_provider ?? config.llm.provider;
   return {
+    voiceMode: "inherit",
+    inheritedClone: profile?.clone_voice ?? config.tts.voice_clone?.enabled ?? false,
+    inheritedReference: !!(profile?.reference_audio ?? config.tts.voice_clone?.reference_audio),
+    inheritedTranscript: profile?.reference_audio != null ? !!profile.reference_text_file : !!(profile?.reference_text_file ?? config.tts.voice_clone?.reference_text_file),
+    referenceAudio: "", referenceText: "", referenceTextFile: "",
     llm: analyzedWithLlm ?? config.llm.enabled,
     provider,
     model: preferences.llm_model || config.llm[MODEL_KEY[provider]].model,
     contextTokens: String(config.llm.max_context_tokens),
     outputTokens: String(config.llm.max_output_tokens),
     remoteConsent: config.llm.allow_remote_content,
-    voice: preferences.default_voice || tts.voice,
-    speed: tts.speed,
+    voice: preferences.default_voice || profile?.voice || tts.voice,
+    speed: profile?.speed ?? tts.speed,
     allChapters: true,
     firstChapter: "1",
     lastChapter: chapters ? String(chapters) : "1",
@@ -75,7 +114,7 @@ function integer(value: string): number | null {
 
 /** The CLI's own limits, checked before anything runs. */
 export function validate(form: OptionsForm, chapters: number | null): OptionsErrors {
-  const errors: OptionsErrors = {};
+  const errors: OptionsErrors = cloneErrors(form);
   if (form.llm) {
     if (!form.model.trim()) errors.model = "Enter a model name";
     const context = integer(form.contextTokens);
@@ -120,7 +159,8 @@ function bookOptions(form: OptionsForm, output: string | null): BookOptions {
 export function requests(book: string, form: OptionsForm, output: string | null): { analyze: Request; convert: Request } {
   const options = bookOptions(form, output);
   const convert: ConvertOptions = {
-    voice: form.voice || null,
+    ...cloneRequest(form),
+    voice: isCloning(form) ? null : form.voice || null,
     speed: form.speed,
     cover: form.cover,
     verify_audio: form.verifyAudio,

@@ -11,7 +11,7 @@ import "./run.css";
 export interface ActiveRun {
   id: number;
   title: string;
-  command: "analyze" | "convert" | "verify_audio" | "resynthesize";
+  command: "analyze" | "convert" | "verify_audio" | "resynthesize" | "tts_fetch";
   workspace: string;
   manifest: string;
   /** The request that started the run, to start again from the reason actions. */
@@ -32,6 +32,7 @@ export function duration(seconds: number): string {
 }
 
 const TASKS: Record<ActiveRun["command"], string> = {
+  tts_fetch: "Downloading KittenTTS 2",
   analyze: "Analyzing",
   convert: "Converting to audio",
   verify_audio: "Checking the audio",
@@ -39,6 +40,7 @@ const TASKS: Record<ActiveRun["command"], string> = {
 };
 
 const DONE: Record<ActiveRun["command"], string> = {
+  tts_fetch: "Model download finished",
   analyze: "Analysis finished",
   convert: "Conversion finished",
   verify_audio: "Audio check finished",
@@ -46,6 +48,7 @@ const DONE: Record<ActiveRun["command"], string> = {
 };
 
 const ICONS: Record<ActiveRun["command"], "auto_stories" | "graphic_eq" | "hearing"> = {
+  tts_fetch: "graphic_eq",
   analyze: "auto_stories",
   convert: "graphic_eq",
   verify_audio: "hearing",
@@ -53,6 +56,7 @@ const ICONS: Record<ActiveRun["command"], "auto_stories" | "graphic_eq" | "heari
 };
 
 const STOPPED: Record<ActiveRun["command"], string> = {
+  tts_fetch: "The download stopped. Verified files are kept; set up the model again to continue.",
   analyze: "The run stopped. Finished chapters are kept; run it again to continue.",
   convert: "The run stopped. Finished chapters are kept; run it again to continue.",
   verify_audio: "The check stopped. Chapters already checked are kept in the report; no audio was changed.",
@@ -130,7 +134,7 @@ export function Run({ run, onDone, onReview, pollMs = 1000, onRestart, onOpenSet
   }
 
   const task = TASKS[run.command];
-  const status = progress?.status ?? null;
+  const status = run.command === "tts_fetch" ? null : progress?.status ?? null;
   return (
     <div className="screen run">
       <div className="run-header">
