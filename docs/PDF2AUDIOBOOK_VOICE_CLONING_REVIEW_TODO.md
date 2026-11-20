@@ -2,6 +2,7 @@
 
 **Status:** In progress — R1 commit planning and isolated validation
 **Date:** 2026-11-19
+**Last reviewed:** 2026-11-20
 **Baseline:** `master` at `451551c` plus the uncommitted voice-cloning working tree
 **Specification:** [Voice Cloning Review Follow-up Specification](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_SPEC.md) (R1–R6)
 **Previous TODO:** [Voice Cloning TODO](PDF2AUDIOBOOK_VOICE_CLONING_TODO.md)
@@ -74,6 +75,9 @@
 |---|---|---|---|---|
 | 2026-11-19 | `451551c` + uncommitted working tree | Spec and TODO drafted from the review; no tasks checked | Review spot checks: 173 cloning and related tests passed; Ruff lint and format clean | R1–R6 |
 | 2026-11-19 | `eed3f7d0dfbad873086d0f7889212002eb2372b7` | R1 prerequisite P0 committed/pushed; 1.1 commit plan recorded; 1.2 partial | Isolated index tree `d0439beb56085317e4760714aca6f9d9a10902b7`: 38 tests passed; lock/Ruff/format/CLI smokes passed; mypy 101 modules on 3.11–3.13; detect-secrets 1.5.0 found 0 findings. Python CI #911 (44632710294) passed all three versions: 2,685 passed/4 skipped each; Desktop CI #66 (44632710112) passed, including executable and AppImage walkthroughs | Remaining R1 units and R2–R6; accelerator gates unchanged |
+| 2026-11-20 | `6fd242d817d2bbe135ea3c0a849b3ce60ab0f5a8` | R1 VC0 design, commit plan and P0 CI evidence committed/pushed | Isolated 23 passed; lock/Ruff/format/CLI and mypy 101 modules on 3.11–3.13 passed; secret scan 0. Exact-head Python CI #912 (44634772551) and Desktop CI #67 (44634772470) passed | Remaining R1 units and R2–R6; accelerator gates unchanged |
+| 2026-11-20 | `ed160e6b7ce509ab3c914281207add10bee7739b` | R1 VC1 pinned model catalog/cache primitives committed; CI failure reproduced | Isolated 22 passed; lock/Ruff/format/CLI and mypy 103 modules on 3.11–3.13 passed. Secret scan: 33 public manifest revisions/checksums reviewed, no real secrets. Python CI #913 (44636305313) failed on the old optional-SDK expectation (2,686 passed/4 skipped/1 failed per version); Desktop CI #68 (44636305380) passed | Historical Python CI remains failed; corrected by the next commit, not rewritten |
+| 2026-11-20 | `0cd79d6084da8491047135eb4b7408968ee731cf` | R1 VC1 corrective test assertion committed/pushed | Isolated 25 passed; lock/Ruff/format/CLI and mypy 103 modules on 3.11–3.13 passed; secret scan 0. Python CI #914 (44637479642) passed all three versions with 2,687 passed/4 skipped each and CLI/wheel/sdist smokes; Desktop CI #69 (44637479706) passed | Remaining R1 units; original ed160e6 CI history still red; R2–R6 and accelerator gates remain |
 
 ## R1 commit plan (recorded before staging)
 
@@ -128,3 +132,28 @@ staging details and any dependency adjustments are recorded before the affected 
   Python 3.11, 3.12 and 3.13 each report **2,685 passed, 4 skipped**, with 101-module mypy,
   CLI and installed wheel/sdist smokes passing. Desktop native executable/AppImage flows
   passed. This is fetched CI evidence; recorded real-model runs were not repeated.
+
+- R2 source-trace qualification (before reproducer): `_voice_run` restores the saved identity,
+  but `_synthesize_selected` already calls `complete_transcript` when pending speech lacks a
+  transcript, then replans. The initially described refusal is therefore **not reproduced**;
+  the review had not traced that later path. Parent-commit tests will distinguish existing
+  rehydration behavior from any same-digest identity or changed-digest reason-reporting gap.
+
+### VC1 CI staging correction (planned before corrective commit)
+
+- Python CI #913 (run 44636305313) failed on all three versions at
+  `tests/test_verification_optional.py::test_the_default_install_has_no_asr_package`:
+  the SDK pin was committed while its existing updated test assertion was left for VC4.
+  The full runs each had **2,686 passed, 4 skipped, 1 failed**. This is a reproduced staging
+  omission, not an SDK or inference failure; the failed SHA/run will not be erased or relabelled.
+- Corrective unit: `test(tts): align optional sdk pin contract`, exact path
+  `tests/test_verification_optional.py`. Move this already-existing assertion change forward
+  from VC4. Validate it against the pinned optional dependency before committing/pushing.
+- The original `ed160e6b7ce509ab3c914281207add10bee7739b` remains a historically failing CI
+  revision. A green corrective successor does not make that original run green. Preserve this
+  qualification when assessing R1's strict per-commit green-CI acceptance criterion.
+
+- CI observation after resumption (2026-11-20): the VC1 corrective head has green Python
+  and Desktop runs. The missing test assertion has been moved forward; no production
+  behavior was changed to resolve the CI failure. Record the failed and recovered heads
+  in this separate documentation commit before advancing to VC2.
