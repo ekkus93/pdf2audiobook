@@ -78,6 +78,9 @@
 | 2026-11-20 | `6fd242d817d2bbe135ea3c0a849b3ce60ab0f5a8` | R1 VC0 design, commit plan and P0 CI evidence committed/pushed | Isolated 23 passed; lock/Ruff/format/CLI and mypy 101 modules on 3.11–3.13 passed; secret scan 0. Exact-head Python CI #912 (44634772551) and Desktop CI #67 (44634772470) passed | Remaining R1 units and R2–R6; accelerator gates unchanged |
 | 2026-11-20 | `ed160e6b7ce509ab3c914281207add10bee7739b` | R1 VC1 pinned model catalog/cache primitives committed; CI failure reproduced | Isolated 22 passed; lock/Ruff/format/CLI and mypy 103 modules on 3.11–3.13 passed. Secret scan: 33 public manifest revisions/checksums reviewed, no real secrets. Python CI #913 (44636305313) failed on the old optional-SDK expectation (2,686 passed/4 skipped/1 failed per version); Desktop CI #68 (44636305380) passed | Historical Python CI remains failed; corrected by the next commit, not rewritten |
 | 2026-11-20 | `0cd79d6084da8491047135eb4b7408968ee731cf` | R1 VC1 corrective test assertion committed/pushed | Isolated 25 passed; lock/Ruff/format/CLI and mypy 103 modules on 3.11–3.13 passed; secret scan 0. Python CI #914 (44637479642) passed all three versions with 2,687 passed/4 skipped each and CLI/wheel/sdist smokes; Desktop CI #69 (44637479706) passed | Remaining R1 units; original ed160e6 CI history still red; R2–R6 and accelerator gates remain |
+| 2026-11-20 | `cdd056079d0d87e65f4f45f40ebac2aa06f59062` | R1 CI failure/recovery evidence commit (partial R1) | Python #915 (44706154248) passed; Desktop #70 (44706154237) attempt 1 failed at the AppImage review-window-close timeout; attempt 2 passed both executable and AppImage flows. No code changed for the rerun. | Remaining R1 units and R2–R6; historical ed160e6 Python failure and VC0.03/VC8.04 accelerator gates remain open. |
+| 2026-11-20 | `0e22c82b46e1f0330d5da5e13b048fe7287ad087` | R1 VC2 private reference/configuration selection (partial R1) | Python #916 (44707452180) passed all three versions: 2,728 passed/4 skipped each, mypy 107 modules, CLI and wheel/sdist smokes. Desktop #71 (44707452181) passed both native walkthroughs. Isolated local subset 160 passed; all three mypy versions, lock/Ruff/format/CLI passed; three non-secret scanner flags reviewed. | Remaining R1 units and R2–R6; historical ed160e6 Python failure and VC0.03/VC8.04 accelerator gates remain open. |
+| 2026-11-20 | `731c8a99d9f6d31336818d7bc8b81ce212ba6cc2` | R1 VC3 isolated offline speech/ASR workers (partial R1) | Python #917 (44707705390) passed all three versions: 2,735 passed/4 skipped each, mypy 109 modules, CLI and wheel/sdist smokes. Desktop #72 (44707705359) passed both native walkthroughs. Isolated local subset 58 passed; lock/Ruff/format/CLI and all three mypy versions passed; one public golden hash scanner flag reviewed. | Remaining R1 units and R2–R6; historical ed160e6 Python failure and VC0.03/VC8.04 accelerator gates remain open. |
 
 ## R1 commit plan (recorded before staging)
 
@@ -157,3 +160,55 @@ staging details and any dependency adjustments are recorded before the affected 
   and Desktop runs. The missing test assertion has been moved forward; no production
   behavior was changed to resolve the CI failure. Record the failed and recovered heads
   in this separate documentation commit before advancing to VC2.
+
+### VC2 checkpoint (2026-11-20)
+
+- Committed/pushed `0e22c82b46e1f0330d5da5e13b048fe7287ad087` after isolated
+  validation: 160 passed; lock, Ruff lint/format, CLI smokes and mypy 107 modules
+  on 3.11–3.13 passed. Three scanner flags were configuration variable names or
+  a public golden identity hash, not secrets. CI is pending.
+- The preceding evidence commit `cdd056079d0d87e65f4f45f40ebac2aa06f59062`
+  passed Python #915 (44706154248). Desktop #70 (44706154237), attempt 1,
+  failed at the AppImage review-window-close timeout; its native executable flow,
+  build and other checks passed. This is a reproduced walkthrough timeout on a
+  documentation-only revision, not a demonstrated voice-cloning regression.
+  A failed-job rerun was requested; do not label the original attempt green.
+- VC2's first test invocation selected a nonexistent test file (exit 4, no tests
+  collected); correcting the command, without changing code, yielded 160 passed.
+
+- VC3 committed/pushed `731c8a99d9f6d31336818d7bc8b81ce212ba6cc2` after isolated 58 tests, lock, Ruff lint/format,
+  mypy on 3.11–3.13 and CLI smokes passed. The scanner flag is the fixed legacy
+  identity golden hash. Exact-head CI is pending; no pending result is counted
+  as passed. VC2's CI was checked and still running before this R1 unit.
+
+- Exact-head Python CI #916 (44707452180) passed VC2 on all three Python
+  versions: **2,728 passed, 4 skipped** each, 107-module mypy and installed
+  wheel/sdist smokes passed. Python #917 (44707705390) also passed VC3;
+  detailed counters and the still-running Desktop jobs will be recorded in the
+  separate CI-evidence commit. Pending jobs are not green evidence.
+- R5 working-tree probe reproduced an additional cache limitation: after a
+  simulated installed Torch version is removed, retaining a reference and its
+  transcript changes `backend_versions` and synthesizes finished chapters again.
+  The earlier probe without a simulated installed backend passed because both
+  identities were empty. Reproduce against the completed committed feature
+  before assigning the final audit verdict; do not silently broaden R2's fix.
+
+- VC4 committed/pushed `3044e742fd397fec6bfc58f661c16a0bc3afbea3`: isolated
+  94 Python tests passed; lock, Ruff, mypy 110 modules on 3.11–3.13, CLI smokes,
+  desktop lint/typecheck/build, 356 Vitest tests, Rust fmt/clippy, 110 Rust unit
+  and seven permission tests passed (one existing opt-in Rust test ignored).
+  All 66 scanner findings were public model/ASR revisions and artifact checksums
+  in the two new diagnostic fixtures. CI pending.
+
+- VC5 committed/pushed after isolated **85 passed, 2 intentionally skipped**
+  (the two opt-in real-model tests); lock, Ruff lint/format, mypy 110 modules
+  on 3.11–3.13 and CLI smokes passed. No scanner findings. Real-model evidence
+  from 2026-11-19 was not re-measured. Exact SHA and CI results follow in the
+  separate evidence ledger after the jobs finish.
+
+- VC6 committed/pushed `8a88b7d04f1fa1e83ab7ba3593e8934f2097501d`: isolated
+  59 Python tests; all Python static/CLI gates; 356 Vitest, 119 Rust unit and
+  seven permission tests passed (four Rust opt-in tests ignored). Private
+  transcript lifecycle covers completion, failure, cancellation and shutdown.
+  One secret-scan flag was an existing synthetic invalid password-env fixture.
+  Exact-head Python #920 (44708954277) and Desktop #75 (44708954310) pending.
