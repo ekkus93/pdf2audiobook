@@ -1,6 +1,6 @@
 # PDF2Audiobook Voice Cloning Review Follow-up TODO
 
-**Status:** In progress — R1 commit planning and isolated validation
+**Status:** In progress — feature and R2/R3 fixes committed; acceptance audit and final checks
 **Date:** 2026-11-19
 **Last reviewed:** 2026-11-20
 **Baseline:** `master` at `451551c` plus the uncommitted voice-cloning working tree
@@ -29,17 +29,17 @@
 ## 2. Warm resume with an unchanged reference (R2)
 
 - [x] 2.1 Decide between option (a), transcribe locally when synthesis needs a transcript, and option (b), keep the refusal and name the fix. Record the decision and reason in the ledger before implementing.
-- [ ] 2.2 Regression test, run against the parent commit: unchanged reference, no transcript, a chapter that needs synthesis. Record the failing test ID.
-- [ ] 2.3 Regression test: a missing local ASR backend never downloads or loads a model.
-- [ ] 2.4 Regression test: the recorded identity is unchanged unless new transcription produces a different digest.
-- [ ] 2.5 Implement the chosen option in `conversion.py` (`_clone_preparation`) and keep the refusal content-free.
+- [x] 2.2 Regression test, run against the parent commit: unchanged reference, no transcript, a chapter that needs synthesis. Record the failing test ID.
+- [x] 2.3 Regression test: a missing local ASR backend never downloads or loads a model.
+- [x] 2.4 Regression test: the recorded identity is unchanged unless new transcription produces a different digest.
+- [x] 2.5 Implement the chosen option in `conversion.py` (`_clone_preparation`) and keep the refusal content-free.
 
 ## 3. Containment before directory creation (R3)
 
-- [ ] 3.1 Regression test, run against the parent commit: a manifest path that escapes the cache root creates nothing outside it and raises `ConfigError`. Record the failing test ID.
-- [ ] 3.2 Regression test: a symlinked component pointing outside the root creates nothing outside it.
-- [ ] 3.3 Move the containment check in `tts/catalog.py` `fetch_model` before `mkdir`. Resolve the deepest existing ancestor for paths that do not exist yet, and refuse symlinks that leave the root.
-- [ ] 3.4 Confirm the existing fetch and offline reuse tests pass unchanged.
+- [x] 3.1 Regression test, run against the parent commit: a manifest path that escapes the cache root creates nothing outside it and raises `ConfigError`. Record the failing test ID.
+- [x] 3.2 Regression test: a symlinked component pointing outside the root creates nothing outside it.
+- [x] 3.3 Move the containment check in `tts/catalog.py` `fetch_model` before `mkdir`. Resolve the deepest existing ancestor for paths that do not exist yet, and refuse symlinks that leave the root.
+- [x] 3.4 Confirm the existing fetch and offline reuse tests pass unchanged.
 
 ## 4. Single validation table (R4)
 
@@ -84,6 +84,9 @@
 | 2026-11-20 | `3044e742fd397fec6bfc58f661c16a0bc3afbea3` | R1 partial: VC4 CLI conversion, repair and protocol contracts | Python #918 (44708223720): 2,740 passed/4 skipped on each of 3.11–3.13, mypy 110 modules, CLI/wheel/sdist passed; Desktop #73 (44708223845) passed executable and AppImage walkthroughs. Local 94 Python, 356 Vitest, 110 Rust unit + seven permission tests passed; 66 public fixture checksum/revision scanner flags reviewed. | Final R1 CI/evidence, R2–R6; historical ed160e6 Python failure and accelerator gates remain open. |
 | 2026-11-20 | `7e873e525e767175282c081d317ec3b594e4efd8` | R1 partial: VC5 cache, conversion and repair acceptance tests | Python #919 (44708513801): 2,774 passed/6 skipped on each of 3.11–3.13, all static/CLI/wheel/sdist checks passed; Desktop #74 (44708513495) passed both walkthroughs. Local 85 passed/two real-model tests intentionally skipped; secret scan 0. | Final R1 CI/evidence, R2–R6; historical ed160e6 Python failure and accelerator gates remain open. |
 | 2026-11-20 | `8a88b7d04f1fa1e83ab7ba3593e8934f2097501d` | R1 partial: VC6 typed Tauri bridge, private drafts and shared config setup | Python #920 (44708954277): 2,774 passed/6 skipped on each version, all static/CLI/wheel/sdist checks passed; Desktop #75 (44708954310) passed both walkthroughs, 119 Rust unit + seven permission tests (four opt-in ignored). Local 59 Python and 356 Vitest passed; one existing synthetic fixture scanner flag reviewed. | Final R1 CI/evidence, R2–R6; historical ed160e6 Python failure and accelerator gates remain open. |
+| 2026-11-20 | `066be91cd7d8f0c279e2d6541f41d2d3b848213a` | R1 VC7 clone controls and native workflow | Python #922 (44709697687) passed all versions with 2,774 passed/6 skipped each. Desktop #77 (44709697645) passed the clone-enabled executable and AppImage walkthroughs: picker, transient draft, synthesis, resume, repair, cancel and cleanup. Local 64 Python, 383 Vitest, 119 Rust unit + seven permission tests and all static/build checks passed; secret scan 0. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
+| 2026-11-20 | `f981812c51613f6ca02a859a2b1bd6faebd4ff01` | R1 VC8 setup, configuration and voice-cloning guides | Exact-head Python #923 (44710034100) and Desktop #78 (44710034119) passed, including clean wheel/sdist and both native clone walkthroughs. Local 39 Python, 383 Vitest, 119 Rust unit + seven permission tests, all three mypy targets and remaining static/build/CLI checks passed; six documentation placeholders/environment-name scanner flags reviewed. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
+| 2026-11-20 | `c1523415034f2563178e2dfe90fe5cb2c9ad4ac8` | R2 warm-resume identity and regeneration reason | Parent a01cfdc reproduced three failures/one pass before the fix; isolated corrected subset 89 passed with all Python static/CLI gates and mypy 110 modules on 3.11–3.13, secret scan 0. Python #925 (44710917499) passed all versions with 2,778 passed/6 skipped each, CLI and wheel/sdist smokes. Desktop #80 (44710917478) is pending, not counted as passed. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
 
 ## R1 commit plan (recorded before staging)
 
@@ -240,3 +243,69 @@ staging details and any dependency adjustments are recorded before the affected 
   is unchanged, including its original ASR provenance. If text differs, replan
   affected synthesis and record the content-free `voice_reference_changed` reason.
   The actual integration function is `_voice_run`, not `_clone_preparation`.
+
+### Parent-commit reproduction (2026-11-20)
+
+Parent `a01cfdcdd6a4b7907abe53d06b8ce24ec0abfeee` (isolated Git tree
+`724f2ced3910226eda477dd7957913fe06c67be2`), before any runtime review fix:
+
+- R2: **3 failed, 1 passed**. Failing tests:
+  `test_warm_resume_rehydrates_same_transcript_without_changing_identity[speed]`,
+  the same test `[chapter]`, and
+  `test_changed_auto_transcript_regenerates_and_records_reason`.
+  The first two reached successful local transcription/synthesis but changed
+  provenance despite identical text SHA-256; the third regenerated speech but
+  lacked `reason_code`. `test_missing_asr_on_warm_resume_never_starts_a_worker_or_downloads`
+  passed with worker/network traps. The originally alleged refusal remains
+  read from code, **not reproduced**, because the later rehydration path works.
+- R3: **2 failed** at
+  `test_fetch_rejects_escaping_parent_before_creating_directories[traversal]`
+  and `[symlink]`: the refusal happened after an outside `new/` directory existed.
+  Both failures were reproduced with synthetic manifest entries and no network.
+- R5 additional finding: `test_finished_audio_reuses_without_sdk_while_reference_exists`
+  failed (eight synthesis calls instead of the original four) when simulated
+  Torch metadata was removed while the reference and transcript remained.
+  This reproduces the working-tree probe on committed code. It affects shared
+  spec §6/§9 dependency-free completed-audio reuse; record VC5.05 as partial
+  rather than include an unrelated behavioral change in R2.
+
+Full logs and reproducer JSON remain outside Git in the review validation cache;
+only synthetic regression test source and content-free findings enter the repository.
+
+- R2 final repository test source was also run against the unchanged parent
+  runtime before editing: `tests/test_voice_cloning_resume.py` reproduced the
+  same **three failures / one pass**. Applied fix: preserve saved provenance on
+  an equal normalized text digest; after a changed digest, replan and record
+  `voice_reference_changed` in each regenerated chapter's conversion status.
+  No model-download or readiness path changed. Validation is in progress.
+
+- R2 focused validation after the fix: **81 passed** across warm resume, clone
+  conversion/reference and function-length tests. The three reproduced failing
+  cases now pass; missing-ASR refusal still starts no worker or network action.
+  Equal digests retain the original identity; differing text records the reason
+  and regenerates even the otherwise unchanged selected chapter. Full per-commit
+  static/type/subset validation is running in an isolated index export.
+
+- R2 committed/pushed `c1523415034f2563178e2dfe90fe5cb2c9ad4ac8` after
+  isolated **89 passed**, lock/Ruff/format/CLI smokes and mypy 110 modules on
+  3.11–3.13; secret scan 0. Exact-head Python #925 (44710917499) and
+  Desktop #80 (44710917478) are pending; no pending result is counted as passed.
+- R3 repository tests were rerun against their immediate parent
+  `c1523415034f2563178e2dfe90fe5cb2c9ad4ac8` **before the containment fix**:
+  both traversal and symlink variants of
+  `tests/test_tts_cache_containment.py::test_fetch_rejects_escaping_parent_before_creating_directories`
+  failed because an outside directory existed. Moved the unchanged content-free
+  refusal before mkdir, using `resolve(strict=False)` to resolve existing
+  ancestors/symlinks while retaining a nonexistent suffix. Validation in progress.
+
+- R3 focused validation passed **79 tests**, including both new containment
+  regressions and the unchanged normal fetch, offline reuse, interruption,
+  cloning conversion and function-length tests. Per-commit isolated checks run
+  before commit; R3 changes no identity or refusal message.
+
+- R3 committed/pushed `8888b4e716e8ca307b887db6aed5928fded1f1de` after
+  isolated **83 passed**, all Python static/CLI gates and mypy 110 modules
+  on 3.11–3.13; secret scan 0. Python #926 (44711393593) and Desktop #81
+  (44711393418) pending. R5 new focused Python coverage passes **27 tests**
+  plus one strict expected failure documenting the unresolved retained-reference
+  dependency-removal case. No production behavior change is planned for that case.
