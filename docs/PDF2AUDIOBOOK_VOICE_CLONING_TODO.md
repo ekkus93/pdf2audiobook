@@ -13,6 +13,48 @@
 > [review follow-up ledger](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_TODO.md) for exact committed
 > revisions and CI evidence. Historical counts are recorded evidence, not new measurements.
 
+## Current validation state
+
+Final code revision: `99416560b9081dd61f8fecd1c52d870fdc0a4c0f`. All rows below were measured on its
+exact exported Git tree after the last code change, then committed unchanged. Later
+documentation commits record this evidence and do not change the tested code. Local logs,
+package artifacts and synthetic screenshots are retained outside Git under the review
+validation cache (`review-2026-11-19/r5/`). Commands below reproduce the corresponding gates.
+
+| Gate | Revision | Date | Current result/count | Evidence |
+|---|---|---|---|---|
+| Lockfile | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 137 packages resolved; locked sync passed | `uv lock --check`; `uv sync --locked --extra dev`; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| Ruff lint | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 0 findings | `uv run --extra dev ruff check .`; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| Ruff format | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 505 files already formatted | `uv run --extra dev ruff format --check .`; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| mypy 3.11 | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 110 source modules; 0 issues | `uv run --extra dev mypy --python-version 3.11`; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| mypy 3.12 | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 110 source modules; 0 issues | `uv run --extra dev mypy --python-version 3.12`; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| mypy 3.13 | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 110 source modules; 0 issues | `uv run --extra dev mypy --python-version 3.13`; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| Full offline pytest | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | **2,807 passed, 6 skipped, 1 xfailed** | `uv run --extra dev pytest -q -ra`; local 173.92 s; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) confirms identical counts on all three versions |
+| CLI smoke | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 3/3 passed | `--help`, `config show --json`, `doctor --json`; isolated configuration; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| Wheel smoke | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 wheel built; clean install/import and 3/3 CLI smokes passed | `uv build --wheel`; separate fresh venv; installed-source location verified; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| sdist smoke | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 sdist built; clean install/import and 3/3 CLI smokes passed | `uv build --sdist`; separate fresh venv; installed-source location verified; [Python CI #928](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371948) |
+| Desktop lint | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 0 errors/warnings | `npm run lint` in the exported desktop source |
+| Desktop types | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 3 TypeScript configurations passed | `npm run typecheck` |
+| Desktop Vitest | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 384 tests passed in 21 files | `npm test` |
+| Frontend production build | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 production build passed | `npm run build`; existing Vite bundle-size advisory |
+| Rust format | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1 crate passed | `cargo fmt --check` |
+| Rust clippy | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | All targets passed; 0 warnings | `cargo clippy --all-targets -- -D warnings` |
+| Rust default tests | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 120 unit + 7 permission tests passed; 4 opt-ins ignored | `cargo test` |
+| Rust real-CLI integrations | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 3/3 explicit opt-ins passed | Synthetic clone convert/resume/repair; shared-config initialize/validate/save; read-only bridge requests; each run with `--ignored` |
+| Native walkthrough | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1/1 local synthetic walkthrough passed (70.39 s) | Native picker, typed draft, actual CLI MP3s, resume, selected repair, cancellation/cleanup and dark/light captures; Desktop CI #83 pending |
+
+The six pytest skips are one optional Kitten smoke, three real-ASR opt-ins and two
+real-clone opt-ins; none is caused by missing FFmpeg, Tesseract or Node. The strict
+expected failure is the reproduced **VC5.05** retained-reference/dependency-removal
+resume gap, **not passed acceptance**. Default Rust ignores four opt-ins; three offline
+CLI integrations were run explicitly, while the real-model bridge was not repeated.
+The Xvfb walkthrough exercises playback controls/seek, not physical speaker output.
+
+**Supersession:** every older software counter and individual timing observation in the
+progress prose below is historical and superseded by this table for current validation.
+The history is retained. Real-model, listening and resource/timing results from 2026-11-19
+are recorded evidence, not re-measured here; accelerator tasks VC0.03/VC8.04 remain open.
+
 ## Working rules
 
 - Follow the dependency order below. Check a task only when its implementation and named
@@ -170,6 +212,9 @@
 | 10. Documentation and remaining gates | VC8.01–VC8.05 |
 
 ## Progress ledger
+
+> Historical checkpoints: all counters below are superseded by the Current validation state
+> table above. Earlier “only accelerator gates remain” conclusions predate the reopened VC5.05.
 
 | Date | Commit/tree | Completed tasks | Validation | Outstanding gates |
 |---|---|---|---|---|

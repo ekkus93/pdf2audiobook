@@ -43,9 +43,9 @@
 
 ## 4. Single validation table (R4)
 
-- [ ] 4.1 Add a "Current validation state" table to `docs/PDF2AUDIOBOOK_VOICE_CLONING_TODO.md` with one row per gate, each giving commit, date and counts.
-- [ ] 4.2 Mark superseded counts in the prose as superseded by the table. Keep the history.
-- [ ] 4.3 Check each table count against a run on the named commit, recorded after the last code change.
+- [x] 4.1 Add a "Current validation state" table to `docs/PDF2AUDIOBOOK_VOICE_CLONING_TODO.md` with one row per gate, each giving commit, date and counts.
+- [x] 4.2 Mark superseded counts in the prose as superseded by the table. Keep the history.
+- [x] 4.3 Check each table count against a run on the named commit, recorded after the last code change.
 
 ## 5. Per-task verification (R5)
 
@@ -86,7 +86,9 @@
 | 2026-11-20 | `8a88b7d04f1fa1e83ab7ba3593e8934f2097501d` | R1 partial: VC6 typed Tauri bridge, private drafts and shared config setup | Python #920 (44708954277): 2,774 passed/6 skipped on each version, all static/CLI/wheel/sdist checks passed; Desktop #75 (44708954310) passed both walkthroughs, 119 Rust unit + seven permission tests (four opt-in ignored). Local 59 Python and 356 Vitest passed; one existing synthetic fixture scanner flag reviewed. | Final R1 CI/evidence, R2–R6; historical ed160e6 Python failure and accelerator gates remain open. |
 | 2026-11-20 | `066be91cd7d8f0c279e2d6541f41d2d3b848213a` | R1 VC7 clone controls and native workflow | Python #922 (44709697687) passed all versions with 2,774 passed/6 skipped each. Desktop #77 (44709697645) passed the clone-enabled executable and AppImage walkthroughs: picker, transient draft, synthesis, resume, repair, cancel and cleanup. Local 64 Python, 383 Vitest, 119 Rust unit + seven permission tests and all static/build checks passed; secret scan 0. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
 | 2026-11-20 | `f981812c51613f6ca02a859a2b1bd6faebd4ff01` | R1 VC8 setup, configuration and voice-cloning guides | Exact-head Python #923 (44710034100) and Desktop #78 (44710034119) passed, including clean wheel/sdist and both native clone walkthroughs. Local 39 Python, 383 Vitest, 119 Rust unit + seven permission tests, all three mypy targets and remaining static/build/CLI checks passed; six documentation placeholders/environment-name scanner flags reviewed. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
-| 2026-11-20 | `c1523415034f2563178e2dfe90fe5cb2c9ad4ac8` | R2 warm-resume identity and regeneration reason | Parent a01cfdc reproduced three failures/one pass before the fix; isolated corrected subset 89 passed with all Python static/CLI gates and mypy 110 modules on 3.11–3.13, secret scan 0. Python #925 (44710917499) passed all versions with 2,778 passed/6 skipped each, CLI and wheel/sdist smokes. Desktop #80 (44710917478) is pending, not counted as passed. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
+| 2026-11-20 | `c1523415034f2563178e2dfe90fe5cb2c9ad4ac8` | R2 warm-resume identity and regeneration reason | Parent a01cfdc reproduced three failures/one pass before the fix; isolated corrected subset 89 passed with all Python static/CLI gates and mypy 110 modules on 3.11–3.13, secret scan 0. Python #925 (44710917499) passed all versions with 2,778 passed/6 skipped each, CLI and wheel/sdist smokes. Desktop #80 (44710917478) passed both clone-enabled native walkthroughs. | Review audit/final gates; historical ed160e6 CI exception and accelerator acceptance remain open. |
+| 2026-11-20 | `8888b4e716e8ca307b887db6aed5928fded1f1de` | R3 containment before directory creation | Immediate-parent traversal/symlink tests both failed before the fix; isolated 83 passed and all Python static/CLI gates plus 110-module mypy on 3.11–3.13 passed; secret scan 0. Python #926 (44711393593) passed all versions with 2,780 passed/6 skipped each and CLI/wheel/sdist smokes. Desktop #81 (44711393418) passed both clone-enabled native flows. | VC5.05 known resume limitation; VC0.03/VC8.04 hardware gates; historical R1 ed160e6 CI exception. |
+| 2026-11-20 | `99416560b9081dd61f8fecd1c52d870fdc0a4c0f` | R5 additional acceptance coverage and reopened VC5.05; R4 final-code counters | Local full suite 2,807 passed/6 skipped/1 strict expected failure; lock/Ruff/format, three 110-module mypy targets, CLI, clean wheel/sdist installs, 384 Vitest, 120 Rust unit + seven permission tests, three explicit real-CLI integrations and 70.39-s native synthetic walkthrough passed. Python #928 (44713371948) confirms the same full-suite counts on all three versions. Desktop #83 (44713371693) pending, not counted as passed. Two old documentation placeholder scanner findings reviewed. | VC5.05 known resume limitation; VC0.03/VC8.04 hardware gates; historical R1 ed160e6 CI exception. |
 
 ## R1 commit plan (recorded before staging)
 
@@ -309,3 +311,25 @@ only synthetic regression test source and content-free findings enter the reposi
   (44711393418) pending. R5 new focused Python coverage passes **27 tests**
   plus one strict expected failure documenting the unresolved retained-reference
   dependency-removal case. No production behavior change is planned for that case.
+
+- R5 adds 27 passing Python acceptance cases and a strict expected failure for
+  the reproduced VC5.05 limitation; the original task is reopened (37/40 checked).
+  Added clone-specific Rust Details/Debug/event-log/generic-error marker coverage
+  and frontend repair-request parity. Structured CLI error messages are a trusted
+  protocol boundary; their content-free behavior is tested on the real Python
+  CLI, while Rust tests ensure raw unstructured stderr cannot reach generic errors.
+- R5 CI maintenance: the original feature changed Desktop CI's apt package list.
+  `MAINTAINER_GUIDE.md` explicitly requires a cache-key bump for that change;
+  refresh its documented key and `desktop.yml` from v2 to v3. This changes no
+  application behavior. Full final-source Python and desktop checks follow.
+
+- R4 authoritative table now names final code
+  `99416560b9081dd61f8fecd1c52d870fdc0a4c0f` for every gate, with date and
+  counters verified against local exported-tree logs. Python CI #928 (44713371948)
+  confirms **2,807 passed, 6 skipped, 1 xfailed** on 3.11/3.12/3.13. Clean wheel
+  and sdist imports/three smokes each, 384 Vitest, 120 Rust unit + seven permission
+  tests, three explicit real-CLI integrations and native synthetic walkthrough
+  (70.39 s) passed. Four Rust opt-ins are ignored by default; only the real-model
+  bridge remains unrun in this review. Current Desktop #83 (44713371693) is pending.
+  Older software counters/timings are explicitly historical and superseded;
+  recorded 2026-11-19 real-model/listening evidence was not re-measured.
