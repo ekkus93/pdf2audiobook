@@ -49,10 +49,10 @@
 
 ## 5. Per-task verification (R5)
 
-- [ ] 5.1 For each `[x]` task in the voice cloning TODO, record the implementing file and line(s), the exercising test(s), and a verdict: verified, partially verified (with what is missing) or not verified.
-- [ ] 5.2 Record each unchecked task as open, with its reason.
-- [ ] 5.3 For each task that is not verified or only partially verified, add a test that verifies it, or untick it with a note.
-- [ ] 5.4 Cover the privacy and identity requirements of the specification in the verification, not only the presence of code.
+- [x] 5.1 For each `[x]` task in the voice cloning TODO, record the implementing file and line(s), the exercising test(s), and a verdict: verified, partially verified (with what is missing) or not verified.
+- [x] 5.2 Record each unchecked task as open, with its reason.
+- [x] 5.3 For each task that is not verified or only partially verified, add a test that verifies it, or untick it with a note.
+- [x] 5.4 Cover the privacy and identity requirements of the specification in the verification, not only the presence of code.
 
 ## 6. Honest provenance (R6)
 
@@ -333,3 +333,14 @@ only synthetic regression test source and content-free findings enter the reposi
   bridge remains unrun in this review. Current Desktop #83 (44713371693) is pending.
   Older software counters/timings are explicitly historical and superseded;
   recorded 2026-11-19 real-model/listening evidence was not re-measured.
+
+- R5 complete task audit: [40-row verification table](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_AUDIT.md)
+  links implementing source and exercising tests at final code
+  `99416560b9081dd61f8fecd1c52d870fdc0a4c0f`. Every original clause is recorded:
+  **37 verified, one partially verified/open (VC5.05), two open hardware gates**.
+  All remaining checked tasks have inspected code plus exercising evidence.
+  Clone-specific privacy, legacy/active identity and per-layer invalidation are
+  covered explicitly. Three default-ignored offline Rust CLI integrations were
+  run and passed; only the real-model Rust bridge is unrun in this review.
+  Native dark/light controls were captured and visually inspected; playback
+  controls/seek ran under Xvfb, without assessing physical speaker output.

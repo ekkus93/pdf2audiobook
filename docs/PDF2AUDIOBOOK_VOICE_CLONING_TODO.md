@@ -6,6 +6,7 @@
 **Specification:** [Voice Cloning Specification](PDF2AUDIOBOOK_VOICE_CLONING_SPEC.md) (VC1–VC8)
 **Baseline:** `master` at `451551c`, plus the working-tree configuration initializer and Settings editor.
 **Delivery:** Both the CLI and Tauri app are required for completion.
+**Task audit:** [All 40 tasks and clauses](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_AUDIT.md) — 37 verified; VC5.05 and two hardware tasks open.
 
 
 > Commit-series provenance: historical checks below describe the reviewed working tree.
