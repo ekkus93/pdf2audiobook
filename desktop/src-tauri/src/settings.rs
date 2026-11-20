@@ -48,6 +48,23 @@ const FILE: &str = "settings.json";
 const MAX_BYTES: u64 = 64 * 1024;
 
 impl AppSettings {
+    /// Materialize defaults on first launch; keep all existing files untouched.
+    pub fn initialize(folder: &Path) -> std::io::Result<()> {
+        fs::create_dir_all(folder)?;
+        let path = folder.join(FILE);
+        if fs::symlink_metadata(&path).is_ok() {
+            return Ok(());
+        }
+        let mut temp = tempfile::NamedTempFile::new_in(folder)?;
+        temp.write_all(serde_json::to_string_pretty(&Self::default())?.as_bytes())?;
+        temp.as_file().sync_all()?;
+        match temp.persist_noclobber(path) {
+            Ok(_) => Ok(()),
+            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+            Err(error) => Err(error.error),
+        }
+    }
+
     /// Reads the settings in `folder`; a missing, oversized or unreadable file gives defaults.
     pub fn load(folder: &Path) -> Self {
         let path = folder.join(FILE);
@@ -97,6 +114,21 @@ mod tests {
         let temp = TempDir::new().unwrap();
         assert_eq!(AppSettings::load(temp.path()), AppSettings::default());
         assert_eq!(AppSettings::default().theme, Theme::Dark);
+    }
+
+    #[test]
+    fn first_launch_creates_settings_and_later_launches_keep_existing_bytes() {
+        let temp = TempDir::new().unwrap();
+        let folder = temp.path().join("nested");
+        AppSettings::initialize(&folder).unwrap();
+        assert!(folder.join(FILE).is_file());
+        assert_eq!(AppSettings::load(&folder), AppSettings::default());
+        fs::write(folder.join(FILE), "{invalid but do not overwrite").unwrap();
+        AppSettings::initialize(&folder).unwrap();
+        assert_eq!(
+            fs::read_to_string(folder.join(FILE)).unwrap(),
+            "{invalid but do not overwrite"
+        );
     }
 
     #[test]

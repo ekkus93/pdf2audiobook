@@ -1,11 +1,13 @@
 pub mod applog;
 pub mod audio;
 pub mod commands;
+pub mod config;
 pub mod engine;
 pub mod library;
 #[cfg(test)]
 mod privacy;
 pub mod settings;
+pub mod voice;
 
 use std::time::Duration;
 
@@ -58,6 +60,7 @@ pub fn run() {
             });
         })
         .setup(|app| {
+            crate::voice::cleanup();
             // The app's own, content-free log (spec D8.c), next to Tauri's other app data.
             if let Ok(folder) = app.path().app_log_dir() {
                 app.state::<commands::Engine>().log.set_folder(&folder);
@@ -86,6 +89,8 @@ pub fn run() {
             commands::run_engine,
             commands::get_settings,
             commands::save_settings,
+            commands::read_cli_config,
+            commands::save_cli_config,
             commands::library,
             commands::add_book,
             commands::start_run,

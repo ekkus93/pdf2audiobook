@@ -2,6 +2,12 @@
 
 export type LlmProvider = "ollama" | "openai" | "llama-server";
 
+/** The editable shared TOML file, separate from effective environment overrides. */
+export interface CliConfigFile {
+  path: string;
+  text: string;
+}
+
 /** Options shared by analyze and convert; mirrors `BookOptions` in request.rs. */
 export interface BookOptions {
   output?: string | null;
@@ -21,8 +27,25 @@ export interface BookOptions {
   resume?: boolean | null;
 }
 
+/** Private local reference options, shared by conversion and selective repair. */
+export interface VoiceCloneOptions {
+  clone_voice?: boolean | null;
+  reference_audio?: string | null;
+  reference_text_file?: string | null;
+  /** Transient draft. Rust writes a private file; this text never enters argv. */
+  reference_text?: string | null;
+}
+export interface TtsReadiness {
+  name: string; model_id: string; revision: string; cloning: boolean;
+  ready: boolean; package_installed: boolean; weights_present: boolean;
+  size_bytes: number; download_bytes: number; directory: string;
+  transcription_ready: boolean; detected_device: string; reason: string | null;
+  files: Array<{ name: string; source: string; size_bytes: number; sha256: string; cached: boolean }>;
+}
+export interface TtsModels { models: Array<Partial<TtsReadiness> & { name: string }> }
+
 /** Options only convert takes; mirrors `ConvertOptions` in request.rs. */
-export interface ConvertOptions {
+export interface ConvertOptions extends VoiceCloneOptions {
   tts_provider?: "kitten" | "piper" | null;
   tts_model?: string | null;
   voice?: string | null;
@@ -60,12 +83,14 @@ export type Request =
   | { command: "inspect"; source: string; pdf_password_env?: string | null }
   | { command: "workspace"; book: string; output?: string | null }
   | { command: "voices"; tts_provider?: "kitten" | "piper" | null; tts_model?: string | null }
+  | { command: "tts_models" }
+  | { command: "tts_fetch" }
   | { command: "asr_list" }
   | { command: "asr_fetch"; models: AsrModel[] }
   | { command: "verify_audio"; manifest: string; chapters?: number[]; models?: AsrModel[] }
   | { command: "audio_report"; manifest: string }
   | { command: "audio_dismiss"; manifest: string; chapter: number; flag: number; undo?: boolean }
-  | { command: "resynthesize"; manifest: string; chapters: number[]; voice: string | null; speed: number | null; verify_audio: boolean | null };
+  | (VoiceCloneOptions & { tts_provider?: "kitten" | "piper" | null; tts_model?: string | null; command: "resynthesize"; manifest: string; chapters: number[]; voice: string | null; speed: number | null; verify_audio: boolean | null });
 
 /** One speech recognizer's readiness (`asr list --json`, contracts/asr-models.schema.json). */
 export interface AsrReadiness {
@@ -295,6 +320,8 @@ export interface CliConfig {
   };
   tts: {
     provider: "kitten" | "piper";
+    profiles?: Record<string, { provider?: "kitten" | "piper" | null; kitten_model?: string | null; voice?: string | null; speed?: number | null; clone_voice?: boolean | null; reference_audio?: string | null; reference_text_file?: string | null }>;
+    voice_clone?: { enabled: boolean; reference_audio: string | null; reference_text_file: string | null };
     kitten: { model: string; voice: string; speed: number };
     piper: { voice: string; speed: number };
   };

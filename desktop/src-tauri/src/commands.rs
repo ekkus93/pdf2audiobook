@@ -24,6 +24,8 @@ use crate::settings::AppSettings;
 pub struct Engine {
     pub runner: Arc<dyn Runner>,
     pub cli: Mutex<Option<LocatedCli>>,
+    /// Serialize edits to shared configuration from this app.
+    pub config: Arc<Mutex<()>>,
     pub runs: Arc<WorkspaceRuns>,
     pub live: Arc<LiveRuns>,
     /// The review server behind the open review window, if any (spec D6).
@@ -39,6 +41,7 @@ impl Default for Engine {
         Self {
             runner: Arc::new(SystemRunner),
             cli: Mutex::new(None),
+            config: Arc::new(Mutex::new(())),
             runs: WorkspaceRuns::new(),
             live: Arc::new(LiveRuns::default()),
             review: Mutex::new(None),
@@ -66,6 +69,14 @@ impl From<LocateError> for BridgeError {
     fn from(error: LocateError) -> Self {
         let message = error.to_string();
         BridgeError::Locate { error, message }
+    }
+}
+
+impl From<crate::config::ConfigError> for BridgeError {
+    fn from(error: crate::config::ConfigError) -> Self {
+        BridgeError::Request {
+            message: error.to_string(),
+        }
     }
 }
 
@@ -102,11 +113,16 @@ pub fn display_command(cli: &CliCommand, args: &[OsString]) -> String {
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| cli.program.to_string_lossy().into_owned());
     std::iter::once(program)
-        .chain(
-            cli.argv(args)
-                .iter()
-                .map(|arg| quote(&arg.to_string_lossy())),
-        )
+        .chain(cli.argv(args).iter().map(|arg| {
+            let value = arg.to_string_lossy();
+            if value.starts_with("--reference-audio=") {
+                "--reference-audio=[private]".into()
+            } else if value.starts_with("--reference-text-file=") {
+                "--reference-text-file=[private]".into()
+            } else {
+                quote(&value)
+            }
+        }))
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -139,6 +155,7 @@ fn located(engine: &Engine, app: &AppHandle) -> Result<LocatedCli, BridgeError> 
     let settings = AppSettings::load(&settings_dir(app)?);
     let path_env = std::env::var_os("PATH");
     let cli = locate_with(&settings, path_env.as_deref(), engine.runner.as_ref())?;
+    crate::config::initialize(&cli.command, engine.runner.as_ref())?;
     *engine.cli.lock().unwrap_or_else(PoisonError::into_inner) = Some(cli.clone());
     Ok(cli)
 }
@@ -153,7 +170,9 @@ pub async fn locate_engine(
     let settings = AppSettings::load(&settings_dir(&app)?);
     let cli = tauri::async_runtime::spawn_blocking(move || {
         let path_env = std::env::var_os("PATH");
-        locate_with(&settings, path_env.as_deref(), runner.as_ref())
+        let cli = locate_with(&settings, path_env.as_deref(), runner.as_ref())?;
+        crate::config::initialize(&cli.command, runner.as_ref())?;
+        Ok::<_, BridgeError>(cli)
     })
     .await
     .map_err(|_| BridgeError::Start)??;
@@ -183,9 +202,15 @@ pub fn describe_request(
 pub async fn run_engine(
     app: AppHandle,
     engine: State<'_, Engine>,
-    request: Request,
+    mut request: Request,
     workspace: Option<PathBuf>,
 ) -> Result<Outcome, BridgeError> {
+    let private_transcript =
+        request
+            .prepare_transcript()
+            .map_err(|error| BridgeError::Request {
+                message: error.to_string(),
+            })?;
     let args = request.args().map_err(|error| BridgeError::Request {
         message: error.to_string(),
     })?;
@@ -212,6 +237,7 @@ pub async fn run_engine(
     let started = std::time::Instant::now();
     let done = tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
+        let _private_transcript = private_transcript;
         runner.run(&cli.command, &args)
     })
     .await
@@ -228,7 +254,47 @@ pub async fn run_engine(
 
 #[tauri::command]
 pub fn get_settings(app: AppHandle) -> Result<AppSettings, BridgeError> {
-    Ok(AppSettings::load(&settings_dir(&app)?))
+    let folder = settings_dir(&app)?;
+    AppSettings::initialize(&folder).map_err(|_| BridgeError::Request {
+        message: "The app settings could not be created; check folder permissions".into(),
+    })?;
+    Ok(AppSettings::load(&folder))
+}
+
+#[tauri::command]
+pub async fn read_cli_config(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+) -> Result<crate::config::ConfigFile, BridgeError> {
+    let cli = located(&engine, &app)?;
+    let runner = Arc::clone(&engine.runner);
+    let config = Arc::clone(&engine.config);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = config.lock().unwrap_or_else(PoisonError::into_inner);
+        crate::config::read(&cli.command, runner.as_ref())
+    })
+    .await
+    .map_err(|_| BridgeError::Start)?
+    .map_err(BridgeError::from)
+}
+
+#[tauri::command]
+pub async fn save_cli_config(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+    text: String,
+    expected: String,
+) -> Result<crate::config::ConfigFile, BridgeError> {
+    let cli = located(&engine, &app)?;
+    let runner = Arc::clone(&engine.runner);
+    let config = Arc::clone(&engine.config);
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = config.lock().unwrap_or_else(PoisonError::into_inner);
+        crate::config::save(&cli.command, runner.as_ref(), &text, &expected)
+    })
+    .await
+    .map_err(|_| BridgeError::Start)?
+    .map_err(BridgeError::from)
 }
 
 #[tauri::command]
@@ -482,9 +548,15 @@ pub async fn library(app: AppHandle, engine: State<'_, Engine>) -> Result<Librar
 pub fn start_run(
     app: AppHandle,
     engine: State<'_, Engine>,
-    request: Request,
+    mut request: Request,
     workspace: PathBuf,
 ) -> Result<u64, BridgeError> {
+    let private_transcript =
+        request
+            .prepare_transcript()
+            .map_err(|error| BridgeError::Request {
+                message: error.to_string(),
+            })?;
     let args = request.args().map_err(|error| BridgeError::Request {
         message: error.to_string(),
     })?;
@@ -505,6 +577,7 @@ pub fn start_run(
             &workspace,
             Some(guard),
             Box::new(move |exit| {
+                drop(private_transcript);
                 log.record(Event::new("run_finished").command(name).finished(
                     exit.code,
                     exit.elapsed,

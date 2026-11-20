@@ -159,10 +159,30 @@ pub struct BookOptions {
     pub resume: Option<bool>,
 }
 
+/// Local reference selection. Typed drafts are materialized by the bridge, never argv.
+#[derive(Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CloneOptions {
+    pub clone_voice: Option<bool>,
+    pub reference_audio: Option<PathBuf>,
+    pub reference_text_file: Option<PathBuf>,
+    pub reference_text: Option<String>,
+}
+
+impl std::fmt::Debug for CloneOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloneOptions")
+            .field("clone_voice", &self.clone_voice)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Options only `convert` takes.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ConvertOptions {
+    #[serde(flatten)]
+    pub voice_clone: CloneOptions,
     pub tts_provider: Option<TtsProvider>,
     pub tts_model: Option<String>,
     pub voice: Option<String>,
@@ -253,6 +273,8 @@ pub enum Request {
     },
     /// Which speech recognizers are installed and downloaded; loads none of them.
     AsrList,
+    TtsModels,
+    TtsFetch,
     /// Downloads the pinned weights; the app has already shown what is fetched and asked.
     AsrFetch {
         models: Vec<AsrModel>,
@@ -279,6 +301,10 @@ pub enum Request {
     },
     /// Speaks chosen chapters again, keeping the previous audio as a backup.
     Resynthesize {
+        #[serde(flatten)]
+        voice_clone: CloneOptions,
+        tts_provider: Option<TtsProvider>,
+        tts_model: Option<String>,
         manifest: PathBuf,
         chapters: Vec<u32>,
         voice: Option<String>,
@@ -309,6 +335,8 @@ impl Request {
             Request::Recover { .. } => "recover",
             Request::BudgetShow { .. } => "budget show",
             Request::AsrList => "asr list",
+            Request::TtsModels => "tts models",
+            Request::TtsFetch => "tts fetch",
             Request::AsrFetch { .. } => "asr fetch",
             Request::VerifyAudio { .. } => "verify-audio",
             Request::AudioReport { .. } => "audio-report show",
@@ -485,6 +513,12 @@ impl Request {
                 args.path("--output", Some(workspace), "The workspace")?;
             }
             Request::AsrList => args.command(&["asr", "list"]),
+            Request::TtsModels => args.command(&["tts", "models"]),
+            Request::TtsFetch => {
+                args.command(&["tts", "fetch"]);
+                args.flag("--yes");
+                args.positional_text("kitten2", "The model")?;
+            }
             Request::AsrFetch { models } => {
                 args.command(&["asr", "fetch"]);
                 args.flag("--yes");
@@ -527,6 +561,9 @@ impl Request {
                 args.positional(manifest, "The manifest")?;
             }
             Request::Resynthesize {
+                voice_clone,
+                tts_provider,
+                tts_model,
                 manifest,
                 chapters,
                 voice,
@@ -534,6 +571,13 @@ impl Request {
                 verify_audio,
             } => {
                 args.command(&["resynthesize"]);
+                clone_options(&mut args, voice_clone)?;
+                args.text(
+                    "--tts-provider",
+                    tts_provider.map(tts_name),
+                    "The TTS provider",
+                )?;
+                args.text("--tts-model", tts_model.as_deref(), "The TTS model")?;
                 if chapters.is_empty() {
                     return Err(RequestError::Empty("The chapter list"));
                 }
@@ -545,6 +589,62 @@ impl Request {
             }
         }
         Ok(args.finish())
+    }
+}
+
+fn clone_options(args: &mut Args, options: &CloneOptions) -> Result<(), RequestError> {
+    if options.clone_voice == Some(true)
+        && options
+            .reference_audio
+            .as_ref()
+            .is_some_and(|p| p.as_os_str().is_empty())
+    {
+        return Err(RequestError::Empty("The reference recording"));
+    }
+    args.switch("clone-voice", options.clone_voice);
+    args.path(
+        "--reference-audio",
+        options.reference_audio.as_deref(),
+        "The reference recording",
+    )?;
+    args.path(
+        "--reference-text-file",
+        options.reference_text_file.as_deref(),
+        "The reference transcript",
+    )?;
+    if let Some(text) = &options.reference_text {
+        if text.trim().is_empty()
+            || text.len() > 65536
+            || text.contains('\0')
+            || options.reference_text_file.is_some()
+        {
+            return Err(RequestError::InvalidText("The reference transcript"));
+        }
+        // Display-only placeholder. Execution first replaces drafts with a private file.
+        args.value("--reference-text-file", "[private transcript]");
+    }
+    Ok(())
+}
+
+impl Request {
+    pub fn prepare_transcript(
+        &mut self,
+    ) -> Result<Option<crate::voice::PrivateTranscript>, RequestError> {
+        let options = match self {
+            Self::Convert { convert, .. } => &mut convert.voice_clone,
+            Self::Resynthesize { voice_clone, .. } => voice_clone,
+            _ => return Ok(None),
+        };
+        let Some(text) = options.reference_text.take() else {
+            return Ok(None);
+        };
+        if options.reference_text_file.is_some() {
+            return Err(RequestError::InvalidText("The reference transcript"));
+        }
+        let file = crate::voice::PrivateTranscript::create(&text)
+            .map_err(|_| RequestError::InvalidText("The reference transcript"))?;
+        options.reference_text_file = Some(file.path().to_path_buf());
+        Ok(Some(file))
     }
 }
 
@@ -584,6 +684,7 @@ fn book_options(args: &mut Args, options: &BookOptions) -> Result<(), RequestErr
 }
 
 fn convert_options(args: &mut Args, convert: &ConvertOptions) -> Result<(), RequestError> {
+    clone_options(args, &convert.voice_clone)?;
     args.text(
         "--tts-provider",
         convert.tts_provider.map(tts_name),
@@ -1026,6 +1127,7 @@ mod tests {
     #[test]
     fn convert_with_every_option() {
         let convert = ConvertOptions {
+            voice_clone: CloneOptions::default(),
             tts_provider: Some(TtsProvider::Kitten),
             tts_model: Some("mini".into()),
             voice: Some("Luna".into()),
@@ -1364,6 +1466,9 @@ mod tests {
         );
         assert_eq!(
             args_of(Request::Resynthesize {
+                voice_clone: CloneOptions::default(),
+                tts_provider: None,
+                tts_model: None,
                 manifest,
                 chapters: vec![3],
                 voice: Some("Luna".into()),
@@ -1413,6 +1518,9 @@ mod tests {
             Err(RequestError::Empty("The model list"))
         );
         let resynthesize = |chapters: Vec<u32>, speed| Request::Resynthesize {
+            voice_clone: CloneOptions::default(),
+            tts_provider: None,
+            tts_model: None,
             manifest: manifest.clone(),
             chapters,
             voice: None,
@@ -1486,6 +1594,9 @@ mod tests {
         );
         assert!(
             Request::Resynthesize {
+                voice_clone: CloneOptions::default(),
+                tts_provider: None,
+                tts_model: None,
                 manifest,
                 chapters: vec![1],
                 voice: None,
@@ -1793,5 +1904,227 @@ mod real_cli {
         };
         assert_eq!((error.kind.as_str(), error.code), ("InputError", 3));
         assert_eq!(error.reason, None);
+    }
+}
+
+#[cfg(test)]
+mod clone_tests {
+    use super::*;
+    #[test]
+    fn private_paths_are_single_args_and_details_are_redacted() {
+        let request: Request = serde_json::from_value(serde_json::json!({
+            "command":"convert", "book":"book.pdf", "options":{},
+            "convert":{"clone_voice":true,"tts_model":"kitten2", "reference_audio":"/PRIVATE/a ' ; $(no).wav", "reference_text_file":"/PRIVATE/words.txt"}
+        })).unwrap();
+        let args = request.args().unwrap();
+        assert!(args.contains(&OsString::from(
+            "--reference-audio=/PRIVATE/a ' ; $(no).wav"
+        )));
+        let shown = crate::commands::display_command(
+            &crate::engine::process::CliCommand::direct("cli"),
+            &args,
+        );
+        assert!(!shown.contains("PRIVATE"));
+        assert!(shown.contains("--reference-audio=[private]"));
+    }
+    #[test]
+    fn drafts_do_not_enter_argv_or_debug_and_are_kept_until_drop() {
+        let mut request: Request = serde_json::from_value(serde_json::json!({
+            "command":"resynthesize", "manifest":"manifest.json", "chapters":[1],
+            "clone_voice":true,"reference_text":"PRIVATE WORDS", "reference_audio":"/PRIVATE/ref.wav"
+        })).unwrap();
+        assert!(!format!("{request:?}").contains("PRIVATE"));
+        assert!(!format!("{:?}", request.args().unwrap()).contains("PRIVATE WORDS"));
+        let draft = request.prepare_transcript().unwrap().unwrap();
+        let path = draft.path();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "PRIVATE WORDS");
+        assert!(
+            request
+                .args()
+                .unwrap()
+                .iter()
+                .any(|arg| arg.to_string_lossy().contains("--reference-text-file="))
+        );
+        drop(draft);
+        assert!(!path.exists());
+    }
+}
+
+#[cfg(test)]
+mod real_clone_cli {
+    use super::*;
+    use crate::engine::process::{CliCommand, Runner, SystemRunner};
+    #[test]
+    #[ignore = "needs uv, Python CLI and FFmpeg; explicit synthetic backend"]
+    fn real_cli_clone_bridge_converts_resumes_and_repairs() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .unwrap();
+        let folder = tempfile::tempdir().unwrap();
+        let state = folder.path().join("state");
+        let launcher = root.join("desktop/e2e/fake_clone.py");
+        let prefix = vec![
+            "run".into(),
+            "--project".into(),
+            root.clone().into_os_string(),
+            "python".into(),
+            launcher.into_os_string(),
+            state.clone().into_os_string(),
+        ];
+        let cli = CliCommand {
+            program: "uv".into(),
+            prefix,
+        };
+        assert_eq!(
+            SystemRunner.run(&cli, &["--prepare".into()]).unwrap().code,
+            Some(0)
+        );
+        let book = folder.path().join("book.pdf");
+        let code = "import fitz,sys; d=fitz.open(); [(lambda p,n:(p.insert_text((80,60),f'Chapter {n}'),p.insert_text((80,115),'The keeper opened the door.')))(d.new_page(),n) for n in (1,2)]; d.save(sys.argv[1])";
+        let python = CliCommand {
+            program: "uv".into(),
+            prefix: vec![
+                "run".into(),
+                "--project".into(),
+                root.into_os_string(),
+                "python".into(),
+                "-c".into(),
+                code.into(),
+            ],
+        };
+        assert_eq!(
+            SystemRunner
+                .run(&python, &[book.clone().into_os_string()])
+                .unwrap()
+                .code,
+            Some(0)
+        );
+        let convert = ConvertOptions {
+            tts_model: Some("kitten2".into()),
+            voice_clone: CloneOptions {
+                clone_voice: Some(true),
+                reference_audio: Some(state.join("reference.wav")),
+                reference_text: Some("PRIVATE_WORDS".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut request = Request::Convert {
+            book,
+            options: BookOptions {
+                llm: Some(false),
+                ocr: Some(OcrMode::Never),
+                output: Some(folder.path().join("out")),
+                ..Default::default()
+            },
+            convert,
+        };
+        let draft = request.prepare_transcript().unwrap().unwrap();
+        let path = draft.path();
+        for _ in 0..2 {
+            let done = SystemRunner.run(&cli, &request.args().unwrap()).unwrap();
+            assert_eq!(done.code, Some(0), "{}", done.stderr);
+            assert!(!done.stdout.contains("PRIVATE_WORDS"));
+        }
+        let before = std::fs::read(state.join("generation.jsonl")).unwrap();
+        let done = SystemRunner.run(&cli, &request.args().unwrap()).unwrap();
+        assert_eq!(done.code, Some(0));
+        assert_eq!(
+            std::fs::read(state.join("generation.jsonl")).unwrap(),
+            before
+        );
+        let workspace = std::fs::read_dir(folder.path().join("out"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        let mut repair: Request = serde_json::from_value(serde_json::json!({"command":"resynthesize","manifest":workspace.join("manifest.json"),"chapters":[2],"tts_model":"kitten2","clone_voice":true,"reference_audio":state.join("reference.wav"),"reference_text":"PRIVATE_WORDS"})).unwrap();
+        let repair_draft = repair.prepare_transcript().unwrap().unwrap();
+        let done = SystemRunner.run(&cli, &repair.args().unwrap()).unwrap();
+        assert_eq!(done.code, Some(0), "{}", done.stderr);
+        assert!(workspace.join("audio/.backup").is_dir());
+        drop(repair_draft);
+        drop(draft);
+        assert!(!path.exists());
+    }
+}
+
+/// Opt-in real model contract, using a CLI environment that already has weights/dependencies.
+#[cfg(test)]
+mod real_clone_model {
+    use super::*;
+    use crate::engine::process::{CliCommand, Runner, SystemRunner};
+
+    #[test]
+    #[ignore = "needs an authorized reference and a prepared KittenTTS 2 CLI environment"]
+    fn clone_bridge_real_model() {
+        let reference = std::env::var_os("PDF2AUDIOBOOK_TEST_CLONE_REFERENCE")
+            .expect("Set PDF2AUDIOBOOK_TEST_CLONE_REFERENCE to an authorized local recording");
+        let program = std::env::var_os("PDF2AUDIOBOOK_TEST_CLONE_CLI")
+            .expect("Set PDF2AUDIOBOOK_TEST_CLONE_CLI to the prepared CLI executable");
+        let cli = CliCommand::direct(PathBuf::from(program));
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let folder = tempfile::tempdir().unwrap();
+        let source = folder.path().join("book.pdf");
+        // outlined_text.pdf is intentionally empty; create actual narration for this check.
+        let python = CliCommand {
+            program: "uv".into(),
+            prefix: vec![
+                "run".into(),
+                "--project".into(),
+                root.into_os_string(),
+                "python".into(),
+            ],
+        };
+        let code = "import pymupdf,sys; d=pymupdf.open(); p=d.new_page(); p.insert_text((80,60),'Chapter 1'); p.insert_text((80,115),'The lighthouse keeper opened the door.'); d.save(sys.argv[1])";
+        let made = SystemRunner
+            .run(
+                &python,
+                &["-c".into(), code.into(), source.clone().into_os_string()],
+            )
+            .unwrap();
+        assert_eq!(made.code, Some(0), "{}", made.stderr);
+        let request = Request::Convert {
+            book: source,
+            options: BookOptions {
+                llm: Some(false),
+                ocr: Some(OcrMode::Never),
+                output: Some(folder.path().join("out")),
+                ..Default::default()
+            },
+            convert: ConvertOptions {
+                tts_provider: Some(TtsProvider::Kitten),
+                tts_model: Some("kitten2".into()),
+                voice_clone: CloneOptions {
+                    clone_voice: Some(true),
+                    reference_audio: Some(reference.into()),
+                    reference_text_file: std::env::var_os("PDF2AUDIOBOOK_TEST_CLONE_TRANSCRIPT")
+                        .map(PathBuf::from),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        };
+        let args = request.args().unwrap();
+        let first = SystemRunner.run(&cli, &args).unwrap();
+        assert_eq!(first.code, Some(0), "{}", first.stderr);
+        let result: serde_json::Value = serde_json::from_str(&first.stdout).unwrap();
+        let files: Vec<PathBuf> = serde_json::from_value(result["mp3_files"].clone()).unwrap();
+        assert!(!files.is_empty());
+        let modified: Vec<_> = files
+            .iter()
+            .map(|p| p.metadata().unwrap().modified().unwrap())
+            .collect();
+        let resumed = SystemRunner.run(&cli, &args).unwrap();
+        assert_eq!(resumed.code, Some(0), "{}", resumed.stderr);
+        assert_eq!(
+            files
+                .iter()
+                .map(|p| p.metadata().unwrap().modified().unwrap())
+                .collect::<Vec<_>>(),
+            modified
+        );
     }
 }

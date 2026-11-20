@@ -260,6 +260,9 @@ fn verification_excerpts_never_reach_the_app_log() {
             models: vec![],
         },
         Request::Resynthesize {
+            voice_clone: Default::default(),
+            tts_provider: None,
+            tts_model: None,
             manifest: manifest.clone(),
             chapters: vec![1],
             voice: Some("Jasper".into()),
