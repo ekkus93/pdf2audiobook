@@ -24,11 +24,11 @@
 
 - [x] 1.1 Plan the commit series from the VC0–VC8 sections of the existing TODO, in dependency order, with the files for each commit listed in the ledger before committing.
 - [ ] 1.2 For each commit, run lint, format, mypy on 3.11–3.13 and the tests that cover its files; push; check CI; record the run in the ledger.
-- [ ] 1.3 Confirm that `git status` shows only `.serena/` and `audiobooks/` and that no private media, weights, caches or workspaces are tracked.
+- [x] 1.3 Confirm that `git status` shows only `.serena/` and `audiobooks/` and that no private media, weights, caches or workspaces are tracked.
 
 ## 2. Warm resume with an unchanged reference (R2)
 
-- [ ] 2.1 Decide between option (a), transcribe locally when synthesis needs a transcript, and option (b), keep the refusal and name the fix. Record the decision and reason in the ledger before implementing.
+- [x] 2.1 Decide between option (a), transcribe locally when synthesis needs a transcript, and option (b), keep the refusal and name the fix. Record the decision and reason in the ledger before implementing.
 - [ ] 2.2 Regression test, run against the parent commit: unchanged reference, no transcript, a chapter that needs synthesis. Record the failing test ID.
 - [ ] 2.3 Regression test: a missing local ASR backend never downloads or loads a model.
 - [ ] 2.4 Regression test: the recorded identity is unchanged unless new transcription produces a different digest.
@@ -81,6 +81,9 @@
 | 2026-11-20 | `cdd056079d0d87e65f4f45f40ebac2aa06f59062` | R1 CI failure/recovery evidence commit (partial R1) | Python #915 (44706154248) passed; Desktop #70 (44706154237) attempt 1 failed at the AppImage review-window-close timeout; attempt 2 passed both executable and AppImage flows. No code changed for the rerun. | Remaining R1 units and R2–R6; historical ed160e6 Python failure and VC0.03/VC8.04 accelerator gates remain open. |
 | 2026-11-20 | `0e22c82b46e1f0330d5da5e13b048fe7287ad087` | R1 VC2 private reference/configuration selection (partial R1) | Python #916 (44707452180) passed all three versions: 2,728 passed/4 skipped each, mypy 107 modules, CLI and wheel/sdist smokes. Desktop #71 (44707452181) passed both native walkthroughs. Isolated local subset 160 passed; all three mypy versions, lock/Ruff/format/CLI passed; three non-secret scanner flags reviewed. | Remaining R1 units and R2–R6; historical ed160e6 Python failure and VC0.03/VC8.04 accelerator gates remain open. |
 | 2026-11-20 | `731c8a99d9f6d31336818d7bc8b81ce212ba6cc2` | R1 VC3 isolated offline speech/ASR workers (partial R1) | Python #917 (44707705390) passed all three versions: 2,735 passed/4 skipped each, mypy 109 modules, CLI and wheel/sdist smokes. Desktop #72 (44707705359) passed both native walkthroughs. Isolated local subset 58 passed; lock/Ruff/format/CLI and all three mypy versions passed; one public golden hash scanner flag reviewed. | Remaining R1 units and R2–R6; historical ed160e6 Python failure and VC0.03/VC8.04 accelerator gates remain open. |
+| 2026-11-20 | `3044e742fd397fec6bfc58f661c16a0bc3afbea3` | R1 partial: VC4 CLI conversion, repair and protocol contracts | Python #918 (44708223720): 2,740 passed/4 skipped on each of 3.11–3.13, mypy 110 modules, CLI/wheel/sdist passed; Desktop #73 (44708223845) passed executable and AppImage walkthroughs. Local 94 Python, 356 Vitest, 110 Rust unit + seven permission tests passed; 66 public fixture checksum/revision scanner flags reviewed. | Final R1 CI/evidence, R2–R6; historical ed160e6 Python failure and accelerator gates remain open. |
+| 2026-11-20 | `7e873e525e767175282c081d317ec3b594e4efd8` | R1 partial: VC5 cache, conversion and repair acceptance tests | Python #919 (44708513801): 2,774 passed/6 skipped on each of 3.11–3.13, all static/CLI/wheel/sdist checks passed; Desktop #74 (44708513495) passed both walkthroughs. Local 85 passed/two real-model tests intentionally skipped; secret scan 0. | Final R1 CI/evidence, R2–R6; historical ed160e6 Python failure and accelerator gates remain open. |
+| 2026-11-20 | `8a88b7d04f1fa1e83ab7ba3593e8934f2097501d` | R1 partial: VC6 typed Tauri bridge, private drafts and shared config setup | Python #920 (44708954277): 2,774 passed/6 skipped on each version, all static/CLI/wheel/sdist checks passed; Desktop #75 (44708954310) passed both walkthroughs, 119 Rust unit + seven permission tests (four opt-in ignored). Local 59 Python and 356 Vitest passed; one existing synthetic fixture scanner flag reviewed. | Final R1 CI/evidence, R2–R6; historical ed160e6 Python failure and accelerator gates remain open. |
 
 ## R1 commit plan (recorded before staging)
 
@@ -212,3 +215,28 @@ staging details and any dependency adjustments are recorded before the affected 
   transcript lifecycle covers completion, failure, cancellation and shutdown.
   One secret-scan flag was an existing synthetic invalid password-env fixture.
   Exact-head Python #920 (44708954277) and Desktop #75 (44708954310) pending.
+
+### Committed feature baseline and R2 decision (2026-11-20)
+
+- VC7 `066be91cd7d8f0c279e2d6541f41d2d3b848213a`: isolated 64 Python tests,
+  383 Vitest tests in 21 files, 119 Rust unit and seven permission tests passed
+  (four opt-in Rust tests ignored). Lock/Ruff/format, mypy 110 modules on
+  3.11–3.13, CLI and desktop lint/typecheck/build/fmt/clippy passed; secret scan 0.
+- VC8 `f981812c51613f6ca02a859a2b1bd6faebd4ff01`: isolated 39 tests and the
+  same Python/desktop gates passed; six scanner flags were documented example
+  placeholders or environment-variable names, not credentials.
+- R1.3 verified at `f981812c51613f6ca02a859a2b1bd6faebd4ff01`: `git status
+  --short` showed only `.serena/` and `audiobooks/`. All 97 new/changed tracked
+  paths since `451551c` were checked for private media, weights, conditioning
+  caches and workspaces; none were present. The original feature is now committed
+  in dependency order. R1.2 stays open until pending CI is recorded, with the
+  historical `ed160e6` Python failure retained as an explicit acceptance exception.
+- R2.1 decision: **option (a)**. Keep the existing lazy local transcription when
+  pending synthesis needs text. User selection of clone mode without a supplied
+  transcript enables that documented local path; unavailable ASR fails before a
+  worker or network action. The original refusal allegation was not reproduced
+  because `_synthesize_selected` already rehydrates after `_voice_run`.
+- The R2 fix will preserve the recorded identity when normalized transcript SHA-256
+  is unchanged, including its original ASR provenance. If text differs, replan
+  affected synthesis and record the content-free `voice_reference_changed` reason.
+  The actual integration function is `_voice_run`, not `_clone_preparation`.
