@@ -1,15 +1,15 @@
 # PDF2Audiobook Voice Cloning TODO
 
-**Status:** CLI/Tauri software checks and speaker/consistency review passed; accelerator acceptance remains open.
+**Status:** CLI/Tauri delivered; review reopened VC5.05; accelerator acceptance remains open.
 **Date:** 2026-11-18
-**Last reviewed:** 2026-11-19
+**Last reviewed:** 2026-11-20
 **Specification:** [Voice Cloning Specification](PDF2AUDIOBOOK_VOICE_CLONING_SPEC.md) (VC1–VC8)
 **Baseline:** `master` at `451551c`, plus the working-tree configuration initializer and Settings editor.
 **Delivery:** Both the CLI and Tauri app are required for completion.
 
 
 > Commit-series provenance: historical checks below describe the reviewed working tree.
-> R1 is now committing that tree in dependency order; use the
+> R1 committed that tree in dependency order; use the
 > [review follow-up ledger](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_TODO.md) for exact committed
 > revisions and CI evidence. Historical counts are recorded evidence, not new measurements.
 
@@ -105,7 +105,7 @@
   legacy golden compatibility for the same SDK; document any intentional SDK identity change.
 - [x] VC5.04 Integrate safe resynthesis staging/backups and detect missing clone selection
   during repairs. Require explicit intent to switch existing clone audio to a built-in voice.
-- [x] VC5.05 Test failed/canceled clone repairs retain valid prior MP3/sidecar pairs. Verify
+- [ ] VC5.05 Test failed/canceled clone repairs retain valid prior MP3/sidecar pairs. Verify
   packing, playback and ASR inspection of finished audio need neither cloning models nor the
   original recording; ASR must assess narration content, not speaker similarity.
 
@@ -440,3 +440,19 @@ Remaining release prerequisites:
   `tests/test_verify_audio_cli.py`; Ruff lint/format, lockfile validation, mypy and the complete
   offline Python suite pass. Only **VC0.03 / VC8.04 accelerator acceptance** remains open,
   pending the user's move to a different machine.
+
+### Review acceptance correction (2026-11-20)
+
+- VC5.05 is **partially verified and reopened**. Failure/cancellation preservation,
+  packing, playback and ASR narration inspection pass, but the shared spec also
+  requires finished conversion reuse without cloning dependencies. With the
+  recording and transcript still present, removing optional backend metadata
+  changes the fresh identity and attempts synthesis again. The new strict expected
+  failure in `tests/test_voice_cloning_known_limitations.py` reproduces this case
+  against parent `a01cfdcdd6a4b7907abe53d06b8ce24ec0abfeee`; it remains unfixed
+  within this review's R2/R3 behavior scope. Do not treat the expected failure as
+  a passed acceptance criterion. **37/40** original tasks are currently checked.
+- The historical “only accelerator gates remain” statements above described the
+  earlier review and are superseded by this correction and the follow-up audit.
+  VC0.03 and VC8.04 still need supported-accelerator evidence. CPU/listening
+  results remain recorded evidence from 2026-11-19, not re-measured here.

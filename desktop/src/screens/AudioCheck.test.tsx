@@ -12,6 +12,7 @@ vi.mock("../engine/api", async (original) => ({
 
 import * as api from "../engine/api";
 import { AudioCheck, LEAD_IN, chaptersToShow, clock, heardBy, isReport, size } from "./AudioCheck";
+import type { CloneForm } from "./bookOptions";
 
 /** Real CLI output from a three-model check of the Harbour demo with an insertion planted in chapter 3. */
 function fixture<T>(name: string): T {
@@ -64,12 +65,13 @@ beforeEach(() => {
   });
 });
 
-function setup() {
+function setup(cloneForm?: CloneForm) {
   const onStart = vi.fn();
   const onPlay = vi.fn();
   const onEditNarration = vi.fn();
   render(
     <AudioCheck
+      cloneForm={cloneForm}
       manifest={MANIFEST}
       workspace={WORKSPACE}
       inspect={INSPECT}
@@ -267,5 +269,20 @@ describe("AudioCheck", () => {
     setup();
     expect(await screen.findByText("The engine returned an unreadable result")).toBeInTheDocument();
     expect(within(document.body).queryByText(/Possible mismatch/)).toBeNull();
+  });
+});
+
+it("repairs a clone with the same private selection and no remembered built-in voice", async () => {
+  const form = { voiceMode: "clone" as const, referenceAudio: "/clips/PRIVATE.wav", referenceText: "PRIVATE transcript" };
+  const { onStart } = setup(form);
+  click(button("Speak again…", await waitFor(() => chapter(3))));
+  const dialog = document.querySelector("md-dialog[open]") as HTMLElement;
+  expect(within(dialog).getByLabelText("Reference transcript (optional)")).toHaveValue("PRIVATE transcript");
+  click(button("Speak again", dialog));
+  expect(onStart).toHaveBeenCalledWith({
+    command: "resynthesize", manifest: MANIFEST, chapters: [3],
+    tts_provider: "kitten", tts_model: "kitten2", clone_voice: true,
+    reference_audio: "/clips/PRIVATE.wav", reference_text: "PRIVATE transcript",
+    voice: null, speed: 1, verify_audio: true,
   });
 });

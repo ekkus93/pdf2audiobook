@@ -287,3 +287,74 @@ fn verification_excerpts_never_reach_the_app_log() {
     assert_clean("the app log", &text);
     assert!(!text.contains(&*workspace.to_string_lossy()));
 }
+
+/// Reference markers never enter Details/Debug/events, on successful or failed clone repair.
+#[test]
+fn clone_reference_markers_stay_out_of_details_errors_and_event_logs() {
+    use crate::commands::display_command;
+    use crate::engine::request::{CloneOptions, TtsProvider};
+
+    let temp = TempDir::new().unwrap();
+    let manifest = temp.path().join("manifest.json");
+    let log = AppLog::default();
+    log.set_folder(&temp.path().join("logs"));
+    for mode in ["success", "structured_error", "unreadable"] {
+        let mut request = Request::Resynthesize {
+            voice_clone: CloneOptions {
+                clone_voice: Some(true),
+                reference_audio: Some(temp.path().join(format!("{FILE_NAME}.wav"))),
+                reference_text: Some(TEXT.into()),
+                ..Default::default()
+            },
+            tts_provider: Some(TtsProvider::Kitten),
+            tts_model: Some("kitten2".into()),
+            manifest: manifest.clone(),
+            chapters: vec![1],
+            voice: None,
+            speed: None,
+            verify_audio: None,
+        };
+        assert_clean("request debug", &format!("{request:?}"));
+        let draft = request.prepare_transcript().unwrap().unwrap();
+        let args = request.args().unwrap();
+        assert_clean(
+            "command Details",
+            &display_command(&CliCommand::direct("pdf2audiobook"), &args),
+        );
+        assert!(!args.iter().any(|a| a.to_string_lossy().contains(TEXT)));
+        let cli = match mode {
+            "success" => CliCommand::direct(write_script(
+                temp.path(),
+                "success-cli",
+                "#!/bin/sh\nprintf '{}'\n",
+            )),
+            "structured_error" => noisy_cli(temp.path()),
+            _ => CliCommand::direct(write_script(
+                temp.path(),
+                "unreadable-cli",
+                &format!("#!/bin/sh\necho '{FILE_NAME} {TEXT}' >&2\nexit 6\n"),
+            )),
+        };
+        let done = TestRunner.run(&cli, &args).unwrap();
+        let outcome = parse(&done);
+        // Structured errors come from the trusted CLI protocol; unstructured stderr
+        // becomes a generic unreadable result and must never reach the frontend.
+        if mode == "unreadable" {
+            assert!(matches!(
+                outcome,
+                crate::engine::result::Outcome::Unreadable { .. }
+            ));
+            assert_clean("generic result", &serde_json::to_string(&outcome).unwrap());
+        }
+        log.record(
+            Event::new("engine_command")
+                .command(request.name())
+                .finished(done.code, Duration::from_millis(1), &outcome, false),
+        );
+        drop(draft);
+    }
+    let text = fs::read_to_string(temp.path().join("logs").join(applog::FILE)).unwrap();
+    assert_clean("clone event log", &text);
+    assert_eq!(text.lines().count(), 3);
+    assert!(!text.contains(&*temp.path().to_string_lossy()));
+}

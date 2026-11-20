@@ -22,7 +22,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/apt-archives
-          key: apt-${{ runner.os }}-desktop-webkit-v2
+          key: apt-${{ runner.os }}-desktop-webkit-v3
       - name: Install WebKitGTK, its WebDriver and the X tools the walkthrough uses
         timeout-minutes: 25
         working-directory: .
