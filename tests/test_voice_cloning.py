@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import wave
 from pathlib import Path
 
@@ -15,9 +16,15 @@ import pytest
 from pdf2audiobook.config import Settings, load_settings, settings_public
 from pdf2audiobook.errors import AudioError, ConfigError
 from pdf2audiobook.tts import catalog
-from pdf2audiobook.tts.cloning import _snapshot_bytes, snapshot_reference, validate_clone_selection
+from pdf2audiobook.tts.clone_provider import change_speed
+from pdf2audiobook.tts.cloning import (
+    _snapshot_bytes,
+    snapshot_reference,
+    validate_clone_selection,
+)
 from pdf2audiobook.tts.private import PrivateDirectory, cleanup_private_jobs, private_root
 from pdf2audiobook.tts.selection import settings_for_book_tts
+from pdf2audiobook.tts.worker_client import WorkerClient
 
 
 @pytest.fixture(autouse=True)
@@ -271,6 +278,17 @@ def test_changed_source_capture_is_detected_without_exposing_paths(
     assert "PRIVATE_NAME" not in str(error.value)
 
 
+def test_worker_failure_and_timeout_are_private_and_reaped() -> None:
+    code = "import sys,time;sys.stdin.readline();sys.stderr.write('PRIVATE_TEXT');sys.stderr.flush();time.sleep(99)"
+    worker = WorkerClient([sys.executable, "-c", code])
+    started = time.monotonic()
+    with pytest.raises(AudioError) as error:
+        worker.request({"command": "test", "text": "PRIVATE_NARRATION"}, timeout=0.1)
+    assert "PRIVATE" not in str(error.value)
+    assert worker.process.poll() is not None
+    assert time.monotonic() - started < 8
+
+
 def test_private_cleanup_preserves_active_and_unowned_directories(tmp_path: Path) -> None:
     active = PrivateDirectory()
     foreign = private_root() / "job-foreign"
@@ -322,6 +340,13 @@ def test_model_fetch_is_verified_atomic_and_cancel_safe(
     assert not list(root.rglob(".part-*"))
 
 
+def test_speed_transform_preserves_finite_mono_audio() -> None:
+    samples = np.sin(np.arange(24000, dtype=np.float32) * 0.1) * 0.2
+    faster = change_speed(samples, 2)
+    assert 9000 < len(faster) < 14000
+    assert faster.ndim == 1 and np.isfinite(faster).all()
+
+
 def test_download_interruption_removes_unpublished_files(tmp_path, monkeypatch):
     artifact = {
         "repo": catalog.MODEL_ID,
@@ -340,6 +365,67 @@ def test_download_interruption_removes_unpublished_files(tmp_path, monkeypatch):
         catalog.fetch_model(tmp_path, opener=lambda *a, **kw: Interrupted(b"data"))
     assert not list(tmp_path.rglob(".part-*"))
     assert not catalog.artifact_path(artifact, tmp_path).exists()
+
+
+def test_private_worker_protocol_omits_voice_and_reuses_conditioning(tmp_path, monkeypatch):
+    fake = tmp_path / "fake_sdk"
+    fake.mkdir()
+    (fake / "huggingface_hub.py").write_text("hf_hub_download = None\n")
+    (fake / "kittenml.py").write_text("""
+import numpy as np
+class KittenTTS2:
+    def __init__(self, *a, **kw): self.prepared = False
+    def _speaker(self, voice, reference, transcript):
+        assert voice is None and reference and transcript == "PRIVATE WORDS"
+        self.prepared = True
+    def generate(self, text, **kw):
+        assert self.prepared and "voice" not in kw
+        assert kw["reference_text"] == "PRIVATE WORDS"
+        assert "PRIVATE" not in text
+        print("PRIVATE noisy backend output")
+        import os
+        os.write(1, b"PRIVATE native output\\n")
+        os.write(2, b"PRIVATE native error\\n")
+        return np.ones(2400, dtype=np.float32) * 0.1
+""")
+    folder = catalog.model_directory() / "model"
+    folder.mkdir(parents=True)
+    (folder / "config.json").write_text("{}")
+    monkeypatch.setenv(
+        "PYTHONPATH", str(fake) + os.pathsep + str(Path(__file__).resolve().parents[1] / "src")
+    )
+    client = WorkerClient()
+    try:
+        assert client.request(
+            {"command": "prepare", "reference": "/private/ref.wav", "transcript": "PRIVATE WORDS"}
+        ) == {"ok": True}
+        for n in range(2):
+            output = tmp_path / f"chunk-{n}.npy"
+            response = client.request(
+                {
+                    "command": "generate",
+                    "text": "Book narration.",
+                    "reference": "/private/ref.wav",
+                    "transcript": "PRIVATE WORDS",
+                    "output": str(output),
+                }
+            )
+            assert response == {"ok": True}
+            assert np.load(output, allow_pickle=False).size == 2400
+        assert "PRIVATE" not in str(client.process.args)
+        with pytest.raises(AudioError) as error:
+            client.request(
+                {
+                    "command": "prepare",
+                    "reference": "/private/ref.wav",
+                    "transcript": "PRIVATE_WRONG_WORDS",
+                }
+            )
+        assert "PRIVATE" not in str(error.value)
+        assert error.value.error_reason == "voice_reference_invalid"
+        assert client.process.poll() is not None
+    finally:
+        client.close()
 
 
 @pytest.mark.parametrize(
@@ -386,6 +472,63 @@ def test_transcript_files_are_bounded_utf8_and_nonempty(tmp_path, data):
         snapshot_reference(settings)
     assert "PRIVATE" not in str(error.value)
     assert not list(private_root().glob("job-*"))
+
+
+def test_auto_transcript_uses_local_backend_and_only_the_snapshot(tmp_path, monkeypatch):
+    settings = settings_for_reference(tmp_path)
+    settings.tts.voice_clone.reference_text_file = None
+    seen = []
+
+    def transcribe(path):
+        assert path != Path(settings.tts.voice_clone.reference_audio)
+        assert path.is_file()
+        seen.append(path)
+        return "Reference words\r\n", {"model": "pinned", "package": "test"}
+
+    monkeypatch.setattr("pdf2audiobook.tts.worker_client.transcribe_reference", transcribe)
+    snapshot = snapshot_reference(settings)
+    assert snapshot.transcript == "Reference words"
+    assert snapshot.identity["transcription"] == {"model": "pinned", "package": "test"}
+    snapshot.close()
+    assert seen and not seen[0].exists()
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux parent-death signal")
+def test_worker_dies_if_cli_parent_is_force_killed(tmp_path):
+    import signal
+
+    parent = subprocess.Popen(
+        [
+            sys.executable,
+            "-u",
+            "-c",
+            "from pdf2audiobook.tts.worker_client import WorkerClient; import time; c=WorkerClient(); print(c.process.pid, flush=True); time.sleep(30)",
+        ],
+        stdout=subprocess.PIPE,
+    )
+    worker_pid = int(parent.stdout.readline())
+    try:
+        # Allow the worker to arm its death signal before terminating the parent.
+        time.sleep(0.5)
+        parent.kill()
+        parent.wait(timeout=3)
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            status = Path(f"/proc/{worker_pid}/stat")
+            if not status.exists() or status.read_text().split()[2] == "Z":
+                break
+            time.sleep(0.05)
+        else:
+            pytest.fail("orphaned model worker survived its CLI parent")
+    finally:
+        if parent.poll() is None:
+            parent.kill()
+            parent.wait()
+        try:
+            os.kill(worker_pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        parent.stdout.close()
 
 
 def test_relative_reference_paths_match_identical_absolute_content(tmp_path, monkeypatch):
@@ -452,6 +595,16 @@ def test_recorded_clone_identity_rejects_opaque_private_metadata(tmp_path):
         reference.close()
 
 
+def test_worker_deadline_includes_a_large_request_to_a_blocked_stdin():
+    client = WorkerClient([sys.executable, "-c", "import time; time.sleep(30)"])
+    started = time.monotonic()
+    with pytest.raises(AudioError) as error:
+        client.request({"transcript": "PRIVATE " * 8192}, timeout=0.05)
+    assert time.monotonic() - started < 3
+    assert "PRIVATE" not in str(error.value)
+    assert client.process.poll() is not None
+
+
 def test_unsupported_worker_platform_preserves_non_clone_configuration(tmp_path, monkeypatch):
     from pdf2audiobook.tts import cloning, private
 
@@ -462,3 +615,23 @@ def test_unsupported_worker_platform_preserves_non_clone_configuration(tmp_path,
     with pytest.raises(ConfigError) as error:
         validate_clone_selection(settings_for_reference(tmp_path))
     assert error.value.error_reason == "voice_clone_unsupported"
+
+
+def test_stopping_a_worker_cleans_its_private_asr_job_and_preserves_active_jobs():
+    code = (
+        "import json,time; from pathlib import Path; "
+        "from pdf2audiobook.tts.private import PrivateDirectory; "
+        "job=PrivateDirectory('transcription'); "
+        "(Path(job.name)/'reference.wav').write_bytes(b'PRIVATE_AUDIO'); "
+        "print(json.dumps({'ok':True,'directory':job.name}),flush=True); time.sleep(30)"
+    )
+    with PrivateDirectory("reference") as active:
+        client = WorkerClient([sys.executable, "-c", code])
+        try:
+            result = client.request({"command": "prepare"}, timeout=5)
+            child_job = Path(result["directory"])
+            assert child_job.is_dir()
+        finally:
+            client.close()
+        assert not child_job.exists()
+        assert Path(active).is_dir()
