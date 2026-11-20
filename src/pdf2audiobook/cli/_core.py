@@ -45,7 +45,8 @@ app = typer.Typer(
 
 
 config_app = typer.Typer(
-    help="Inspect effective configuration.", epilog="Example: pdf2audiobook config show --sources"
+    help="Create, validate or inspect configuration.",
+    epilog="Example: pdf2audiobook config init",
 )
 
 
@@ -77,7 +78,6 @@ asr_app = typer.Typer(
 
 
 app.add_typer(asr_app, name="asr")
-
 
 audio_report_app = typer.Typer(
     help="Read a book's saved audio verification report and mark flags reviewed.",
@@ -232,11 +232,27 @@ def _show_version(value: bool) -> None:
         raise typer.Exit()
 
 
+def _initialize(value: bool) -> None:
+    """An eager alias allows --init without a subcommand, like --version."""
+    if value:
+        from pdf2audiobook.cli.configuration import init_config
+
+        init_config(config=None, json_output=False)
+        raise typer.Exit()
+
+
 @app.callback()
 def entry(
     ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", help="Show version.", is_eager=True, callback=_show_version
+    ),
+    init: bool = typer.Option(
+        False,
+        "--init",
+        help="Create the default configuration file without replacing an existing file.",
+        is_eager=True,
+        callback=_initialize,
     ),
     verbose: bool = typer.Option(
         False, "--verbose", help="Emit privacy-safe debug events to stderr."
@@ -264,6 +280,9 @@ def entry(
     if not verbose:
         use_default_event_policy()
     begin_cli_command()
+    from pdf2audiobook.tts.private import cleanup_private_jobs
+
+    cleanup_private_jobs()
     log_event("command_started", level=logging.DEBUG, command=ctx.invoked_subcommand or "root")
 
 

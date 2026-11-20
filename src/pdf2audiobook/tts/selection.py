@@ -37,6 +37,10 @@ def _tts_model_identity(settings: Settings) -> str:
             digests.append((path.suffix, digest))
         return fingerprint("piper-model-v1", str(model_path), digests)
     model = settings.tts.kitten.model
+    if model in {"kitten2", "KittenML/kitten-tts-2"}:
+        from pdf2audiobook.tts.cloning import GENERATION
+
+        return fingerprint("kitten2-model-v1", GENERATION)
     resolved_model = KITTEN_MODEL_ALIASES.get(model, model)
     try:
         engine_version = package_version("kittenml")
@@ -70,6 +74,21 @@ def settings_for_book_tts(
             selected.tts.piper.speed = profile.speed
         else:
             selected.tts.kitten.speed = profile.speed
+    clone_explicit = explicit | settings._clone_explicit
+    if "clone_voice" not in clone_explicit and "enabled" not in clone_explicit:
+        if profile.clone_voice is not None:
+            selected.tts.voice_clone.enabled = profile.clone_voice
+    if "reference_audio" not in clone_explicit and profile.reference_audio is not None:
+        selected.tts.voice_clone.reference_audio = profile.reference_audio
+        if "reference_text_file" not in clone_explicit:
+            selected.tts.voice_clone.reference_text_file = profile.reference_text_file
+    elif (
+        "reference_audio" not in clone_explicit
+        and "reference_text_file" not in clone_explicit
+        and profile.reference_text_file is not None
+    ):
+        selected.tts.voice_clone.reference_text_file = profile.reference_text_file
+    selected._clone_explicit = settings._clone_explicit
     return selected
 
 
@@ -87,6 +106,12 @@ def tts_selection(
         if chapter is not None and chapter.voice_id is not None
         else provider_settings.voice
     )
+    if settings.tts.voice_clone.enabled:
+        from pdf2audiobook.tts.cloning import ReferenceVoice, resolved_voice
+
+        selection = resolved_voice(settings, voice)
+        if isinstance(selection, ReferenceVoice):
+            voice = selection.key
     return provider_name, voice, provider_settings.speed
 
 

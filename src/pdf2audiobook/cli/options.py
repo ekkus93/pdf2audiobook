@@ -163,3 +163,25 @@ def _check_accept_review(accept_review: list[str]) -> None:
             "Unknown --accept-review reason; choose from "
             + ", ".join(BOOK_WIDE_REVIEW_REASON_CODES)
         )
+
+
+def clone_overrides(
+    overrides: dict[str, Any],
+    *,
+    clone_voice: bool | None,
+    reference_audio: Path | str | None,
+    reference_text_file: Path | str | None,
+) -> None:
+    """Keep unset flags out of the precedence merge and pair replacement inputs."""
+    if clone_voice is None and reference_audio is None and reference_text_file is None:
+        return
+    values = overrides.setdefault("tts", {}).setdefault("voice_clone", {})
+    if clone_voice is not None:
+        values["enabled"] = clone_voice
+    if reference_audio is not None:
+        values["reference_audio"] = str(reference_audio)
+        values["reference_text_file"] = (
+            str(reference_text_file) if reference_text_file is not None else None
+        )
+    elif reference_text_file is not None:
+        values["reference_text_file"] = str(reference_text_file)

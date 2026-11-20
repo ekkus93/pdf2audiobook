@@ -14,6 +14,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     ValidationError,
     field_validator,
     model_validator,
@@ -122,9 +123,14 @@ class TTSProfile(ConfigModel):
     piper_model_path: str | None = None
     voice: str | None = None
     speed: float | None = Field(default=None, gt=0, le=3)
+    clone_voice: bool | None = None
+    reference_audio: str | None = Field(default=None, json_schema_extra={"secret": True})
+    reference_text_file: str | None = Field(default=None, json_schema_extra={"secret": True})
 
     @model_validator(mode="after")
     def validate_piper_profile(self) -> TTSProfile:
+        if self.clone_voice and self.voice is not None:
+            raise ValueError("A profile must choose a built-in voice or voice cloning")
         if (
             self.provider == "piper"
             and self.voice is not None
@@ -132,6 +138,17 @@ class TTSProfile(ConfigModel):
         ):
             raise ValueError("Piper profile voice must be a decimal speaker ID")
         return self
+
+
+class VoiceClone(ConfigModel):
+    enabled: bool = False
+    reference_audio: str | None = Field(default=None, json_schema_extra={"secret": True})
+    reference_text_file: str | None = Field(default=None, json_schema_extra={"secret": True})
+
+    @field_validator("reference_audio", "reference_text_file", mode="before")
+    @classmethod
+    def empty_reference(cls, value: Any) -> Any:
+        return None if isinstance(value, str) and not value.strip() else value
 
 
 class TTS(ConfigModel):
@@ -143,6 +160,7 @@ class TTS(ConfigModel):
     max_retries: int = Field(default=2, ge=0, le=10)
     kitten: TTSModel = Field(default_factory=TTSModel)
     piper: PiperTTSModel = Field(default_factory=PiperTTSModel)
+    voice_clone: VoiceClone = Field(default_factory=VoiceClone)
     profiles: dict[str, TTSProfile] = Field(default_factory=dict)
     pronunciations: dict[str, str] = Field(default_factory=dict)
 
@@ -202,6 +220,9 @@ class Reading(ConfigModel):
 
 
 class Settings(ConfigModel):
+    # Per-run snapshots and explicit choices are never serialized to config or manifests.
+    _clone_reference: Any = PrivateAttr(default=None)
+    _clone_explicit: frozenset[str] = PrivateAttr(default=frozenset())
     general: General = Field(default_factory=General)
     pdf: Pdf = Field(default_factory=Pdf)
     chapters: Chapters = Field(default_factory=Chapters)
@@ -213,6 +234,9 @@ class Settings(ConfigModel):
 
 
 ENV_KEYS = {
+    "PDF2AUDIOBOOK_CLONE_VOICE": ("tts", "voice_clone", "enabled"),
+    "PDF2AUDIOBOOK_REFERENCE_AUDIO": ("tts", "voice_clone", "reference_audio"),
+    "PDF2AUDIOBOOK_REFERENCE_TEXT_FILE": ("tts", "voice_clone", "reference_text_file"),
     "PDF2AUDIOBOOK_OUTPUT_DIR": ("general", "output_dir"),
     "PDF2AUDIOBOOK_PROGRESS": ("general", "progress"),
     "PDF2AUDIOBOOK_HEARTBEAT_SECONDS": ("general", "heartbeat_seconds"),
@@ -375,6 +399,12 @@ def load_settings(
     tts_provider = str(tts_provider)
     for env_name, setting_path in ENV_KEYS.items():
         if env_name in env:
+            if (
+                env_name == "PDF2AUDIOBOOK_REFERENCE_AUDIO"
+                and "PDF2AUDIOBOOK_REFERENCE_TEXT_FILE" not in env
+            ):
+                _apply(data, ("tts", "voice_clone", "reference_text_file"), None)
+                sources["tts.voice_clone.reference_text_file"] = f"env:{env_name}"
             if setting_path[0] == "tts" and "@selected" in setting_path:
                 actual = tuple(tts_provider if key == "@selected" else key for key in setting_path)
                 if env_name == "PDF2AUDIOBOOK_TTS_MODEL" and tts_provider == "piper":
@@ -387,6 +417,11 @@ def load_settings(
             _apply(data, actual, _parse_env(env[env_name], current))
             sources[".".join(actual)] = f"env:{env_name}"
     if overrides:
+        clone_overrides = overrides.get("tts", {}).get("voice_clone", {})
+        if isinstance(clone_overrides, dict) and "reference_audio" in clone_overrides:
+            if "reference_text_file" not in clone_overrides:
+                _apply(data, ("tts", "voice_clone", "reference_text_file"), None)
+                sources["tts.voice_clone.reference_text_file"] = "CLI"
         _merge(data, overrides)
         sources.update({key: "CLI" for key in _flatten(overrides)})
     try:
@@ -395,6 +430,31 @@ def load_settings(
         # Pydantic errors can echo rejected values, including provider URLs and secrets.
         raise ConfigError("invalid configuration values; check field names and types") from None
     result.general.output_dir = str(Path(result.general.output_dir).expanduser().resolve())
+    if overrides:
+        result._clone_explicit = _explicit_voice_fields(tts_overrides)
+    _validate_effective_settings(result, sources)
+    from pdf2audiobook.logging import configure_from_settings
+
+    configure_from_settings(
+        result.general.log_level,
+        cache_directory_configured=sources.get("cache.directory", "built-in") != "built-in",
+        explicit=sources.get("general.log_level", "built-in") != "built-in",
+    )
+    return result, sources
+
+
+def _explicit_voice_fields(tts: dict[str, Any]) -> frozenset[str]:
+    clone_keys = tts.get("voice_clone", {})
+    explicit = set(clone_keys) if isinstance(clone_keys, dict) else set()
+    if any(
+        isinstance(tts.get(provider), dict) and "voice" in tts[provider]
+        for provider in ("kitten", "piper")
+    ):
+        explicit.add("voice")
+    return frozenset(explicit)
+
+
+def _validate_effective_settings(result: Settings, sources: dict[str, str]) -> None:
     if result.llm.max_estimated_cost_usd is not None and (
         result.llm.input_cost_usd_per_million_tokens is None
         or result.llm.output_cost_usd_per_million_tokens is None
@@ -411,14 +471,6 @@ def load_settings(
         raise ConfigError("llm.chunk_tokens must be smaller than llm.max_context_tokens")
     if result.llm.max_output_tokens + 128 >= result.llm.max_context_tokens:
         raise ConfigError("llm.max_output_tokens leaves no context room for messages")
-    from pdf2audiobook.logging import configure_from_settings
-
-    configure_from_settings(
-        result.general.log_level,
-        cache_directory_configured=sources.get("cache.directory", "built-in") != "built-in",
-        explicit=sources.get("general.log_level", "built-in") != "built-in",
-    )
-    return result, sources
 
 
 def _secret_field_paths(model: type[BaseModel], prefix: str = "") -> frozenset[str]:
@@ -447,7 +499,11 @@ def settings_public(settings: Settings) -> dict[str, Any]:
 
 def _redact_public_value(value: Any, field_name: str = "", _path: str = "") -> Any:
     """Redact only declared secret fields and URL credential components."""
-    if _path in _SECRET_CONFIG_PATHS and value is not None:
+    profile_reference = _path.startswith("tts.profiles.") and field_name in {
+        "reference_audio",
+        "reference_text_file",
+    }
+    if (_path in _SECRET_CONFIG_PATHS or profile_reference) and value is not None:
         return "***"
     if isinstance(value, dict):
         return {
