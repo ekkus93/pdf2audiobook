@@ -73,7 +73,7 @@
   Corrective `0cd79d6084da8491047135eb4b7408968ee731cf` is green. History was
   not rewritten. The spec's literal “Every feature commit has a green CI run”
   needs an accepted historical exception; a green successor cannot satisfy it.
-- **Original VC5.05:** dependency-free completed conversion can attempt synthesis
+- **Original VC5.05 (resolved in `282f6f0`; see the VC5.05 TODO):** dependency-free completed conversion can attempt synthesis
   when optional backend metadata is removed while the recording and transcript
   remain. The strict expected-failure test and partial audit verdict retain this
   gap; the original task is unticked. Fixing this extra boundary is outside R2/R3.

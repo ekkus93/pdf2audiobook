@@ -1,12 +1,12 @@
 # PDF2Audiobook Voice Cloning TODO
 
-**Status:** CLI/Tauri delivered; review reopened VC5.05; accelerator acceptance remains open.
+**Status:** CLI/Tauri delivered; VC5.05 resume gap fixed in `282f6f0`; accelerator acceptance remains open.
 **Date:** 2026-11-18
 **Last reviewed:** 2026-11-20
 **Specification:** [Voice Cloning Specification](PDF2AUDIOBOOK_VOICE_CLONING_SPEC.md) (VC1–VC8)
 **Baseline:** `master` at `451551c`, plus the working-tree configuration initializer and Settings editor.
 **Delivery:** Both the CLI and Tauri app are required for completion.
-**Task audit:** [All 40 tasks and clauses](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_AUDIT.md) — 37 verified; VC5.05 and two hardware tasks open.
+**Task audit:** [All 40 tasks and clauses](PDF2AUDIOBOOK_VOICE_CLONING_REVIEW_AUDIT.md) — 38 verified; two hardware tasks open.
 
 
 > Commit-series provenance: historical checks below describe the reviewed working tree.
@@ -45,9 +45,9 @@ validation cache (`review-2026-11-19/r5/`). Commands below reproduce the corresp
 | Native walkthrough | [`9941656`](https://github.com/ekkus93/pdf2audiobook/commit/99416560b9081dd61f8fecd1c52d870fdc0a4c0f) | 2026-11-20 | 1/1 local synthetic walkthrough passed (70.39 s); CI executable/AppImage 2/2 passed | Native picker, typed draft, actual CLI MP3s, resume, selected repair, cancellation/cleanup and dark/light captures; [Desktop CI #83](https://github.com/ekkus93/pdf2audiobook/actions/runs/44713371693) passed |
 
 The six pytest skips are one optional Kitten smoke, three real-ASR opt-ins and two
-real-clone opt-ins; none is caused by missing FFmpeg, Tesseract or Node. The strict
-expected failure is the reproduced **VC5.05** retained-reference/dependency-removal
-resume gap, **not passed acceptance**. Default Rust ignores four opt-ins; three offline
+real-clone opt-ins; none is caused by missing FFmpeg, Tesseract or Node. The former
+strict expected failure (the reproduced **VC5.05** retained-reference dependency-removal
+resume gap) is fixed in `282f6f0` and now passes as a regression test. Default Rust ignores four opt-ins; three offline
 CLI integrations were run explicitly, while the real-model bridge was not repeated.
 The Xvfb walkthrough exercises playback controls/seek, not physical speaker output.
 
@@ -148,7 +148,7 @@ are recorded evidence, not re-measured here; accelerator tasks VC0.03/VC8.04 rem
   legacy golden compatibility for the same SDK; document any intentional SDK identity change.
 - [x] VC5.04 Integrate safe resynthesis staging/backups and detect missing clone selection
   during repairs. Require explicit intent to switch existing clone audio to a built-in voice.
-- [ ] VC5.05 Test failed/canceled clone repairs retain valid prior MP3/sidecar pairs. Verify
+- [x] VC5.05 Test failed/canceled clone repairs retain valid prior MP3/sidecar pairs. Verify
   packing, playback and ASR inspection of finished audio need neither cloning models nor the
   original recording; ASR must assess narration content, not speaker similarity.
 
@@ -486,6 +486,20 @@ Remaining release prerequisites:
   `tests/test_verify_audio_cli.py`; Ruff lint/format, lockfile validation, mypy and the complete
   offline Python suite pass. Only **VC0.03 / VC8.04 accelerator acceptance** remains open,
   pending the user's move to a different machine.
+
+### VC5.05 resolution (2026-11-20)
+
+- Fixed in `282f6f004bdf2d60a47e480ca806f13e5526b859`: a finished clone chapter is reused
+  while its reference audio and any supplied transcript match the recorded identity. The
+  fresh identity records installed backend versions, so merely removing the optional
+  package made valid audio stale. Validation still rejects a recorded identity whose
+  backend differs from an installed one. Parent `77d522b` reproduced 8 synthesis calls
+  against 4; the fix holds the count at 4.
+- Regeneration still happens when the reference audio, the transcript, an installed
+  backend version or a generation setting changes. Sidecars written before the fix keep
+  their identity.
+- Python CI run 934 and Desktop CI run 89 are green on the fix commit.
+- VC0.03 and VC8.04 remain open for accelerator hardware.
 
 ### Review acceptance correction (2026-11-20)
 
