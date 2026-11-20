@@ -78,3 +78,5 @@
 | Date | Commit | Completed tasks | Runs and results | Outstanding gates |
 |---|---|---|---|---|
 | 2026-11-20 | `8e7f329` | Spec and TODO drafted; no workflow written | Draft only | Tasks 1–8 |
+| 2026-11-20 | `8fe4e1c5054198a400b2f329a3015230796bf1f7` | Workflow, helper scripts, guard test, CLAUDE.md wording and maintainer guide | Python CI [940](https://github.com/ekkus93/pdf2audiobook/actions/runs/44742528071) failed on all three versions: the guard test imported PyYAML, which is not a declared dependency. Desktop CI [95](https://github.com/ekkus93/pdf2audiobook/actions/runs/44742528074) passed. | Real-model runs (tasks 2.1, 3.x, 4.x, 8.x) |
+| 2026-11-20 | `a88ca3fe16418b0723afc6db532b4f65a959eadd` | Guard test rewritten without YAML | Python CI [941](https://github.com/ekkus93/pdf2audiobook/actions/runs/44744060280) passed on 3.11 and 3.12; 3.13 failed in the unrelated `test_worker_dies_if_cli_parent_is_force_killed` (`ProcessLookupError`). Rerunning the failed job passed on attempt 2 (same run ID). Desktop CI [96](https://github.com/ekkus93/pdf2audiobook/actions/runs/44744060132) passed. | Real-model runs |
