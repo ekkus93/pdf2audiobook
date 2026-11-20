@@ -49,6 +49,9 @@ def batch(
     tts_provider: str | None = typer.Option(None, "--tts-provider"),
     tts_model: str | None = typer.Option(None, "--tts-model"),
     voice: str | None = typer.Option(None, "--voice"),
+    clone_voice: bool | None = typer.Option(None, "--clone-voice/--no-clone-voice"),
+    reference_audio: str | None = typer.Option(None, "--reference-audio", metavar="PATH"),
+    reference_text_file: str | None = typer.Option(None, "--reference-text-file", metavar="PATH"),
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
     sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
     bitrate: str | None = typer.Option(None, "--bitrate"),
@@ -89,12 +92,20 @@ def batch(
             overrides.setdefault("tts", {})["bitrate"] = bitrate
         if cover is not None:
             overrides.setdefault("audio", {})["cover_image"] = str(cover)
+        from pdf2audiobook.cli.options import clone_overrides
+
+        clone_overrides(
+            overrides,
+            clone_voice=clone_voice,
+            reference_audio=reference_audio,
+            reference_text_file=reference_text_file,
+        )
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
         configure_effective_logging(settings, origins)
         from pdf2audiobook.audio import read_cover_image
 
         read_cover_image(settings.audio.cover_image)
-        from pdf2audiobook.pipeline import convert_book, settings_for_book_tts, tts_selection
+        from pdf2audiobook.pipeline import convert_book
 
         results: list[dict[str, Any]] = []
         failures = 0
@@ -110,23 +121,7 @@ def batch(
                 )
                 if present
             )
-            book_settings = settings_for_book_tts(settings, source.stem, explicit=explicit)
-            validated = book_settings.model_dump()
-            selected_provider, _selected_voice, _selected_speed = tts_selection(book_settings)
-            if tts_model is not None:
-                section = "piper" if selected_provider == "piper" else "kitten"
-                key = "model_path" if section == "piper" else "model"
-                validated["tts"][section][key] = tts_model
-            if voice is not None:
-                validated["tts"][selected_provider]["voice"] = voice
-            if speed is not None:
-                validated["tts"][selected_provider]["speed"] = speed
-            try:
-                book_settings = Settings.model_validate(validated)
-            except (typer.Exit, ClickExit):
-                raise
-            except Exception:
-                raise ConfigError("Invalid per-book TTS settings for batch conversion") from None
+            book_settings = _book_settings(settings, source, explicit, tts_model, voice, speed)
             batch_jobs.append((source, book_settings))
         for source, book_settings in batch_jobs:
             configure_effective_logging(book_settings, origins)
@@ -138,16 +133,7 @@ def batch(
                 raise
             except Exception as exc:
                 failures += 1
-                code = getattr(exc, "exit_code", 1)
-                if isinstance(exc, OSError):
-                    code = AudioError.exit_code
-                results.append(
-                    {
-                        "book": source.name,
-                        "ok": False,
-                        "error_code": code,
-                    }
-                )
+                results.append(_batch_failure(source, exc))
             else:
                 results.append(
                     {"book": source.name, "ok": True, "mp3_files": [str(path) for path in outputs]}
@@ -161,3 +147,50 @@ def batch(
         raise
     except Exception as exc:
         fail(exc, json_output=json_output)
+
+
+def _book_settings(
+    settings: Settings,
+    source: Path,
+    explicit: frozenset[str],
+    tts_model: str | None,
+    voice: str | None,
+    speed: float | None,
+) -> Settings:
+    from pdf2audiobook.pipeline import settings_for_book_tts, tts_selection
+    from pdf2audiobook.tts.cloning import validate_clone_selection
+
+    book_settings = settings_for_book_tts(settings, source.stem, explicit=explicit)
+    validated = book_settings.model_dump()
+    selected_provider, _selected_voice, _selected_speed = tts_selection(book_settings)
+    if tts_model is not None:
+        section = "piper" if selected_provider == "piper" else "kitten"
+        key = "model_path" if section == "piper" else "model"
+        validated["tts"][section][key] = tts_model
+    if voice is not None:
+        validated["tts"][selected_provider]["voice"] = voice
+    if speed is not None:
+        validated["tts"][selected_provider]["speed"] = speed
+    try:
+        book_settings = Settings.model_validate(validated)
+        book_settings._clone_explicit = settings._clone_explicit | (
+            frozenset({"voice"}) if voice is not None else frozenset()
+        )
+        validate_clone_selection(book_settings)
+    except (typer.Exit, ClickExit):
+        raise
+    except ConfigError:
+        raise
+    except Exception:
+        raise ConfigError("Invalid per-book TTS settings for batch conversion") from None
+    return book_settings
+
+
+def _batch_failure(source: Path, exc: Exception) -> dict[str, Any]:
+    from pdf2audiobook.errors import AudiobookError
+
+    code = AudioError.exit_code if isinstance(exc, OSError) else getattr(exc, "exit_code", 1)
+    result: dict[str, Any] = {"book": source.name, "ok": False, "error_code": code}
+    if isinstance(exc, AudiobookError) and exc.error_reason:
+        result["reason"] = exc.error_reason
+    return result

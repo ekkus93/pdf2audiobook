@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import logging
 import os
 import tempfile
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -50,6 +52,12 @@ def _rendering_inputs(settings: Settings) -> dict[str, object]:
     inputs: dict[str, object] = {"footnotes": settings.pdf.footnotes}
     if settings.reading.process_citations:
         inputs["citations"] = True
+    if settings.tts.voice_clone.enabled:
+        from pdf2audiobook.tts.cloning import clone_metadata
+
+        metadata = clone_metadata(settings)
+        if metadata is not None:
+            inputs["voice_clone"] = metadata
     return inputs
 
 
@@ -187,6 +195,120 @@ def _initial_status(run: _ConversionRun) -> None:
         }
         for item in run.chosen
     }
+
+
+def _recorded_clone(run: _ConversionRun) -> dict[str, Any] | None:
+    from pdf2audiobook.tts.cloning import valid_recorded_identity
+
+    found: dict[str, Any] | None = None
+    for chapter in run.chosen:
+        if chapter.id in run.skipped_empty:
+            continue
+        output = run.services.audio_output_path(run.manifest, chapter, run.manifest_path.parent)
+        metadata = run.services.valid_mp3_sidecar(output)
+        inputs = metadata.get("rendering_inputs") if isinstance(metadata, dict) else None
+        clone = inputs.get("voice_clone") if isinstance(inputs, dict) else None
+        if not valid_recorded_identity(clone) or (found is not None and found != clone):
+            return None
+        found = clone
+    return found
+
+
+def _previous_clone_selection(run: _ConversionRun) -> bool:
+    """Retain repair intent even when the MP3 is corrupt or its chapter title changed."""
+    from pdf2audiobook.jsonio import load_bounded_json
+
+    chosen = {chapter.id for chapter in run.chosen}
+    for path in (run.manifest_path.parent / "audio").glob("*.cache.json"):
+        if path.is_symlink():
+            continue
+        metadata = load_bounded_json(path, max_bytes=4096, max_depth=8)
+        if (
+            not isinstance(metadata, dict)
+            or not isinstance(metadata.get("chapter_id"), str)
+            or metadata["chapter_id"] not in chosen
+        ):
+            continue
+        inputs = metadata.get("rendering_inputs")
+        if isinstance(inputs, dict) and inputs.get("voice_clone") is not None:
+            return True
+    return False
+
+
+@contextlib.contextmanager
+def _voice_run(run: _ConversionRun) -> Iterator[None]:
+    from pdf2audiobook.tts.cloning import (
+        ReferenceVoice,
+        clone_error,
+        complete_transcript,
+        snapshot_reference,
+        validate_clone_selection,
+    )
+
+    settings = run.settings
+    validate_clone_selection(settings)
+    owned_provider = run.provider is None
+    reference: ReferenceVoice | None = None
+    previous = settings._clone_reference
+    preparation = None
+    try:
+        if settings.tts.voice_clone.enabled:
+            if run.progress is not None and run.progress.enabled:
+                preparation = run.progress.stage("Preparing voice reference", None, "reference")
+            for chapter in run.chosen:
+                if chapter.id in run.skipped_empty:
+                    continue
+                try:
+                    text = run.text_file(chapter).read_text(encoding="utf-8")
+                except (OSError, UnicodeError):
+                    raise clone_error(
+                        "Could not read the selected chapter text", "voice_selection_conflict"
+                    ) from None
+                if chapter.voice_id or run.services.voice_marker_ids(text):
+                    raise clone_error(
+                        f"Chapter {chapter.number} has a voice override; clear it or disable cloning",
+                        "voice_selection_conflict",
+                    )
+            recorded = _recorded_clone(run) if settings.general.resume and not run.force else None
+            configured = settings.tts.voice_clone.reference_audio or ""
+            missing = (
+                "://" not in configured
+                and "\0" not in configured
+                and not os.path.lexists(Path(configured).expanduser())
+            )
+            if missing and recorded is not None:
+                reference = ReferenceVoice(recorded)
+            else:
+                reference = snapshot_reference(settings, transcribe=False)
+                if reference.transcript is None:
+                    if (
+                        recorded is not None
+                        and recorded["reference_audio_sha256"]
+                        == reference.identity["reference_audio_sha256"]
+                    ):
+                        reference.identity = recorded
+                    else:
+                        complete_transcript(reference)
+            settings._clone_reference = reference
+            if preparation is not None:
+                preparation.close()
+                preparation = None
+        elif "enabled" not in settings._clone_explicit and _previous_clone_selection(run):
+            raise clone_error(
+                "This audio used a cloned voice; provide its reference or choose --no-clone-voice explicitly",
+                "voice_selection_conflict",
+            )
+        yield
+    finally:
+        if preparation is not None:
+            preparation.close()
+        if owned_provider and run.provider is not None:
+            close = getattr(run.provider, "close", None)
+            if callable(close):
+                close()
+        if reference is not None:
+            reference.close()
+        settings._clone_reference = previous
 
 
 def _chapter_identity(run: _ConversionRun, text: str, item: Chapter) -> str:
@@ -608,30 +730,68 @@ def _convert_analyzed_book(
         skipped_empty={item.id for item in selection.skipped},
         provider=tts_provider,
     )
-    _preflight_voice_markers(run)
-    _initial_status(run)
-    outputs, pending, chapter_chars, cached_chars = _plan_synthesis(run)
-    synthesis: ProgressHandle | None = None
-    if progress is not None and progress.enabled and pending:
-        # Characters, not chunks, so the estimate follows how much text is left.
-        synthesis = progress.stage(
-            "Synthesizing speech",
-            sum(chapter_chars.values()),
-            "char",
-            initial=cached_chars,
-        )
-    for position, entry in enumerate(pending, 1):
-        _convert_chapter(run, entry, position, len(pending), synthesis)
-    if synthesis is not None:
-        synthesis.close()
-    _write_conversion_status(run)
-    if run.failed_chapters:
-        services.log_event(
-            "degraded_output",
-            level=logging.WARNING,
-            stage="conversion",
-            count=len(run.failed_chapters),
-        )
-        numbers = ", ".join(str(number) for number in sorted(run.failed_chapters))
-        raise PartialConversionError(f"Chapter audio failed for chapter(s): {numbers}")
-    return outputs
+    return _synthesize_selected(run)
+
+
+def _synthesize_selected(run: _ConversionRun) -> list[Path]:
+    settings, progress = run.settings, run.progress
+    with _voice_run(run):
+        _preflight_voice_markers(run)
+        _initial_status(run)
+        outputs, pending, chapter_chars, cached_chars = _plan_synthesis(run)
+        if pending and settings.tts.voice_clone.enabled:
+            from pdf2audiobook.tts.cloning import complete_transcript
+
+            reference = settings._clone_reference
+            if reference.transcript is None:
+                complete_transcript(reference)
+                _initial_status(run)
+                outputs, pending, chapter_chars, cached_chars = _plan_synthesis(run)
+        if (
+            pending
+            and run.provider is None
+            and settings.tts.kitten.model in {"kitten2", "KittenML/kitten-tts-2"}
+            and settings.tts.provider == "kitten"
+        ):
+            _prepare_kitten2(run)
+        synthesis: ProgressHandle | None = None
+        if progress is not None and progress.enabled and pending:
+            # Characters, not chunks, so the estimate follows how much text is left.
+            synthesis = progress.stage(
+                "Synthesizing speech",
+                sum(chapter_chars.values()),
+                "char",
+                initial=cached_chars,
+            )
+        for position, entry in enumerate(pending, 1):
+            _convert_chapter(run, entry, position, len(pending), synthesis)
+        if synthesis is not None:
+            synthesis.close()
+        _write_conversion_status(run)
+        if run.failed_chapters:
+            run.services.log_event(
+                "degraded_output",
+                level=logging.WARNING,
+                stage="conversion",
+                count=len(run.failed_chapters),
+            )
+            numbers = ", ".join(str(number) for number in sorted(run.failed_chapters))
+            raise PartialConversionError(f"Chapter audio failed for chapter(s): {numbers}")
+        return outputs
+
+
+def _prepare_kitten2(run: _ConversionRun) -> None:
+    """Load/condition once before chapter synthesis; preparation failures retain exit code 6."""
+    from pdf2audiobook.tts.catalog import require_model
+
+    stage = (
+        run.progress.stage("Preparing local voice model", None, "model")
+        if run.progress is not None and run.progress.enabled
+        else None
+    )
+    try:
+        require_model()
+        run.provider = run.services.create_tts_provider(run.settings)
+    finally:
+        if stage is not None:
+            stage.close()

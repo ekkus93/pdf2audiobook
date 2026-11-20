@@ -55,6 +55,7 @@ from pdf2audiobook.document.structure import (
     validate_chapter_coverage as validate_chapter_coverage,
 )
 from pdf2audiobook.errors import (
+    AudioError,
     ConfigError,
     ExtractionError,
     InputError,
@@ -244,6 +245,19 @@ def create_tts_provider(settings: Settings) -> TTSProvider:
     """Construct the selected TTS adapter in one place."""
     if settings.tts.provider == "piper":
         return PiperProvider(settings.tts.piper.model_path)
+    if settings.tts.voice_clone.enabled:
+        from pdf2audiobook.tts.clone_provider import KittenCloneProvider
+        from pdf2audiobook.tts.cloning import ReferenceVoice
+
+        if not isinstance(settings._clone_reference, ReferenceVoice):
+            raise AudioError(
+                "Prepare a voice reference before synthesis", error_reason="voice_clone_unavailable"
+            )
+        return KittenCloneProvider(settings._clone_reference)
+    if settings.tts.kitten.model in {"kitten2", "KittenML/kitten-tts-2"}:
+        from pdf2audiobook.tts.clone_provider import Kitten2BuiltinProvider
+
+        return Kitten2BuiltinProvider()
     return KittenProvider(settings.tts.kitten.model)
 
 
@@ -361,6 +375,9 @@ def chapter_audio_fingerprint(
         if cover_image is None and settings.audio.cover_image is not None:
             cover_image = read_cover_image(settings.audio.cover_image)
         cover_identity = digest_bytes(cover_image[0]) if cover_image is not None else None
+    from pdf2audiobook.tts.cloning import clone_metadata
+
+    clone = clone_metadata(settings)
     return fingerprint(
         text,
         settings.tts.provider,
@@ -381,6 +398,7 @@ def chapter_audio_fingerprint(
         *adapters,
         # Present only when on, so every existing identity is unchanged.
         *(("citations-skipped-v2",) if settings.reading.process_citations else ()),
+        *((fingerprint(clone),) if clone is not None else ()),
     )
 
 

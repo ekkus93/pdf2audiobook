@@ -25,7 +25,6 @@ ALLOWLIST = {
     "pdf2audiobook/reading_order.py::order_two_columns": 108,
     "pdf2audiobook/llm/equations.py::propose_llm_equation_readings": 107,
     "pdf2audiobook/llm/budget.py::BookLLMBudgetLedger._stats": 107,
-    "pdf2audiobook/cli/batch.py::batch": 106,
 }
 
 

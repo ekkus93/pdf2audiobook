@@ -1,0 +1,256 @@
+{
+  "models": [
+    {
+      "name": "kitten2",
+      "model_id": "KittenML/kitten-tts-2",
+      "revision": "c93cb7c271baa51d9ae8204d5277988906f235a2",
+      "cloning": true,
+      "backend": "torch",
+      "device": "auto",
+      "detected_device": "cpu",
+      "packages": {
+        "kittenml": null,
+        "torch": null,
+        "torchaudio": null,
+        "transformers": null,
+        "safetensors": null,
+        "soundfile": null,
+        "librosa": null,
+        "diffusers": null,
+        "s3tokenizer": null,
+        "omegaconf": null,
+        "hydra-core": null
+      },
+      "required_sdk_version": "0.9.6",
+      "package_installed": false,
+      "weights_present": false,
+      "ready": false,
+      "size_bytes": 1597139657,
+      "download_bytes": 1597139657,
+      "directory": "/cache/voice-model",
+      "transcription_ready": false,
+      "transcription_model": "d7440d1dc186f76616474e0ff0b3b6b879abc9d1a4926b7adfa41db2d497ab4f",
+      "files": [
+        {
+          "name": "LICENSE.md",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/LICENSE.md",
+          "size_bytes": 12462,
+          "sha256": "3be75a42ccf71515b18094f116a2f271ac599334fed980ede7021b4636d01212",
+          "cached": false
+        },
+        {
+          "name": "config.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/config.json",
+          "size_bytes": 2435,
+          "sha256": "1b9ec1e0fe936b6233c0f25a984af52b1860f1704a7ad725f1d6aaa114a52599",
+          "cached": false
+        },
+        {
+          "name": "lm/added_tokens.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/added_tokens.json",
+          "size_bytes": 157239,
+          "sha256": "f757d3b2e5381b23765a7177bb76afd6f44f3ac8e9eb585fc39333e4769001f3",
+          "cached": false
+        },
+        {
+          "name": "lm/config.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/config.json",
+          "size_bytes": 1359,
+          "sha256": "91378d01ae13755f130e3b714abfe57e8a48d15a88fc0d3a1414f30af76d3f2b",
+          "cached": false
+        },
+        {
+          "name": "lm/generation_config.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/generation_config.json",
+          "size_bytes": 214,
+          "sha256": "d3e057bbca66b92f33a8bdc6a1301014e0e4ab69b3b3fd2e442d9fe0c69f3431",
+          "cached": false
+        },
+        {
+          "name": "lm/merges.txt",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/merges.txt",
+          "size_bytes": 1671853,
+          "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5",
+          "cached": false
+        },
+        {
+          "name": "lm/model-tl2-emb4.safetensors",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/model-tl2-emb4.safetensors",
+          "size_bytes": 492114403,
+          "sha256": "af447d02ae92ea14c733c45bbb8fb740e14efeff1643583482b5a5cd3dc5301d",
+          "cached": false
+        },
+        {
+          "name": "lm/special_tokens_map.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/special_tokens_map.json",
+          "size_bytes": 450,
+          "sha256": "a67cddf2259d77b5021cfa9a5608e60779f19c4828567b2ae46604f23fc0c569",
+          "cached": false
+        },
+        {
+          "name": "lm/tokenizer.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/tokenizer.json",
+          "size_bytes": 12649770,
+          "sha256": "99644fcf19a9aff57b247b4e56fffe878c65d9c230d21a46caf9acf8f54d31d7",
+          "cached": false
+        },
+        {
+          "name": "lm/tokenizer_config.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/tokenizer_config.json",
+          "size_bytes": 1166768,
+          "sha256": "ce07c343b7bb1d9b822475beb46e39b3883706bfb5bbc3d080142ccd321beea3",
+          "cached": false
+        },
+        {
+          "name": "lm/vocab.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/lm/vocab.json",
+          "size_bytes": 2776833,
+          "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+          "cached": false
+        },
+        {
+          "name": "speaker/LICENSE",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/speaker/LICENSE",
+          "size_bytes": 1061,
+          "sha256": "14d7016ad68e7394d6e6b78d96cc2ae431c905287b89674cfdf021e79e62b8ba",
+          "cached": false
+        },
+        {
+          "name": "speaker/model.safetensors",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/speaker/model.safetensors",
+          "size_bytes": 17418240,
+          "sha256": "c435292860671aa96e94bd19fcea055241c8ef05548e1e441a659b2bfd79fad5",
+          "cached": false
+        },
+        {
+          "name": "voices/voices.json",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/voices.json",
+          "size_bytes": 43714,
+          "sha256": "f4439cb036f99df5a7f096977d9fb0c3222ff1508c3e1dfc67f4575bc5c7e670",
+          "cached": false
+        },
+        {
+          "name": "s3gen_meanflow.safetensors",
+          "source": "https://huggingface.co/ResembleAI/chatterbox-turbo/resolve/749d1c1a46eb10492095d68fbcf55691ccf137cd/s3gen_meanflow.safetensors",
+          "size_bytes": 1064875036,
+          "sha256": "d65cb687a2ed581ee6cc297e919ffefa63386944f42364ae13b78a594945514f",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_2_female.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_2_female.wav",
+          "size_bytes": 587036,
+          "sha256": "cd87018a8c2046a01b4b60f46981d1695a11ac5430733d1a45fc3e071e819e98",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_2_female.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_2_female.npz",
+          "size_bytes": 3808,
+          "sha256": "aa9db4baf49fe0a159724f79d112d78b95047db3d797b6ba4d17c68119003eec",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_2_male.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_2_male.wav",
+          "size_bytes": 532844,
+          "sha256": "e950331d5788b42a69695f031ae96ec041ccbae1a1354374104d3d4c039661f1",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_2_male.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_2_male.npz",
+          "size_bytes": 3696,
+          "sha256": "8e7df50efef79cc9679fdd59c8094a9932ecf53ceef077b632836445b9adbf52",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_3_female.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_3_female.wav",
+          "size_bytes": 483068,
+          "sha256": "de9f4b750650219f97ce39fcec0f060d540e756ec2d37ad55b64be45d311d3f8",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_3_female.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_3_female.npz",
+          "size_bytes": 3592,
+          "sha256": "1644d038c5de111ad0d1098f91918eb88064998f25c5674903cfcb660580a62c",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_3_male.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_3_male.wav",
+          "size_bytes": 477452,
+          "sha256": "659b6b7000c74f2a2132bc1d7aca72cdd767ad3eab3865c5af1ea8e4d1e086c1",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_3_male.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_3_male.npz",
+          "size_bytes": 3580,
+          "sha256": "ecb8089534b84bbed17cdb888dfeac879f354a6ad8a6041b9528c8f915345570",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_4_female.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_4_female.wav",
+          "size_bytes": 486092,
+          "sha256": "1ff68b1309fabe3c464a6228e848cf793a38b1e7797bda67faedfc595a36bae6",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_4_female.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_4_female.npz",
+          "size_bytes": 3596,
+          "sha256": "5cfaa87ec6a0059e461e83c61e0ba88636afb4eb17160cf9fb0d5ed19efbfc10",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_4_male.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_4_male.wav",
+          "size_bytes": 568220,
+          "sha256": "872a1179583b8ea9ec040acbb66a7dfbb16de0574d263f0b73b1e31b0257e059",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_4_male.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_4_male.npz",
+          "size_bytes": 3768,
+          "sha256": "d77cc1848293a8aae0057a156aa39c034b62876b7cc619c36162891eba2e26ac",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_5_female.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_5_female.wav",
+          "size_bytes": 531836,
+          "sha256": "200750b1506328c02296c7345600f0a10b82046c82ecaf3c855887d54869fd91",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_5_female.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_5_female.npz",
+          "size_bytes": 3692,
+          "sha256": "10fe2937b11a37cfaeb36fa6c7884a737dbe50b42c3bfd9907ba62135ca8165c",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_5_male.wav",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_5_male.wav",
+          "size_bytes": 551804,
+          "sha256": "e40db26e40a1cd974165f16df815a4c1ad644c637113ae6472850089ff5e3a3c",
+          "cached": false
+        },
+        {
+          "name": "voices/kitten_v08_voice_5_male.npz",
+          "source": "https://huggingface.co/KittenML/kitten-tts-2/resolve/c93cb7c271baa51d9ae8204d5277988906f235a2/voices/kitten_v08_voice_5_male.npz",
+          "size_bytes": 3736,
+          "sha256": "1d48cb37eef54048e04531f021e1ce562c88dc59d7ad9a0ce31824c0b570ca16",
+          "cached": false
+        }
+      ],
+      "reason": "model_not_installed"
+    }
+  ],
+  "warnings": []
+}

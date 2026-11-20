@@ -235,6 +235,11 @@ def resynthesize(
         [], "--chapter", min=1, help="Chapter to speak again; repeatable."
     ),
     voice: str | None = typer.Option(None, "--voice", help="Voice for this retry."),
+    tts_provider: str | None = typer.Option(None, "--tts-provider"),
+    tts_model: str | None = typer.Option(None, "--tts-model"),
+    clone_voice: bool | None = typer.Option(None, "--clone-voice/--no-clone-voice"),
+    reference_audio: str | None = typer.Option(None, "--reference-audio", metavar="PATH"),
+    reference_text_file: str | None = typer.Option(None, "--reference-text-file", metavar="PATH"),
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
     cover: Path | None = typer.Option(
         None, "--cover", help="Cover art; by default the art already in the chapter MP3 is kept."
@@ -259,7 +264,7 @@ def resynthesize(
         if not chapter:
             raise ConfigError("Name at least one --chapter to synthesize again")
         preliminary, _ = load_settings(config, no_config=no_config)
-        provider = preliminary.tts.provider
+        provider = tts_provider or preliminary.tts.provider
         overrides: dict[str, Any] = {}
         if voice is not None or speed is not None:
             overrides = {
@@ -269,7 +274,41 @@ def resynthesize(
                     }
                 }
             }
+        if tts_provider is not None:
+            overrides.setdefault("tts", {})["provider"] = tts_provider
+        if tts_model is not None:
+            section, key = ("piper", "model_path") if provider == "piper" else ("kitten", "model")
+            overrides.setdefault("tts", {}).setdefault(section, {})[key] = tts_model
+        from pdf2audiobook.cli.options import clone_overrides
+        from pdf2audiobook.tts.cloning import validate_clone_selection
+
+        clone_overrides(
+            overrides,
+            clone_voice=clone_voice,
+            reference_audio=reference_audio,
+            reference_text_file=reference_text_file,
+        )
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides or None)
+        from pdf2audiobook.tts.selection import settings_for_book_tts
+        from pdf2audiobook.workspace import read_manifest
+
+        if settings.tts.profiles:
+            source_stem = Path(read_manifest(manifest_path).source_path).stem
+            settings = settings_for_book_tts(
+                settings,
+                source_stem,
+                explicit=frozenset(
+                    key
+                    for key, present in (
+                        ("tts_provider", tts_provider is not None),
+                        ("tts_model", tts_model is not None),
+                        ("voice", voice is not None),
+                        ("speed", speed is not None),
+                    )
+                    if present
+                ),
+            )
+        validate_clone_selection(settings)
         configure_effective_logging(settings, origins)
         cover_image = read_cover_image(cover) if cover is not None else None
         workspace = manifest_path.parent

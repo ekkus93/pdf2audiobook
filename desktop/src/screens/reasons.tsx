@@ -12,6 +12,11 @@ export const ACTION_REASONS = [
   "llm_context_too_small",
   "llm_output_cap",
   "budget_exhausted",
+  "voice_clone_unsupported",
+  "voice_clone_unavailable",
+  "voice_reference_invalid",
+  "voice_reference_changed",
+  "voice_selection_conflict",
 ] as const;
 export type ActionReason = (typeof ACTION_REASONS)[number];
 
@@ -91,6 +96,16 @@ export function ReasonAction({ reason, context }: { reason: ActionReason; contex
           </div>
         </Panel>
       );
+    case "voice_clone_unsupported":
+    case "voice_clone_unavailable":
+    case "voice_reference_invalid":
+    case "voice_reference_changed":
+    case "voice_selection_conflict":
+      return <Panel label="Voice setup" title="Check the voice selection">
+        <p className="body-medium on-surface-variant">{context.message}</p>
+        <p className="body-medium on-surface-variant">Cloning needs full KittenTTS 2 and a local 5–30 second recording. Supply its transcript or prepare local Whisper. Clear chapter voice overrides for cloned chapters.</p>
+        <Button icon="tune" onClick={() => context.onOpenBook?.()} disabled={!context.onOpenBook}>Change voice options</Button>
+      </Panel>;
     case "budget_exhausted":
       return <Budget context={context} />;
   }

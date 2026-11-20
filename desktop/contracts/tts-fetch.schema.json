@@ -1,0 +1,150 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tts fetch kitten2 --json",
+  "type": "object",
+  "properties": {
+    "model": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "Pinned voice model readiness",
+      "type": "object",
+      "properties": {
+        "name": {
+          "const": "kitten2"
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        },
+        "cloning": {
+          "const": true
+        },
+        "backend": {
+          "const": "torch"
+        },
+        "device": {
+          "type": "string"
+        },
+        "detected_device": {
+          "type": "string"
+        },
+        "packages": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required_sdk_version": {
+          "type": "string"
+        },
+        "package_installed": {
+          "type": "boolean"
+        },
+        "weights_present": {
+          "type": "boolean"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "download_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "directory": {
+          "type": "string"
+        },
+        "transcription_ready": {
+          "type": "boolean"
+        },
+        "transcription_model": {
+          "type": "string"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": "Artifact",
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "size_bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "cached": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "source",
+              "size_bytes",
+              "sha256",
+              "cached"
+            ],
+            "additionalProperties": true
+          }
+        }
+      },
+      "required": [
+        "name",
+        "model_id",
+        "revision",
+        "cloning",
+        "backend",
+        "packages",
+        "package_installed",
+        "weights_present",
+        "ready",
+        "size_bytes",
+        "download_bytes",
+        "directory",
+        "transcription_ready",
+        "files",
+        "reason"
+      ],
+      "additionalProperties": true
+    },
+    "fetched": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "model",
+    "fetched",
+    "warnings"
+  ],
+  "additionalProperties": true
+}

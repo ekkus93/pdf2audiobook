@@ -21,6 +21,7 @@ from pdf2audiobook.cli._core import (
 )
 from pdf2audiobook.config import Settings, load_settings, settings_public
 from pdf2audiobook.errors import (
+    AudioError,
     InputError,
     LLMError,
 )
@@ -106,19 +107,21 @@ def doctor(
     try:
         settings, origins = load_settings(config, no_config=no_config)
         configure_effective_logging(settings, origins)
+        from importlib.metadata import PackageNotFoundError, version
+
         try:
-            from importlib import import_module
-
-            import_module("kittenml")
-
+            version("kittenml")
             kitten_installed = True
-        except ImportError:
+        except PackageNotFoundError:
             kitten_installed = False
         from pdf2audiobook.pdf import missing_ocr_languages, tesseract_languages
 
         languages = tesseract_languages()
+        from pdf2audiobook.tts.cloning import clone_diagnostics
+
         emit(
             {
+                "voice_clone": clone_diagnostics(settings),
                 "version": __version__,
                 "ffmpeg": bool(shutil.which("ffmpeg")),
                 "tesseract": bool(shutil.which("tesseract")),
@@ -254,6 +257,11 @@ def voices(
         if tts:
             settings, origins = load_settings(config, no_config=no_config, overrides={"tts": tts})
         configure_effective_logging(settings, origins)
+        from pdf2audiobook.tts.cloning import clone_diagnostics
+
+        if settings.tts.provider == "kitten":
+            emit(_kitten_voice_catalog(settings), json_output)
+            return
         provider = create_tts_provider(settings)
         # Piper speakers are numbers in the model, not names, so it has nothing to list.
         listable = getattr(provider, "supports_voice_listing", False) is True
@@ -264,6 +272,7 @@ def voices(
                 "voices": provider.list_voices() if listable else [],
                 "listable": listable,
                 "default_voice": section.voice,
+                "voice_clone": clone_diagnostics(settings),
             },
             json_output,
         )
@@ -273,6 +282,31 @@ def voices(
         raise
     except Exception as exc:
         fail(exc, json_output=json_output)
+
+
+def _kitten_voice_catalog(settings: Settings) -> dict[str, Any]:
+    """Known models share eight original voices; discovery never initializes an SDK."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    from pdf2audiobook.tts import KITTEN_BUILTIN_VOICES, KITTEN_MODEL_ALIASES
+    from pdf2audiobook.tts.cloning import clone_diagnostics
+
+    model = settings.tts.kitten.model
+    if model not in {"kitten2", "KittenML/kitten-tts-2"}:
+        try:
+            version("kittenml")
+        except PackageNotFoundError:
+            raise AudioError(
+                "Kitten TTS is not installed. Run 'uv sync --extra kitten' first."
+            ) from None
+    known = model in KITTEN_MODEL_ALIASES or model in KITTEN_MODEL_ALIASES.values()
+    return {
+        "provider": "kitten",
+        "voices": list(KITTEN_BUILTIN_VOICES) if known else [],
+        "listable": known,
+        "default_voice": settings.tts.kitten.voice,
+        "voice_clone": clone_diagnostics(settings),
+    }
 
 
 @app.command(epilog="Example: pdf2audiobook thumbnail ./book.pdf --output ./cover.png --json")

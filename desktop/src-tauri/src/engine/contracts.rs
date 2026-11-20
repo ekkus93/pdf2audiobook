@@ -40,7 +40,10 @@ fn assert_valid(schema_name: &str, instance: &Value) {
 }
 
 /// Success fixtures and the contract each follows.
-const RESULTS: [(&str, &str); 19] = [
+const RESULTS: [(&str, &str); 22] = [
+    ("tts-models.json", "tts-models"),
+    ("tts-fetch.json", "tts-fetch"),
+    ("voice-clone.json", "voice-clone"),
     ("doctor.json", "doctor"),
     ("doctor-llm-check.json", "doctor"),
     ("config-show.json", "config-show"),
@@ -85,6 +88,11 @@ fn success_fixtures_follow_their_contracts_and_parse() {
 fn error_fixtures_follow_the_contract_and_parse() {
     let cases = [
         ("error.input.stderr", 3, None),
+        (
+            "error.voice-clone.stderr",
+            6,
+            Some("voice_clone_unavailable"),
+        ),
         ("error.review-required.stderr", 6, Some("review_required")),
     ];
     for (file, code, reason) in cases {

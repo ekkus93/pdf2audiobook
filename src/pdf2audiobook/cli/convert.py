@@ -69,8 +69,38 @@ def _dry_run_convert(
         output_files = [
             str(audio_output_path(manifest, item, manifest_path.parent)) for item in chapters
         ]
+        clone_plan = {}
+        if settings.tts.voice_clone.enabled:
+            from pdf2audiobook.audio import voice_marker_ids
+            from pdf2audiobook.tts.catalog import model_readiness
+            from pdf2audiobook.tts.cloning import clone_error, snapshot_reference
+
+            for item in chapters:
+                text = (manifest_path.parent / "chapters" / f"{item.number:03d}.txt").read_text(
+                    encoding="utf-8"
+                )
+                if item.voice_id or voice_marker_ids(text):
+                    raise clone_error(
+                        f"Chapter {item.number} has a voice override; clear it or disable cloning",
+                        "voice_selection_conflict",
+                    )
+            reference = snapshot_reference(settings, transcribe=False)
+            try:
+                ready = model_readiness()
+                clone_plan = {
+                    "voice_clone": {
+                        "enabled": True,
+                        "reference_configured": True,
+                        "transcript_provided": reference.transcript is not None,
+                        "ready": ready["ready"]
+                        and (reference.transcript is not None or ready["transcription_ready"]),
+                    }
+                }
+            finally:
+                reference.close()
         emit(
             {
+                **clone_plan,
                 "dry_run": True,
                 "chapters": len(chapters),
                 "mp3_files": output_files,
@@ -171,6 +201,16 @@ def convert(
     tts_provider: str | None = typer.Option(None, "--tts-provider"),
     tts_model: str | None = typer.Option(None, "--tts-model"),
     voice: str | None = typer.Option(None, "--voice"),
+    clone_voice: bool | None = typer.Option(None, "--clone-voice/--no-clone-voice"),
+    reference_audio: str | None = typer.Option(
+        None, "--reference-audio", metavar="PATH", help="Local 5–30 second WAV/FLAC/MP3 reference."
+    ),
+    reference_text_file: str | None = typer.Option(
+        None,
+        "--reference-text-file",
+        metavar="PATH",
+        help="Optional UTF-8 transcript of the reference.",
+    ),
     bitrate: str | None = typer.Option(None, "--bitrate"),
     chapter: int | None = typer.Option(None, "--chapter", min=1),
     chapter_range: str | None = typer.Option(
@@ -233,7 +273,29 @@ def convert(
             )
         selected_range = parse_chapter_range(chapter_range) if chapter_range else None
         _check_accept_review(accept_review)
+        from pdf2audiobook.cli.options import clone_overrides
+        from pdf2audiobook.tts.cloning import validate_clone_selection
+        from pdf2audiobook.tts.selection import settings_for_book_tts
+
+        clone_overrides(
+            overrides,
+            clone_voice=clone_voice,
+            reference_audio=reference_audio,
+            reference_text_file=reference_text_file,
+        )
         settings, origins = load_settings(config, no_config=no_config, overrides=overrides)
+        explicit = frozenset(
+            key
+            for key, present in (
+                ("tts_provider", tts_provider is not None),
+                ("tts_model", tts_model is not None),
+                ("voice", voice is not None),
+                ("speed", speed is not None),
+            )
+            if present
+        )
+        settings = settings_for_book_tts(settings, source.stem, explicit=explicit)
+        validate_clone_selection(settings)
         configure_effective_logging(settings, origins)
         from pdf2audiobook.audio import read_cover_image
 

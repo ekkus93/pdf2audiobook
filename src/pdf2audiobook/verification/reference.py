@@ -67,8 +67,6 @@ def chapter_reference(
 ) -> Reference | Unavailable:
     """The expected narration for `chapter`, or why it can't be verified."""
     provider, voice, _speed = tts_selection(settings, chapter)
-    if provider == "piper" and not _english_piper(voice, settings):
-        return Unavailable("unsupported_language")
     audio = audio_output_path(manifest, chapter, workspace)
     if not _inside(audio, workspace / "audio"):
         return Unavailable("audio_missing")
@@ -76,6 +74,11 @@ def chapter_reference(
     text_file = workspace / "chapters" / f"{chapter.number:03d}.txt"
     if sidecar is None or not _inside(text_file, workspace / "chapters"):
         return Unavailable("audio_stale")
+    rendering = sidecar.get("rendering_inputs")
+    if isinstance(rendering, dict) and rendering.get("voice_clone") is not None:
+        provider, voice = "kitten", "Cloned voice"
+    elif provider == "piper" and not _english_piper(voice, settings):
+        return Unavailable("unsupported_language")
     try:
         text = text_file.read_text(encoding="utf-8")
     except (OSError, UnicodeError):

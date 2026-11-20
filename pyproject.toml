@@ -123,6 +123,7 @@ files = [
     "src/pdf2audiobook/cli/_core.py",
     "src/pdf2audiobook/cli/info.py",
     "src/pdf2audiobook/cli/configuration.py",
+    "src/pdf2audiobook/cli/tts_models.py",
     "src/pdf2audiobook/cli/options.py",
     "src/pdf2audiobook/cli/analyze.py",
     "src/pdf2audiobook/cli/convert.py",

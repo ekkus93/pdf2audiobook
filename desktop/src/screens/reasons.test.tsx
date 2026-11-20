@@ -65,7 +65,7 @@ beforeEach(() => {
 });
 
 describe("every D2.b reason leads to its action", () => {
-  it("covers all nine reasons between this file and Run.test.tsx", () => {
+  it("covers all stable reasons between this file and Run.test.tsx", () => {
     // review_required and pending_recovery are tested in Run.test.tsx.
     expect([...ACTION_REASONS, "review_required", "pending_recovery"].sort()).toEqual(
       [
@@ -78,6 +78,7 @@ describe("every D2.b reason leads to its action", () => {
         "review_acknowledgement_required",
         "review_required",
         "workspace_locked",
+        "voice_clone_unsupported", "voice_clone_unavailable", "voice_reference_invalid", "voice_reference_changed", "voice_selection_conflict",
       ].sort(),
     );
   });
@@ -256,4 +257,11 @@ describe("unacknowledged", () => {
       }),
     ).toEqual(["ambiguous_page_numbers"]);
   });
+});
+
+it.each(["voice_clone_unsupported", "voice_clone_unavailable", "voice_reference_invalid", "voice_reference_changed", "voice_selection_conflict"])("%s directs the user back to voice options", async (reason) => {
+  const { onDone } = setup(reason);
+  expect(await screen.findByText("Check the voice selection")).toBeInTheDocument();
+  await press("Change voice options");
+  expect(onDone).toHaveBeenCalledOnce();
 });

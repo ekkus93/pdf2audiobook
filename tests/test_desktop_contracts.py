@@ -115,7 +115,7 @@ def test_voices(monkeypatch: pytest.MonkeyPatch) -> None:
         "KittenTTS", (), {"__init__": lambda self, _m: None, "available_voices": ["Jasper"]}
     )
     monkeypatch.setitem(sys.modules, "kittenml", fake)
-    _check("voices", _ok("voices", "--no-config", "--json"))
+    _check("voices", _ok("voices", "--no-config", "--tts-model", "kitten2", "--json"))
 
 
 def test_thumbnail(book: dict[str, Path], tmp_path: Path) -> None:
@@ -278,5 +278,7 @@ def test_every_contract_has_a_test() -> None:
         "asr-models", "audio-verification",
         # Tested in test_verify_audio_cli.py.
         "audio-report", "audio-dismiss",
+        # Tested in test_voice_cloning_conversion.py.
+        "tts-models", "tts-fetch", "voice-clone",
     }  # fmt: skip
     assert contracts == tested

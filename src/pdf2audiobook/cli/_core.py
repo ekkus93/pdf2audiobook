@@ -79,6 +79,13 @@ asr_app = typer.Typer(
 
 app.add_typer(asr_app, name="asr")
 
+tts_app = typer.Typer(
+    help="List or explicitly fetch optional speech models.",
+    epilog="Example: pdf2audiobook tts models --json",
+)
+app.add_typer(tts_app, name="tts")
+
+
 audio_report_app = typer.Typer(
     help="Read a book's saved audio verification report and mark flags reviewed.",
     no_args_is_help=True,

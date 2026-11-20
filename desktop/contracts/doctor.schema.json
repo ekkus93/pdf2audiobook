@@ -163,6 +163,41 @@
           "additionalProperties": true
         }
       ]
+    },
+    "voice_clone": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "Voice cloning diagnostics",
+      "type": "object",
+      "properties": {
+        "supported": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "reference_configured": {
+          "type": "boolean"
+        },
+        "transcript_configured": {
+          "type": "boolean"
+        },
+        "model_ready": {
+          "type": "boolean"
+        },
+        "transcription_ready": {
+          "type": "boolean"
+        },
+        "ready": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "supported",
+        "enabled",
+        "reference_configured",
+        "transcript_configured"
+      ],
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

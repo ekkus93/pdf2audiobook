@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import sys
 import types
@@ -11,13 +12,13 @@ import pytest
 from typer.testing import CliRunner
 
 from pdf2audiobook.cli import app
-from pdf2audiobook.tts import KittenProvider
+from pdf2audiobook.tts import KITTEN_BUILTIN_VOICES, KittenProvider
 
 runner = CliRunner()
 
 
 class _FakeKittenModel:
-    available_voices = ["Bella", "Jasper", "Luna"]
+    available_voices = list(KITTEN_BUILTIN_VOICES)
 
     def __init__(self, model_id: str) -> None:
         self.model_id = model_id
@@ -31,6 +32,12 @@ def fake_kittenml(monkeypatch: pytest.MonkeyPatch) -> None:
     module = types.ModuleType("kittenml")
     module.KittenTTS = _FakeKittenModel  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "kittenml", module)
+    original = importlib.metadata.version
+    monkeypatch.setattr(
+        importlib.metadata,
+        "version",
+        lambda name: "0.9.6" if name == "kittenml" else original(name),
+    )
 
 
 def _voices(*args: str) -> object:
@@ -49,12 +56,20 @@ def test_kitten_voices_match_the_provider_listing() -> None:
         "listable": True,
         "default_voice": "Jasper",
         "warnings": [],
+        "voice_clone": {
+            "supported": False,
+            "enabled": False,
+            "reference_configured": False,
+            "transcript_configured": False,
+        },
     }
-    assert payload["voices"] == ["Bella", "Jasper", "Luna"]
+    assert payload["voices"] == list(KITTEN_BUILTIN_VOICES)
 
 
 @pytest.mark.usefixtures("fake_kittenml")
-def test_tts_model_selects_the_kitten_model(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tts_model_selects_offline_metadata_without_loading_the_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     loaded: list[str] = []
 
     class Recording(_FakeKittenModel):
@@ -66,7 +81,8 @@ def test_tts_model_selects_the_kitten_model(monkeypatch: pytest.MonkeyPatch) -> 
     result = _voices("--tts-provider", "kitten", "--tts-model", "nano")
 
     assert result.exit_code == 0, result.output
-    assert loaded == ["KittenML/kitten-tts-nano-0.8"]
+    assert loaded == []
+    assert json.loads(result.stdout)["voices"] == list(KITTEN_BUILTIN_VOICES)
 
 
 def test_piper_reports_that_its_speakers_cannot_be_listed(
@@ -86,12 +102,21 @@ def test_piper_reports_that_its_speakers_cannot_be_listed(
         "listable": False,
         "default_voice": "",
         "warnings": [],
+        "voice_clone": {
+            "supported": False,
+            "enabled": False,
+            "reference_configured": False,
+            "transcript_configured": False,
+        },
     }
     assert str(tmp_path) not in result.stdout
 
 
 def test_missing_kitten_gives_the_existing_install_message(monkeypatch) -> None:
-    monkeypatch.setitem(sys.modules, "kittenml", None)  # import raises ImportError
+    def missing(name):
+        raise importlib.metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(importlib.metadata, "version", missing)
 
     result = _voices()
 

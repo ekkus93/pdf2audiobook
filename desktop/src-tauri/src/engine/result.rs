@@ -105,6 +105,11 @@ mod tests {
             "llm_context_too_small",
             "llm_output_cap",
             "budget_exhausted",
+            "voice_clone_unsupported",
+            "voice_clone_unavailable",
+            "voice_reference_invalid",
+            "voice_reference_changed",
+            "voice_selection_conflict",
         ];
         for reason in reasons {
             let line = json!({
