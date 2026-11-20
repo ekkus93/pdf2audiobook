@@ -10,7 +10,7 @@ import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from pdf2audiobook.audio import AudioEncoder
 from pdf2audiobook.audio.commit import (
@@ -25,6 +25,9 @@ from pdf2audiobook.models import BookManifest, Chapter
 from pdf2audiobook.progress_display import ProgressHandle, ProgressReporter
 from pdf2audiobook.tts import TTSProvider
 from pdf2audiobook.workspace import fingerprint, write_json
+
+if TYPE_CHECKING:
+    from pdf2audiobook.tts.cloning import ReferenceVoice
 
 
 @dataclass(frozen=True)
@@ -197,6 +200,20 @@ def _initial_status(run: _ConversionRun) -> None:
     }
 
 
+def _recorded_reference_matches(recorded: dict[str, Any], reference: ReferenceVoice) -> bool:
+    """A finished clone stays valid while its reference audio and any supplied transcript match.
+
+    The fresh identity records installed backend versions, so an optional package that is
+    merely absent must not make finished audio stale. Validation still rejects a recorded
+    identity whose backend differs from an installed one.
+    """
+    if recorded["reference_audio_sha256"] != reference.identity["reference_audio_sha256"]:
+        return False
+    if reference.transcript is None:
+        return True
+    return recorded["reference_text_sha256"] == reference.identity["reference_text_sha256"]
+
+
 def _recorded_clone(run: _ConversionRun) -> dict[str, Any] | None:
     from pdf2audiobook.tts.cloning import valid_recorded_identity
 
@@ -280,15 +297,10 @@ def _voice_run(run: _ConversionRun) -> Iterator[None]:
                 reference = ReferenceVoice(recorded)
             else:
                 reference = snapshot_reference(settings, transcribe=False)
-                if reference.transcript is None:
-                    if (
-                        recorded is not None
-                        and recorded["reference_audio_sha256"]
-                        == reference.identity["reference_audio_sha256"]
-                    ):
-                        reference.identity = recorded
-                    else:
-                        complete_transcript(reference)
+                if recorded is not None and _recorded_reference_matches(recorded, reference):
+                    reference.identity = recorded
+                elif reference.transcript is None:
+                    complete_transcript(reference)
             settings._clone_reference = reference
             if preparation is not None:
                 preparation.close()

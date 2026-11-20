@@ -128,8 +128,9 @@ changing it invalidates affected speech while keeping chapter analysis and appro
 contain these hashes/settings, never raw audio, transcript text or conditioning embeddings.
 
 Valid finished MP3s remain playable, packable and inspectable without the original reference or
-cloning SDK. New or stale audio still needs the reference. ASR checking assesses narration words;
-it cannot establish speaker similarity. Repairs stage replacements and keep previous audio as
-backups. See the [feature backlog](../PDF2AUDIOBOOK_VOICE_CLONING_TODO.md) for real CPU,
+cloning SDK. Resuming a finished conversion also needs no cloning SDK while the reference is
+still present: a valid recorded identity is reused. New or stale audio still needs the reference
+and SDK. ASR checking assesses narration words; it cannot establish speaker similarity. Repairs
+stage replacements and keep previous audio as backups. See the [feature backlog](../PDF2AUDIOBOOK_VOICE_CLONING_TODO.md) for real CPU,
 accelerator, listening, continuity and resource acceptance gates; software tests alone do not
 establish voice quality.
