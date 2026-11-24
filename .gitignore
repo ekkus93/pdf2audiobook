@@ -15,3 +15,4 @@ build/
 .audiobook-cache/
 
 tmp/
+.claude/settings.local.json
