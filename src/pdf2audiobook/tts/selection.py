@@ -20,6 +20,14 @@ def _model_file_digest(path: str, size: int, mtime_ns: int) -> str:
     return digest_file(Path(path))
 
 
+KITTEN2_MODEL_NAMES = frozenset({"kitten2", "KittenML/kitten-tts-2"})
+
+
+def uses_kitten2(settings: Settings) -> bool:
+    """Whether the selected text-to-speech model is Kitten 2, the one that samples."""
+    return settings.tts.provider == "kitten" and settings.tts.kitten.model in KITTEN2_MODEL_NAMES
+
+
 def _tts_model_identity(settings: Settings) -> str:
     """Return content/version identity for the active TTS model without loading it."""
     if settings.tts.provider == "piper":
@@ -37,10 +45,13 @@ def _tts_model_identity(settings: Settings) -> str:
             digests.append((path.suffix, digest))
         return fingerprint("piper-model-v1", str(model_path), digests)
     model = settings.tts.kitten.model
-    if model in {"kitten2", "KittenML/kitten-tts-2"}:
+    if model in KITTEN2_MODEL_NAMES:
         from pdf2audiobook.tts.cloning import GENERATION
 
-        return fingerprint("kitten2-model-v1", GENERATION)
+        # The sampling temperature changes the audio, so it is part of the identity.
+        return fingerprint(
+            "kitten2-model-v2", GENERATION, {"temperature": settings.tts.kitten.temperature}
+        )
     resolved_model = KITTEN_MODEL_ALIASES.get(model, model)
     try:
         engine_version = package_version("kittenml")
@@ -74,6 +85,8 @@ def settings_for_book_tts(
             selected.tts.piper.speed = profile.speed
         else:
             selected.tts.kitten.speed = profile.speed
+    if "temperature" not in explicit and profile.temperature is not None:
+        selected.tts.kitten.temperature = profile.temperature
     clone_explicit = explicit | settings._clone_explicit
     if "clone_voice" not in clone_explicit and "enabled" not in clone_explicit:
         if profile.clone_voice is not None:

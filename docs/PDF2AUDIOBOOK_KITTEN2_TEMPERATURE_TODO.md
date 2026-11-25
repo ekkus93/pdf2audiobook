@@ -15,7 +15,7 @@
 
 ## 1. Setting (K1)
 
-- [ ] 1.1 Add `temperature` to the Kitten settings: a provisional default of `0.3` and the range `[0.05, 1.5]`, with NaN and infinity rejected. Add a profile field, `PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE` and `--tts-temperature` on `convert`, `batch` and `verify-audio`.
+- [ ] 1.1 Add `temperature` to the Kitten settings: a provisional default of `0.3` and the range `[0.05, 1.5]`, with NaN and infinity rejected. Add a profile field, `PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE` and `--tts-temperature` on `convert`, `batch` and `resynthesize`.
 - [ ] 1.2 Tests: the default; flag over environment over config over default; a profile override; the range bounds; a content-free range error.
 - [ ] 1.3 `config show`: list an explicitly set temperature in `_unused_settings` when the model is not Kitten 2. `doctor`: report `tts_temperature`, with `null` for other models. Update the `config-show` and `doctor` contract schemas and their tests.
 
@@ -26,12 +26,12 @@
 
 ## 3. Identity (K3)
 
-- [ ] 3.1 Add the temperature to the Kitten 2 generation identity (`GENERATION` and the `kitten2-model-v1` identity), so it reaches chunk keys, progress identity, chapter fingerprints and clone sidecars.
+- [ ] 3.1 Add the temperature to the Kitten 2 model identity (renamed `kitten2-model-v2`), so it reaches chunk keys, progress identity and chapter fingerprints, and record it in chapter sidecars as `rendering_inputs.kitten2_temperature` when Kitten 2 is selected.
 - [ ] 3.2 Tests:
   - a different temperature gives a new Kitten 2 chapter fingerprint, and the `mini` fingerprint is unchanged;
   - a re-run at the same value makes no synthesis calls;
   - a new value re-synthesizes only Kitten 2 chapters;
-  - a recorded identity without `temperature` does not match;
+  - audio keyed by the old `kitten2-model-v1` identity, or a sidecar without `kitten2_temperature`, is not reused;
   - the analysis manifest bytes stay the same.
 
 ## 4. Privacy (K4)

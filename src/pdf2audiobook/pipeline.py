@@ -253,11 +253,13 @@ def create_tts_provider(settings: Settings) -> TTSProvider:
             raise AudioError(
                 "Prepare a voice reference before synthesis", error_reason="voice_clone_unavailable"
             )
-        return KittenCloneProvider(settings._clone_reference)
+        return KittenCloneProvider(
+            settings._clone_reference, temperature=settings.tts.kitten.temperature
+        )
     if settings.tts.kitten.model in {"kitten2", "KittenML/kitten-tts-2"}:
         from pdf2audiobook.tts.clone_provider import Kitten2BuiltinProvider
 
-        return Kitten2BuiltinProvider()
+        return Kitten2BuiltinProvider(temperature=settings.tts.kitten.temperature)
     return KittenProvider(settings.tts.kitten.model)
 
 

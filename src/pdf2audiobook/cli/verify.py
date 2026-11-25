@@ -241,6 +241,13 @@ def resynthesize(
     reference_audio: str | None = typer.Option(None, "--reference-audio", metavar="PATH"),
     reference_text_file: str | None = typer.Option(None, "--reference-text-file", metavar="PATH"),
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
+    temperature: float | None = typer.Option(
+        None,
+        "--tts-temperature",
+        min=0.05,
+        max=1.5,
+        help="Kitten 2 sampling temperature; lower stays closer to the text.",
+    ),
     cover: Path | None = typer.Option(
         None, "--cover", help="Cover art; by default the art already in the chapter MP3 is kept."
     ),
@@ -276,6 +283,8 @@ def resynthesize(
             }
         if tts_provider is not None:
             overrides.setdefault("tts", {})["provider"] = tts_provider
+        if temperature is not None:
+            overrides.setdefault("tts", {}).setdefault("kitten", {})["temperature"] = temperature
         if tts_model is not None:
             section, key = ("piper", "model_path") if provider == "piper" else ("kitten", "model")
             overrides.setdefault("tts", {}).setdefault(section, {})[key] = tts_model
@@ -304,6 +313,7 @@ def resynthesize(
                         ("tts_model", tts_model is not None),
                         ("voice", voice is not None),
                         ("speed", speed is not None),
+                        ("temperature", temperature is not None),
                     )
                     if present
                 ),

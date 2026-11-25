@@ -97,7 +97,7 @@ def reference_provider(tmp_path, monkeypatch):
 
     monkeypatch.setattr(clone_provider, "WorkerClient", Client)
     monkeypatch.setattr(clone_provider, "require_model", lambda: None)
-    provider = clone_provider.KittenCloneProvider(reference)
+    provider = clone_provider.KittenCloneProvider(reference, temperature=0.3)
     try:
         yield settings, reference, provider, requests
     finally:

@@ -55,6 +55,10 @@ def _rendering_inputs(settings: Settings) -> dict[str, object]:
     inputs: dict[str, object] = {"footnotes": settings.pdf.footnotes}
     if settings.reading.process_citations:
         inputs["citations"] = True
+    from pdf2audiobook.tts.selection import uses_kitten2
+
+    if uses_kitten2(settings):
+        inputs["kitten2_temperature"] = settings.tts.kitten.temperature
     if settings.tts.voice_clone.enabled:
         from pdf2audiobook.tts.cloning import clone_metadata
 

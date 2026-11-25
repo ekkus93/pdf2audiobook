@@ -23,7 +23,7 @@ In scope: Kitten 2, for both built-in voices and cloned voices. Out of scope:
 ### K1: The setting
 
 - `[tts.kitten] temperature`, a float. When it is not set, the default is the low value chosen in K5 (provisionally `0.3`). It must be finite and in `[0.05, 1.5]`; anything else is a `ConfigError` with a content-free message.
-- An environment variable `PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE` and a `--tts-temperature` flag on `convert`, `batch` and `verify-audio` (the commands that already take `--speed`), with the existing precedence: flag, then environment variable, then config file, then default.
+- An environment variable `PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE` and a `--tts-temperature` flag on `convert`, `batch` and `resynthesize` (the commands that already take `--speed`; amended 2026-11-25, the draft named `verify-audio`), with the existing precedence: flag, then environment variable, then config file, then default.
 - A `[tts.profiles.<name>]` profile may set `temperature`, like `speed`.
 - `config show --json` reports the value and its source. When the selected model is not Kitten 2 and the value was set explicitly, it is listed in `_unused_settings`, the same way `cache.directory` is.
 - `doctor --json` reports `"tts_temperature"`: the effective value when the model is Kitten 2, otherwise `null`.
@@ -40,9 +40,10 @@ In scope: Kitten 2, for both built-in voices and cloned voices. Out of scope:
 
 ### K3: Identity, resume and caching
 
-- The temperature becomes part of the Kitten 2 generation identity (`tts/cloning.py` `GENERATION` and the `kitten2-model-v1` identity in `tts/selection.py`), so it enters chunk-cache keys, progress identity, chapter fingerprints and clone sidecars.
+- The temperature becomes part of the Kitten 2 model identity in `tts/selection.py`, renamed `kitten2-model-v2`. That identity feeds the chunk-cache keys, progress identity and chapter fingerprints, for built-in and cloned voices alike. Chapter sidecars record it as `rendering_inputs.kitten2_temperature`, only when Kitten 2 is selected.
+- The recorded clone reference identity (`GENERATION` and the reference digests) does not change. It describes the reference recording, not how it is decoded. (Amended 2026-11-25: the draft also put the temperature in `GENERATION`; the model identity already covers every key that needs it.)
 - Changing the value regenerates the affected Kitten 2 audio and nothing else. The same value reuses the existing audio.
-- A recorded clone identity without a `temperature` field (written before this change) does not match. Existing Kitten 2 audio is regenerated once after upgrading. This is intended: it was made at the preset's own temperature, not the new default.
+- Audio made before this change was keyed by `kitten2-model-v1`, and its sidecars have no `kitten2_temperature`, so neither matches. Existing Kitten 2 audio is regenerated once after upgrading. This is intended: it was made at the preset's own temperature, not the new default.
 - The Kitten 0.8 and Piper identities do not change, so their finished audio is not regenerated.
 - The analysis fingerprint and manifest do not change.
 

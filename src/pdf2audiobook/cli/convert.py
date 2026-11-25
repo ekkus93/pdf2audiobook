@@ -220,6 +220,13 @@ def convert(
         False, "--dry-run", help="Analyze and plan chapter outputs without TTS synthesis."
     ),
     speed: float | None = typer.Option(None, "--speed", min=0.1, max=3.0),
+    temperature: float | None = typer.Option(
+        None,
+        "--tts-temperature",
+        min=0.05,
+        max=1.5,
+        help="Kitten 2 sampling temperature; lower stays closer to the text.",
+    ),
     sample_rate: int | None = typer.Option(None, "--sample-rate", min=8000, max=96000),
     cover: Path | None = typer.Option(None, "--cover", help="JPEG or PNG chapter cover image."),
     accept_review: list[str] = typer.Option(
@@ -260,6 +267,7 @@ def convert(
             voice=voice,
             bitrate=bitrate,
             speed=speed,
+            temperature=temperature,
             sample_rate=sample_rate,
             cover=cover,
             resume=resume,
@@ -291,6 +299,7 @@ def convert(
                 ("tts_model", tts_model is not None),
                 ("voice", voice is not None),
                 ("speed", speed is not None),
+                ("temperature", temperature is not None),
             )
             if present
         )

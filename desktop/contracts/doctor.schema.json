@@ -46,6 +46,17 @@
     "kitten_installed": {
       "type": "boolean"
     },
+    "tts_temperature": {
+      "description": "Kitten 2 sampling temperature in use; null when another model is selected.",
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "piper_installed": {
       "type": "boolean"
     },

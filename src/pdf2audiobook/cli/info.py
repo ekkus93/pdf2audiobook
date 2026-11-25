@@ -42,8 +42,18 @@ def show_config(
         settings, origin = load_settings(config, no_config=no_config)
         configure_effective_logging(settings, origin)
         payload = settings_public(settings)
-        if origin.get("cache.directory", "built-in") != "built-in":
-            payload["_unused_settings"] = ["cache.directory"]
+        from pdf2audiobook.tts.selection import uses_kitten2
+
+        unused = [
+            key
+            for key, unused_here in (
+                ("cache.directory", True),
+                ("tts.kitten.temperature", not uses_kitten2(settings)),
+            )
+            if unused_here and origin.get(key, "built-in") != "built-in"
+        ]
+        if unused:
+            payload["_unused_settings"] = unused
         if sources:
             payload["_sources"] = origin
         emit(payload, json_output)
@@ -118,6 +128,7 @@ def doctor(
 
         languages = tesseract_languages()
         from pdf2audiobook.tts.cloning import clone_diagnostics
+        from pdf2audiobook.tts.selection import uses_kitten2
 
         emit(
             {
@@ -131,6 +142,9 @@ def doctor(
                     settings.pdf.ocr_language, languages
                 ),
                 "kitten_installed": kitten_installed,
+                "tts_temperature": (
+                    settings.tts.kitten.temperature if uses_kitten2(settings) else None
+                ),
                 "piper_installed": bool(shutil.which("piper")),
                 "llm_provider": settings.llm.provider if settings.llm.enabled else "disabled",
                 "process_citations": settings.reading.process_citations,

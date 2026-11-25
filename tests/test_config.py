@@ -196,6 +196,7 @@ def test_environment_mapping_covers_every_declared_variable():
         "PDF2AUDIOBOOK_TTS_MODEL": "7",
         "PDF2AUDIOBOOK_TTS_VOICE": "3",
         "PDF2AUDIOBOOK_TTS_SPEED": "1.25",
+        "PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE": "0.4",
         "PDF2AUDIOBOOK_TTS_SAMPLE_RATE": "22050",
         "PDF2AUDIOBOOK_TTS_BITRATE": "96k",
         "PDF2AUDIOBOOK_TTS_MAX_RETRIES": "2",
@@ -216,6 +217,7 @@ def test_environment_mapping_covers_every_declared_variable():
     assert settings.general.heartbeat_seconds == 30
     assert settings.tts.kitten.model == "7"
     assert settings.tts.kitten.speed == 1.25
+    assert settings.tts.kitten.temperature == 0.4
     assert settings.tts.piper.speed == 1.5
 
 

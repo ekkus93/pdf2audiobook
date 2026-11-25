@@ -131,6 +131,7 @@ def main() -> None:
                                     request["text"],
                                     **speaker,
                                     preset="stable",
+                                    temperature=float(request["temperature"]),
                                     normalize=False,
                                     max_new_tokens=1000,
                                     advanced={"seed": 0, "use_emotion": False},

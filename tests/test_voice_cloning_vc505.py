@@ -27,10 +27,10 @@ def constructed(monkeypatch):
         max_chars_per_chunk = fake.max_chars_per_chunk
         supports_voice_listing = False
 
-        def __init__(self, reference):
+        def __init__(self, reference, **_kwargs):
             catalog.require_model()
             built.append(reference)
-            self.inner = fake(reference)
+            self.inner = fake(reference, **_kwargs)
 
         def generate(self, narration, *, voice, speed):
             return self.inner.generate(narration, voice=voice, speed=speed)

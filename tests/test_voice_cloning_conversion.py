@@ -40,8 +40,9 @@ def cloned_book(tmp_path, monkeypatch):
         max_chars_per_chunk = 350
         supports_voice_listing = False
 
-        def __init__(self, reference):
+        def __init__(self, reference, *, temperature):
             assert reference.wav.exists()
+            assert temperature == 0.3
             self.reference = reference
 
         def generate(self, narration, *, voice, speed):
@@ -132,7 +133,7 @@ def test_clone_repair_requires_selection_and_failure_keeps_old_audio(cloned_book
     assert result.exit_code == 2, result.output
     assert json.loads(result.stderr)["error"]["reason"] == "voice_selection_conflict"
 
-    def fail(_reference):
+    def fail(_reference, **_kwargs):
         raise AudioError("Local model unavailable", error_reason="voice_clone_unavailable")
 
     monkeypatch.setattr("pdf2audiobook.tts.clone_provider.KittenCloneProvider", fail)

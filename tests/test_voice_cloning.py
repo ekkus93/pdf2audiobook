@@ -407,6 +407,7 @@ class KittenTTS2:
                     "text": "Book narration.",
                     "reference": "/private/ref.wav",
                     "transcript": "PRIVATE WORDS",
+                    "temperature": 0.3,
                     "output": str(output),
                 }
             )

@@ -92,8 +92,9 @@ class KittenCloneProvider:
     max_chars_per_chunk = 350
     supports_voice_listing = False
 
-    def __init__(self, reference: ReferenceVoice):
+    def __init__(self, reference: ReferenceVoice, *, temperature: float):
         require_model()
+        self.temperature = temperature
         if reference.wav is None or reference.transcript is None:
             raise AudioError(
                 "Provide the original voice reference to synthesize new audio",
@@ -137,6 +138,7 @@ class KittenCloneProvider:
                     "reference": str(self.reference.wav),
                     "transcript": self.reference.transcript,
                     "text": text,
+                    "temperature": self.temperature,
                     "output": str(output),
                 }
             )
@@ -151,8 +153,9 @@ class Kitten2BuiltinProvider(KittenCloneProvider):
 
     supports_voice_listing = True
 
-    def __init__(self) -> None:
+    def __init__(self, *, temperature: float) -> None:
         require_model()
+        self.temperature = temperature
         self.client = WorkerClient()
         try:
             self.client.request({"command": "load"}, timeout=MODEL_PREPARATION_TIMEOUT)
@@ -169,6 +172,12 @@ class Kitten2BuiltinProvider(KittenCloneProvider):
         with PrivateDirectory("audio") as folder:
             output = Path(folder) / "audio.npy"
             self.client.request(
-                {"command": "generate_builtin", "voice": voice, "text": text, "output": str(output)}
+                {
+                    "command": "generate_builtin",
+                    "voice": voice,
+                    "text": text,
+                    "temperature": self.temperature,
+                    "output": str(output),
+                }
             )
             return change_speed(_read_worker_audio(output), speed)

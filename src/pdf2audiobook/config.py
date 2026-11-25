@@ -98,10 +98,18 @@ class LLM(ConfigModel):
     )
 
 
+KITTEN2_TEMPERATURE_RANGE = (0.05, 1.5)
+
+
 class TTSModel(ConfigModel):
     model: str = "mini"
     voice: str = "Jasper"
     speed: float = Field(default=1.0, gt=0, le=3)
+    # Kitten 2 sampling temperature; kept low so narration stays close to the text.
+    # Kitten 0.8 models do not sample and ignore it.
+    temperature: float = Field(
+        default=0.3, ge=KITTEN2_TEMPERATURE_RANGE[0], le=KITTEN2_TEMPERATURE_RANGE[1]
+    )
 
 
 class PiperTTSModel(ConfigModel):
@@ -123,6 +131,9 @@ class TTSProfile(ConfigModel):
     piper_model_path: str | None = None
     voice: str | None = None
     speed: float | None = Field(default=None, gt=0, le=3)
+    temperature: float | None = Field(
+        default=None, ge=KITTEN2_TEMPERATURE_RANGE[0], le=KITTEN2_TEMPERATURE_RANGE[1]
+    )
     clone_voice: bool | None = None
     reference_audio: str | None = Field(default=None, json_schema_extra={"secret": True})
     reference_text_file: str | None = Field(default=None, json_schema_extra={"secret": True})
@@ -272,6 +283,7 @@ ENV_KEYS = {
     "PDF2AUDIOBOOK_TTS_MODEL": ("tts", "@selected", "model"),
     "PDF2AUDIOBOOK_TTS_VOICE": ("tts", "@selected", "voice"),
     "PDF2AUDIOBOOK_TTS_SPEED": ("tts", "@selected", "speed"),
+    "PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE": ("tts", "kitten", "temperature"),
     "PDF2AUDIOBOOK_TTS_SAMPLE_RATE": ("tts", "sample_rate"),
     "PDF2AUDIOBOOK_TTS_BITRATE": ("tts", "bitrate"),
     "PDF2AUDIOBOOK_TTS_MAX_RETRIES": ("tts", "max_retries"),

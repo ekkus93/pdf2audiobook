@@ -84,6 +84,7 @@ def _convert_overrides(
     voice: str | None,
     bitrate: str | None,
     speed: float | None,
+    temperature: float | None,
     sample_rate: int | None,
     cover: Path | None,
     resume: bool | None,
@@ -143,6 +144,8 @@ def _convert_overrides(
         overrides.setdefault("llm", {})["vision"] = vision
     if speed is not None:
         overrides.setdefault("tts", {}).setdefault(effective_tts_provider, {})["speed"] = speed
+    if temperature is not None:
+        overrides.setdefault("tts", {}).setdefault("kitten", {})["temperature"] = temperature
     if sample_rate is not None:
         overrides.setdefault("tts", {})["sample_rate"] = sample_rate
     if cover is not None:
