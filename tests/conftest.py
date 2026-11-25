@@ -21,6 +21,13 @@ def _served_ollama_context(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolated_cwd(tmp_path, monkeypatch):
+    """Run each test from its own directory, so the default `./audiobooks` output never lands in
+    the repository (28 tests relied on the default output folder and wrote there)."""
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture(autouse=True)
 def _wide_terminal(monkeypatch):
     # Rich wraps human-mode error text to the terminal width; CI has no terminal, so pin a wide one
     # and keep colour codes out of the captured text (CI run 44040242466). The CLI's module-level
