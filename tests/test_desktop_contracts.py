@@ -88,6 +88,20 @@ def test_doctor() -> None:
     assert checked["llm_check"]["checked"] is True
 
 
+def test_doctor_without_tesseract(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_which = shutil.which
+
+    def which(name: str, *args: Any, **kwargs: Any) -> str | None:
+        return None if name == "tesseract" else real_which(name, *args, **kwargs)
+
+    monkeypatch.setattr(shutil, "which", which)
+    payload = _ok("doctor", "--no-config", "--json")
+    _check("doctor", payload)
+    assert payload["tesseract"] is False
+    assert payload["ocr_installed_languages"] == []
+    assert payload["ocr_missing_languages"] == ["eng"]
+
+
 def test_config_show() -> None:
     _check("config-show", _ok("config", "show", "--no-config", "--sources", "--json"))
 

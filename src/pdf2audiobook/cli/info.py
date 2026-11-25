@@ -126,7 +126,7 @@ def doctor(
                 "ffmpeg": bool(shutil.which("ffmpeg")),
                 "tesseract": bool(shutil.which("tesseract")),
                 "ocr_requested_languages": settings.pdf.ocr_language,
-                "ocr_installed_languages": languages,
+                "ocr_installed_languages": [] if languages is None else languages,
                 "ocr_missing_languages": missing_ocr_languages(
                     settings.pdf.ocr_language, languages
                 ),
