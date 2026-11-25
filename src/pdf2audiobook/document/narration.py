@@ -250,7 +250,35 @@ def _is_wrapped_line(
         if left_shift <= 2 and before.text.rstrip().endswith((".", "?", "!", ":", ";")):
             return False
     # Preserve indented paragraphs, section breaks and column transitions.
-    return -2 <= vertical_gap <= 0.8 * line_height and abs(left_shift) <= max(12.0, line_height)
+    if -2 <= vertical_gap <= 0.8 * line_height and abs(left_shift) <= max(12.0, line_height):
+        return True
+    return _is_tall_glyph_wrap(before, after)
+
+
+def _is_tall_glyph_wrap(before: DocumentBlock, after: DocumentBlock) -> bool:
+    """A radical or fraction makes a line's box taller than its text, so it overlaps its
+    neighbours. Judge such lines by their line pitch, not by the gap between their boxes."""
+    assert before.bbox is not None and after.bbox is not None
+    sizes = [float(size) for size in (before.font_size, after.font_size) if size is not None]
+    if not sizes:
+        return False
+    size = min(sizes)
+    tall = max(before.bbox[3] - before.bbox[1], after.bbox[3] - after.bbox[1])
+    if tall <= 1.3 * size:
+        return False
+    overlap = min(before.bbox[3], after.bbox[3]) - max(before.bbox[1], after.bbox[1])
+    # The rest of the same printed line, split off at a fraction ("of 1" then "√dk . Additive").
+    if (
+        overlap >= 0.5 * size
+        and before.bbox[0] + 2 < after.bbox[0]
+        and before.bbox[2] - 2 * size <= after.bbox[0] <= before.bbox[2] + size
+    ):
+        return True
+    # The next printed line: whichever edge the tall glyph did not stretch keeps the pitch.
+    pitch = max(after.bbox[1] - before.bbox[1], after.bbox[3] - before.bbox[3])
+    # It may start left of a line that began mid-line, never indented as a new paragraph.
+    shift = after.bbox[0] - before.bbox[0]
+    return 0.7 * size <= pitch <= 1.8 * size and -2 * size <= shift <= 2
 
 
 def reflow_narration_lines(
