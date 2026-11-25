@@ -94,7 +94,7 @@ def test_fraction_split_line_and_the_line_after_it_join():
         _line(4, "a single hidden layer.", (108.0, 534.4, 504.0, 544.5)),
     ]
     assert reflow_narration_lines(lines) == (
-        "The two attention functions are identical, except for the scaling factor of 1 √dk . Additive attention uses a network"
+        "The two attention functions are identical, except for the scaling factor of 1 over √dk . Additive attention uses a network"
         " with a single hidden layer.\n"
     )
 
@@ -125,3 +125,27 @@ def test_padded_epub_line_boxes_keep_paragraph_breaks():
         "Paragraph 1 continues with plain narrative prose so that several paragraphs fill a"
         " page.\n\nParagraph 2 of the invented passage continues here.\n"
     )
+
+
+def test_inline_fraction_at_a_line_end_reads_over():
+    lines = [
+        _line(
+            0, "the dot products grow large in magnitude, pushing the", (108.0, 594.3, 504.0, 605.1)
+        ),
+        _line(1, "this effect, we scale the dot products by 1", (108.0, 603.6, 450.2, 615.4)),
+        _line(2, "√dk .", (440.7, 605.4, 459.5, 620.7)),
+    ]
+    assert reflow_narration_lines(lines) == (
+        "the dot products grow large in magnitude, pushing the this effect, we scale the dot"
+        " products by 1 over √dk .\n"
+    )
+
+
+def test_text_continuing_after_a_short_word_is_not_a_fraction():
+    # The next piece starts after the word ends, so nothing sits under it.
+    lines = [
+        _line(0, "Consider the case where", (108.0, 589.0, 504.0, 599.0)),
+        _line(1, "the value of x is", (108.0, 600.0, 180.0, 610.0)),
+        _line(2, "√2 . Then", (182.0, 598.0, 504.0, 615.0)),
+    ]
+    assert reflow_narration_lines(lines) == "Consider the case where the value of x is √2 . Then\n"

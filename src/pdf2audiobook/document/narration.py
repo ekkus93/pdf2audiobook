@@ -316,6 +316,25 @@ def _tall_line_wrap(
     return 0.7 * size <= pitch <= 1.3 * usual and -2 * size <= shift <= 2
 
 
+def _is_split_fraction(before: DocumentBlock, after: DocumentBlock) -> bool:
+    """The PDF stored an inline fraction as two pieces: the line up to a short numerator
+    ("of 1"), then the denominator set lower and starting under it ("√dk . Additive")."""
+    if not before.bbox or not after.bbox or before.page_index != after.page_index:
+        return False
+    sizes = [float(size) for size in (before.font_size, after.font_size) if size is not None]
+    if not sizes or not re.search(r"(?:^|\s)[0-9A-Za-z]{1,3}$", before.text.rstrip()):
+        return False
+    size = min(sizes)
+    overlap = min(before.bbox[3], after.bbox[3]) - max(before.bbox[1], after.bbox[1])
+    return (
+        overlap >= 0.5 * size
+        and before.bbox[2] - 2 * size <= after.bbox[0] < before.bbox[2]
+        and after.bbox[0] > before.bbox[0] + 2
+        and after.bbox[1] > before.bbox[1]
+        and after.bbox[3] > before.bbox[3]
+    )
+
+
 def reflow_narration_lines(
     blocks: list[DocumentBlock],
     replacements: dict[str, str] | None = None,
@@ -363,7 +382,7 @@ def reflow_narration_lines(
                 else:
                     current += " " + text
             else:
-                current += " " + text
+                current += (" over " if _is_split_fraction(previous, block) else " ") + text
         else:
             if current:
                 paragraphs.append(current)
