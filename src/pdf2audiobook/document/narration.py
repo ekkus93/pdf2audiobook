@@ -191,7 +191,10 @@ def render_chapter_texts(
 
 
 def _is_wrapped_line(
-    before: DocumentBlock, after: DocumentBlock, after_next: DocumentBlock | None = None
+    before: DocumentBlock,
+    after: DocumentBlock,
+    after_next: DocumentBlock | None = None,
+    line_pitch: float | None = None,
 ) -> bool:
     """Join nearby consecutive body lines only when geometry supports a soft wrap."""
     if before.kind in {"heading", "table", "footnote", "caption", "equation"}:
@@ -249,23 +252,52 @@ def _is_wrapped_line(
         # when the list item itself has no sentence-ending punctuation.
         if left_shift <= 2 and before.text.rstrip().endswith((".", "?", "!", ":", ";")):
             return False
+    tall = _tall_line_wrap(before, after, line_pitch)
+    if tall is not None:
+        return tall
     # Preserve indented paragraphs, section breaks and column transitions.
-    if -2 <= vertical_gap <= 0.8 * line_height and abs(left_shift) <= max(12.0, line_height):
-        return True
-    return _is_tall_glyph_wrap(before, after)
+    return -2 <= vertical_gap <= 0.8 * line_height and abs(left_shift) <= max(12.0, line_height)
 
 
-def _is_tall_glyph_wrap(before: DocumentBlock, after: DocumentBlock) -> bool:
-    """A radical or fraction makes a line's box taller than its text, so it overlaps its
-    neighbours. Judge such lines by their line pitch, not by the gap between their boxes."""
+def _line_pitches(blocks: list[DocumentBlock]) -> dict[int, float]:
+    """Each page's usual distance between the tops of consecutive lines."""
+    steps: dict[int, list[float]] = defaultdict(list)
+    for before, after in zip(blocks, blocks[1:]):
+        if (
+            before.page_index != after.page_index
+            or not before.bbox
+            or not after.bbox
+            or not before.font_size
+            or not after.font_size
+            or abs(float(before.font_size) - float(after.font_size)) > 0.5
+            or not _valid_bbox(before.bbox)
+            or not _valid_bbox(after.bbox)
+        ):
+            continue
+        step = after.bbox[1] - before.bbox[1]
+        size = float(before.font_size)
+        if 0.7 * size <= step <= 3 * size and abs(after.bbox[0] - before.bbox[0]) <= 2:
+            steps[before.page_index].append(step)
+    return {page: sorted(values)[len(values) // 2] for page, values in steps.items()}
+
+
+def _tall_line_wrap(
+    before: DocumentBlock, after: DocumentBlock, line_pitch: float | None
+) -> bool | None:
+    """Judge lines whose boxes are taller than their text, or None for ordinary lines.
+
+    A radical or fraction stretches one line's box, and font metrics pad every line's
+    box in some EPUB and generated PDF renderings. The box height then overstates the
+    line height, and the gap between boxes no longer shows where a paragraph ends, so
+    the distance from line to line is compared with the page's usual line pitch.
+    """
     assert before.bbox is not None and after.bbox is not None
     sizes = [float(size) for size in (before.font_size, after.font_size) if size is not None]
-    if not sizes:
-        return False
-    size = min(sizes)
-    tall = max(before.bbox[3] - before.bbox[1], after.bbox[3] - after.bbox[1])
-    if tall <= 1.3 * size:
-        return False
+    if not sizes or line_pitch is None:
+        return None
+    size, usual = min(sizes), line_pitch
+    if max(before.bbox[3] - before.bbox[1], after.bbox[3] - after.bbox[1]) <= 1.3 * size:
+        return None
     overlap = min(before.bbox[3], after.bbox[3]) - max(before.bbox[1], after.bbox[1])
     # The rest of the same printed line, split off at a fraction ("of 1" then "√dk . Additive").
     if (
@@ -274,11 +306,14 @@ def _is_tall_glyph_wrap(before: DocumentBlock, after: DocumentBlock) -> bool:
         and before.bbox[2] - 2 * size <= after.bbox[0] <= before.bbox[2] + size
     ):
         return True
-    # The next printed line: whichever edge the tall glyph did not stretch keeps the pitch.
-    pitch = max(after.bbox[1] - before.bbox[1], after.bbox[3] - before.bbox[3])
+    # The next printed line: the edge a tall glyph did not stretch keeps the usual pitch.
+    pitch = min(
+        (after.bbox[1] - before.bbox[1], after.bbox[3] - before.bbox[3]),
+        key=lambda step: abs(step - usual),
+    )
     # It may start left of a line that began mid-line, never indented as a new paragraph.
     shift = after.bbox[0] - before.bbox[0]
-    return 0.7 * size <= pitch <= 1.8 * size and -2 * size <= shift <= 2
+    return 0.7 * size <= pitch <= 1.3 * usual and -2 * size <= shift <= 2
 
 
 def reflow_narration_lines(
@@ -295,6 +330,7 @@ def reflow_narration_lines(
     replacements = replacements or {}
     corpus = supporting_text if supporting_text is not None else " ".join(b.text for b in blocks)
     corpus_words = {word.casefold() for word in re.findall(r"[^\W\d_]+", corpus)}
+    pitches = _line_pitches(blocks)
     paragraphs: list[str] = []
     current = ""
     previous: DocumentBlock | None = None
@@ -309,7 +345,11 @@ def reflow_narration_lines(
                 previous = None
             continue
         after_next = blocks[block_index + 1] if block_index + 1 < len(blocks) else None
-        if current and previous is not None and _is_wrapped_line(previous, block, after_next):
+        if (
+            current
+            and previous is not None
+            and _is_wrapped_line(previous, block, after_next, pitches.get(block.page_index))
+        ):
             if current.endswith("\u00ad"):
                 current = current[:-1] + text
             elif current.endswith("-") and text[:1].islower():

@@ -87,13 +87,14 @@ def test_line_made_tall_by_a_radical_joins_the_line_above():
 
 def test_fraction_split_line_and_the_line_after_it_join():
     lines = [
-        _line(0, "identical, except for the scaling factor", (108.0, 510.4, 504.2, 520.4)),
-        _line(1, "of 1", (108.0, 519.5, 129.6, 531.3)),
-        _line(2, "√dk . Additive attention uses a network with", (120.1, 521.3, 504.0, 536.6)),
-        _line(3, "a single hidden layer.", (108.0, 534.4, 504.0, 544.5)),
+        _line(0, "The two attention functions are", (107.7, 499.5, 505.7, 509.5)),
+        _line(1, "identical, except for the scaling factor", (108.0, 510.4, 504.2, 520.4)),
+        _line(2, "of 1", (108.0, 519.5, 129.6, 531.3)),
+        _line(3, "√dk . Additive attention uses a network with", (120.1, 521.3, 504.0, 536.6)),
+        _line(4, "a single hidden layer.", (108.0, 534.4, 504.0, 544.5)),
     ]
     assert reflow_narration_lines(lines) == (
-        "identical, except for the scaling factor of 1 √dk . Additive attention uses a network"
+        "The two attention functions are identical, except for the scaling factor of 1 √dk . Additive attention uses a network"
         " with a single hidden layer.\n"
     )
 
@@ -108,4 +109,19 @@ def test_equation_number_and_indented_paragraph_stay_apart_from_a_tall_line():
     assert reflow_narration_lines(lines) == (
         "Attention(Q, K, V ) = softmax(QKT )V\n\n(1)\n\ndivide each by √dk to finish.\n\n"
         "An indented new paragraph.\n"
+    )
+
+
+def test_padded_epub_line_boxes_keep_paragraph_breaks():
+    # Geometry from the golden EPUB: 11-pt text in 16-pt line boxes that overlap.
+    lines = [
+        _line(0, "Paragraph 1 continues with plain", (33.0, 127.5, 366.2, 143.6), 11.0),
+        _line(1, "narrative prose so that several", (33.0, 140.7, 313.2, 156.8), 11.0),
+        _line(2, "paragraphs fill a page.", (33.0, 153.9, 141.9, 170.0), 11.0),
+        _line(3, "Paragraph 2 of the invented passage", (33.0, 178.1, 322.3, 194.2), 11.0),
+        _line(4, "continues here.", (33.0, 191.3, 322.3, 207.4), 11.0),
+    ]
+    assert reflow_narration_lines(lines) == (
+        "Paragraph 1 continues with plain narrative prose so that several paragraphs fill a"
+        " page.\n\nParagraph 2 of the invented passage continues here.\n"
     )

@@ -1,10 +1,10 @@
 {
  "golden_book.pdf": {
   "files": {
-   "chapter-artifacts.json": "568db6294769f4d8eb8767fc11fe01a49a8d039c82b9970720b4093834e49ce2",
+   "chapter-artifacts.json": "d1e470c53020968f637f92131ec0084e0d623029125be00ee1642e6a0983a8d5",
    "chapters/001.txt": "e75730a06a6519fb0f5370e55d5e46c8154b4a8d61cf6a5596e9a2332e417199",
-   "chapters/002.txt": "d8eb11c8c38b52942fc7c5bde4d644add2312f41c42eb30f03316ddff2f46ff6",
-   "chapters/003.txt": "5e7e7751f594d6d7175ad38fe0b8a320dcd454ba336cf3298f0e0e667b862b2c",
+   "chapters/002.txt": "3339408f444ed306b9bb2e6a00c87ea72136f7af3239c84c25db3f62d3d3701c",
+   "chapters/003.txt": "d7065132abd4817e3d9b0732b3c6b633cc8fa2cca0ecf1d6cc49085b2f83a61b",
    "coverage.json": "8e0761870bb2a052b77438524db617d9c7738c347a71d443cb3fd3df9a523806",
    "manifest.json": "000100de99186af62d57bd901aa7f60d550c58cfaa14e2dd9b2cd1fd83fe53c2",
    "reports/analysis_fingerprints.json": "59eab53153f7b830cb32dd1f611b637416bd0e14057f664c1651c4c9ced5e6fe",
@@ -71,14 +71,14 @@
  },
  "novel.epub": {
   "files": {
-   "chapter-artifacts.json": "56c6bd3b4c2be83003de8aea15574bb8c683a28d120023793eba81aafdeb51ae",
+   "chapter-artifacts.json": "e92e9d8ab756c478606ba5f45915b912609716b327f392ebb2dc757eb9695558",
    "chapters/001.txt": "a4658ff9bdae1e4791ca0011c46c9bae6e4c4aa822362f35af63f2c25446caaa",
-   "chapters/002.txt": "13ef95a3f48a11f7c630d98b6035fefb37284a794ddae76c8770739e11bc5ec4",
-   "chapters/003.txt": "54958c14fed68e81277cfe8545420f198aa351ab3e5f6eb32b94718cf74cb1de",
-   "chapters/004.txt": "256119032838b51f3814bf86b4d323bfb4e685e4a9989d39ad40601c07a4548e",
-   "chapters/005.txt": "88bd93a41ec6936fc84692a28422b380c48e5e6c4fb31d6ce87943d7a3632b32",
-   "chapters/006.txt": "953e8d7940df2a5f06d8ec1461d1006fbd7e5b438be0e4b90264be2b657b865c",
-   "chapters/007.txt": "460e7f015b0153f79482e2c232d298a4c4521da691a92f8c4e184f9139b856e9",
+   "chapters/002.txt": "e96254ffec08bbe8a336e301568915e39eebd2e35ccd779039957135329546e5",
+   "chapters/003.txt": "47dfa7a32d8e734ad412ff5ddafb2c8a3d212271c7040895181e64c898ee55a2",
+   "chapters/004.txt": "03fc2d6b8a163809062aac4d8ff7fa0e80d3e910436f71458203d1c068efebdb",
+   "chapters/005.txt": "636723064e95bfa74e00907a121171b2a9ce0c64c4fde0b6021f897b154ddf23",
+   "chapters/006.txt": "3c0fc8763704945c9602f4c19bce7d0aafacce9637078d5eaddea64de22a4ff7",
+   "chapters/007.txt": "179674859ad41421a5a4482ade31cacf778af0aee1c174ac9b5f18323df85ee1",
    "coverage.json": "150733a40fa20c0536a0c75c339d67bf60fda4002d3dca64dcfd9196916533ed",
    "manifest.json": "ee8c2fec25ed697b35ace4cb4f77be03ad44376ab6ef9db4aba8fcd0e0c3fc6d",
    "reports/analysis_fingerprints.json": "b146c4e88b21a0f0bd016ca7fe2c5eea26789a78287f0509f14bb860f8fbe8ed",
