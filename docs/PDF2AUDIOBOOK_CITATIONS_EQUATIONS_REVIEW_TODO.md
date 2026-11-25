@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Review Fixes TODO
 
-**Status:** In progress; 9.2, 9.3 and 10.2 wait on a running Ollama and the listening check
+**Status:** In progress; 9.2 done 2026-11-25; 9.3 and 10.2 remain
 **Date:** 2026-10-28
 **Baseline:** master at 686bd06
 **Specification:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_SPEC.md` (Q1–Q9)
@@ -80,7 +80,7 @@
 - [x] 9.1 Add the ledger rows to the C1–C5 TODO:
   - 686bd06 and CI run 693, stating that it was not test-first and naming the existing tests it changed;
   - the first 6.2 counts.
-- [ ] 9.2 After sections 1–7, repeat the *Attention* acceptance from the cached analysis. Render one chapter with citations and accepted readings into `tmp/`, and ask the user to listen. Tick the C1–C5 TODO's 6.2 only with the user's confirmation.
+- [x] 9.2 After sections 1–7, repeat the *Attention* acceptance from the cached analysis. Render one chapter with citations and accepted readings into `tmp/`, and ask the user to listen. Tick the C1–C5 TODO's 6.2 only with the user's confirmation.
 - [ ] 9.3 Record the review as the C1–C5 TODO's 6.3: the findings fixed here and the remaining limitations.
 
 ## 10. Finish
@@ -110,3 +110,4 @@
 | 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 9.1: ledger rows for 686bd06 and the first 6.2 counts, in both ledgers. | Docs only. | None |
 | 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 10.1 final gate: `uv lock --check`, Ruff, format, mypy on 3.11, 3.12 and 3.13, `pytest -q -ra` with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`, CLI smoke. | 1995 passed, nothing skipped (the Kitten smoke test ran). mypy reports only the two known `kittenml` errors locally because the Kitten extra is installed; CI does not install it and passed. | None |
 | 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 9.2 attempted: Ollama was not running (empty reply from `/api/tags`), and the changed equation prompt misses the LLM cache, so the repeat acceptance cannot run. | No result. | Needs Ollama running |
+| 2026-11-25 | 5ab6ed89e00ff73c3aedb6ad08e9e905cb6d8bd6 | 9.2: repeat *Attention* acceptance and the user's listening confirmation; C1–C5 6.2 ticked. | Re-analysis on 2026-11-25 with qwen35-32k (32,768-token context) over the Ollama tunnel, resumed from the LLM cache, both settings on (never committed; counts only): 26 chapters; 103 citation groups detected and skipped in the audio; 37 equation proposals checked, 29 verified and 8 discarded; 30 edits accepted with `edits accept --all` (29 equation readings and 1 punctuation fix). Chapter 9 (3.2.1 Scaled Dot-Product Attention) rendered with Kitten voice Jasper into `tmp/`; the spoken chunks match the chapter text with citations removed, and Whisper medium.en and Vosk transcripts match all six accepted readings. The listening check found mid-sentence breaks at radicals and a fraction read without "over", fixed in 2dbe9b6, dcfd1e8 and 5ab6ed8 and re-rendered; the user then confirmed the listening check passes. | 9.3, 10.2 |

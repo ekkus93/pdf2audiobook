@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Reading TODO
 
-**Status:** In progress; 6.2 and 6.3 are finished by `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_TODO.md` (sections 9 and 10)
+**Status:** In progress; 6.2 done 2026-11-25; 6.3 is finished by `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_TODO.md` (sections 9 and 10)
 **Date:** 2026-10-27
 **Baseline:** master at b0b4d7c
 **Specification:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_SPEC.md` (C1–C5)
@@ -60,7 +60,7 @@
 ## 6. Finish
 
 - [x] 6.1 Run `/verify`, plus mypy on Python 3.12 and 3.13. Record the pass and skip counts, and run the Kitten smoke test with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`.
-- [ ] 6.2 Local acceptance on the *Attention Is All You Need* paper, never committed, counts only: citations skipped, equation candidates, proposals that pass verification, edits accepted, and a listening check of a sample.
+- [x] 6.2 Local acceptance on the *Attention Is All You Need* paper, never committed, counts only: citations skipped, equation candidates, proposals that pass verification, edits accepted, and a listening check of a sample.
 - [ ] 6.3 Review the final diff against C1–C5 and record unresolved limitations.
 
 ## Progress ledger
@@ -82,3 +82,4 @@
 | 2026-10-27 | ebd84a5b5514b9cb1014a840d6c0bb12c10cb8b5 | 6.2 attempted: re-analysis of the local *Attention* paper with both settings on, in a fresh output folder seeded with the earlier LLM cache. | Failed at the first uncached request with `Could not read the context length Ollama serves for the model`: Ollama was not running (service inactive, connections reset). No result to report. | Needs Ollama running |
 | 2026-10-27 | 686bd0691b99f028884a759fc96a62886fc1ef17 | User decision: both settings default to on. Equation processing is quietly inactive without an LLM unless requested explicitly; the equation setting left the `llm-analysis` fingerprint (spec C5 amended); `auto` model resolution counts it. | **Not written test-first**: the default was flipped and the failing tests were then fixed. Existing tests changed, beyond the one exception the working rules allow: `tests/test_reading_settings.py` (default and precedence expectations), `tests/test_citation_identity.py` and `tests/test_equation_identity.py` (the off state is now set explicitly; the equation fingerprint tests replaced), and the sidecar `rendering_inputs` assertions in `tests/test_review_followup_regressions.py`, `tests/test_pack_m4b_manifest_text.py` and `tests/test_mp3_resume_id3_integrity.py`. 1961 passed. Run [693](https://github.com/ekkus93/pdf2audiobook/actions/runs/40644146441) passed on 3.11, 3.12 and 3.13. | None |
 | 2026-10-28 | 686bd0691b99f028884a759fc96a62886fc1ef17 | 6.2 run on the local *Attention Is All You Need* paper with both settings on and no flags, from a fresh output folder seeded with the earlier LLM cache (never committed; counts only). | 27 chapters; 103 citation groups remain in the chapter text (skipping is audio-only); 22 equation proposals checked, 13 verified and 9 discarded; all 13 accepted in the scratch workspace with `edits accept --all`. **The listening check was not done**, so 6.2 stays open; the review TODO's 9.2 repeats the run after its fixes. | Listening check |
+| 2026-11-25 | 5ab6ed89e00ff73c3aedb6ad08e9e905cb6d8bd6 | 6.2 done. | Re-analysis on 2026-11-25 with qwen35-32k (32,768-token context) over the Ollama tunnel, resumed from the LLM cache, both settings on (never committed; counts only): 26 chapters; 103 citation groups detected and skipped in the audio; 37 equation proposals checked, 29 verified and 8 discarded; 30 edits accepted with `edits accept --all` (29 equation readings and 1 punctuation fix). Chapter 9 (3.2.1 Scaled Dot-Product Attention) rendered with Kitten voice Jasper into `tmp/`; the spoken chunks match the chapter text with citations removed, and Whisper medium.en and Vosk transcripts match all six accepted readings. The listening check found mid-sentence breaks at radicals and a fraction read without "over", fixed in 2dbe9b6, dcfd1e8 and 5ab6ed8 and re-rendered; the user then confirmed the listening check passes. | 6.3 (review TODO 9.3) |
