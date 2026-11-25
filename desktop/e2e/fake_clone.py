@@ -38,7 +38,8 @@ def main() -> None:
         max_chars_per_chunk = 350
         supports_voice_listing = False
 
-        def __init__(self, reference):
+        def __init__(self, reference, *, temperature):
+            assert 0.05 <= temperature <= 1.5
             self.reference = reference
 
         def generate(self, text, *, voice, speed):
