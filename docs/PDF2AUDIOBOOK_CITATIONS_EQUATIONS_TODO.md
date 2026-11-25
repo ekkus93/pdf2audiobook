@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Reading TODO
 
-**Status:** In progress; 6.2 done 2026-11-25; 6.3 is finished by `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_TODO.md` (sections 9 and 10)
+**Status:** Complete 2026-11-25; 6.2 and 6.3 finished through `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_TODO.md` (sections 9 and 10)
 **Date:** 2026-10-27
 **Baseline:** master at b0b4d7c
 **Specification:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_SPEC.md` (C1–C5)
@@ -61,7 +61,23 @@
 
 - [x] 6.1 Run `/verify`, plus mypy on Python 3.12 and 3.13. Record the pass and skip counts, and run the Kitten smoke test with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`.
 - [x] 6.2 Local acceptance on the *Attention Is All You Need* paper, never committed, counts only: citations skipped, equation candidates, proposals that pass verification, edits accepted, and a listening check of a sample.
-- [ ] 6.3 Review the final diff against C1–C5 and record unresolved limitations.
+- [x] 6.3 Review the final diff against C1–C5 and record unresolved limitations.
+
+## Review record (6.3)
+
+Recorded 2026-11-25 by the review TODO's 9.3. The review round (`docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_SPEC.md`, Q1–Q9) found and fixed:
+
+- Q1: `edits list` parsed book text as Rich markup and could fail; it now prints it literally (0ca6295).
+- Q2: rejected built-in edits were listed as pending; they have a `rejected` status (ffee0af).
+- Q3: two accepted edits could replace one block; `accept` refuses the second (d1d4e23).
+- Q4: a failed edit audit write was silently ignored; it now warns (730fc08).
+- Q5: math intervals such as `x ∈ [0, 1]` were skipped as citations; a preceding relation symbol now keeps them (51ae888).
+- Q6: bibliography numbers and citation-only chapters are tested and documented (9497c59).
+- Q7: the equation prompt described records wrongly; it is reworded (67a7649).
+- Q8: code comments and documents are corrected (91616ff, 9fb5bde, f37d9ac).
+- Q9: the missing evidence is recorded, and the *Attention* acceptance passed with the user's listening check (6.2).
+
+Against C1–C5: C1 and C4 are met; C2 and C5 are partly met; C3 is met as specified, but its verification is weaker than the spec's wording. The remaining limitations, 22 in all, are listed in the review TODO's "Unresolved limitations" section and not repeated here.
 
 ## Progress ledger
 
@@ -83,3 +99,4 @@
 | 2026-10-27 | 686bd0691b99f028884a759fc96a62886fc1ef17 | User decision: both settings default to on. Equation processing is quietly inactive without an LLM unless requested explicitly; the equation setting left the `llm-analysis` fingerprint (spec C5 amended); `auto` model resolution counts it. | **Not written test-first**: the default was flipped and the failing tests were then fixed. Existing tests changed, beyond the one exception the working rules allow: `tests/test_reading_settings.py` (default and precedence expectations), `tests/test_citation_identity.py` and `tests/test_equation_identity.py` (the off state is now set explicitly; the equation fingerprint tests replaced), and the sidecar `rendering_inputs` assertions in `tests/test_review_followup_regressions.py`, `tests/test_pack_m4b_manifest_text.py` and `tests/test_mp3_resume_id3_integrity.py`. 1961 passed. Run [693](https://github.com/ekkus93/pdf2audiobook/actions/runs/40644146441) passed on 3.11, 3.12 and 3.13. | None |
 | 2026-10-28 | 686bd0691b99f028884a759fc96a62886fc1ef17 | 6.2 run on the local *Attention Is All You Need* paper with both settings on and no flags, from a fresh output folder seeded with the earlier LLM cache (never committed; counts only). | 27 chapters; 103 citation groups remain in the chapter text (skipping is audio-only); 22 equation proposals checked, 13 verified and 9 discarded; all 13 accepted in the scratch workspace with `edits accept --all`. **The listening check was not done**, so 6.2 stays open; the review TODO's 9.2 repeats the run after its fixes. | Listening check |
 | 2026-11-25 | 5ab6ed89e00ff73c3aedb6ad08e9e905cb6d8bd6 | 6.2 done. | Re-analysis on 2026-11-25 with qwen35-32k (32,768-token context) over the Ollama tunnel, resumed from the LLM cache, both settings on (never committed; counts only): 26 chapters; 103 citation groups detected and skipped in the audio; 37 equation proposals checked, 29 verified and 8 discarded; 30 edits accepted with `edits accept --all` (29 equation readings and 1 punctuation fix). Chapter 9 (3.2.1 Scaled Dot-Product Attention) rendered with Kitten voice Jasper into `tmp/`; the spoken chunks match the chapter text with citations removed, and Whisper medium.en and Vosk transcripts match all six accepted readings. The listening check found mid-sentence breaks at radicals and a fraction read without "over", fixed in 2dbe9b6, dcfd1e8 and 5ab6ed8 and re-rendered; the user then confirmed the listening check passes. | 6.3 (review TODO 9.3) |
+| 2026-11-25 | 377c1ec3f6545adb1c65868ace687bd00f575413 | 6.3 done: the review record above, with the remaining limitations kept in the review TODO. | Docs only. | None |

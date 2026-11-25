@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Review Fixes TODO
 
-**Status:** In progress; 9.2 done 2026-11-25; 9.3 and 10.2 remain
+**Status:** Complete 2026-11-25; limitations recorded below
 **Date:** 2026-10-28
 **Baseline:** master at 686bd06
 **Specification:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_SPEC.md` (Q1–Q9)
@@ -81,16 +81,52 @@
   - 686bd06 and CI run 693, stating that it was not test-first and naming the existing tests it changed;
   - the first 6.2 counts.
 - [x] 9.2 After sections 1–7, repeat the *Attention* acceptance from the cached analysis. Render one chapter with citations and accepted readings into `tmp/`, and ask the user to listen. Tick the C1–C5 TODO's 6.2 only with the user's confirmation.
-- [ ] 9.3 Record the review as the C1–C5 TODO's 6.3: the findings fixed here and the remaining limitations.
+- [x] 9.3 Record the review as the C1–C5 TODO's 6.3: the findings fixed here and the remaining limitations.
 
 ## 10. Finish
 
 - [x] 10.1 Run `/verify`, plus mypy on Python 3.12 and 3.13, and the Kitten smoke test with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`. Record the pass and skip counts.
-- [ ] 10.2 Review the final diff against Q1–Q9, and record any unresolved limitations below.
+- [x] 10.2 Review the final diff against Q1–Q9, and record any unresolved limitations below.
 
 ## Unresolved limitations
 
-(Filled in by 10.2.)
+Reviewed 2026-11-25 against `master` at `377c1ec`. The citation, equation and edit-review code has not changed since the review TODO's last fix. Each item still holds; the probes for 14, 9, 10 and 11 were re-run against the current code.
+
+**From the C1–C5 spec §3:**
+
+1. Author–year citations and superscript or footnote-number citations are not handled. No code exists for either; the *Attention* chapter 9 footnote marker "4" is read aloud.
+2. Math without the listed symbols is not a candidate. A display equation split across blocks is judged one block at a time, so its pieces are read separately (in *Attention* chapter 9 the equation number "(1)" and the denominator "√dk" are read after the equation as separate lines).
+3. There is no review screen for proposals beyond the `edits` commands. Partly superseded: the desktop app now lists them with `--with-text`.
+4. Verification cannot judge how an operator is read (`llm/equations.py`).
+5. The settings apply only at analysis time and are in no fingerprint, so even an unapproved workspace needs `--no-resume` to pick up a change.
+
+**From the Q1–Q9 spec §4:**
+
+6. `in [1, 5]` is still read as a citation.
+7. A rejected built-in edit can be restored only through review.
+8. A reading replaces its whole block, and Q3 refuses it when the block already has an accepted edit.
+
+**Found by the review:**
+
+9. Verification rule 4 checks only ASCII words of four or more letters, by substring search over the joined letters. A dropped "not" passes (`x = 1 is not y` read as "x equals 1 is y"), invented clauses pass up to the length limit, and "information" matches "in form ation". Prose in non-Latin scripts is not protected.
+10. The digit check ignores number boundaries: `x = 21` read as "x equals 2 times 1" passes. "hundred" and "thousand" are not mapped, so "one hundred" for `100` is rejected (safe, only a missed reading).
+11. LaTeX output passes the markup check: `\sqrt{d_k}` is accepted as a reading of `√dk`.
+12. The candidate test matches some prose (`C++`, `α-helix`, `$5 + tax`), which gives whole-paragraph proposals and extra LLM calls, now on by default.
+13. Headings are never candidates. A block larger than `chunk_tokens` is skipped with `oversized_source_block`.
+14. Citation masking stops after four adjacent groups (`a [1][2][3][4][5][6]` still speaks `[5][6]`), and a space-separated `[1 2]` is spoken although the C2 text allows spaces. `x ≠ [3]` is masked, because `≠` is not one of the Q5 relation symbols.
+15. A block with two pending edits (an LLM cleanup and an equation reading) cannot be rejected one by one: rejecting by ID is refused, and the only way out is `reject --all`, which drops every pending edit in the book.
+16. `edits list --json --with-text` puts book text in JSON, against C4's content-free rule. It is intended for the desktop app and documented in the maintainer guide, but the C1–C5 spec is not amended.
+17. Reference verification rebuilds chunks from the current citation setting, not the one recorded in the sidecar. It only lowers the match to `exact=False`.
+18. A rejected proposal can return on re-analysis. Because accepting any LLM edit makes the workspace approved content, this happens only in workspaces with nothing accepted.
+19. A citation-only chapter fails with "Chapter audio failed for chapter(s): N", not the spec's "Chapter has no speakable text". It is content-free, so only the wording differs.
+20. The user guide does not list every §3 limitation: superscript and footnote numbers, split display equations and returning rejected proposals are missing, and it says "for each line of mathematics" although candidates are blocks.
+
+**Seen in the 9.2 acceptance (outside C1–C5 and Q1–Q9):**
+
+21. Chapter detection on the *Attention* paper splits "4" from "Why Self-Attention", adds a spurious "Training" chapter, and folds the References into "7 Conclusion".
+22. Inline `dk` in prose is not a candidate and is read as letters; the user accepted this.
+
+The acceptance also found two narration bugs, fixed in 2dbe9b6, dcfd1e8 and 5ab6ed8: mid-sentence breaks at lines made tall by a radical, and an inline fraction read without "over".
 
 ## Progress ledger
 
@@ -111,3 +147,4 @@
 | 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 10.1 final gate: `uv lock --check`, Ruff, format, mypy on 3.11, 3.12 and 3.13, `pytest -q -ra` with `PDF2AUDIOBOOK_KITTEN_SMOKE=1`, CLI smoke. | 1995 passed, nothing skipped (the Kitten smoke test ran). mypy reports only the two known `kittenml` errors locally because the Kitten extra is installed; CI does not install it and passed. | None |
 | 2026-10-28 | c929b996590865a0f9baee8c2a61571c929087be | 9.2 attempted: Ollama was not running (empty reply from `/api/tags`), and the changed equation prompt misses the LLM cache, so the repeat acceptance cannot run. | No result. | Needs Ollama running |
 | 2026-11-25 | 5ab6ed89e00ff73c3aedb6ad08e9e905cb6d8bd6 | 9.2: repeat *Attention* acceptance and the user's listening confirmation; C1–C5 6.2 ticked. | Re-analysis on 2026-11-25 with qwen35-32k (32,768-token context) over the Ollama tunnel, resumed from the LLM cache, both settings on (never committed; counts only): 26 chapters; 103 citation groups detected and skipped in the audio; 37 equation proposals checked, 29 verified and 8 discarded; 30 edits accepted with `edits accept --all` (29 equation readings and 1 punctuation fix). Chapter 9 (3.2.1 Scaled Dot-Product Attention) rendered with Kitten voice Jasper into `tmp/`; the spoken chunks match the chapter text with citations removed, and Whisper medium.en and Vosk transcripts match all six accepted readings. The listening check found mid-sentence breaks at radicals and a fraction read without "over", fixed in 2dbe9b6, dcfd1e8 and 5ab6ed8 and re-rendered; the user then confirmed the listening check passes. | 9.3, 10.2 |
+| 2026-11-25 | 377c1ec3f6545adb1c65868ace687bd00f575413 | 9.3 and 10.2: the review is recorded as the C1–C5 TODO's 6.3; the final code reviewed against Q1–Q9 and 22 unresolved limitations recorded above; the review spec's status corrected. | Docs only. Probes re-run against the current code confirm limitations 9, 10, 11 and 14. | None |

@@ -1,6 +1,6 @@
 # PDF2Audiobook Citation and Equation Review Fixes Specification
 
-**Status:** Proposed
+**Status:** Implemented; acceptance passed 2026-11-25 (limitations in the TODO)
 **Date:** 2026-10-28
 **Companion:** `docs/PDF2AUDIOBOOK_CITATIONS_EQUATIONS_REVIEW_TODO.md`
 **Baseline:** master at 686bd06 (`feat(config): default citation and equation processing to on`)
