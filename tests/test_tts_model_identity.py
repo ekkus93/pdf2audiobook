@@ -1,5 +1,6 @@
 """Audio cache identities follow model content and stable absolute paths."""
 
+import os
 from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
@@ -41,8 +42,11 @@ def test_piper_model_bytes_change_mp3_and_wav_identities(tmp_path: Path):
     )
     assert provider.calls == 1
 
+    before = model.stat().st_mtime_ns
     model.write_bytes(b"model-two")
-    model.touch()
+    # Same size, so the hash cache keys on mtime; a rewrite within one timestamp tick
+    # would otherwise look unchanged and make this test flaky.
+    os.utime(model, ns=(before + 1_000_000_000, before + 1_000_000_000))
     second = _tts_model_identity(settings)
     assert second != first
     synthesize_chunks(
