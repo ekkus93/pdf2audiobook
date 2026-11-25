@@ -63,3 +63,4 @@
 
 | Date | Master SHA | Completed tasks | Tests/CI | Blockers |
 | --- | --- | --- | --- | --- |
+| 2026-11-25 | 377c1ec3f6545adb1c65868ace687bd00f575413 | Spec and TODO committed. | Docs only. Python CI run [954](https://github.com/ekkus93/pdf2audiobook/actions/runs/45711151801) and Desktop CI run [109](https://github.com/ekkus93/pdf2audiobook/actions/runs/45711151665) passed. | None |
