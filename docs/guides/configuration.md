@@ -102,7 +102,7 @@ selection has additional rules; see [voices and speech](voices.md).
 |---|---|
 | `[general]` | `output_dir`, `resume`, `progress`, `heartbeat_seconds`; see [progress](cli.md#progress-and-time-estimates) |
 | `[pdf]` | `ocr` (`auto`, `always`, `never`), `ocr_language`, `footnotes` (`warn`, `inline`, `end`, `omit`), page-number cleanup |
-| `[tts]`, `[tts.kitten]`, `[tts.piper]` | Provider, bitrate, sample rate, model, voice and speed; see [voices](voices.md) |
+| `[tts]`, `[tts.kitten]`, `[tts.piper]` | Provider, bitrate, sample rate, model, voice and speed, plus the Kitten 2 `temperature`; see [voices](voices.md) and [Kitten 2 temperature](voices.md#kitten-2-temperature) |
 | `[tts.profiles."My Book"]`, `[tts.pronunciations]` | Per-book voice settings and spoken word replacements; see [examples](voices.md#piper-and-other-settings) |
 | `[llm]`, `[llm.ollama]` | Enable assistance, select a model, set context/output limits and timeouts; see [LLM setup](llm.md) |
 | `[llm.openai]`, `[llm.llama_server]` | Other providers; set `[llm] provider` to `"openai"` or `"llama-server"` |

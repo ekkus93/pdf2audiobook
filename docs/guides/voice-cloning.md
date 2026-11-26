@@ -77,6 +77,9 @@ conflicts with an explicit `--voice`, selected chapter `voice_id` overrides, and
 markers. Overrides in unselected chapters do not block the run. Speed and existing pronunciation,
 pause, chapter-range and narration processing still apply.
 
+Cloned voices use the Kitten 2 sampling temperature, `0.2` by default, which keeps narration close
+to the text. Change it with `--tts-temperature`; see [Kitten 2 temperature](voices.md#kitten-2-temperature).
+
 To disable inherited cloning, pass `--no-clone-voice`. Switching existing cloned audio to a
 built-in voice during repair requires this explicit choice; omitted references never trigger a
 silent fallback.
@@ -123,7 +126,7 @@ Reference paths are redacted in diagnostics and command Details; backend prints 
 sanitized. No microphone permission, browser inference or remote-content upload is added.
 
 Audio identity includes canonical audio/transcript digests, model/decoder revisions, preparation,
-backend versions and generation settings. Moving identical reference content preserves identity;
+backend versions and generation settings, including the sampling temperature. Moving identical reference content preserves identity;
 changing it invalidates affected speech while keeping chapter analysis and approvals. Sidecars
 contain these hashes/settings, never raw audio, transcript text or conditioning embeddings.
 

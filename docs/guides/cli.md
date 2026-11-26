@@ -213,7 +213,9 @@ output stays parseable; bars never go to stdout and never include book text, tit
 `tts models [--json]` reports capabilities and local readiness; `tts fetch kitten2 [--yes]
 [--json]` explicitly downloads pinned artifacts. `convert`, `batch` and `resynthesize` accept
 `--clone-voice/--no-clone-voice`, `--reference-audio PATH` and `--reference-text-file PATH`.
-Choose `--tts-model kitten2`; repair also accepts `--tts-provider`. See the
+Choose `--tts-model kitten2`; repair also accepts `--tts-provider`. The same three commands
+accept `--tts-temperature` (Kitten 2 only, default `0.2`; see
+[Kitten 2 temperature](voices.md#kitten-2-temperature)). See the
 [complete examples and privacy rules](voice-cloning.md). Stable clone error reasons are
 `voice_clone_unsupported`, `voice_clone_unavailable`, `voice_reference_invalid`,
 `voice_reference_changed` and `voice_selection_conflict`; existing exit-code families apply.

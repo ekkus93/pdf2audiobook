@@ -781,6 +781,19 @@ only digests and generation settings. Resume may restore recorded identity to re
 without loading the SDK or original reference. New synthesis must prepare a real snapshot.
 Repair uses existing staging/backups and requires explicit intent to change from a clone.
 
+Kitten 2 sampling temperature (`tts.kitten.temperature`, default `0.2`, range `0.05`–`1.5`;
+[spec](PDF2AUDIOBOOK_KITTEN2_TEMPERATURE_SPEC.md)): `create_tts_provider` passes it to
+`Kitten2BuiltinProvider` and `KittenCloneProvider`, which send it in each worker request.
+`clone_worker` hands it to `generate()` with `preset="stable"` and `seed=0` unchanged. It enters
+audio identity in two places: the Kitten 2 model identity in `tts/selection.py`
+(`kitten2-model-v2`, which feeds the chunk-cache keys, progress identity and chapter fingerprints),
+and the sidecar's `rendering_inputs.kitten2_temperature` (only when Kitten 2 is selected). The
+clone reference identity (`GENERATION` and the reference digests) does not include it. Kitten 0.8,
+Piper and analysis identities never see it. Changing the default therefore regenerates all Kitten 2
+audio made at the old default on its next conversion, for built-in and cloned voices, while other
+models' audio and all analysis are kept. Choose a new default with a real-model comparison and a
+listening check, as K5 of the spec describes, and record it in that TODO's ledger.
+
 Rust flattens reference options into conversion/repair requests. Typed drafts are written to
 restricted files and captured by the child exit hook; Details and Debug redact reference fields.
 Startup sweeps only marked unlocked private jobs. React keeps drafts in session memory; shared

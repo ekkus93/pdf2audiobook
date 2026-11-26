@@ -87,6 +87,11 @@ with cloning. Preflight those chapters before synthesis and explain how to remov
 or select built-in narration. Unselected chapters do not block a selective conversion. Never
 silently ignore approved chapter/passage voice choices.
 
+Note (2026-11-26): `[tts.kitten] temperature` (default `0.2`), with
+`PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE`, `--tts-temperature` and a profile `temperature` field,
+sets the Kitten 2 sampling temperature for cloned and built-in voices alike. It follows the
+precedence above. See the [Kitten 2 Temperature Specification](PDF2AUDIOBOOK_KITTEN2_TEMPERATURE_SPEC.md) (K1).
+
 ## 4. VC3 — Reference validation and preparation
 
 The following are project limits for the first release, to be verified against the pinned model:
@@ -218,6 +223,12 @@ Playback, packaging and ASR narration inspection remain verified independently.
 
 Voice selection changes affect synthesis, not chapter analysis, boundaries, approvals, or text.
 ASR comparison still uses exact narration and audio hashes; it does not assess voice similarity.
+
+Note (2026-11-26): the Kitten 2 sampling temperature is a generation setting under the rule
+above. It enters the Kitten 2 model identity (`kitten2-model-v2`) and the sidecar's
+`rendering_inputs.kitten2_temperature`, not the clone reference identity (`GENERATION` and the
+reference digests). Clone audio made before it existed is regenerated once. See the
+[Kitten 2 Temperature Specification](PDF2AUDIOBOOK_KITTEN2_TEMPERATURE_SPEC.md) (K3).
 
 ## 8. VC7 — Tauri integration and user experience
 

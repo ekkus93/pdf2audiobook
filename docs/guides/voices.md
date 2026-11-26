@@ -99,3 +99,31 @@ paragraph boundaries, and their source offsets remain in the narration progress 
 Full KittenTTS 2 supports a recording-based voice selection through `--tts-model kitten2
 --clone-voice`. Other models retain built-in voices. Follow the [voice cloning guide](voice-cloning.md)
 for explicit model setup, recording limits, transcripts, desktop controls and acceptance status.
+
+## Kitten 2 temperature
+
+Full KittenTTS 2 (`kitten2`) chooses each stretch of audio by sampling, so now and then it can say
+a word that is not in the text, repeat a word, or run on. Its sampling temperature controls how
+freely it samples. pdf2audiobook keeps it low by default, at `0.2`, so narration stays close to
+the text. The model's own `stable` preset uses `0.8`. A higher value can sound more expressive and
+makes slips more likely. Values from `0.05` to `1.5` are accepted.
+
+The setting applies to Kitten 2 only, for built-in and cloned voices alike. The smaller Kitten
+models (`mini`, `micro`, `nano`) do not sample and ignore it, and so does Piper.
+
+- **One run:** `--tts-temperature 0.3` on `convert`, `batch` or `resynthesize`.
+- **Every run:** `temperature = 0.3` under `[tts.kitten]`, or the
+  `PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE` environment variable.
+- **One book:** `temperature = 0.3` in its `[tts.profiles."<file name>"]` entry.
+
+A command-line flag takes precedence over the environment variable, which takes precedence over
+the config file. `config show` lists a temperature you set as unused when Kitten 2 is not
+selected, and `doctor --json` reports the value in use as `tts_temperature`.
+
+The temperature is part of Kitten 2's audio identity. Changing it regenerates Kitten 2 audio the
+next time a book is converted, and keeps the chapter analysis and approvals. Converting again at the
+same value reuses the audio already made. Kitten 2 audio made before this setting existed was
+rendered at the preset's `0.8`, so it is regenerated once.
+
+A low temperature makes slips less likely but does not rule them out. Use
+[audio verification](audio-verification.md) to find chapters that were misread.
