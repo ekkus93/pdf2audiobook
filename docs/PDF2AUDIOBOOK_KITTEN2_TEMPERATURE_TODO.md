@@ -1,6 +1,6 @@
 # PDF2Audiobook Kitten 2 Temperature TODO
 
-**Status:** In progress; tasks 1–4 done 2026-11-25, task 5 done 2026-11-26 (default 0.2), task 6 done 2026-11-26
+**Status:** Complete 2026-11-26 (default 0.2); six limitations recorded below
 **Date:** 2026-11-25
 **Baseline:** `master` at `f3c970f`
 **Specification:** [Kitten 2 Temperature Specification](PDF2AUDIOBOOK_KITTEN2_TEMPERATURE_SPEC.md) (K1–K5)
@@ -52,12 +52,19 @@
 
 ## 7. Finish
 
-- [ ] 7.1 Run `/verify`, and mypy on Python 3.12 and 3.13. Record the pass and skip counts.
-- [ ] 7.2 Review the final diff against K1–K5 and record any unresolved limitations below.
+- [x] 7.1 Run `/verify`, and mypy on Python 3.12 and 3.13. Record the pass and skip counts.
+- [x] 7.2 Review the final diff against K1–K5 and record any unresolved limitations below.
 
 ## Unresolved limitations
 
-(Filled in by 7.2.)
+Recorded by the 7.2 review, 2026-11-26. None blocks the setting.
+
+1. A low temperature makes Kitten 2 less likely to speak words that are not in the text, repeat words or run on. It does not prevent it. `verify-audio` remains the check for misread chunks.
+2. `top_k`, `top_p` and `min_p` stay at the `stable` preset's values (50, 0.8, 0.0) and also shape the output. They are not configurable.
+3. The default rests on a small sample: two chapters (about 2:17 each) of one technical paper, one built-in voice (Jasper), seed 0. Cloned voices and long-form or fiction narration were not compared with the real model. In that sample only two slips occurred in eight renders, so the counts alone do not separate 0.8, 0.5, 0.3 and 0.2. The choice of 0.2 rests on the spec's lowest-acceptable rule and the listening check.
+4. The comparison ran locally. The main CI checks the setting only with stand-in models. The manual real-model workflow's clone tests now run at the 0.2 default, but nothing there compares temperatures or checks that one was applied.
+5. The desktop app has no temperature control (spec §6 follow-up). Its TypeScript `doctor` type does not read `tts_temperature`. The contract test validates the CLI's `doctor` output against the updated schema.
+6. Kitten 2 audio made before this change, or at another temperature, is regenerated once on its next conversion, as K3 intends.
 
 ## Progress ledger
 
@@ -68,3 +75,4 @@
 | 2026-11-25 | 062fc8d7078698d03c101cd5f6941272046ee44b | Walkthrough clone double accepts the temperature. | Python CI [958](https://github.com/ekkus93/pdf2audiobook/actions/runs/45717763039) passed 3.11/3.12/3.13 with 2,866 passed/6 skipped each. Desktop CI [113](https://github.com/ekkus93/pdf2audiobook/actions/runs/45717763001) passed. | Task 5 (default choice) and 6–7 |
 | 2026-11-26 | 94b0bb58738cd10c1f5e719b7259af9d03ac4bfc | 5.1–5.3 (K5): the default is now 0.2. Preset (`config.json` `decode_presets.stable`): temperature 0.8, top_p 0.8, top_k 50, min_p 0.0 (expressive: 0.9, 0.9, 50, 0.0). Local real-model comparison, not committed: Attention paper chapters 4 and 9, built-in voice Jasper, seed 0, `stable` preset, at 0.8, 0.5, 0.3 and 0.2; scored with Whisper medium.en against the chapter text with citations removed. Word error rate ch4/ch9, Whisper-flagged chunks ch4/ch9, inserted or repeated words: 0.8: 1.1%/2.8%, 0/2, 1 inserted word (ch9); 0.5: 1.5%/2.4%, 1/2, none; 0.3: 1.1%/2.8%, 0/2, 1 repeated word (ch4); 0.2: 1.1%/3.1%, 0/2, none. No dropped or reordered text and no stalls at any value; all renders 2:16–2:18. Nearly all word errors are Whisper spelling (numerals, "paran", dropped commas, "dk"), common to every value; the ch9 flags are the title number and "dk" at every value. Listening verdict: 0.3 ch9 "sounded good", 0.3 ch4 "sounds good"; 0.2 ch9 "sounded natural", 0.2 ch4 "sounds natural". Chose 0.2, the lowest candidate with no added flags, stalls, repetition or flat delivery. Default and the tests that assume it updated. | Python CI [960](https://github.com/ekkus93/pdf2audiobook/actions/runs/45808759660) passed 3.11/3.12/3.13 with 2,866 passed/6 skipped each. Desktop CI [115](https://github.com/ekkus93/pdf2audiobook/actions/runs/45808760205) passed. | Tasks 6–7 |
 | 2026-11-26 | 545156bb66aa3f71ea5e8e0531c2d3b3d1659a13 | 6.1–6.3: `docs/guides/voices.md` gains a "Kitten 2 temperature" section (default 0.2, range, Kitten 2 only, the slips-versus-expressiveness trade-off, flag, environment variable, config and profile, `config show` and `doctor` reports, regeneration on change), linked from the configuration, CLI and voice cloning guides. The maintainer guide's voice cloning contracts describe where the value enters identity and that changing the default regenerates Kitten 2 audio. Voice Cloning Specification §3 and §7 carry dated notes pointing to the temperature spec. | Docs only. Python CI [962](https://github.com/ekkus93/pdf2audiobook/actions/runs/45813545519) passed 3.11/3.12/3.13 with 2,866 passed/6 skipped each. Desktop CI [117](https://github.com/ekkus93/pdf2audiobook/actions/runs/45813545620) passed. | Task 7 |
+| 2026-11-26 | (uncommitted) | 7.1–7.2: final local gate on `d725304` plus this TODO: lock check, locked sync, Ruff, format (521 files), mypy 110 modules on Python 3.11, 3.12 and 3.13, pytest 2,866 passed/6 skipped (skips: Kitten extra not installed, 3 real-ASR opt-ins, 2 real-clone opt-ins; FFmpeg present), CLI smoke. Review of the diff from `f3c970f` against K1–K5: K1 setting, range, environment variable, `convert`/`batch`/`resynthesize` flag, profile, `config show` unused report and `doctor` field (validated by `tests/test_desktop_contracts.py` against the updated schema; `config-show` needs no schema change, it already allows `_unused_settings`); K2 both worker requests carry it and Kitten 0.8 never does; K3 `kitten2-model-v2` and `rendering_inputs.kitten2_temperature`, clone reference identity, Kitten 0.8, Piper and analysis identities unchanged; K4 content-free range error and `doctor` output; K5 recorded above. Six limitations recorded. | Local only; CI pending. | None |

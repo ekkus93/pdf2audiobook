@@ -1,6 +1,6 @@
 # PDF2Audiobook Kitten 2 Temperature Specification
 
-**Status:** Proposed (draft)
+**Status:** Implemented 2026-11-26 (default 0.2; see the TODO for limitations)
 **Date:** 2026-11-25
 **Companion:** [Kitten 2 Temperature TODO](PDF2AUDIOBOOK_KITTEN2_TEMPERATURE_TODO.md)
 **Baseline:** `master` at `f3c970f`
