@@ -108,7 +108,7 @@ class TTSModel(ConfigModel):
     # Kitten 2 sampling temperature; kept low so narration stays close to the text.
     # Kitten 0.8 models do not sample and ignore it.
     temperature: float = Field(
-        default=0.3, ge=KITTEN2_TEMPERATURE_RANGE[0], le=KITTEN2_TEMPERATURE_RANGE[1]
+        default=0.2, ge=KITTEN2_TEMPERATURE_RANGE[0], le=KITTEN2_TEMPERATURE_RANGE[1]
     )
 
 

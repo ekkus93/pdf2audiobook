@@ -1,6 +1,6 @@
 # PDF2Audiobook Kitten 2 Temperature TODO
 
-**Status:** In progress; tasks 1–4 done 2026-11-25, task 5 running
+**Status:** In progress; tasks 1–4 done 2026-11-25, task 5 done 2026-11-26 (default 0.2)
 **Date:** 2026-11-25
 **Baseline:** `master` at `f3c970f`
 **Specification:** [Kitten 2 Temperature Specification](PDF2AUDIOBOOK_KITTEN2_TEMPERATURE_SPEC.md) (K1–K5)
@@ -40,9 +40,9 @@
 
 ## 5. Choose the default (K5)
 
-- [ ] 5.1 Fetch Kitten 2 locally (`pdf2audiobook tts fetch kitten2`). Read `decode_presets.stable` from its `config.json` and record the preset's temperature, `top_k`, `top_p` and `min_p` in the ledger.
-- [ ] 5.2 Narrate the same sample chapters at the preset's value and at the candidates (for example `0.5`, `0.3` and `0.2`), using the same voice and seed. For each, run `verify-audio` with Whisper and record the word error rate, inserted and repeated words, and flagged chunks. Counts only, never committed.
-- [ ] 5.3 Ask the user to listen to each candidate's sample. Choose the lowest value that does not add flagged chunks, stalls, repetition or flat delivery. Set it as the default and record the choice and the user's verdict in the ledger.
+- [x] 5.1 Fetch Kitten 2 locally (`pdf2audiobook tts fetch kitten2`). Read `decode_presets.stable` from its `config.json` and record the preset's temperature, `top_k`, `top_p` and `min_p` in the ledger.
+- [x] 5.2 Narrate the same sample chapters at the preset's value and at the candidates (for example `0.5`, `0.3` and `0.2`), using the same voice and seed. For each, run `verify-audio` with Whisper and record the word error rate, inserted and repeated words, and flagged chunks. Counts only, never committed.
+- [x] 5.3 Ask the user to listen to each candidate's sample. Choose the lowest value that does not add flagged chunks, stalls, repetition or flat delivery. Set it as the default and record the choice and the user's verdict in the ledger.
 
 ## 6. Documentation
 
@@ -66,3 +66,4 @@
 | 2026-11-25 | 377c1ec3f6545adb1c65868ace687bd00f575413 | Spec and TODO committed. | Docs only. Python CI run [954](https://github.com/ekkus93/pdf2audiobook/actions/runs/45711151801) and Desktop CI run [109](https://github.com/ekkus93/pdf2audiobook/actions/runs/45711151665) passed. | None |
 | 2026-11-25 | 4d24dec71c0966673af340e9233ed1f96da69b30 | 1.1–4.1 (K1–K4): `tts.kitten.temperature` (default 0.3, range 0.05–1.5), env variable, `--tts-temperature` on `convert`, `batch` and `resynthesize`, profile field; `config show` unused report and `doctor` `tts_temperature`; both Kitten 2 paths send it to the model; `kitten2-model-v2` identity and `rendering_inputs.kitten2_temperature`. | Tests written first: 13 of 20 settings tests, 4 of 5 synthesis tests and 3 of 6 identity tests failed at the parent (the rest are guards that already held). Python CI [957](https://github.com/ekkus93/pdf2audiobook/actions/runs/45715727658) passed 3.11/3.12/3.13 with 2,866 passed/6 skipped each. Desktop CI [112](https://github.com/ekkus93/pdf2audiobook/actions/runs/45715727726) FAILED: the walkthrough's stand-in clone provider (`desktop/e2e/fake_clone.py`) did not accept `temperature`. Fixed below. | Fixed in `062fc8d` |
 | 2026-11-25 | 062fc8d7078698d03c101cd5f6941272046ee44b | Walkthrough clone double accepts the temperature. | Python CI [958](https://github.com/ekkus93/pdf2audiobook/actions/runs/45717763039) passed 3.11/3.12/3.13 with 2,866 passed/6 skipped each. Desktop CI [113](https://github.com/ekkus93/pdf2audiobook/actions/runs/45717763001) passed. | Task 5 (default choice) and 6–7 |
+| 2026-11-26 | (uncommitted) | 5.1–5.3 (K5): the default is now 0.2. Preset (`config.json` `decode_presets.stable`): temperature 0.8, top_p 0.8, top_k 50, min_p 0.0 (expressive: 0.9, 0.9, 50, 0.0). Local real-model comparison, not committed: Attention paper chapters 4 and 9, built-in voice Jasper, seed 0, `stable` preset, at 0.8, 0.5, 0.3 and 0.2; scored with Whisper medium.en against the chapter text with citations removed. Word error rate ch4/ch9, Whisper-flagged chunks ch4/ch9, inserted or repeated words: 0.8: 1.1%/2.8%, 0/2, 1 inserted word (ch9); 0.5: 1.5%/2.4%, 1/2, none; 0.3: 1.1%/2.8%, 0/2, 1 repeated word (ch4); 0.2: 1.1%/3.1%, 0/2, none. No dropped or reordered text and no stalls at any value; all renders 2:16–2:18. Nearly all word errors are Whisper spelling (numerals, "paran", dropped commas, "dk"), common to every value; the ch9 flags are the title number and "dk" at every value. Listening verdict: 0.3 ch9 "sounded good", 0.3 ch4 "sounds good"; 0.2 ch9 "sounded natural", 0.2 ch4 "sounds natural". Chose 0.2, the lowest candidate with no added flags, stalls, repetition or flat delivery. Default and the tests that assume it updated. | Affected tests pass locally (173). CI pending. | Tasks 6–7 |

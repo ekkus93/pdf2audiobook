@@ -42,7 +42,7 @@ def cloned_book(tmp_path, monkeypatch):
 
         def __init__(self, reference, *, temperature):
             assert reference.wav.exists()
-            assert temperature == 0.3
+            assert temperature == 0.2
             self.reference = reference
 
         def generate(self, narration, *, voice, speed):

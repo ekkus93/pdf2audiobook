@@ -102,15 +102,15 @@ def test_kitten_2_regenerates_only_when_the_temperature_changes(book: dict) -> N
     convert, calls = book["convert"], book["calls"]
     convert("--tts-model", "kitten2")
     first = len(calls)
-    assert first > 0 and {temperature for _text, temperature in calls} == {0.3}
+    assert first > 0 and {temperature for _text, temperature in calls} == {0.2}
     manifest = _manifest_bytes(book["output"])
 
-    convert("--tts-model", "kitten2", "--tts-temperature", "0.3")
+    convert("--tts-model", "kitten2", "--tts-temperature", "0.2")
     assert len(calls) == first
 
-    convert("--tts-model", "kitten2", "--tts-temperature", "0.2")
+    convert("--tts-model", "kitten2", "--tts-temperature", "0.3")
     assert len(calls) == 2 * first
-    assert {temperature for _text, temperature in calls[first:]} == {0.2}
+    assert {temperature for _text, temperature in calls[first:]} == {0.3}
     assert _manifest_bytes(book["output"]) == manifest
 
 
@@ -130,10 +130,10 @@ def test_a_sidecar_recorded_before_the_temperature_existed_is_not_reused(book: d
     assert sidecars
     for sidecar in sidecars:
         record = json.loads(sidecar.read_text())
-        assert record["rendering_inputs"]["kitten2_temperature"] == 0.3
+        assert record["rendering_inputs"]["kitten2_temperature"] == 0.2
         del record["rendering_inputs"]["kitten2_temperature"]
         sidecar.write_text(json.dumps(record))
     convert("--tts-model", "kitten2")
     # The chapter MP3 is rebuilt, from chunk audio cached at the same temperature.
     for sidecar in sidecars:
-        assert json.loads(sidecar.read_text())["rendering_inputs"]["kitten2_temperature"] == 0.3
+        assert json.loads(sidecar.read_text())["rendering_inputs"]["kitten2_temperature"] == 0.2

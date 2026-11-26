@@ -22,7 +22,7 @@ In scope: Kitten 2, for both built-in voices and cloned voices. Out of scope:
 
 ### K1: The setting
 
-- `[tts.kitten] temperature`, a float. When it is not set, the default is the low value chosen in K5 (provisionally `0.3`). It must be finite and in `[0.05, 1.5]`; anything else is a `ConfigError` with a content-free message.
+- `[tts.kitten] temperature`, a float. When it is not set, the default is `0.2`, the low value chosen in K5 (amended 2026-11-26; the draft's provisional value was `0.3`). It must be finite and in `[0.05, 1.5]`; anything else is a `ConfigError` with a content-free message.
 - An environment variable `PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE` and a `--tts-temperature` flag on `convert`, `batch` and `resynthesize` (the commands that already take `--speed`; amended 2026-11-25, the draft named `verify-audio`), with the existing precedence: flag, then environment variable, then config file, then default.
 - A `[tts.profiles.<name>]` profile may set `temperature`, like `speed`.
 - `config show --json` reports the value and its source. When the selected model is not Kitten 2 and the value was set explicitly, it is listed in `_unused_settings`, the same way `cache.directory` is.

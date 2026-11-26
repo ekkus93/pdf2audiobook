@@ -25,7 +25,7 @@ def _load(*, toml: str | None = None, env: dict[str, str] | None = None, overrid
 
 
 def test_the_default_is_low() -> None:
-    assert Settings().tts.kitten.temperature == 0.3
+    assert Settings().tts.kitten.temperature == 0.2
 
 
 def test_flag_over_environment_over_config_over_default(tmp_path: Path) -> None:
@@ -61,7 +61,7 @@ def test_a_profile_sets_the_temperature_unless_the_flag_does(tmp_path: Path) -> 
     settings = _load(toml='[tts.profiles."Novel"]\ntemperature = 0.25\n', tmp=tmp_path)[0]
     assert settings_for_book_tts(settings, "Novel").tts.kitten.temperature == 0.25
     explicit = settings_for_book_tts(settings, "Novel", explicit=frozenset({"temperature"}))
-    assert explicit.tts.kitten.temperature == 0.3
+    assert explicit.tts.kitten.temperature == 0.2
 
 
 def _capture(monkeypatch: pytest.MonkeyPatch, target: str) -> list[Settings]:
@@ -148,9 +148,9 @@ def test_config_show_does_not_flag_a_used_or_default_temperature(env: dict[str, 
     ("env", "expected"),
     [
         ({}, None),
-        ({"PDF2AUDIOBOOK_TTS_MODEL": "kitten2"}, 0.3),
-        ({"PDF2AUDIOBOOK_TTS_MODEL": "kitten2", ENV: "0.2"}, 0.2),
-        ({"PDF2AUDIOBOOK_TTS_PROVIDER": "piper", ENV: "0.2"}, None),
+        ({"PDF2AUDIOBOOK_TTS_MODEL": "kitten2"}, 0.2),
+        ({"PDF2AUDIOBOOK_TTS_MODEL": "kitten2", ENV: "0.4"}, 0.4),
+        ({"PDF2AUDIOBOOK_TTS_PROVIDER": "piper", ENV: "0.4"}, None),
     ],
     ids=["mini", "kitten2-default", "kitten2-set", "piper"],
 )
@@ -165,12 +165,12 @@ def test_doctor_reports_the_temperature_only_for_kitten_2(
 def test_doctor_reports_the_temperature_without_reference_paths(tmp_path: Path) -> None:
     config = tmp_path / "config.toml"
     config.write_text(
-        '[tts.kitten]\nmodel = "kitten2"\ntemperature = 0.2\n'
+        '[tts.kitten]\nmodel = "kitten2"\ntemperature = 0.4\n'
         '[tts.voice_clone]\nreference_audio = "/PRIVATE/narrator.wav"\n'
         'reference_text_file = "/PRIVATE/narrator.txt"\n',
         encoding="utf-8",
     )
     result = runner.invoke(app, ["doctor", "--config", str(config), "--json"])
     assert result.exit_code == 0, result.output
-    assert json.loads(result.stdout)["tts_temperature"] == 0.2
+    assert json.loads(result.stdout)["tts_temperature"] == 0.4
     assert "PRIVATE" not in result.stdout and "PRIVATE" not in result.stderr
