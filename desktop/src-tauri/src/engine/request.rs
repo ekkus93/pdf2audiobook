@@ -138,6 +138,36 @@ pub enum AsrModel {
     Vosk,
 }
 
+/// An optional feature the built-in engine installs on demand (self-contained app spec SC3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Addon {
+    /// Voice cloning and Kitten 2.
+    Kitten2,
+    /// Audio checking with Whisper.
+    AudioCheck,
+}
+
+fn addon_name(addon: Addon) -> &'static str {
+    match addon {
+        Addon::Kitten2 => "kitten2",
+        Addon::AudioCheck => "audio-check",
+    }
+}
+
+/// A Tesseract language code as the engine's catalog names it, such as `deu` or `chi_sim`.
+fn check_language(code: &str) -> Result<(), RequestError> {
+    let mut chars = code.chars();
+    let valid = (2..=32).contains(&code.len())
+        && chars.next().is_some_and(|c| c.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_');
+    if valid {
+        Ok(())
+    } else {
+        Err(RequestError::OutOfRange("The OCR language"))
+    }
+}
+
 /// Options shared by `analyze` and `convert`. `None` leaves the CLI's own setting in force.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -277,6 +307,26 @@ pub enum Request {
     AsrList,
     TtsModels,
     TtsFetch,
+    /// The built-in engine's add-ons and whether each is installed; installs nothing.
+    AddonsList,
+    /// Downloads and installs an add-on; the app has already shown what and asked.
+    AddonsInstall {
+        addon: Addon,
+    },
+    /// Removes an add-on, keeping what another installed add-on needs.
+    AddonsRemove {
+        addon: Addon,
+    },
+    /// OCR languages ready to use and those that can be added.
+    AddonLanguages,
+    /// Downloads OCR languages; the app has already asked.
+    AddonAddLanguages {
+        languages: Vec<String>,
+    },
+    /// Removes an added OCR language.
+    AddonRemoveLanguage {
+        language: String,
+    },
     /// Downloads the pinned weights; the app has already shown what is fetched and asked.
     AsrFetch {
         models: Vec<AsrModel>,
@@ -341,6 +391,12 @@ impl Request {
             Request::AsrList => "asr list",
             Request::TtsModels => "tts models",
             Request::TtsFetch => "tts fetch",
+            Request::AddonsList => "addons list",
+            Request::AddonsInstall { .. } => "addons install",
+            Request::AddonsRemove { .. } => "addons remove",
+            Request::AddonLanguages => "addons languages",
+            Request::AddonAddLanguages { .. } => "addons add-language",
+            Request::AddonRemoveLanguage { .. } => "addons remove-language",
             Request::AsrFetch { .. } => "asr fetch",
             Request::VerifyAudio { .. } => "verify-audio",
             Request::AudioReport { .. } => "audio-report show",
@@ -518,6 +574,33 @@ impl Request {
             }
             Request::AsrList => args.command(&["asr", "list"]),
             Request::TtsModels => args.command(&["tts", "models"]),
+            Request::AddonsList => args.command(&["addons", "list"]),
+            Request::AddonsInstall { addon } => {
+                args.command(&["addons", "install"]);
+                args.flag("--yes");
+                args.positional_text(addon_name(*addon), "The add-on")?;
+            }
+            Request::AddonsRemove { addon } => {
+                args.command(&["addons", "remove"]);
+                args.positional_text(addon_name(*addon), "The add-on")?;
+            }
+            Request::AddonLanguages => args.command(&["addons", "languages"]),
+            Request::AddonAddLanguages { languages } => {
+                args.command(&["addons", "add-language"]);
+                args.flag("--yes");
+                if languages.is_empty() {
+                    return Err(RequestError::Empty("The OCR language list"));
+                }
+                for language in languages {
+                    check_language(language)?;
+                    args.positional_text(language, "The OCR language")?;
+                }
+            }
+            Request::AddonRemoveLanguage { language } => {
+                args.command(&["addons", "remove-language"]);
+                check_language(language)?;
+                args.positional_text(language, "The OCR language")?;
+            }
             Request::TtsFetch => {
                 args.command(&["tts", "fetch"]);
                 args.flag("--yes");
@@ -1508,6 +1591,96 @@ mod tests {
                 "/w/manifest.json"
             ]
         );
+    }
+
+    #[test]
+    fn addon_requests_build_their_commands_and_check_language_codes() {
+        assert_eq!(
+            args_of(Request::AddonsList),
+            ["--no-progress", "addons", "list", "--json"]
+        );
+        assert_eq!(
+            args_of(Request::AddonsInstall {
+                addon: Addon::Kitten2
+            }),
+            [
+                "--no-progress",
+                "addons",
+                "install",
+                "--yes",
+                "--json",
+                "--",
+                "kitten2"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::AddonsRemove {
+                addon: Addon::AudioCheck
+            }),
+            [
+                "--no-progress",
+                "addons",
+                "remove",
+                "--json",
+                "--",
+                "audio-check"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::AddonLanguages),
+            ["--no-progress", "addons", "languages", "--json"]
+        );
+        assert_eq!(
+            args_of(Request::AddonAddLanguages {
+                languages: vec!["deu".into(), "chi_sim".into()]
+            }),
+            [
+                "--no-progress",
+                "addons",
+                "add-language",
+                "--yes",
+                "--json",
+                "--",
+                "deu",
+                "chi_sim"
+            ]
+        );
+        assert_eq!(
+            args_of(Request::AddonRemoveLanguage {
+                language: "deu".into()
+            }),
+            [
+                "--no-progress",
+                "addons",
+                "remove-language",
+                "--json",
+                "--",
+                "deu"
+            ]
+        );
+        for bad in ["", "../eng", "DEU", "-x", "a"] {
+            assert_eq!(
+                Request::AddonAddLanguages {
+                    languages: vec![bad.into()]
+                }
+                .args(),
+                Err(RequestError::OutOfRange("The OCR language"))
+            );
+        }
+        assert_eq!(
+            Request::AddonAddLanguages { languages: vec![] }.args(),
+            Err(RequestError::Empty("The OCR language list"))
+        );
+        let request: Request =
+            serde_json::from_str(r#"{"command": "addons_install", "addon": "audio-check"}"#)
+                .unwrap();
+        assert_eq!(
+            request,
+            Request::AddonsInstall {
+                addon: Addon::AudioCheck
+            }
+        );
+        assert!(!request.is_write());
     }
 
     #[test]

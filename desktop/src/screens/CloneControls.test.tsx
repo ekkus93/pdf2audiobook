@@ -72,3 +72,21 @@ it("keeps keyboard focus on the transcript and associates validation feedback", 
   expect(transcript).toHaveAttribute("aria-invalid", "true");
   expect(document.getElementById(transcript.getAttribute("aria-describedby") ?? "")).toHaveTextContent("Remove NUL characters");
 });
+
+it("offers the voice cloning add-on in place when its packages are missing", async () => {
+  const { run } = await import("../engine/api");
+  vi.mocked(run).mockImplementation((async (request: { command: string }) => {
+    if (request.command === "tts_models") {
+      return { outcome: "success", result: { models: [{ name: "kitten2", ready: false, package_installed: false, weights_present: false, download_bytes: 1600000000, directory: "/model-cache", transcription_ready: false }] } };
+    }
+    if (request.command === "addons_list") {
+      return { outcome: "success", result: { available: true, addons: [{ name: "kitten2", title: "Voice cloning and Kitten 2", installed: false, components: [], older_version_installed: false }] } };
+    }
+    throw new Error(`unexpected ${request.command}`);
+  }) as never);
+  render(<CloneControls form={{ voiceMode: "clone", referenceAudio: "/clip" }} onChange={() => undefined} />);
+  expect(await screen.findByText(/needs the Voice cloning and Kitten 2 add-on/)).toBeInTheDocument();
+  expect(screen.queryByText(/CLI environment/)).toBeNull();
+  fireEvent.click(screen.getByText("Install voice cloning…"));
+  expect(document.querySelector("md-dialog[open]")).toHaveTextContent("Install Voice cloning and Kitten 2?");
+});

@@ -307,3 +307,20 @@ it("speaks again with the book's Kitten 2 temperature, or none for another model
   click(button("Speak again", document.querySelector("md-dialog[open]") as HTMLElement));
   expect(second.onStart.mock.lastCall?.[0]).not.toHaveProperty("temperature");
 });
+
+it("offers the audio checking add-on instead of a terminal command", async () => {
+  models = { models: models.models.map((model) => ({ ...model, ready: false, reason: "model_not_installed", package_version: null })) };
+  const base = vi.mocked(api.run).getMockImplementation();
+  if (!base) throw new Error("the audio check mock is missing");
+  vi.mocked(api.run).mockImplementation(async (request: Request) => {
+    if (request.command === "addons_list") {
+      return { outcome: "success", result: { available: true, addons: [{ name: "audio-check", title: "Audio checking (speech recognizers)", installed: false, components: [], older_version_installed: false }] } };
+    }
+    return base(request);
+  });
+  setup();
+  const offer = await screen.findByText("Install audio checking…");
+  expect(screen.queryByText(/uv sync/)).toBeNull();
+  click(offer.closest("md-text-button, md-filled-tonal-button") as HTMLElement);
+  expect(document.querySelector("md-dialog[open]")).toHaveTextContent("Install Audio checking (speech recognizers)?");
+});

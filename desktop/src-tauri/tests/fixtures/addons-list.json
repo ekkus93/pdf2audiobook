@@ -1,0 +1,42 @@
+{
+  "available": true,
+  "addons": [
+    {
+      "name": "kitten2",
+      "title": "Voice cloning and Kitten 2",
+      "installed": false,
+      "components": [
+        {
+          "name": "audio-check+kitten2",
+          "installed": true,
+          "packages": 16
+        },
+        {
+          "name": "kitten2",
+          "installed": false,
+          "packages": 35
+        }
+      ],
+      "older_version_installed": false
+    },
+    {
+      "name": "audio-check",
+      "title": "Audio checking (speech recognizers)",
+      "installed": true,
+      "components": [
+        {
+          "name": "audio-check",
+          "installed": true,
+          "packages": 6
+        },
+        {
+          "name": "audio-check+kitten2",
+          "installed": true,
+          "packages": 16
+        }
+      ],
+      "older_version_installed": false
+    }
+  ],
+  "warnings": []
+}

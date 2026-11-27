@@ -65,6 +65,28 @@ export interface ConvertOptions extends VoiceCloneOptions {
 
 export type AsrModel = "whisper" | "wav2vec2" | "vosk";
 
+/** An optional feature the built-in engine installs on demand (contracts/addons-list.schema.json). */
+export type AddonName = "kitten2" | "audio-check";
+export interface AddonState {
+  name: AddonName;
+  title: string;
+  installed: boolean;
+  components: Array<{ name: string; installed: boolean; packages: number }>;
+  /** Add-ons for an older engine version are present; they are not used. */
+  older_version_installed: boolean;
+}
+/** `addons list --json`; outside the built-in engine `available` is false. */
+export interface AddonsList {
+  available: boolean;
+  addons: AddonState[];
+}
+/** `addons languages --json` (contracts/addon-languages.schema.json). */
+export interface AddonLanguages {
+  available: string[];
+  installed: string[];
+  bundled: string[];
+}
+
 export type Request =
   | { command: "analyze"; book: string; options: BookOptions }
   | { command: "convert"; book: string; options: BookOptions; convert: ConvertOptions }
@@ -87,6 +109,12 @@ export type Request =
   | { command: "voices"; tts_provider?: "kitten" | "piper" | null; tts_model?: string | null }
   | { command: "tts_models" }
   | { command: "tts_fetch" }
+  | { command: "addons_list" }
+  | { command: "addons_install"; addon: AddonName }
+  | { command: "addons_remove"; addon: AddonName }
+  | { command: "addon_languages" }
+  | { command: "addon_add_languages"; languages: string[] }
+  | { command: "addon_remove_language"; language: string }
   | { command: "asr_list" }
   | { command: "asr_fetch"; models: AsrModel[] }
   | { command: "verify_audio"; manifest: string; chapters?: number[]; models?: AsrModel[] }

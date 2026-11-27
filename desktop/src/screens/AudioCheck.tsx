@@ -20,6 +20,7 @@ import { Dialog } from "../ui/Dialog";
 import { Icon } from "../ui/Icon";
 import { Select } from "../ui/Select";
 import { Slider } from "../ui/Slider";
+import { AddonDialog, useAddons } from "./Addons";
 import "./audio.css";
 
 const MODEL_NAMES: Record<AsrModel, string> = {
@@ -255,7 +256,7 @@ export function AudioCheck({ cloneForm, onCloneChange, manifest, workspace, insp
           Verify existing audio
         </Button>
       </div>
-      <ModelList models={models} onSetup={() => setSetup(true)} />
+      <ModelList models={models} onSetup={() => setSetup(true)} onInstalled={() => setReload((value) => value + 1)} />
       <p className="body-small on-surface-variant audio-check-limits">
         Local speech recognizers listen to each chapter and compare what they hear with the text that was spoken. A flag is a reason to
         listen, not proof of a mistake: recognizers mishear names, numbers and unusual words, and they were tested on synthetic speech.
@@ -312,9 +313,11 @@ export function AudioCheck({ cloneForm, onCloneChange, manifest, workspace, insp
   );
 }
 
-function ModelList({ models, onSetup }: { models: AsrReadiness[]; onSetup: () => void }) {
+function ModelList({ models, onSetup, onInstalled }: { models: AsrReadiness[]; onSetup: () => void; onInstalled: () => void }) {
   const missing = downloadable(models);
   const uninstalled = models.filter((model) => model.reason === "model_not_installed");
+  const { list: addons, reload } = useAddons(uninstalled.length > 0);
+  const [installing, setInstalling] = useState(false);
   return (
     <div className="check-models">
       <ul className="check-model-list" aria-label="Speech recognizers">
@@ -337,7 +340,16 @@ function ModelList({ models, onSetup }: { models: AsrReadiness[]; onSetup: () =>
           Download recognizers…
         </Button>
       ) : null}
-      {uninstalled.length > 0 ? (
+      {uninstalled.length > 0 && addons?.available ? (
+        <>
+          <Button variant="tonal" icon="download" onClick={() => setInstalling(true)}>
+            Install audio checking…
+          </Button>
+          {installing ? (
+            <AddonDialog addon="audio-check" open onClose={() => setInstalling(false)} onInstalled={() => { reload(); onInstalled(); }} />
+          ) : null}
+        </>
+      ) : uninstalled.length > 0 ? (
         <p className="body-small on-surface-variant">
           {uninstalled.length === models.length ? "The speech recognizers aren't installed. " : "Some recognizers aren't installed. "}
           They're optional; install them with <code>uv sync --extra asr</code> (see the README, “Installing the speech recognizers”). Two of

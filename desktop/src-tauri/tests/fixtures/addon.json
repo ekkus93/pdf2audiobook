@@ -1,0 +1,21 @@
+{
+  "addon": {
+    "name": "kitten2",
+    "title": "Voice cloning and Kitten 2",
+    "installed": false,
+    "components": [
+      {
+        "name": "audio-check+kitten2",
+        "installed": true,
+        "packages": 16
+      },
+      {
+        "name": "kitten2",
+        "installed": false,
+        "packages": 35
+      }
+    ],
+    "older_version_installed": false
+  },
+  "warnings": []
+}

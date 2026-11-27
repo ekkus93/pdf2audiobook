@@ -7,6 +7,7 @@ import { CircularProgress } from "../ui/Progress";
 import { Icon } from "../ui/Icon";
 import { IconButton } from "../ui/IconButton";
 import { setupChecks, type Check } from "./setupChecks";
+import { AddonsPanel } from "./Addons";
 import "./screens.css";
 
 type State =
@@ -125,6 +126,7 @@ export function Setup() {
               />
             ))}
           </ul>
+          <AddonsPanel onChange={recheck} />
         </>
       ) : null}
       {commands.length > 0 ? (

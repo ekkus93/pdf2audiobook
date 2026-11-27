@@ -9,6 +9,7 @@ import { TextField } from "../ui/TextField";
 import { blobUrl } from "./Player";
 import { Setup } from "./Setup";
 import { CliConfigEditor } from "./CliConfigEditor";
+import { AddonsPanel, OcrLanguages } from "./Addons";
 import "./settings.css";
 
 /** The README's Kitten voice samples (docs/audio/voices), bundled with the app. */
@@ -224,6 +225,11 @@ export function Settings() {
             </div>
           </>
         ) : null}
+      </section>
+
+      <section className="settings-group" aria-label="Add-ons and OCR languages">
+        <AddonsPanel />
+        <OcrLanguages />
       </section>
 
       <section className="settings-group" aria-labelledby="settings-library">

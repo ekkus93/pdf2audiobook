@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
 import { TextField } from "../ui/TextField";
 import { cloneErrors, isCloning, type CloneForm } from "./bookOptions";
+import { ADDONS, AddonDialog, useAddons } from "./Addons";
 
 /** Local-only reference controls. Drafts are never persisted by this component. */
 export function CloneControls({ form, onChange, onDownload, allowDraft = true }: {
@@ -17,6 +18,10 @@ export function CloneControls({ form, onChange, onDownload, allowDraft = true }:
   const [ready, setReady] = useState<Partial<TtsReadiness> | null>(null);
   const [problem, setProblem] = useState("");
   const [confirmDownload, setConfirmDownload] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [recheck, setRecheck] = useState(0);
+  const { list: addons, reload: reloadAddons } = useAddons(active && !!ready && !ready.package_installed);
+  const offerAddon = !!ready && !ready.package_installed && !!addons?.available;
   useEffect(() => {
     if (!active) return;
     let current = true;
@@ -26,7 +31,7 @@ export function CloneControls({ form, onChange, onDownload, allowDraft = true }:
       else setProblem(result.outcome === "failed" ? result.error.message : "Model readiness is unavailable");
     }).catch((error) => current && setProblem(errorMessage(error)));
     return () => { current = false; };
-  }, [active]);
+  }, [active, recheck]);
   const set = (change: Partial<CloneForm>) => onChange({ ...form, ...change });
   const pick = async (transcript: boolean) => {
     try {
@@ -56,7 +61,9 @@ export function CloneControls({ form, onChange, onDownload, allowDraft = true }:
         aria-describedby={`${id}-help`} onChange={(event) => set({ referenceText: event.target.value, referenceTextFile: "" })} />
       <p id={`${id}-help`} className="body-small" role={errors.referenceText ? "alert" : undefined}>{errors.referenceText ?? "Type the words spoken in the recording. Drafts stay transient; omitting text requires an already downloaded local Whisper model."}</p>
       </> : null}
-      {ready ? <p className="body-medium" role="status">{ready.ready ? `Model ready (${ready.detected_device})` : !ready.package_installed ? "Install the optional kitten dependencies in the CLI environment." : "Model weights need downloading."}{!ready.transcription_ready && !form.referenceText?.trim() && !form.referenceTextFile && !(form.inheritedTranscript && !form.referenceAudio) ? " Add a transcript or set up local Whisper." : ""}</p> : <p className="body-small">Checking model readiness…</p>}
+      {ready ? <p className="body-medium" role="status">{ready.ready ? `Model ready (${ready.detected_device})` : !ready.package_installed ? (offerAddon ? `Voice cloning needs the ${ADDONS.kitten2.title} add-on.` : "Install the optional kitten dependencies in the CLI environment.") : "Model weights need downloading."}{!ready.transcription_ready && !form.referenceText?.trim() && !form.referenceTextFile && !(form.inheritedTranscript && !form.referenceAudio) ? " Add a transcript or set up local Whisper." : ""}</p> : <p className="body-small">Checking model readiness…</p>}
+      {offerAddon ? <Button variant="tonal" icon="download" onClick={() => setInstalling(true)}>Install voice cloning…</Button> : null}
+      {installing ? <AddonDialog addon="kitten2" open onClose={() => setInstalling(false)} onInstalled={() => { reloadAddons(); setRecheck((value) => value + 1); }} /> : null}
       {onDownload && ready && !ready.weights_present ? <>
         <Button variant="text" onClick={() => setConfirmDownload((value) => !value)}>Set up KittenTTS 2</Button>
         {confirmDownload ? <div role="group" aria-label="Confirm model download">
