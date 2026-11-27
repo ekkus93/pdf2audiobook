@@ -197,6 +197,42 @@ async function addDemoBook() {
   throw new Error("the demo book was not added after 3 attempts");
 }
 
+/** Waits for the Run page's result and fails at once, with its message, if it isn't `expected`. */
+async function runFinished(expected, seconds) {
+  const result = await find("//section[contains(@class, 'run-result')]", seconds);
+  const text = await run("return arguments[0].innerText;", [{ [ELEMENT]: result }]);
+  if (!text.includes(expected)) throw new Error(`the run ended with: ${text.replace(/\s+/g, " ").trim()}`);
+}
+
+/**
+ * What to print when the walkthrough fails: the app's own log (event names, commands and exit
+ * codes; never a path or any text) and, for an AppImage with its built-in engine, the engine's
+ * own error output from converting the synthetic demo book again outside the app.
+ */
+function diagnose() {
+  const logs = spawnSync("find", [home, "-name", "pdf2audiobook-desktop.log*"], { encoding: "utf8" }).stdout.trim().split("\n");
+  for (const log of logs.filter(Boolean)) {
+    console.error(`e2e: app log:\n${readFileSync(log, "utf8").trim().split("\n").slice(-20).join("\n")}`);
+  }
+  if (!BUNDLED) return;
+  const unpacked = mkdtempSync(join(tmpdir(), "p2a-e2e-engine-"));
+  try {
+    spawnSync(APP, ["--appimage-extract"], { cwd: unpacked, encoding: "utf8" });
+    const cli = join(unpacked, "squashfs-root", "usr", "lib", "pdf2audiobook", "engine", "bin", "pdf2audiobook");
+    const again = spawnSync(cli, ["--no-progress", "convert", "--no-llm", `--output=${out}`, "--json", "--", book], {
+      env,
+      encoding: "utf8",
+      timeout: 1_800_000,
+    });
+    console.error(
+      `e2e: the built-in engine's convert outside the app exited ${again.status} (signal ${again.signal}); its error output ends:\n` +
+        (again.stderr ?? "").trim().split("\n").slice(-40).join("\n"),
+    );
+  } finally {
+    rmSync(unpacked, { recursive: true, force: true });
+  }
+}
+
 async function findOptional(xpath, seconds) {
   try {
     return await find(xpath, seconds);
@@ -288,7 +324,7 @@ async function main() {
     throw new Error("the LLM is on for a book analyzed without it");
   }
   await click(await find(button("Convert to audio"), 60));
-  await find("//*[contains(., 'Conversion finished')]", DRY_RUN ? 180 : 1800);
+  await runFinished("Conversion finished", DRY_RUN ? 180 : 1800);
   await screenshot("5-converted");
 
   const workspace = readdirSync(out).find((name) => name.startsWith("lighthouse"));
@@ -505,6 +541,11 @@ try {
   failed = true;
   console.error(`e2e: FAILED: ${error.message}`);
   if (session) await screenshot("failure").catch(() => undefined);
+  try {
+    diagnose();
+  } catch (problem) {
+    console.error(`e2e: could not gather diagnostics: ${problem.message}`);
+  }
 } finally {
   if (session) await call("DELETE", `/session/${session}`).catch(() => undefined);
   driver.kill();
