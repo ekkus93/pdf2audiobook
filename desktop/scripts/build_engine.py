@@ -2,7 +2,7 @@
 
     uv run --no-project python desktop/scripts/build_engine.py OUTPUT_DIR [--cache DIR]
 
-Produces OUTPUT_DIR/engine: a relocatable CPython from uv, pdf2audiobook and its locked
+Produces OUTPUT_DIR/engine: a relocatable CPython (python-build-standalone, as uv installs it), pdf2audiobook and its locked
 core dependencies, the Kitten 0.8 ONNX voice path without PyTorch, FFmpeg, English OCR data
 and the default voice model. Everything comes from uv.lock or desktop/engine/pins.json and is
 checked by hash. Downloads are kept in --cache and reused when their hashes match.
@@ -171,7 +171,8 @@ def write_notices(engine: Path, pins: dict, cache: Path) -> None:
     components = [
         {"name": "Python", "version": python, "license": "PSF-2.0",
          "source": f"https://www.python.org/ftp/python/{python}/Python-{python}.tar.xz "
-                   "(built by https://github.com/astral-sh/python-build-standalone)",
+                   "(built by https://github.com/astral-sh/python-build-standalone, release "
+                   f"{pins['python_build']['release']})",
          "files": [rel(next((engine / "lib").glob("python3*/LICENSE.txt")))]},
         {"name": "FFmpeg", "version": ffmpeg["version"], "license": ffmpeg["license"],
          "source": f"{ffmpeg['url']} (sha256 {ffmpeg['sha256']}); "
@@ -361,11 +362,12 @@ def build(output: Path, cache: Path, with_ffmpeg: bool) -> None:
         shutil.rmtree(engine)
     with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR")) as temp:
         work = Path(temp)
-        run("uv", "python", "install", pins["python"], "--install-dir", work / "python",
-            capture_output=True)  # fmt: skip
-        source = next(p for p in (work / "python").iterdir() if p.is_dir() and not p.is_symlink()
-                      and p.name.startswith(f"cpython-{pins['python']}-"))  # fmt: skip
-        shutil.copytree(source, engine, symlinks=True)
+        # The relocatable CPython uv installs, from its pinned archive: older uv versions (CI's
+        # pin among them) do not list the newest Python releases.
+        build = pins["python_build"]
+        with tarfile.open(fetch(build["url"], build["sha256"], cache)) as tar:
+            tar.extractall(work, filter="tar")
+        shutil.copytree(work / "python", engine, symlinks=True)
         python = engine / "bin" / "python3"
         install_packages(python, work, pins)
 
