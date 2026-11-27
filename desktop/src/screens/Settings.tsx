@@ -4,6 +4,7 @@ import { errorMessage, getSettings, run, saveSettings } from "../engine/api";
 import type { AppSettings, CliConfig, LlmProvider, Theme, Voices } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Select } from "../ui/Select";
+import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
 import { blobUrl } from "./Player";
 import { Setup } from "./Setup";
@@ -190,28 +191,39 @@ export function Settings() {
     <div className="screen settings">
       <section className="settings-group" aria-labelledby="settings-engine">
         <h3 id="settings-engine" className="title-medium">Engine</h3>
-        <div className="settings-field">
-          <TextField
-            label="CLI location"
-            value={draft.cli_path ?? ""}
-            onChange={(value) => set("cli_path", blank(value))}
-            supportingText="Empty uses pdf2audiobook from your PATH."
-          />
-          <Button variant="text" icon="folder_open" onClick={() => void browse("cli_path", false)}>
-            Browse
-          </Button>
-        </div>
-        <div className="settings-field">
-          <TextField
-            label="Source checkout"
-            value={draft.uv_project ?? ""}
-            onChange={(value) => set("uv_project", blank(value))}
-            supportingText="Optional: a pdf2audiobook checkout to run with uv run --project."
-          />
-          <Button variant="text" icon="folder_open" onClick={() => void browse("uv_project", true)}>
-            Browse
-          </Button>
-        </div>
+        <p className="body-medium on-surface-variant">
+          The engine built into this app is used. Nothing else needs installing.
+        </p>
+        <Switch label="Use a development engine" selected={draft.developer_engine} onChange={(value) => set("developer_engine", value)} />
+        {draft.developer_engine ? (
+          <>
+            <p className="body-small on-surface-variant">
+              For developing pdf2audiobook: the CLI below, then PATH, then a source checkout are tried before the built-in engine.
+            </p>
+            <div className="settings-field">
+              <TextField
+                label="CLI location"
+                value={draft.cli_path ?? ""}
+                onChange={(value) => set("cli_path", blank(value))}
+                supportingText="Empty uses pdf2audiobook from your PATH."
+              />
+              <Button variant="text" icon="folder_open" onClick={() => void browse("cli_path", false)}>
+                Browse
+              </Button>
+            </div>
+            <div className="settings-field">
+              <TextField
+                label="Source checkout"
+                value={draft.uv_project ?? ""}
+                onChange={(value) => set("uv_project", blank(value))}
+                supportingText="Optional: a pdf2audiobook checkout to run with uv run --project."
+              />
+              <Button variant="text" icon="folder_open" onClick={() => void browse("uv_project", true)}>
+                Browse
+              </Button>
+            </div>
+          </>
+        ) : null}
       </section>
 
       <section className="settings-group" aria-labelledby="settings-library">

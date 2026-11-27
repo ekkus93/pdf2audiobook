@@ -58,7 +58,8 @@ These were settled with the decision, so the work can proceed. Each can be revis
 
 ### SC2: Finding the engine
 
-- A new engine source, `bundled`, is tried first. The configured path, `PATH` and `uv` checkout sources are used only when the developer setting is on, or when no bundled engine exists (a development build).
+- A new engine source, `bundled`. When the app has one and the developer setting is off, it is the only engine used. With the developer setting on, the configured path, `PATH` and the `uv` checkout are tried first and the bundled engine last; without a bundled engine (a development build) the old order applies. (Amended 2026-11-26: the draft said "tried first" without saying where the developer setting puts it.) A development build can point at a locally built engine with `PDF2AUDIOBOOK_ENGINE_DIR`.
+- The app starts the bundled engine as `engine/bin/python3 -I -m pdf2audiobook`: isolated mode ignores the user's `PYTHON*` variables and user site-packages, and needs no shell.
 - The bundled engine's version always equals the app's, so the version-mismatch path cannot occur for it.
 - The engine runs with its own `PATH` additions (bundled FFmpeg and Tesseract first), its own Tesseract data directory, and the add-on directory (SC3). It never depends on the user's shell environment.
 

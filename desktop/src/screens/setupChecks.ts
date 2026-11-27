@@ -14,6 +14,7 @@ export interface Check {
 }
 
 const SOURCES: Record<EngineInfo["source"], string> = {
+  bundled: "the engine built into this app",
   configured: "the path in Settings",
   on_path: "your PATH",
   uv_project: "a source checkout, through uv",

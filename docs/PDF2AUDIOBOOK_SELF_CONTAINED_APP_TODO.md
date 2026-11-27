@@ -25,14 +25,14 @@
 
 - [x] 2.1 A build script (`desktop/scripts/build-engine.sh` or similar) that produces `engine/` reproducibly from `uv.lock`, with the pinned FFmpeg and Tesseract, hash-checked.
 - [x] 2.2 Bundle the `mini` model files and make the engine find them offline.
-- [ ] 2.3 The engine wrapper sets `PATH`, the Tesseract data directory and the add-on path, independent of the user's environment.
+- [x] 2.3 The engine wrapper sets `PATH`, the Tesseract data directory and the add-on path, independent of the user's environment.
 - [x] 2.4 A smoke test in the built engine: import, `doctor --json`, synthesize a sample, OCR a scanned synthetic page.
 
 ## 3. Finding the engine (SC2)
 
-- [ ] 3.1 Rust: the `bundled` source, tried first; other sources only with the developer setting or without a bundled engine. Tests.
-- [ ] 3.2 The app passes the engine's environment to every run. Tests.
-- [ ] 3.3 Settings: the developer setting, off by default.
+- [x] 3.1 Rust: the `bundled` source, tried first; other sources only with the developer setting or without a bundled engine. Tests.
+- [x] 3.2 The app passes the engine's environment to every run. Tests.
+- [x] 3.3 Settings: the developer setting, off by default.
 
 ## 4. Add-ons (SC3, SC4)
 
@@ -80,3 +80,4 @@
 | 2026-11-26 | eeb3647c8b1a05920638808775e98263c9f37f71 | 1.2 and 2.1 done. The pinned FFmpeg archive (BtbN LGPL n8.1.3-41-ga8029b6528) downloaded and matched its SHA-256; it has the encoders the engine uses (libmp3lame, aac, flac, pcm_s16le, pcm_f32le, mjpeg, png) and needs GLIBC_2.28, so the engine's floor stays GLIBC_2.29 (CPython wheels). The static `ffmpeg` is 142 MB. The full build (`build_engine.py` with FFmpeg) passed `smoke_engine.py` with networking off and an empty environment, and the bundled `ffmpeg` was the one found. Sizes against C8: 607 MB installed (budget 1 GB), 200 MB as xz -6 and 211 MB as zstd -19 (budget 400 MB, before the Tauri app). | Local only. | The FFmpeg pin's source keeps about a month of dated builds; a durable mirror is needed before CI depends on it. |
 | 2026-11-26 | dc57348164bf63c200a4d1fc27adc1854ecc8ae5 | CI for `f1ef653` and `dc57348`, pushed together (the first has no run of its own). | Python CI [970](https://github.com/ekkus93/pdf2audiobook/actions/runs/45946363127) passed 3.11/3.12/3.13 with 2,874 passed/6 skipped each. Desktop CI [125](https://github.com/ekkus93/pdf2audiobook/actions/runs/45946363117) passed. | None |
 | 2026-11-26 | eeb3647c8b1a05920638808775e98263c9f37f71 | CI for the FFmpeg check record. | Docs only. Python CI [971](https://github.com/ekkus93/pdf2audiobook/actions/runs/45951701284) and Desktop CI [126](https://github.com/ekkus93/pdf2audiobook/actions/runs/45951701286) passed. | FFmpeg mirror |
+| 2026-11-26 | (uncommitted) | 2.3 (engine side, with 3.2), 3.1–3.3 (SC2). Rust: `CliSource::Bundled`; `LocateOptions` gains the bundled folder and the developer flag; a folder counts only with the marker and an executable `bin/python3`, started as `python3 -I -m pdf2audiobook`. The developer setting off: the bundled engine is the only candidate; on: configured, `PATH`, checkout, then bundled; no bundled engine: the old order. The app looks in `PDF2AUDIOBOOK_ENGINE_DIR`, then `engine/` in its resources. `AppSettings.developer_engine` (default off). Settings → Engine says the built-in engine is used, with a **Use a development engine** switch that reveals the CLI and checkout fields; Setup names the source as "the engine built into this app". The built engine, started that way with a broken `PYTHONPATH` and `PYTHONHOME`, reported 0.1.0 (the app's version) with FFmpeg, OCR and Kitten ready. Spec SC2 amended for the developer order. | Tests written first and failing at the parent: Rust `the_bundled_engine_is_used_even_with_another_cli_on_path`, `the_developer_setting_tries_other_engines_first_then_the_bundled_one`, `a_folder_without_the_marker_is_not_a_bundled_engine` (did not compile); Settings `is used without any engine fields…`, `shows the engine fields and saves the setting…`. Local: `cargo test` 124 + 7 passed (4 ignored), clippy and fmt clean; `npm run lint`, `npm run typecheck`, `npm test` 414 passed, each exit 0. | Packaging the engine into the app's resources is task 7.1 |

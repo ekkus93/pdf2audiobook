@@ -185,7 +185,7 @@ export type BridgeError =
 
 export interface EngineInfo {
   version: string;
-  source: "configured" | "on_path" | "uv_project";
+  source: "bundled" | "configured" | "on_path" | "uv_project";
   command: string;
 }
 
@@ -292,6 +292,8 @@ export type Theme = "dark" | "light" | "system";
 export interface AppSettings {
   cli_path: string | null;
   uv_project: string | null;
+  /** Use `cli_path`, PATH or `uv_project` before the engine built into the app. */
+  developer_engine: boolean;
   output_dir: string | null;
   theme: Theme;
   added_books: string[];

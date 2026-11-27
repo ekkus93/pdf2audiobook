@@ -88,10 +88,12 @@ pub struct EngineInfo {
     pub command: String,
 }
 
-/// Finds the CLI using the app's settings and the `PATH`.
+/// Finds the CLI: the bundled engine, or with the developer setting the app's settings and
+/// the `PATH` first.
 pub fn locate_with(
     settings: &AppSettings,
     path_env: Option<&OsStr>,
+    bundled: Option<&Path>,
     runner: &dyn Runner,
 ) -> Result<LocatedCli, LocateError> {
     locate(
@@ -99,10 +101,20 @@ pub fn locate_with(
             configured: settings.cli_path.as_deref(),
             uv_project: settings.uv_project.as_deref(),
             path_env,
+            bundled,
+            developer: settings.developer_engine,
             app_version: env!("CARGO_PKG_VERSION"),
         },
         runner,
     )
+}
+
+/// Where this build's bundled engine is: `PDF2AUDIOBOOK_ENGINE_DIR` for a development build
+/// pointed at a locally built engine, otherwise `engine/` in the app's resources.
+fn bundled_engine(app: &AppHandle) -> Option<PathBuf> {
+    std::env::var_os("PDF2AUDIOBOOK_ENGINE_DIR")
+        .map(PathBuf::from)
+        .or_else(|| app.path().resource_dir().ok().map(|dir| dir.join("engine")))
 }
 
 /// A readable command line for "Details". Display only: commands never run through a shell.
@@ -154,7 +166,13 @@ fn located(engine: &Engine, app: &AppHandle) -> Result<LocatedCli, BridgeError> 
     }
     let settings = AppSettings::load(&settings_dir(app)?);
     let path_env = std::env::var_os("PATH");
-    let cli = locate_with(&settings, path_env.as_deref(), engine.runner.as_ref())?;
+    let bundled = bundled_engine(app);
+    let cli = locate_with(
+        &settings,
+        path_env.as_deref(),
+        bundled.as_deref(),
+        engine.runner.as_ref(),
+    )?;
     crate::config::initialize(&cli.command, engine.runner.as_ref())?;
     *engine.cli.lock().unwrap_or_else(PoisonError::into_inner) = Some(cli.clone());
     Ok(cli)
@@ -168,9 +186,15 @@ pub async fn locate_engine(
     *engine.cli.lock().unwrap_or_else(PoisonError::into_inner) = None;
     let runner = Arc::clone(&engine.runner);
     let settings = AppSettings::load(&settings_dir(&app)?);
+    let bundled = bundled_engine(&app);
     let cli = tauri::async_runtime::spawn_blocking(move || {
         let path_env = std::env::var_os("PATH");
-        let cli = locate_with(&settings, path_env.as_deref(), runner.as_ref())?;
+        let cli = locate_with(
+            &settings,
+            path_env.as_deref(),
+            bundled.as_deref(),
+            runner.as_ref(),
+        )?;
         crate::config::initialize(&cli.command, runner.as_ref())?;
         Ok::<_, BridgeError>(cli)
     })
@@ -680,7 +704,7 @@ mod tests {
             ..AppSettings::default()
         };
 
-        let found = locate_with(&settings, None, &TestRunner).unwrap();
+        let found = locate_with(&settings, None, None, &TestRunner).unwrap();
 
         assert_eq!(found.source, CliSource::Configured);
         assert_eq!(found.command, CliCommand::direct(cli));

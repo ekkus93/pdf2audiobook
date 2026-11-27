@@ -26,6 +26,7 @@ beforeEach(() => {
   vi.mocked(api.getSettings).mockResolvedValue({
     cli_path: null,
     uv_project: null,
+    developer_engine: false,
     output_dir: null,
     theme: "light",
     added_books: [],

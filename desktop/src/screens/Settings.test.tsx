@@ -22,6 +22,8 @@ import { Settings, VOICE_SAMPLES, configRows, sourceLabel } from "./Settings";
 const SAVED: AppSettings = {
   cli_path: null,
   uv_project: null,
+  // The engine fields show only with the developer setting; most tests here edit them.
+  developer_engine: true,
   output_dir: null,
   theme: "dark",
   added_books: ["/books/a.pdf"],
@@ -272,5 +274,32 @@ describe("Settings", () => {
     await press(button("Save settings"));
     expect(await screen.findByText("The settings could not be saved")).toBeInTheDocument();
     await waitFor(() => expect(button("Save settings")).not.toHaveAttribute("disabled"));
+  });
+});
+
+describe("the engine shipped with the app", () => {
+  const developer = () =>
+    screen.getByText("Use a development engine").closest("label")?.querySelector("md-switch") as HTMLElement & { selected: boolean };
+
+  it("is used without any engine fields unless the developer setting is on", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({ ...SAVED, developer_engine: false });
+    await ready();
+    expect(screen.getByText(/The engine built into this app is used/)).toBeInTheDocument();
+    expect(document.querySelector('md-outlined-text-field[label="CLI location"]')).toBeNull();
+    expect(document.querySelector('md-outlined-text-field[label="Source checkout"]')).toBeNull();
+    expect(developer().selected).toBeFalsy();
+  });
+
+  it("shows the engine fields and saves the setting when it is turned on", async () => {
+    vi.mocked(api.getSettings).mockResolvedValue({ ...SAVED, developer_engine: false });
+    await ready();
+    const toggle = developer();
+    await act(async () => {
+      toggle.selected = true;
+      toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(field("CLI location")).toBeInTheDocument();
+    await press(button("Save settings"));
+    expect(api.saveSettings).toHaveBeenCalledWith({ ...SAVED, developer_engine: true });
   });
 });

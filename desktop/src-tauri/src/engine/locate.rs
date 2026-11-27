@@ -11,6 +11,8 @@ use super::process::{CliCommand, Runner, find_on_path, is_executable};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CliSource {
+    /// The engine shipped inside the app (self-contained app spec SC2).
+    Bundled,
     /// The path saved in the app's settings.
     Configured,
     /// `pdf2audiobook` on `PATH`.
@@ -62,14 +64,25 @@ pub struct LocateOptions<'a> {
     pub uv_project: Option<&'a Path>,
     /// The `PATH` to search.
     pub path_env: Option<&'a OsStr>,
+    /// The engine folder shipped with the app, if this build has one.
+    pub bundled: Option<&'a Path>,
+    /// The developer setting: try the configured path, `PATH` and a checkout before the
+    /// bundled engine. Off, a bundled engine is the only one used.
+    pub developer: bool,
     /// This app's version, e.g. `env!("CARGO_PKG_VERSION")`.
     pub app_version: &'a str,
 }
 
-/// Try the configured path, then `PATH`, then `uv run --project`, and return the first CLI
+/// Try the bundled engine, or with the developer setting (or no bundled engine) the configured
+/// path, then `PATH`, then `uv run --project`, then the bundled engine. Return the first CLI
 /// whose `--version` and `doctor --json` agree and whose major and minor version match the app.
 pub fn locate(options: &LocateOptions<'_>, runner: &dyn Runner) -> Result<LocatedCli, LocateError> {
+    let bundled = options.bundled.and_then(bundled_command);
     let mut candidates: Vec<(CliSource, CliCommand)> = Vec::new();
+    if let (Some(command), false) = (&bundled, options.developer) {
+        candidates.push((CliSource::Bundled, command.clone()));
+        return first_confirmed(candidates, runner, options.app_version);
+    }
     if let Some(path) = options.configured.filter(|path| is_executable(path)) {
         candidates.push((CliSource::Configured, CliCommand::direct(path)));
     }
@@ -79,9 +92,20 @@ pub fn locate(options: &LocateOptions<'_>, runner: &dyn Runner) -> Result<Locate
     if let (Some(project), Some(uv)) = (options.uv_project, find_on_path("uv", options.path_env)) {
         candidates.push((CliSource::UvProject, uv_command(uv, project)));
     }
+    if let Some(command) = bundled {
+        candidates.push((CliSource::Bundled, command));
+    }
+    first_confirmed(candidates, runner, options.app_version)
+}
+
+fn first_confirmed(
+    candidates: Vec<(CliSource, CliCommand)>,
+    runner: &dyn Runner,
+    app_version: &str,
+) -> Result<LocatedCli, LocateError> {
     let mut failure = LocateError::NotFound;
     for (source, command) in candidates {
-        match confirm(&command, runner, options.app_version) {
+        match confirm(&command, runner, app_version) {
             Ok(version) => {
                 return Ok(LocatedCli {
                     command,
@@ -94,6 +118,20 @@ pub fn locate(options: &LocateOptions<'_>, runner: &dyn Runner) -> Result<Locate
         }
     }
     Err(failure)
+}
+
+/// The marker the engine build writes next to the bundled interpreter.
+pub const BUNDLE_MARKER: &str = "pdf2audiobook-bundle.json";
+
+/// Start a bundled engine through its own interpreter in isolated mode (`-I`): the user's
+/// `PYTHONPATH`, `PYTHONHOME` and user site-packages can't reach it, and the engine sets up
+/// its own tools and data (`pdf2audiobook.bundle`).
+fn bundled_command(folder: &Path) -> Option<CliCommand> {
+    let python = folder.join("bin").join("python3");
+    (folder.join(BUNDLE_MARKER).is_file() && is_executable(&python)).then(|| CliCommand {
+        program: python,
+        prefix: ["-I", "-m", "pdf2audiobook"].map(OsString::from).to_vec(),
+    })
 }
 
 fn uv_command(uv: PathBuf, project: &Path) -> CliCommand {
@@ -189,8 +227,81 @@ mod tests {
             configured,
             uv_project,
             path_env,
+            bundled: None,
+            developer: false,
             app_version: APP,
         }
+    }
+
+    /// A fake bundled engine: the marker file and a `bin/python3` that answers only for
+    /// `-I -m pdf2audiobook ...`, the way the app starts it.
+    fn fake_bundle(folder: &Path, version: &str, marker: bool) -> PathBuf {
+        fs::create_dir_all(folder.join("bin")).unwrap();
+        if marker {
+            fs::write(folder.join("pdf2audiobook-bundle.json"), "{}").unwrap();
+        }
+        let script = format!(
+            "#!/bin/sh\ncase \"$*\" in\n  \"-I -m pdf2audiobook --version\") echo '{version}' ;;\n  \"-I -m pdf2audiobook doctor --json\") echo '{{\"version\": \"{version}\"}}' ;;\n  *) exit 2 ;;\nesac\n"
+        );
+        write_script(&folder.join("bin"), "python3", &script)
+    }
+
+    #[test]
+    fn the_bundled_engine_is_used_even_with_another_cli_on_path() {
+        let temp = TempDir::new().unwrap();
+        let engine = temp.path().join("engine");
+        let python = fake_bundle(&engine, "0.1.0", true);
+        let configured = fake_cli(&temp.path().join("custom"), "my-cli", "0.1.7", "0.1.7");
+        fake_cli(&temp.path().join("bin"), "pdf2audiobook", "0.1.2", "0.1.2");
+        let path_env = temp.path().join("bin").into_os_string();
+        let mut opts = options(Some(&configured), None, Some(&path_env));
+        opts.bundled = Some(&engine);
+
+        let found = locate(&opts, &TestRunner).unwrap();
+
+        assert_eq!(found.source, CliSource::Bundled);
+        assert_eq!(found.command.program, python);
+        assert_eq!(found.command.prefix, ["-I", "-m", "pdf2audiobook"]);
+        assert_eq!(found.version, "0.1.0");
+    }
+
+    #[test]
+    fn the_developer_setting_tries_other_engines_first_then_the_bundled_one() {
+        let temp = TempDir::new().unwrap();
+        let engine = temp.path().join("engine");
+        fake_bundle(&engine, "0.1.0", true);
+        let cli = fake_cli(&temp.path().join("bin"), "pdf2audiobook", "0.1.3", "0.1.3");
+        let path_env = temp.path().join("bin").into_os_string();
+        let mut opts = options(None, None, Some(&path_env));
+        opts.bundled = Some(&engine);
+        opts.developer = true;
+
+        let found = locate(&opts, &TestRunner).unwrap();
+        assert_eq!(found.source, CliSource::OnPath);
+        assert_eq!(found.command, CliCommand::direct(cli));
+
+        let empty = temp.path().join("empty").into_os_string();
+        opts.path_env = Some(&empty);
+        assert_eq!(
+            locate(&opts, &TestRunner).unwrap().source,
+            CliSource::Bundled
+        );
+    }
+
+    #[test]
+    fn a_folder_without_the_marker_is_not_a_bundled_engine() {
+        let temp = TempDir::new().unwrap();
+        let engine = temp.path().join("engine");
+        fake_bundle(&engine, "0.1.0", false);
+        let cli = fake_cli(&temp.path().join("bin"), "pdf2audiobook", "0.1.2", "0.1.2");
+        let path_env = temp.path().join("bin").into_os_string();
+        let mut opts = options(None, None, Some(&path_env));
+        opts.bundled = Some(&engine);
+
+        let found = locate(&opts, &TestRunner).unwrap();
+
+        assert_eq!(found.source, CliSource::OnPath);
+        assert_eq!(found.command, CliCommand::direct(cli));
     }
 
     #[test]

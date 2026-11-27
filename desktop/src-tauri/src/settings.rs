@@ -22,6 +22,9 @@ pub struct AppSettings {
     pub cli_path: Option<PathBuf>,
     /// A source checkout to run with `uv run --project`.
     pub uv_project: Option<PathBuf>,
+    /// Use `cli_path`, `PATH` or `uv_project` before the engine shipped with the app
+    /// (self-contained app spec SC2). Off by default.
+    pub developer_engine: bool,
     /// The folder holding book workspaces; `None` uses the CLI's `general.output_dir`.
     pub output_dir: Option<PathBuf>,
     pub theme: Theme,
@@ -137,6 +140,7 @@ mod tests {
         let settings = AppSettings {
             cli_path: Some("/opt/cli".into()),
             uv_project: Some("/src/checkout".into()),
+            developer_engine: true,
             output_dir: Some("/books/out".into()),
             theme: Theme::System,
             added_books: vec!["/books/a.pdf".into()],
