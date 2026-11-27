@@ -82,7 +82,20 @@ pub fn host_environment(vars: &[(OsString, OsString)]) -> Vec<(OsString, Option<
     changes
 }
 
-/// Applies [`host_environment`] for this process's environment to `command`.
+/// The folder child processes run in: `HOME`, if it is an existing absolute folder.
+///
+/// The CLI resolves its default output folder (`./audiobooks`) against the folder it runs in,
+/// and the app's own folder depends on how it was started (`/` from some launchers, the
+/// download folder from a file manager). Running from home keeps books in `~/audiobooks`.
+pub fn home_folder(vars: &[(OsString, OsString)]) -> Option<std::path::PathBuf> {
+    vars.iter()
+        .find(|(key, _)| key == "HOME")
+        .map(|(_, value)| std::path::PathBuf::from(value))
+        .filter(|home| home.is_absolute() && home.is_dir())
+}
+
+/// Applies [`host_environment`] for this process's environment to `command`, and runs it from
+/// the home folder ([`home_folder`]).
 pub fn use_host_environment(command: &mut Command) -> &mut Command {
     let vars: Vec<(OsString, OsString)> = std::env::vars_os().collect();
     for (key, value) in host_environment(&vars) {
@@ -90,6 +103,9 @@ pub fn use_host_environment(command: &mut Command) -> &mut Command {
             Some(value) => command.env(key, value),
             None => command.env_remove(key),
         };
+    }
+    if let Some(home) = home_folder(&vars) {
+        command.current_dir(home);
     }
     command
 }
@@ -159,6 +175,38 @@ mod tests {
             std::env::var("PATH").unwrap()
         );
         assert_eq!(done.stdout, expected);
+    }
+
+    #[test]
+    fn the_child_runs_in_the_home_folder() {
+        // The CLI's default output folder is relative ("./audiobooks"); however the app was
+        // started (a launcher in `/`, a file manager in Downloads), books go to ~/audiobooks.
+        let Some(home) = home_folder(&std::env::vars_os().collect::<Vec<_>>()) else {
+            return; // No usable HOME in this test environment.
+        };
+        let temp = TempDir::new().unwrap();
+        let cli = write_script(temp.path(), "where", "#!/bin/sh\npwd -P\n");
+
+        let done = TestRunner.run(&CliCommand::direct(cli), &[]).unwrap();
+
+        assert_eq!(
+            done.stdout.trim(),
+            home.canonicalize().unwrap().to_str().unwrap()
+        );
+    }
+
+    #[test]
+    fn the_home_folder_must_be_an_absolute_folder() {
+        let temp = TempDir::new().unwrap();
+        let vars = |home: &str| vec![(OsString::from("HOME"), OsString::from(home))];
+        assert_eq!(
+            home_folder(&vars(temp.path().to_str().unwrap())),
+            Some(temp.path().to_path_buf())
+        );
+        assert_eq!(home_folder(&vars("relative/home")), None);
+        assert_eq!(home_folder(&vars("")), None);
+        assert_eq!(home_folder(&vars("/no/such/folder/here")), None);
+        assert_eq!(home_folder(&[]), None);
     }
 
     #[test]
