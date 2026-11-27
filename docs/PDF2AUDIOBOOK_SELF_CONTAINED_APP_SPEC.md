@@ -67,7 +67,7 @@ These were settled with the decision, so the work can proceed. Each can be revis
 
 ### SC3: Add-ons
 
-- Two add-ons: **Voice cloning and Kitten 2** (full `kittenml` dependencies with CPU PyTorch, then the Kitten 2 model files) and **Audio checking** (Whisper with CPU PyTorch, then a Whisper model). They share one PyTorch.
+- Two add-ons: **Voice cloning and Kitten 2** (full `kittenml` dependencies with CPU PyTorch, then the Kitten 2 model files) and **Audio checking** (Whisper with CPU PyTorch, then a Whisper model). They share one PyTorch. (Amended 2026-11-26: audio checking confirms a flag only when two of its three recognizers agree, so the Audio checking add-on installs all three, Whisper, wav2vec 2.0 and Vosk, with their models.)
 - Each is offered where it is needed (choosing Clone a voice, Kitten 2, or an audio check) and on the Setup screen. Before downloading, the app shows what will be downloaded, from where, its size and where it goes, and asks for consent, as `tts fetch` does today.
 - Packages come from a pinned, hash-locked list generated from `uv.lock` (`desktop/engine/addons.lock.json`, by `desktop/scripts/addon_lists.py`), installed with the bundled CPython's own pip (`--require-hashes --no-deps --only-binary :all:`) into `$XDG_DATA_HOME/pdf2audiobook/addons/<engine version>/` (or `~/.local/share/…`). Model files keep the existing pinned fetches into the cache. (Amended 2026-11-26: the draft named a bundled `uv`; pip is already in the bundled interpreter, so no further binary ships.)
 - Packages are grouped into components by the set of add-ons that need them, each installed into its own folder, so a package both add-ons use (PyTorch among them) is installed once and removing one add-on keeps what the other needs. CUDA, NVIDIA and Triton packages are left out (C5).
@@ -80,7 +80,7 @@ These were settled with the decision, so the work can proceed. Each can be revis
 ### SC4: FFmpeg and Tesseract
 
 - A pinned FFmpeg static build (LGPL) and Tesseract with `eng` data ship in the app, checked by hash at build time.
-- The OCR language setting lists bundled and installed languages. Another language's `.traineddata` is an add-on download (pinned, hash-checked) into the add-on directory.
+- The OCR language setting lists bundled and installed languages. Another language's `.traineddata` is an add-on download (pinned, hash-checked) into the add-on directory. (Amended 2026-11-26: the catalog pins tessdata_fast 4.1.0's files by size and git blob SHA-1, the hash GitHub's tree API reports, since no SHA-256 list is published; a writable folder holds the added languages and copies of the bundled ones, because PyMuPDF reads all languages from one folder.)
 
 **Acceptance:** The SC1 container test converts a scanned (image-only) synthetic page with OCR. A test installs a fake language file and `doctor` reports it.
 
