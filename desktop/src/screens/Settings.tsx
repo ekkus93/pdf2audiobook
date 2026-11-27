@@ -9,6 +9,7 @@ import { TextField } from "../ui/TextField";
 import { blobUrl } from "./Player";
 import { Setup } from "./Setup";
 import { CliConfigEditor } from "./CliConfigEditor";
+import { About } from "./About";
 import { AddonsPanel, OcrLanguages } from "./Addons";
 import "./settings.css";
 
@@ -351,6 +352,11 @@ export function Settings() {
             </table>
           </details>
         ) : null}
+      </section>
+
+      <section className="settings-group" aria-labelledby="settings-about">
+        <h3 id="settings-about" className="title-medium">About</h3>
+        <About />
       </section>
     </div>
   );

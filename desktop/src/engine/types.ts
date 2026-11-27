@@ -81,6 +81,15 @@ export interface AddonsList {
   addons: AddonState[];
 }
 /** `addons languages --json` (contracts/addon-languages.schema.json). */
+/** A component inside the built-in engine and its licence (self-contained app spec C9). */
+export interface Notice {
+  name: string;
+  version: string;
+  license: string;
+  source: string;
+  files: string[];
+}
+
 export interface AddonLanguages {
   available: string[];
   installed: string[];

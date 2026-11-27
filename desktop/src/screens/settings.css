@@ -107,3 +107,37 @@
   outline: 2px solid var(--md-sys-color-primary);
   outline-offset: 2px;
 }
+
+.notice-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.notice-row p {
+  margin: 2px 0 0;
+}
+
+.notice-source {
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.notice-text {
+  max-height: 60vh;
+  overflow: auto;
+  margin: 0;
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  user-select: text;
+}

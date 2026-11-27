@@ -1,6 +1,6 @@
 """Smoke-test a built engine the way a clean machine would run it (self-contained app SC1, SC4).
 
-    python3 desktop/scripts/smoke_engine.py ENGINE_DIR [--allow-system-ffmpeg]
+    python3 desktop/scripts/smoke_engine.py ENGINE_DIR [--allow-system-ffmpeg] [--offline]
 
 Runs ENGINE_DIR/bin/pdf2audiobook with an empty environment, no network when `unshare -rn`
 is available, and a minimal PATH. It checks `doctor --json`, converts a synthetic two-chapter
@@ -43,6 +43,37 @@ image.insert_image(image.rect, pixmap=pixmap)
 scanned.save(f"{folder}/scanned.pdf")
 """
 
+# Every other way the engine uses FFmpeg, so a smaller FFmpeg build cannot drop one unnoticed:
+# reference recordings (WAV, FLAC), speed changes (atempo) and decoding for the recognizers.
+FFMPEG_USES = """
+import sys
+from pathlib import Path
+
+import numpy as np
+import soundfile
+
+from pdf2audiobook.bundle import configure_environment
+
+configure_environment()
+from pdf2audiobook.tts.clone_provider import change_speed
+from pdf2audiobook.tts.cloning import decode_reference
+from pdf2audiobook.verification.backends import decode
+
+folder, mp3 = Path(sys.argv[1]), Path(sys.argv[2])
+tone = (0.2 * np.sin(2 * np.pi * 220 * np.arange(24000 * 6) / 24000)).astype("float32")
+for kind in ("WAV", "FLAC"):
+    reference = folder / f"reference.{kind.lower()}"
+    soundfile.write(reference, tone, 24000, format=kind)
+    decode_reference(reference.read_bytes(), reference.suffix)
+    print(f"ok: decoded a {kind} reference recording")
+faster = change_speed(tone, 1.5)
+assert 0.6 < faster.size / tone.size < 0.7, faster.size
+print("ok: changed speech speed")
+decode(mp3, folder / "16k.wav")
+assert soundfile.info(folder / "16k.wav").samplerate == 16000
+print("ok: decoded an MP3 for the speech recognizers")
+"""
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -50,14 +81,19 @@ def main() -> None:
     )
     parser.add_argument("engine", type=Path)
     parser.add_argument("--allow-system-ffmpeg", action="store_true")
+    parser.add_argument(
+        "--offline", action="store_true", help="The network is already off (a container)."
+    )
     args = parser.parse_args()
     engine = args.engine.resolve()
     launcher = engine / "bin" / "pdf2audiobook"
     path = "/usr/bin:/bin" if args.allow_system_ffmpeg else "/bin"
     isolate = (
-        ["unshare", "-rn"] if shutil.which("unshare") and _works(["unshare", "-rn", "true"]) else []
+        ["unshare", "-rn"]
+        if not args.offline and shutil.which("unshare") and _works(["unshare", "-rn", "true"])
+        else []
     )
-    if not isolate:
+    if not isolate and not args.offline:
         print("note: unshare is unavailable; running with the network enabled", file=sys.stderr)
 
     with tempfile.TemporaryDirectory() as temp:
@@ -92,6 +128,20 @@ def main() -> None:
                 run,
             )
             print(f"ok: {name} PDF -> {len(mp3s)} MP3(s)")
+            if name == "text":
+                book, chapter = mp3s[0].parent.parent, mp3s[0]
+        m4b = work / "book.m4b"
+        packed = cli("pack-m4b", str(book / "manifest.json"), "--output", str(m4b), "--no-config",
+                     "--json")  # fmt: skip
+        _check(packed.returncode == 0 and m4b.stat().st_size > 1000, "packed an M4B", packed)
+        print("ok: text PDF -> M4B audiobook")
+        uses = subprocess.run(
+            [*isolate, "env", "-i", *(f"{k}={v}" for k, v in environ.items()),
+             str(engine / "bin" / "python3"), "-I", "-c", FFMPEG_USES, temp, str(chapter)],
+            capture_output=True, text=True, check=False, timeout=300,
+        )  # fmt: skip
+        _check(uses.returncode == 0, "every FFmpeg use works", uses)
+        print(uses.stdout, end="")
     print("ok: engine smoke test passed")
 
 

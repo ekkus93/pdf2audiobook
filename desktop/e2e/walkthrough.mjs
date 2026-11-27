@@ -4,6 +4,9 @@
 // reviewed and speak that chapter again (audio verification AV5.06; the speech recognizers are
 // stood in for by e2e/fake_asr.mjs). Plain W3C WebDriver over fetch; no test framework needed.
 // E2E_DRY_RUN=0 converts with real speech instead (manual acceptance, TD10.05; needs Kitten).
+// E2E_BUNDLED=1 runs an app that carries its own engine (self-contained app SC7) as a user
+// would: no CLI is configured, so the app must find its built-in engine; conversion uses real
+// speech from the bundled voice, and the audio check must offer its add-on in place.
 //
 //   E2E_APP=src-tauri/target/release/pdf2audiobook-desktop \
 //   E2E_NATIVE_DRIVER=/usr/bin/WebKitWebDriver node e2e/walkthrough.mjs
@@ -24,8 +27,10 @@ const TAURI_DRIVER = process.env.E2E_TAURI_DRIVER ?? "tauri-driver";
 const ARTIFACTS = resolve(process.env.E2E_ARTIFACTS ?? join(DESKTOP, "e2e", "artifacts"));
 const PORT = 4444;
 const NEW_TITLE = "The Keeper (reviewed)";
+const BUNDLED = process.env.E2E_BUNDLED === "1";
 const CLONE = process.env.E2E_CLONE === "1";
-const DRY_RUN = process.env.E2E_DRY_RUN !== "0";
+const DRY_RUN = !BUNDLED && process.env.E2E_DRY_RUN !== "0";
+if (BUNDLED && CLONE) throw new Error("E2E_CLONE needs the stand-in voice cloner, which a bundled run cannot use");
 
 const shellQuote = (value) => "'" + value.replaceAll("'", "'\\''") + "'";
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -80,7 +85,9 @@ exec uv run --project ${shellQuote(REPO)} pdf2audiobook "$@"
 chmodSync(cli, 0o755);
 writeFileSync(
   join(config, "io.github.ekkus93.pdf2audiobook", "settings.json"),
-  JSON.stringify({ cli_path: cli, output_dir: out, theme: "dark", added_books: [] }),
+  JSON.stringify(
+    BUNDLED ? { output_dir: out, theme: "dark", added_books: [] } : { cli_path: cli, output_dir: out, theme: "dark", added_books: [] },
+  ),
 );
 
 // --- WebDriver ---
@@ -303,11 +310,38 @@ async function main() {
       step(`  ${name}: ${Number(probe.stdout.trim()).toFixed(1)} s`);
     }
   }
+  if (BUNDLED) {
+    await addonOffer();
+    step("passed: with its built-in engine, the app added, analyzed, reviewed and converted the book with real speech, and offered the audio check add-on and its licences");
+    return;
+  }
   await audioCheck(workspace, manifest.chapters.length);
   if (CLONE) await cloneCheck(workspace);
   step(
     `passed: the book was added, analyzed, reviewed, converted${DRY_RUN ? " (dry run)" : " with real speech"}, checked and repaired`,
   );
+}
+
+/** The built-in engine has no speech recognizers until the add-on is installed: it is offered in place. */
+async function addonOffer() {
+  step("audio check: the add-on is offered in place");
+  await click(await find(button("Back to the book")));
+  const offer = await find(button("Install audio checking…"), 60);
+  if (await run("return document.body.innerText.includes('uv sync');")) throw new Error("the app shows a terminal command");
+  await run("document.querySelector('.audio-check').scrollIntoView({ block: 'center', behavior: 'instant' });");
+  await click(offer);
+  await find("//md-dialog[@open][contains(., 'Audio checking')][contains(., 'checksum')]", 30);
+  await screenshot("6-addon-offer");
+  await click(await find(`//md-dialog[@open]${button("Not now")}`));
+
+  step("about: the built-in engine's components and their licences");
+  await click(await find("//nav[@aria-label='Main']//button[contains(., 'Settings')]"));
+  const ffmpeg = await find("//li[contains(@class, 'notice-row')][contains(., 'FFmpeg')][contains(., 'LGPL')]", 60);
+  await run("arguments[0].scrollIntoView({ block: 'center', behavior: 'instant' });", [{ [ELEMENT]: ffmpeg }]);
+  await click(await find(`//li[contains(@class, 'notice-row')][contains(., 'espeak-ng 1.52.0')]${button("Licence")}`));
+  await find("//md-dialog[@open]//pre[contains(., 'GNU GENERAL PUBLIC LICENSE')]", 30);
+  await screenshot("7-about");
+  await click(await find(`//md-dialog[@open]${button("Close")}`));
 }
 
 /** Checks the audio, listens at the flagged passage, marks it reviewed and speaks it again. */

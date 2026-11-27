@@ -117,6 +117,22 @@ fn bundled_engine(app: &AppHandle) -> Option<PathBuf> {
         .or_else(|| app.path().resource_dir().ok().map(|dir| dir.join("engine")))
 }
 
+/// The built-in engine's licence notices for About; None in a development build (spec C9).
+#[tauri::command]
+pub fn engine_notices(app: AppHandle) -> Option<Vec<crate::notices::Notice>> {
+    crate::notices::notices(&bundled_engine(&app)?)
+}
+
+/// One component's licence texts, by its place in `engine_notices`.
+#[tauri::command]
+pub fn engine_notice_text(app: AppHandle, index: usize) -> Result<String, BridgeError> {
+    bundled_engine(&app)
+        .and_then(|engine| crate::notices::notice_text(&engine, index))
+        .ok_or(BridgeError::Request {
+            message: "The licence text could not be read; reinstall the app".into(),
+        })
+}
+
 /// A readable command line for "Details". Display only: commands never run through a shell.
 pub fn display_command(cli: &CliCommand, args: &[OsString]) -> String {
     let program = cli

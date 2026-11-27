@@ -9,6 +9,8 @@ vi.mock("../engine/api", async (original) => ({
   saveSettings: vi.fn(),
   readCliConfig: vi.fn(),
   saveCliConfig: vi.fn(),
+  engineNotices: vi.fn(async () => null),
+  engineNoticeText: vi.fn(),
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 // The setup check has its own tests (Setup.test.tsx).

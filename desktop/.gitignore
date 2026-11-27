@@ -28,3 +28,6 @@ dist-ssr
 
 # Screenshots from the end-to-end walkthrough
 e2e/artifacts/
+
+# The bundled engine, built by scripts/build_engine.py for packaging
+engine-dist/

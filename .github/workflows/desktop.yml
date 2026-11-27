@@ -1,6 +1,8 @@
 name: Desktop CI
 # The Tauri desktop app in desktop/ (spec D10.c): frontend and Rust checks, a Linux build with
 # AppImage and .deb artifacts (D10.b, unsigned per D10.d), and the end-to-end walkthrough (D9.d).
+# The installers carry the built-in engine (self-contained app spec SC7), checked on a clean
+# machine with no network.
 on:
   push:
     branches: [master]
@@ -84,8 +86,29 @@ jobs:
       - name: Rust tests
         working-directory: desktop/src-tauri
         run: cargo test
+      - name: Restore the engine build cache
+        uses: actions/cache@v4
+        with:
+          # Pinned downloads (checked by hash on every use) and the FFmpeg build.
+          path: ~/engine-cache
+          key: engine-${{ hashFiles('desktop/engine/*.json', 'desktop/scripts/build_engine.py', 'uv.lock') }}
+          restore-keys: engine-
+      - name: Build the built-in engine
+        working-directory: .
+        run: uv run --no-project python desktop/scripts/build_engine.py desktop/engine-dist --cache ~/engine-cache
+      - name: Engine smoke test
+        working-directory: .
+        run: python3 desktop/scripts/smoke_engine.py desktop/engine-dist/engine
       - name: Linux build with AppImage and .deb
         run: npx tauri build --bundles appimage,deb
+      - name: Add the engine to the AppImage and .deb, and record their sizes
+        working-directory: .
+        run: |
+          python3 desktop/scripts/package_engine.py desktop/engine-dist/engine | tee "$RUNNER_TEMP/sizes.json"
+          { echo '### Installer sizes (spec C8)'; echo '```json'; cat "$RUNNER_TEMP/sizes.json"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Clean machine check (no Python, uv, FFmpeg or Tesseract; no network)
+        working-directory: .
+        run: bash desktop/scripts/clean_machine_check.sh desktop/src-tauri/target/release/bundle/appimage/*.AppImage
       - name: Label the installers as unsigned
         run: |
           # Signing waits for an owner decision (spec D10.d); until then the file names say so.
@@ -109,9 +132,9 @@ jobs:
           E2E_NATIVE_DRIVER: /usr/bin/WebKitWebDriver
           E2E_ARTIFACTS: ${{ runner.temp }}/e2e
         run: bash e2e/isolated.sh
-      - name: End-to-end walkthrough of the AppImage itself
+      - name: End-to-end walkthrough of the AppImage itself, with its built-in engine
         env:
-          E2E_CLONE: "1"
+          E2E_BUNDLED: "1"
           E2E_NATIVE_DRIVER: /usr/bin/WebKitWebDriver
           E2E_ARTIFACTS: ${{ runner.temp }}/e2e-appimage
           # Runners may lack FUSE; the AppImage then unpacks itself and runs.

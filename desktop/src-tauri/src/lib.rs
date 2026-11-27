@@ -4,6 +4,7 @@ pub mod commands;
 pub mod config;
 pub mod engine;
 pub mod library;
+pub mod notices;
 #[cfg(test)]
 mod privacy;
 pub mod settings;
@@ -102,6 +103,8 @@ pub fn run() {
             commands::play_book_audio,
             commands::open_audio_folder,
             commands::export_zip,
+            commands::engine_notices,
+            commands::engine_notice_text,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

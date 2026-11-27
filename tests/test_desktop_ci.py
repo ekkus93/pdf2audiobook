@@ -43,14 +43,39 @@ def test_it_shares_the_python_ci_uv_pin_and_node_major() -> None:
     assert re.search(r"actions/setup-node@v4\s+with:\s+node-version: \"22\"", desktop)
 
 
+def _step(workflow: str, name: str) -> str:
+    return workflow.split(f"- name: {name}", 1)[1].split("\n      - ", 1)[0]
+
+
 def test_the_walkthrough_also_runs_the_shipped_appimage() -> None:
     workflow = _desktop()
-    step = workflow.split("- name: End-to-end walkthrough of the AppImage itself", 1)[1]
-    step = step.split("\n      - ", 1)[0]
+    step = _step(workflow, "End-to-end walkthrough of the AppImage itself")
     assert 'APPIMAGE_EXTRACT_AND_RUN: "1"' in step
     assert "bundle/appimage/*-unsigned.AppImage" in step
     assert "bash e2e/isolated.sh" in step
-    assert 'E2E_CLONE: "1"' in step
+    # With its built-in engine, as a user runs it (self-contained app SC7).
+    assert 'E2E_BUNDLED: "1"' in step
+    # The walkthrough of the build itself still drives the stand-in voice cloner.
+    assert 'E2E_CLONE: "1"' in _step(workflow, "End-to-end walkthrough\n")
+
+
+def test_installers_carry_the_engine_and_are_checked_on_a_clean_machine() -> None:
+    workflow = _desktop()
+    commands = re.findall(r"^\s+run: (.+)$", workflow, re.MULTILINE)
+    build = "uv run --no-project python desktop/scripts/build_engine.py desktop/engine-dist"
+    assert any(command.startswith(build) for command in commands)
+    assert "python3 desktop/scripts/smoke_engine.py desktop/engine-dist/engine" in commands
+    clean = "bash desktop/scripts/clean_machine_check.sh desktop/src-tauri/target/release/bundle"
+    assert any(command.startswith(clean) for command in commands)
+    # The engine goes in after `tauri build` and before the installers are renamed and uploaded.
+    order = [
+        workflow.index("npx tauri build --bundles appimage,deb"),
+        workflow.index("desktop/scripts/package_engine.py desktop/engine-dist/engine"),
+        workflow.index("desktop/scripts/clean_machine_check.sh"),
+        workflow.index('"${file%.*}-unsigned.${file##*.}"'),
+    ]
+    assert order == sorted(order)
+    assert "GITHUB_STEP_SUMMARY" in _step(workflow, "Add the engine to the AppImage and .deb")
 
 
 def test_installers_are_uploaded_and_named_unsigned() -> None:

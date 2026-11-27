@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AppSettings, AudioFile, CliConfigFile, EngineInfo, Library, Outcome, Progress, Request } from "./types";
+import type { AppSettings, AudioFile, CliConfigFile, EngineInfo, Library, Notice, Outcome, Progress, Request } from "./types";
 
 /** Finds and confirms the CLI (spec D3.a). Rejects with a `BridgeError`. */
 export function locateEngine(): Promise<EngineInfo> {
@@ -41,6 +41,16 @@ export function readCliConfig(): Promise<CliConfigFile> {
 /** The backend validates TOML and rejects changes to a file edited since it was loaded. */
 export function saveCliConfig(text: string, expected: string): Promise<CliConfigFile> {
   return invoke<CliConfigFile>("save_cli_config", { text, expected });
+}
+
+/** The built-in engine's components and licences; null in a build without one. */
+export function engineNotices(): Promise<Notice[] | null> {
+  return invoke<Notice[] | null>("engine_notices");
+}
+
+/** One component's licence texts, by its place in `engineNotices`. */
+export function engineNoticeText(index: number): Promise<string> {
+  return invoke<string>("engine_notice_text", { index });
 }
 
 /** A user-facing sentence for anything `invoke` rejects with. */
