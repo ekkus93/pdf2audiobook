@@ -10,7 +10,8 @@ import { Select } from "../ui/Select";
 import { Slider } from "../ui/Slider";
 import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
-import { defaults, modelFor, requests, validate, type OptionsForm, type Preferences } from "./bookOptions";
+import { defaults, modelFor, requests, TEMPERATURE, usesKitten2, validate, type OptionsForm, type Preferences } from "./bookOptions";
+import { TemperatureControl } from "./TemperatureControl";
 import { CloneControls } from "./CloneControls";
 import { isCloning } from "./bookOptions";
 import { PendingEdits } from "./PendingEdits";
@@ -136,6 +137,7 @@ export function BookPage({ draft, onDraftChange, book, reviewing = false, onRevi
           voices={loaded.phase === "ready" ? loaded.voices : null}
           voice={form?.voice ?? ""}
           speed={form?.speed ?? 1}
+          temperature={form?.temperature ?? TEMPERATURE.fallback}
           cloneForm={form ?? undefined}
           onCloneChange={(change) => form && setForm({ ...form, ...change })}
           onStart={(request) => onStart(request, book.workspace)}
@@ -280,6 +282,9 @@ function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, boo
             <Slider label="Speed" value={form.speed} min={0.5} max={2} step={0.05} onChange={(value) => set("speed", value)} />
             <span className="body-medium slider-value">{form.speed.toFixed(2)}×</span>
           </div>
+          {usesKitten2(form) ? (
+            <TemperatureControl value={form.temperature} onChange={(value) => set("temperature", value)} />
+          ) : null}
         </section>
         <section className="options-group" aria-labelledby="options-chapters">
           <h3 id="options-chapters" className="title-medium">Chapters</h3>

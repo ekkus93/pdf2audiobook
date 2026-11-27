@@ -267,6 +267,7 @@ fn verification_excerpts_never_reach_the_app_log() {
             chapters: vec![1],
             voice: Some("Jasper".into()),
             speed: None,
+            temperature: None,
             verify_audio: Some(true),
         },
     ] {
@@ -312,6 +313,7 @@ fn clone_reference_markers_stay_out_of_details_errors_and_event_logs() {
             chapters: vec![1],
             voice: None,
             speed: None,
+            temperature: None,
             verify_audio: None,
         };
         assert_clean("request debug", &format!("{request:?}"));

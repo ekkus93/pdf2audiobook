@@ -322,3 +322,57 @@ it("restores transient clone drafts and clears paired text when picking a new re
   await act(async () => button("Choose recording").dispatchEvent(new Event("click", { bubbles: true })));
   expect(change).toHaveBeenCalledWith(expect.objectContaining({ referenceAudio: "/clips/new.wav", referenceText: "", referenceTextFile: "" }));
 });
+
+describe("the Kitten 2 temperature", () => {
+  const KITTEN2 = { ...CONFIG, tts: { ...CONFIG.tts, kitten: { ...CONFIG.tts.kitten, model: "kitten2", temperature: 0.4 } } };
+  const slider = () => document.querySelector('md-slider[aria-label="Temperature"]') as (HTMLElement & { value: number }) | null;
+  const serve = (config: typeof CONFIG) =>
+    vi.mocked(api.run).mockImplementation(async (request: Request) => {
+      if (request.command === "config_show") return { outcome: "success", result: config };
+      if (request.command === "tts_models") return { outcome: "success", result: { models: [] } };
+      if (request.command === "edits_list") return { outcome: "success", result: { edits: [] } };
+      return { outcome: "success", result: { provider: "kitten", voices: ["Jasper"], listable: true, default_voice: "Jasper" } };
+    });
+  const converted = (onStart: ReturnType<typeof vi.fn>) => {
+    click(button("Convert to audio"));
+    return (onStart.mock.lastCall?.[0] as Extract<Request, { command: "convert" }>).convert;
+  };
+
+  it("is hidden and not sent when another model speaks the book", async () => {
+    const onStart = await renderPage();
+    expect(slider()).toBeNull();
+    expect(converted(onStart)).not.toHaveProperty("temperature");
+  });
+
+  it("starts from the configuration and sends the chosen value for Kitten 2", async () => {
+    serve(KITTEN2);
+    const onStart = await renderPage();
+    const control = slider();
+    expect(control?.value).toBe(0.4);
+    expect(screen.getByText("0.40")).toBeInTheDocument();
+    expect(screen.getByText(/Lower keeps the narration closer to the text/)).toBeInTheDocument();
+    expect(converted(onStart).temperature).toBe(0.4);
+    act(() => {
+      Object.defineProperty(control, "value", { value: 0.6, writable: true, configurable: true });
+      control?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(converted(onStart).temperature).toBe(0.6);
+  });
+
+  it("appears when a voice is cloned, since cloning uses Kitten 2", async () => {
+    serve(CONFIG);
+    const onStart = await renderPage();
+    const mode = Array.from(document.querySelectorAll("md-outlined-select")).find((element) => (element as HTMLElement & { label: string }).label === "Voice source");
+    act(() => {
+      Object.defineProperty(mode, "value", { value: "clone", writable: true, configurable: true });
+      mode?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(slider()?.value).toBe(0.2);
+    const field = Array.from(document.querySelectorAll("md-outlined-text-field")).find((element) => (element as HTMLElement & { label: string }).label === "Reference recording");
+    act(() => {
+      Object.defineProperty(field, "value", { value: "/clips/a.wav", writable: true, configurable: true });
+      field?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(converted(onStart).temperature).toBe(0.2);
+  });
+});

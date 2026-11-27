@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CloneControls } from "./CloneControls";
-import { cloneRequest, cloneErrors, isCloning, type CloneForm } from "./bookOptions";
+import { cloneRequest, cloneErrors, isCloning, temperatureRequest, usesKitten2, type CloneForm } from "./bookOptions";
+import { TemperatureControl } from "./TemperatureControl";
 import { bookAudio, errorMessage, run } from "../engine/api";
 import type {
   AsrModel,
@@ -99,9 +100,10 @@ interface AudioCheckProps {
   workspace: string;
   inspect: InspectManifest;
   voices: Voices | null;
-  /** The voice and speed the book's options would use, to start a retry from. */
+  /** The voice, speed and Kitten 2 temperature the book's options would use, to start a retry from. */
   voice: string;
   speed: number;
+  temperature: number;
   /** Starts a long run (verify, speak again) for this book. */
   onStart: (request: Request) => void;
   /** Plays chapter `index` of `files` from `start` seconds. */
@@ -154,7 +156,7 @@ async function load(manifest: string): Promise<Loaded> {
  * audio", each chapter's result with the passages the models heard differently, and the repair
  * actions of §6. Nothing here changes audio or text by itself.
  */
-export function AudioCheck({ cloneForm, onCloneChange, manifest, workspace, inspect, voices, voice, speed, onStart, onPlay, onEditNarration }: AudioCheckProps) {
+export function AudioCheck({ cloneForm, onCloneChange, manifest, workspace, inspect, voices, voice, speed, temperature, onStart, onPlay, onEditNarration }: AudioCheckProps) {
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
   const [files, setFiles] = useState<AudioFile[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
@@ -297,6 +299,7 @@ export function AudioCheck({ cloneForm, onCloneChange, manifest, workspace, insp
           voices={voices}
           voice={voice}
           speed={speed}
+          temperature={temperature}
           verify={ready.length > 0}
           onClose={() => setRetry(null)}
           onStart={(request) => {
@@ -500,17 +503,19 @@ interface RetryProps {
   voices: Voices | null;
   voice: string;
   speed: number;
+  temperature: number;
   /** Whether a recognizer is ready to check the new audio. */
   verify: boolean;
   onClose: () => void;
   onStart: (request: Omit<Extract<Request, { command: "resynthesize" }>, "manifest">) => void;
 }
 
-function RetryDialog({ cloneForm, onCloneChange, chapter, voices, voice, speed, verify, onClose, onStart }: RetryProps) {
+function RetryDialog({ cloneForm, onCloneChange, chapter, voices, voice, speed, temperature, verify, onClose, onStart }: RetryProps) {
   const [clone, setClone] = useState<CloneForm>(cloneForm ?? { voiceMode: "inherit" });
   const changeClone = (next: CloneForm) => { setClone(next); onCloneChange?.(next); };
   const [chosenVoice, setVoice] = useState(voice);
   const [chosenSpeed, setSpeed] = useState(speed);
+  const [chosenTemperature, setTemperature] = useState(temperature);
   const options = (voices?.listable ? voices.voices : [voice]).filter(Boolean).map((name) => ({ value: name, label: name }));
   return (
     <Dialog
@@ -532,6 +537,7 @@ function RetryDialog({ cloneForm, onCloneChange, chapter, voices, voice, speed, 
                 ...cloneRequest(clone),
                 voice: isCloning(clone) ? null : chosenVoice || null,
                 speed: chosenSpeed,
+                ...temperatureRequest(clone, chosenTemperature),
                 verify_audio: verify ? true : null,
               })
             }
@@ -553,6 +559,7 @@ function RetryDialog({ cloneForm, onCloneChange, chapter, voices, voice, speed, 
         <Slider label="Speed" value={chosenSpeed} min={0.5} max={2} step={0.05} onChange={setSpeed} />
         <span className="body-medium slider-value">{chosenSpeed.toFixed(2)}×</span>
       </div>
+      {usesKitten2(clone) ? <TemperatureControl value={chosenTemperature} onChange={setTemperature} /> : null}
     </Dialog>
   );
 }

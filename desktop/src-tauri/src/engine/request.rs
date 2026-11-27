@@ -190,6 +190,8 @@ pub struct ConvertOptions {
     pub chapters: Option<ChapterSelection>,
     pub dry_run: bool,
     pub speed: Option<f64>,
+    /// The Kitten 2 sampling temperature; `None` leaves it to the CLI's configuration.
+    pub temperature: Option<f64>,
     pub sample_rate: Option<u32>,
     pub cover: Option<PathBuf>,
     pub accept_review: Vec<ReviewReason>,
@@ -309,6 +311,8 @@ pub enum Request {
         chapters: Vec<u32>,
         voice: Option<String>,
         speed: Option<f64>,
+        /// The Kitten 2 sampling temperature; `None` leaves it to the CLI's configuration.
+        temperature: Option<f64>,
         /// `None` re-verifies only chapters verified before.
         verify_audio: Option<bool>,
     },
@@ -568,6 +572,7 @@ impl Request {
                 chapters,
                 voice,
                 speed,
+                temperature,
                 verify_audio,
             } => {
                 args.command(&["resynthesize"]);
@@ -584,6 +589,7 @@ impl Request {
                 chapter_list(&mut args, chapters)?;
                 args.text("--voice", voice.as_deref(), "The voice")?;
                 speed_option(&mut args, *speed)?;
+                temperature_option(&mut args, *temperature)?;
                 args.switch("verify-audio", *verify_audio);
                 args.positional(manifest, "The manifest")?;
             }
@@ -709,6 +715,7 @@ fn convert_options(args: &mut Args, convert: &ConvertOptions) -> Result<(), Requ
         args.flag("--dry-run");
     }
     speed_option(args, convert.speed)?;
+    temperature_option(args, convert.temperature)?;
     args.number(
         "--sample-rate",
         convert.sample_rate,
@@ -738,6 +745,17 @@ fn speed_option(args: &mut Args, speed: Option<f64>) -> Result<(), RequestError>
             return Err(RequestError::OutOfRange("The speed"));
         }
         args.value("--speed", speed.to_string());
+    }
+    Ok(())
+}
+
+/// The CLI's `--tts-temperature` range (`KITTEN2_TEMPERATURE_RANGE` in config.py).
+fn temperature_option(args: &mut Args, temperature: Option<f64>) -> Result<(), RequestError> {
+    if let Some(temperature) = temperature {
+        if !temperature.is_finite() || !(0.05..=1.5).contains(&temperature) {
+            return Err(RequestError::OutOfRange("The temperature"));
+        }
+        args.value("--tts-temperature", temperature.to_string());
     }
     Ok(())
 }
@@ -1135,6 +1153,7 @@ mod tests {
             chapters: Some(ChapterSelection::Range { first: 2, last: 5 }),
             dry_run: true,
             speed: Some(1.15),
+            temperature: Some(0.3),
             sample_rate: Some(24000),
             cover: Some("/art/cover.jpg".into()),
             accept_review: vec![
@@ -1165,6 +1184,7 @@ mod tests {
                 "--chapter-range=2:5",
                 "--dry-run",
                 "--speed=1.15",
+                "--tts-temperature=0.3",
                 "--sample-rate=24000",
                 "--cover=/art/cover.jpg",
                 "--accept-review=damaged_source",
@@ -1473,6 +1493,7 @@ mod tests {
                 chapters: vec![3],
                 voice: Some("Luna".into()),
                 speed: Some(0.95),
+                temperature: None,
                 verify_audio: Some(false),
             }),
             [
@@ -1487,6 +1508,78 @@ mod tests {
                 "/w/manifest.json"
             ]
         );
+    }
+
+    #[test]
+    fn the_kitten_2_temperature_is_passed_only_when_set() {
+        let convert = |temperature| Request::Convert {
+            book: "/books/a.pdf".into(),
+            options: BookOptions::default(),
+            convert: ConvertOptions {
+                temperature,
+                ..ConvertOptions::default()
+            },
+        };
+        let resynthesize = |temperature| Request::Resynthesize {
+            voice_clone: CloneOptions::default(),
+            tts_provider: None,
+            tts_model: None,
+            manifest: "/w/manifest.json".into(),
+            chapters: vec![2],
+            voice: None,
+            speed: None,
+            temperature,
+            verify_audio: None,
+        };
+        assert_eq!(
+            args_of(convert(Some(0.2))),
+            [
+                "--no-progress",
+                "convert",
+                "--tts-temperature=0.2",
+                "--json",
+                "--",
+                "/books/a.pdf"
+            ]
+        );
+        assert_eq!(
+            args_of(resynthesize(Some(1.5))),
+            [
+                "--no-progress",
+                "resynthesize",
+                "--chapter=2",
+                "--tts-temperature=1.5",
+                "--json",
+                "--",
+                "/w/manifest.json"
+            ]
+        );
+        assert!(
+            !args_of(convert(None))
+                .iter()
+                .any(|a| a.contains("temperature"))
+        );
+        assert!(
+            !args_of(resynthesize(None))
+                .iter()
+                .any(|a| a.contains("temperature"))
+        );
+        assert!(args_of(convert(Some(0.05))).contains(&"--tts-temperature=0.05".to_owned()));
+        for bad in [0.04, 1.51, f64::NAN, f64::INFINITY, -0.2] {
+            assert_eq!(
+                convert(Some(bad)).args(),
+                Err(RequestError::OutOfRange("The temperature"))
+            );
+            assert_eq!(
+                resynthesize(Some(bad)).args(),
+                Err(RequestError::OutOfRange("The temperature"))
+            );
+        }
+        let request: Request = serde_json::from_str(
+            r#"{"command": "resynthesize", "manifest": "/w/manifest.json", "chapters": [2], "voice": null, "speed": null, "verify_audio": null}"#,
+        )
+        .unwrap();
+        assert_eq!(request, resynthesize(None));
     }
 
     #[test]
@@ -1525,6 +1618,7 @@ mod tests {
             chapters,
             voice: None,
             speed,
+            temperature: None,
             verify_audio: None,
         };
         assert_eq!(
@@ -1601,6 +1695,7 @@ mod tests {
                 chapters: vec![1],
                 voice: None,
                 speed: None,
+                temperature: None,
                 verify_audio: None,
             }
             .is_write()

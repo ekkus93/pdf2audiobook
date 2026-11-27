@@ -78,7 +78,8 @@ markers. Overrides in unselected chapters do not block the run. Speed and existi
 pause, chapter-range and narration processing still apply.
 
 Cloned voices use the Kitten 2 sampling temperature, `0.2` by default, which keeps narration close
-to the text. Change it with `--tts-temperature`; see [Kitten 2 temperature](voices.md#kitten-2-temperature).
+to the text. Change it with `--tts-temperature`, or with the desktop app's **Temperature** slider;
+see [Kitten 2 temperature](voices.md#kitten-2-temperature).
 
 To disable inherited cloning, pass `--no-clone-voice`. Switching existing cloned audio to a
 built-in voice during repair requires this explicit choice; omitted references never trigger a

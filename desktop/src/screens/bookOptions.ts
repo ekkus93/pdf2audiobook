@@ -9,8 +9,22 @@ export interface CloneForm {
   inheritedClone?: boolean;
   inheritedReference?: boolean;
   inheritedTranscript?: boolean;
+  /** Whether the configuration (or the book's profile) already selects Kitten 2. */
+  inheritedKitten2?: boolean;
 }
 export const isCloning = (form: CloneForm) => form.voiceMode === "clone" || (form.voiceMode !== "builtin" && !!form.inheritedClone);
+/** The CLI's `--tts-temperature` range and default (config.py `KITTEN2_TEMPERATURE_RANGE`). */
+export const TEMPERATURE = { min: 0.05, max: 1.5, step: 0.05, fallback: 0.2 } as const;
+const KITTEN2_MODELS = new Set(["kitten2", "KittenML/kitten-tts-2"]);
+/** Whether Kitten 2 will speak: a clone always uses it, built-in voices only when it is configured. */
+export const usesKitten2 = (form: CloneForm) => isCloning(form) || !!form.inheritedKitten2;
+/** The temperature to send: only when Kitten 2 speaks, since other models ignore it. */
+export const temperatureRequest = (form: CloneForm, temperature: number) => (usesKitten2(form) ? { temperature } : {});
+export function temperatureError(temperature: number): string | undefined {
+  return Number.isFinite(temperature) && temperature >= TEMPERATURE.min && temperature <= TEMPERATURE.max
+    ? undefined
+    : `Between ${TEMPERATURE.min} and ${TEMPERATURE.max}`;
+}
 export function cloneRequest(form: CloneForm): VoiceCloneOptions & { tts_provider?: "kitten"; tts_model?: string } {
   if (form.voiceMode === "builtin") return { clone_voice: false };
   if (!isCloning(form)) return {};
@@ -39,6 +53,8 @@ export interface OptionsForm extends CloneForm {
   remoteConsent: boolean;
   voice: string;
   speed: number;
+  /** The Kitten 2 sampling temperature; used only when Kitten 2 speaks the book. */
+  temperature: number;
   allChapters: boolean;
   firstChapter: string;
   lastChapter: string;
@@ -81,9 +97,11 @@ export function defaults(
   const ttsProvider = profile?.provider ?? config.tts.provider;
   const tts = ttsProvider === "piper" ? config.tts.piper : config.tts.kitten;
   const provider = preferences.llm_provider ?? config.llm.provider;
+  const kittenModel = profile?.kitten_model ?? config.tts.kitten.model;
   return {
     voiceMode: "inherit",
     inheritedClone: profile?.clone_voice ?? config.tts.voice_clone?.enabled ?? false,
+    inheritedKitten2: ttsProvider === "kitten" && KITTEN2_MODELS.has(kittenModel),
     inheritedReference: !!(profile?.reference_audio ?? config.tts.voice_clone?.reference_audio),
     inheritedTranscript: profile?.reference_audio != null ? !!profile.reference_text_file : !!(profile?.reference_text_file ?? config.tts.voice_clone?.reference_text_file),
     referenceAudio: "", referenceText: "", referenceTextFile: "",
@@ -95,6 +113,7 @@ export function defaults(
     remoteConsent: config.llm.allow_remote_content,
     voice: preferences.default_voice || profile?.voice || tts.voice,
     speed: profile?.speed ?? tts.speed,
+    temperature: profile?.temperature ?? config.tts.kitten.temperature ?? TEMPERATURE.fallback,
     allChapters: true,
     firstChapter: "1",
     lastChapter: chapters ? String(chapters) : "1",
@@ -131,6 +150,8 @@ export function validate(form: OptionsForm, chapters: number | null): OptionsErr
   if (!Number.isFinite(form.speed) || form.speed < 0.1 || form.speed > 3) {
     errors.speed = "Between 0.1 and 3";
   }
+  const temperature = temperatureError(form.temperature);
+  if (temperature) errors.temperature = temperature;
   if (!form.allChapters) {
     const first = integer(form.firstChapter);
     const last = integer(form.lastChapter);
@@ -162,6 +183,7 @@ export function requests(book: string, form: OptionsForm, output: string | null)
     ...cloneRequest(form),
     voice: isCloning(form) ? null : form.voice || null,
     speed: form.speed,
+    ...temperatureRequest(form, form.temperature),
     cover: form.cover,
     verify_audio: form.verifyAudio,
     chapters: form.allChapters

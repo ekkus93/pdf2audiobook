@@ -115,6 +115,9 @@ models (`mini`, `micro`, `nano`) do not sample and ignore it, and so does Piper.
 - **Every run:** `temperature = 0.3` under `[tts.kitten]`, or the
   `PDF2AUDIOBOOK_TTS_KITTEN_TEMPERATURE` environment variable.
 - **One book:** `temperature = 0.3` in its `[tts.profiles."<file name>"]` entry.
+- **Desktop app:** the **Temperature** slider under Speed, in **Book options → Voice** and in the
+  **Speak again** dialog. It appears only when Kitten 2 will speak the book, and starts from the
+  book's profile, then the shared configuration.
 
 A command-line flag takes precedence over the environment variable, which takes precedence over
 the config file. `config show` lists a temperature you set as unused when Kitten 2 is not

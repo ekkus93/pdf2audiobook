@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CliConfig } from "../engine/types";
-import { defaults, modelFor, requests, validate, type OptionsForm } from "./bookOptions";
+import { defaults, modelFor, requests, usesKitten2, validate, type OptionsForm } from "./bookOptions";
 
 export const CONFIG: CliConfig = {
   general: { output_dir: "/home/user/audiobooks" },
@@ -39,7 +39,7 @@ describe("defaults", () => {
 
   it("start from the CLI's own configuration", () => {
     expect(FORM).toEqual({
-      voiceMode: "inherit", inheritedClone: false, inheritedReference: false, inheritedTranscript: false,
+      voiceMode: "inherit", inheritedClone: false, inheritedReference: false, inheritedTranscript: false, inheritedKitten2: false,
       referenceAudio: "", referenceText: "", referenceTextFile: "",
       llm: true,
       provider: "ollama",
@@ -49,6 +49,7 @@ describe("defaults", () => {
       remoteConsent: false,
       voice: "Jasper",
       speed: 1,
+      temperature: 0.2,
       allChapters: true,
       firstChapter: "1",
       lastChapter: "12",
@@ -143,5 +144,56 @@ describe("requests", () => {
     expect(one.command === "convert" && one.convert.chapters).toEqual({ kind: "one", chapter: 3 });
     const range = requests("/b.pdf", { ...FORM, allChapters: false, firstChapter: "2", lastChapter: "5" }, null).convert;
     expect(range.command === "convert" && range.convert.chapters).toEqual({ kind: "range", first: 2, last: 5 });
+  });
+});
+
+describe("Kitten 2 temperature", () => {
+  const kitten = (model: string, extra: Partial<CliConfig["tts"]["kitten"]> = {}): CliConfig => ({
+    ...CONFIG,
+    tts: { ...CONFIG.tts, kitten: { ...CONFIG.tts.kitten, model, ...extra } },
+  });
+  const profiled = (profile: NonNullable<CliConfig["tts"]["profiles"]>[string], base: CliConfig = CONFIG): CliConfig => ({
+    ...base,
+    tts: { ...base.tts, profiles: { Novel: profile } },
+  });
+
+  it("start from the profile, then the configuration, then 0.2", () => {
+    expect(defaults(CONFIG, 3).temperature).toBe(0.2);
+    expect(defaults(kitten("kitten2", { temperature: 0.4 }), 3).temperature).toBe(0.4);
+    const book = profiled({ temperature: 0.25 }, kitten("kitten2", { temperature: 0.4 }));
+    expect(defaults(book, 3, {}, null, "/books/Novel.pdf").temperature).toBe(0.25);
+    expect(defaults(book, 3, {}, null, "/books/Other.pdf").temperature).toBe(0.4);
+  });
+
+  it("know when the book will use Kitten 2", () => {
+    expect(usesKitten2(defaults(CONFIG, 3))).toBe(false);
+    expect(usesKitten2(defaults(kitten("kitten2"), 3))).toBe(true);
+    expect(usesKitten2(defaults(kitten("KittenML/kitten-tts-2"), 3))).toBe(true);
+    expect(usesKitten2(defaults({ ...kitten("kitten2"), tts: { ...kitten("kitten2").tts, provider: "piper" } }, 3))).toBe(false);
+    expect(usesKitten2(defaults(profiled({ kitten_model: "kitten2" }), 3, {}, null, "/b/Novel.pdf"))).toBe(true);
+    expect(usesKitten2(defaults(profiled({ provider: "piper" }, kitten("kitten2")), 3, {}, null, "/b/Novel.pdf"))).toBe(false);
+    expect(usesKitten2(defaults(profiled({ clone_voice: true }), 3, {}, null, "/b/Novel.pdf"))).toBe(true);
+    expect(usesKitten2({ ...defaults(CONFIG, 3), voiceMode: "clone" })).toBe(true);
+    const inheritedClone = defaults({ ...CONFIG, tts: { ...CONFIG.tts, voice_clone: { enabled: true, reference_audio: "/r.wav", reference_text_file: null } } }, 3);
+    expect(usesKitten2(inheritedClone)).toBe(true);
+    expect(usesKitten2({ ...inheritedClone, voiceMode: "builtin" })).toBe(false);
+  });
+
+  it("are checked against the CLI's range", () => {
+    for (const temperature of [0.04, 1.51, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(validate({ ...FORM, temperature }, 12).temperature).toBe("Between 0.05 and 1.5");
+    }
+    expect(validate({ ...FORM, temperature: 0.05 }, 12)).toEqual({});
+    expect(validate({ ...FORM, temperature: 1.5 }, 12)).toEqual({});
+  });
+
+  it("are sent only when Kitten 2 speaks the book", () => {
+    const sent = (form: OptionsForm) => {
+      const built = requests("/b.pdf", form, null).convert;
+      return built.command === "convert" ? built.convert : null;
+    };
+    expect(sent({ ...FORM, temperature: 0.3 })).not.toHaveProperty("temperature");
+    expect(sent({ ...defaults(kitten("kitten2"), 3), temperature: 0.3 })?.temperature).toBe(0.3);
+    expect(sent({ ...FORM, voiceMode: "clone", referenceAudio: "/r.wav", temperature: 0.35 })?.temperature).toBe(0.35);
   });
 });

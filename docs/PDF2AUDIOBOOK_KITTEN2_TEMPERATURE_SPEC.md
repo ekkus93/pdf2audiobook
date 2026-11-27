@@ -88,7 +88,7 @@ The default must be low enough to keep narration close to the text, without the 
 
 ## 6. Follow-up (not in this round)
 
-- A temperature control in the desktop app's voice settings, through the config contract.
+- A temperature control in the desktop app's voice settings, through the config contract. (2026-11-26: specified in the [Desktop Temperature Control Specification](PDF2AUDIOBOOK_DESKTOP_TEMPERATURE_SPEC.md).)
 
 ## 7. Validation
 

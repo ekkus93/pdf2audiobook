@@ -53,6 +53,8 @@ export interface ConvertOptions extends VoiceCloneOptions {
   chapters?: { kind: "one"; chapter: number } | { kind: "range"; first: number; last: number } | null;
   dry_run?: boolean;
   speed?: number | null;
+  /** The Kitten 2 sampling temperature; omitted leaves it to the CLI's configuration. */
+  temperature?: number | null;
   sample_rate?: number | null;
   cover?: string | null;
   accept_review?: Array<"damaged_source" | "ambiguous_page_numbers">;
@@ -90,7 +92,7 @@ export type Request =
   | { command: "verify_audio"; manifest: string; chapters?: number[]; models?: AsrModel[] }
   | { command: "audio_report"; manifest: string }
   | { command: "audio_dismiss"; manifest: string; chapter: number; flag: number; undo?: boolean }
-  | (VoiceCloneOptions & { tts_provider?: "kitten" | "piper" | null; tts_model?: string | null; command: "resynthesize"; manifest: string; chapters: number[]; voice: string | null; speed: number | null; verify_audio: boolean | null });
+  | (VoiceCloneOptions & { tts_provider?: "kitten" | "piper" | null; tts_model?: string | null; command: "resynthesize"; manifest: string; chapters: number[]; voice: string | null; speed: number | null; temperature?: number | null; verify_audio: boolean | null });
 
 /** One speech recognizer's readiness (`asr list --json`, contracts/asr-models.schema.json). */
 export interface AsrReadiness {
@@ -320,9 +322,10 @@ export interface CliConfig {
   };
   tts: {
     provider: "kitten" | "piper";
-    profiles?: Record<string, { provider?: "kitten" | "piper" | null; kitten_model?: string | null; voice?: string | null; speed?: number | null; clone_voice?: boolean | null; reference_audio?: string | null; reference_text_file?: string | null }>;
+    profiles?: Record<string, { provider?: "kitten" | "piper" | null; kitten_model?: string | null; voice?: string | null; speed?: number | null; temperature?: number | null; clone_voice?: boolean | null; reference_audio?: string | null; reference_text_file?: string | null }>;
     voice_clone?: { enabled: boolean; reference_audio: string | null; reference_text_file: string | null };
-    kitten: { model: string; voice: string; speed: number };
+    /** `temperature` is the Kitten 2 sampling temperature; older CLIs do not report it. */
+    kitten: { model: string; voice: string; speed: number; temperature?: number };
     piper: { voice: string; speed: number };
   };
   chapters: { min_boundary_confidence: number };

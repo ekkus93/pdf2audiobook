@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AsrModels, AudioFile, AudioReport, InspectManifest, Request } from "../engine/types";
 
@@ -65,7 +65,7 @@ beforeEach(() => {
   });
 });
 
-function setup(cloneForm?: CloneForm) {
+function setup(cloneForm?: CloneForm, temperature = 0.2) {
   const onStart = vi.fn();
   const onPlay = vi.fn();
   const onEditNarration = vi.fn();
@@ -78,6 +78,7 @@ function setup(cloneForm?: CloneForm) {
       voices={{ voices: ["Jasper", "Luna"], listable: true } as never}
       voice="Jasper"
       speed={1}
+      temperature={temperature}
       onStart={onStart}
       onPlay={onPlay}
       onEditNarration={onEditNarration}
@@ -283,6 +284,26 @@ it("repairs a clone with the same private selection and no remembered built-in v
     command: "resynthesize", manifest: MANIFEST, chapters: [3],
     tts_provider: "kitten", tts_model: "kitten2", clone_voice: true,
     reference_audio: "/clips/PRIVATE.wav", reference_text: "PRIVATE transcript",
-    voice: null, speed: 1, verify_audio: true,
+    voice: null, speed: 1, temperature: 0.2, verify_audio: true,
   });
+});
+
+it("speaks again with the book's Kitten 2 temperature, or none for another model", async () => {
+  const slider = () => document.querySelector('md-dialog[open] md-slider[aria-label="Temperature"]') as (HTMLElement & { value: number }) | null;
+  const first = setup({ voiceMode: "inherit", inheritedKitten2: true }, 0.45);
+  click(button("Speak again…", await waitFor(() => chapter(3))));
+  expect(slider()?.value).toBe(0.45);
+  act(() => {
+    const control = slider();
+    Object.defineProperty(control, "value", { value: 0.3, writable: true, configurable: true });
+    control?.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  click(button("Speak again", document.querySelector("md-dialog[open]") as HTMLElement));
+  expect(first.onStart).toHaveBeenLastCalledWith(expect.objectContaining({ command: "resynthesize", temperature: 0.3 }));
+  cleanup();
+  const second = setup({ voiceMode: "inherit" }, 0.45);
+  click(button("Speak again…", await waitFor(() => chapter(3))));
+  expect(slider()).toBeNull();
+  click(button("Speak again", document.querySelector("md-dialog[open]") as HTMLElement));
+  expect(second.onStart.mock.lastCall?.[0]).not.toHaveProperty("temperature");
 });
