@@ -66,10 +66,9 @@ describe("shared configuration editor", () => {
 it("persists clone defaults only after applying to the editor and explicitly saving", async () => {
   render(<CliConfigEditor onSaved={() => undefined} />);
   const editor = await screen.findByRole("textbox", { name: "Configuration file (TOML)" });
-  const mode = Array.from(document.querySelectorAll("md-outlined-select")).find((element) => (element as HTMLElement & {label:string}).label === "Voice source");
-  if (!mode) throw new Error("Voice source missing");
-  Object.defineProperty(mode, "value", { value: "clone", writable: true, configurable: true });
-  fireEvent.change(mode);
+  const clone = Array.from(document.querySelectorAll("md-filter-chip")).find((element) => (element as HTMLElement & {label:string}).label === "Clone a voice");
+  if (!clone) throw new Error("Clone a voice missing");
+  fireEvent.click(clone);
   await screen.findByText("Choose recording");
   const field = Array.from(document.querySelectorAll("md-outlined-text-field")).find((element) => (element as HTMLElement & {label:string}).label === "Reference recording");
   if (!field) throw new Error("Reference recording missing");

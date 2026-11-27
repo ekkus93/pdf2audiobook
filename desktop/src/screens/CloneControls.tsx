@@ -3,7 +3,7 @@ import { useEffect, useId, useState } from "react";
 import { errorMessage, run } from "../engine/api";
 import type { TtsModels, TtsReadiness } from "../engine/types";
 import { Button } from "../ui/Button";
-import { Select } from "../ui/Select";
+import { ChipSet, FilterChip } from "../ui/Chip";
 import { TextField } from "../ui/TextField";
 import { cloneErrors, isCloning, type CloneForm } from "./bookOptions";
 import { ADDONS, AddonDialog, useAddons } from "./Addons";
@@ -42,10 +42,26 @@ export function CloneControls({ form, onChange, onDownload, allowDraft = true }:
     } catch (error) { setProblem(errorMessage(error)); }
   };
   return <div className="clone-controls">
-    <Select label="Voice source" value={form.voiceMode ?? "inherit"} options={[
-      { value: "inherit", label: "Use shared configuration" }, { value: "builtin", label: "Built-in voice" },
-      { value: "clone", label: "Clone a voice (KittenTTS 2)" },
-    ]} onChange={(value) => set({ voiceMode: value as CloneForm["voiceMode"] })} />
+    {/* Visible choices (self-contained app spec SC6). Neither pressed uses the shared configuration;
+        pressing the chosen one again goes back to it. */}
+    <div role="group" aria-label="Voice source" className="voice-source">
+      <span className="label-large">Voice source</span>
+      <ChipSet>
+        {(["builtin", "clone"] as const).map((mode) => (
+          <FilterChip
+            key={mode}
+            label={mode === "builtin" ? "Built-in voice" : "Clone a voice"}
+            selected={form.voiceMode === mode}
+            onChange={(selected) => set({ voiceMode: selected ? mode : "inherit" })}
+          />
+        ))}
+      </ChipSet>
+      {(form.voiceMode ?? "inherit") === "inherit" ? (
+        <p className="body-small on-surface-variant">
+          Uses the shared configuration: {form.inheritedClone ? "a voice cloned from the configured recording" : "a built-in voice"}.
+        </p>
+      ) : null}
+    </div>
     {active ? <>
       <p className="body-medium on-surface-variant">Full KittenTTS 2 · English · local inference. Choose one speaker, 5–30 seconds, up to 10 MiB. Chapter voice overrides must be cleared for selected chapters.</p>
       <TextField label="Reference recording" value={form.referenceAudio ?? ""} errorText={errors.referenceAudio}

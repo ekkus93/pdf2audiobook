@@ -90,3 +90,36 @@ it("offers the voice cloning add-on in place when its packages are missing", asy
   fireEvent.click(screen.getByText("Install voice cloning…"));
   expect(document.querySelector("md-dialog[open]")).toHaveTextContent("Install Voice cloning and Kitten 2?");
 });
+
+describe("the visible voice choice", () => {
+  const chip = (label: string) =>
+    Array.from(document.querySelectorAll("md-filter-chip")).find(
+      (element) => (element as HTMLElement & { label: string }).label === label,
+    ) as HTMLElement & { selected?: boolean };
+
+  it("shows both choices, neither pressed, and names what the configuration uses", () => {
+    render(<CloneControls form={{ voiceMode: "inherit" }} onChange={() => undefined} />);
+    expect(screen.getByRole("group", { name: "Voice source" })).toBeInTheDocument();
+    expect(document.querySelector('md-outlined-select[label="Voice source"]')).toBeNull();
+    expect(chip("Built-in voice").selected).toBeFalsy();
+    expect(chip("Clone a voice").selected).toBeFalsy();
+    expect(screen.getByText(/shared configuration: a built-in voice/)).toBeInTheDocument();
+  });
+
+  it("names an inherited clone", () => {
+    render(<CloneControls form={{ voiceMode: "inherit", inheritedClone: true, inheritedReference: true }} onChange={() => undefined} />);
+    expect(screen.getByText(/shared configuration: a voice cloned from the configured recording/)).toBeInTheDocument();
+  });
+
+  it("chooses a source, and pressing it again goes back to the configuration", () => {
+    const changes: string[] = [];
+    const { rerender } = render(<CloneControls form={{ voiceMode: "inherit" }} onChange={(next) => changes.push(next.voiceMode ?? "")} />);
+    fireEvent.click(chip("Clone a voice"));
+    expect(changes).toEqual(["clone"]);
+    rerender(<CloneControls form={{ voiceMode: "clone", referenceAudio: "/clip" }} onChange={(next) => changes.push(next.voiceMode ?? "")} />);
+    expect(chip("Clone a voice").selected).toBeTruthy();
+    fireEvent.click(chip("Clone a voice"));
+    fireEvent.click(chip("Built-in voice"));
+    expect(changes).toEqual(["clone", "inherit", "builtin"]);
+  });
+});

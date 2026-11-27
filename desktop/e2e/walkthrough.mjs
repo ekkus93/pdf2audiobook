@@ -387,8 +387,13 @@ async function cloneCheck(workspace) {
   step("cloning: select a reference through the native file picker");
   const prepared = spawnSync("uv", ["run", "--project", REPO, "python", join(DESKTOP, "e2e", "fake_clone.py"), asrState, "--prepare"], { encoding: "utf8" });
   if (prepared.status !== 0) throw new Error(`synthetic reference: ${prepared.stderr}`);
-  const selection = await find("//md-outlined-select[.//*[contains(text(), 'Clone a voice (KittenTTS 2)')]]");
-  await run("arguments[0].value='clone'; arguments[0].dispatchEvent(new Event('change', {bubbles:true}));", [{[ELEMENT]:selection}]);
+  // The voice source is a pair of visible chips (self-contained app spec SC6).
+  let chosen = false;
+  for (let n=0; n<100 && !chosen; n++) {
+    chosen = await run("const chip=[...document.querySelectorAll('md-filter-chip')].find((c)=>c.label==='Clone a voice'); if (!chip) return false; chip.click(); return true;");
+    if (!chosen) await sleep(100);
+  }
+  if (!chosen) throw new Error("the Clone a voice choice did not appear");
   await run("document.querySelector('.clone-controls').scrollIntoView({block:'center',behavior:'instant'});");
   const before = visibleWindows();
   await click(await find(button("Choose recording")));

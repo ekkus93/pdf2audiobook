@@ -362,10 +362,9 @@ describe("the Kitten 2 temperature", () => {
   it("appears when a voice is cloned, since cloning uses Kitten 2", async () => {
     serve(CONFIG);
     const onStart = await renderPage();
-    const mode = Array.from(document.querySelectorAll("md-outlined-select")).find((element) => (element as HTMLElement & { label: string }).label === "Voice source");
+    const clone = Array.from(document.querySelectorAll("md-filter-chip")).find((element) => (element as HTMLElement & { label: string }).label === "Clone a voice");
     act(() => {
-      Object.defineProperty(mode, "value", { value: "clone", writable: true, configurable: true });
-      mode?.dispatchEvent(new Event("change", { bubbles: true }));
+      clone?.dispatchEvent(new Event("click", { bubbles: true }));
     });
     expect(slider()?.value).toBe(0.2);
     const field = Array.from(document.querySelectorAll("md-outlined-text-field")).find((element) => (element as HTMLElement & { label: string }).label === "Reference recording");

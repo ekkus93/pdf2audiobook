@@ -95,7 +95,7 @@ These were settled with the decision, so the work can proceed. Each can be revis
 
 ### SC6: Visible voice choice
 
-- In Book options and Speak again, the voice source is a visible choice (segmented buttons: **Built-in voice** · **Clone a voice**), not an item inside a dropdown. "Use shared configuration" remains the default state, shown as neither button pressed, with a line naming what the configuration uses.
+- In Book options and Speak again, the voice source is a visible choice (segmented buttons: **Built-in voice** · **Clone a voice**), not an item inside a dropdown. (Amended 2026-11-27: two filter chips in a labelled group, since Material Web's segmented button exists only in its unstable `labs` folder; the shared `CloneControls` also gives Settings → Voice defaults the same choice.) "Use shared configuration" remains the default state, shown as neither button pressed, with a line naming what the configuration uses.
 - Choosing Clone a voice before the add-on is installed offers the add-on (SC3) in place.
 - The Kitten 2 temperature slider keeps its rule (desktop temperature spec DT3).
 
