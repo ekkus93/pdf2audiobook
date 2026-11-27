@@ -1,10 +1,13 @@
 """The desktop app's optional add-ons (self-contained app spec SC3)."""
 
+from pathlib import Path
+
 import typer
 
 from pdf2audiobook.cli._core import ClickExit, addons_app, console, emit, fail, fail_interrupted
 from pdf2audiobook.errors import ConfigError
 from pdf2audiobook.logging import set_output_mode
+from pdf2audiobook.progress_display import StatusReporter, make_reporter
 
 
 @addons_app.command("list", epilog="Example: pdf2audiobook addons list --json")
@@ -36,10 +39,20 @@ def addons_list(json_output: bool = typer.Option(False, "--json")) -> None:
 def addons_install(
     name: str = typer.Argument(..., help="kitten2 or audio-check."),
     yes: bool = typer.Option(False, "--yes", help="Download and install without asking first."),
+    status_dir: Path | None = typer.Option(
+        None,
+        "--status-dir",
+        help="An existing folder to keep reports/run_status.json in, for the desktop app.",
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Download and install an add-on's packages and models, checking every file's hash."""
+    """Download and install an add-on's packages and models, checking every file's hash.
+
+    Progress shows one step per package, then one per model file. Stopping (Ctrl+C) keeps
+    the parts already installed; installing again continues from there.
+    """
     set_output_mode(json_output)
+    reporter: StatusReporter | None = None
     try:
         from pdf2audiobook import addons
 
@@ -50,13 +63,25 @@ def addons_install(
                 f"Download and install the {name} add-on?", default=False, err=True
             ):
                 raise typer.Exit(1)
-        emit({"addon": addons.install(name)}, json_output)
+        if status_dir is not None and not status_dir.is_dir():
+            raise ConfigError("The status folder does not exist")
+        reporter = StatusReporter(
+            make_reporter("auto", json_output=json_output, quiet=False), command="addons install"
+        )
+        if status_dir is not None:
+            reporter.bind_workspace(status_dir)
+        installed = addons.install(name, reporter=reporter)
+        reporter.summary("Add-on installed")
+        emit({"addon": installed}, json_output)
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)
     except (typer.Exit, ClickExit):
         raise
     except Exception as exc:
         fail(exc, json_output=json_output)
+    finally:
+        if reporter is not None:
+            reporter.close()
 
 
 @addons_app.command("remove", epilog="Example: pdf2audiobook addons remove kitten2 --json")

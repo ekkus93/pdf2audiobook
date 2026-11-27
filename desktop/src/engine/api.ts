@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { AppSettings, AudioFile, CliConfigFile, EngineInfo, Library, Notice, Outcome, Progress, Request } from "./types";
+import type { AddonName, AppSettings, AudioFile, CliConfigFile, EngineInfo, Library, Notice, Outcome, Progress, Request } from "./types";
 
 /** Finds and confirms the CLI (spec D3.a). Rejects with a `BridgeError`. */
 export function locateEngine(): Promise<EngineInfo> {
@@ -64,6 +64,11 @@ export function errorMessage(error: unknown): string {
 /** Starts analyze or convert for a book's workspace; resolves with the run's ID at once. */
 export function startRun(request: Request, workspace: string): Promise<number> {
   return invoke<number>("start_run", { request, workspace });
+}
+
+/** Starts installing an add-on as a long run; follow it with `runProgress`, stop it with `cancelRun`. */
+export function startAddonInstall(addon: AddonName): Promise<number> {
+  return invoke<number>("start_addon_install", { addon });
 }
 
 export function runProgress(id: number): Promise<Progress> {

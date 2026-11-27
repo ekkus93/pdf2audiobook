@@ -83,7 +83,7 @@ def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     monkeypatch.setenv("PYTHONPATH", "")
     monkeypatch.setattr(sys, "path", list(sys.path))
     fetched: list[str] = []
-    monkeypatch.setattr(addons, "_fetch_models", lambda name: fetched.append(name))
+    monkeypatch.setattr(addons, "_fetch_models", lambda name, reporter: fetched.append(name))
     return {
         "root": root, "index": index, "fetched": fetched, "lock": lock,
         "pip": ["--no-index", "--find-links", str(index)], "data": tmp_path / "data",
@@ -205,3 +205,168 @@ def test_the_cli_lists_installs_and_removes(engine: dict, monkeypatch: pytest.Mo
     _contract("addons-list", payload)
     _contract("addon", json.loads(installed.stdout))
     _contract("addon", json.loads(removed.stdout))
+
+
+class _Recorder:
+    """A progress reporter that records each stage's total and advances."""
+
+    def __init__(self, stop_at: tuple[str, int] | None = None) -> None:
+        self.stages: list[dict] = []
+        self.stop_at = stop_at
+
+    def stage(self, name: str, total: int | None, unit: str, initial: int = 0) -> "_Recorder":
+        self.stages.append({"name": name, "total": total, "unit": unit, "done": initial})
+        return self
+
+    def advance(self, count: int = 1, *, cached: bool = False) -> None:
+        stage = self.stages[-1]
+        stage["done"] += count
+        if self.stop_at == (stage["name"], stage["done"]):
+            raise KeyboardInterrupt
+
+    def set_total(self, total: int) -> None:
+        self.stages[-1]["total"] = total
+
+    def set_detail(self, text: str) -> None:
+        self.stages[-1]["detail"] = text
+
+    def close(self) -> None:
+        pass
+
+    def summary(self, text: str) -> None:
+        pass
+
+
+def test_install_reports_each_package_as_pip_handles_it(engine: dict) -> None:
+    recorder = _Recorder()
+    addons.install("kitten2", pip_options=engine["pip"], reporter=recorder)
+    (packages,) = [stage for stage in recorder.stages if stage["unit"] == "packages"]
+    # Two components of one package each: the shared one and kitten2's own.
+    assert (packages["name"], packages["total"], packages["done"]) == ("Installing packages", 2, 2)
+
+
+def test_installing_again_reports_only_what_is_missing(engine: dict) -> None:
+    addons.install("kitten2", pip_options=engine["pip"])
+    recorder = _Recorder()
+    addons.install("audio-check", pip_options=engine["pip"], reporter=recorder)
+    (packages,) = [stage for stage in recorder.stages if stage["unit"] == "packages"]
+    assert (packages["total"], packages["done"]) == (1, 1)
+
+
+def test_an_install_stopped_partway_keeps_finished_components_and_no_half_installed_one(
+    engine: dict,
+) -> None:
+    # Stop while pip works on the second component (kitten2's own package).
+    with pytest.raises(KeyboardInterrupt):
+        addons.install(
+            "kitten2", pip_options=engine["pip"], reporter=_Recorder(("Installing packages", 2))
+        )
+    folder = addons.addons_root()
+    assert sorted(p.name for p in folder.iterdir()) == ["audio-check+kitten2"]
+    assert [c["installed"] for c in _status("kitten2")["components"]] == [True, False]
+    assert engine["fetched"] == []
+    # Installing again continues from there.
+    recorder = _Recorder()
+    addons.install("kitten2", pip_options=engine["pip"], reporter=recorder)
+    assert _status("kitten2")["installed"] is True
+    (packages,) = [stage for stage in recorder.stages if stage["unit"] == "packages"]
+    assert packages["total"] == 1
+
+
+def test_model_downloads_report_each_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pdf2audiobook.tts import catalog
+    from pdf2audiobook.verification import models as asr
+
+    files = [{"name": "a.bin"}, {"name": "b.bin"}]
+    monkeypatch.setattr(catalog, "missing_files", lambda root=None: list(files))
+
+    def fake_fetch_model(root=None, *, on_file=None, **_: object) -> list[str]:
+        for item in files:
+            on_file(item)
+        return [item["name"] for item in files]
+
+    monkeypatch.setattr(catalog, "fetch_model", fake_fetch_model)
+    recorder = _Recorder()
+    addons._fetch_models("kitten2", recorder)
+    (models,) = recorder.stages
+    assert (models["name"], models["unit"], models["total"], models["done"]) == (
+        "Downloading models", "files", 2, 2,
+    )  # fmt: skip
+
+    plan = [("whisper", ["w1"]), ("wav2vec2", []), ("vosk", ["v1", "v2"])]
+    monkeypatch.setattr(asr, "fetch_plan", lambda names, root=None: plan)
+    monkeypatch.setattr(
+        asr,
+        "fetch",
+        lambda name, root=None, *, on_file=None, **_: [on_file(f) for f in dict(plan)[name]],
+    )
+    recorder = _Recorder()
+    addons._fetch_models("audio-check", recorder)
+    (models,) = recorder.stages
+    assert (models["total"], models["done"]) == (3, 3)
+
+
+def test_the_cli_writes_progress_where_the_app_reads_it(
+    engine: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PDF2AUDIOBOOK_ADDON_PIP_OPTIONS", " ".join(engine["pip"]))
+    status_dir = tmp_path / "status"
+    status_dir.mkdir()
+    result = runner.invoke(
+        app,
+        ["addons", "install", "kitten2", "--yes", "--json", "--status-dir", str(status_dir)],
+    )
+    assert result.exit_code == 0, result.output
+    status = json.loads((status_dir / "reports" / "run_status.json").read_text(encoding="utf-8"))
+    assert status["command"] == "addons install"
+    assert status["state"] == "completed"
+    assert [stage["name"] for stage in status["completed_stages"]] == ["Installing packages"]
+    assert str(engine["data"]) not in json.dumps(status)
+
+
+def test_a_cli_install_interrupted_says_so_and_records_it_stopped(
+    engine: dict, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    def interrupted(*_: object, **__: object) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(addons, "_install_component", interrupted)
+    status_dir = tmp_path / "status"
+    status_dir.mkdir()
+    result = runner.invoke(
+        app,
+        ["addons", "install", "kitten2", "--yes", "--json", "--status-dir", str(status_dir)],
+    )
+    assert result.exit_code == 130
+    assert json.loads(result.stderr)["error"]["type"] == "Interrupted"
+    status = json.loads((status_dir / "reports" / "run_status.json").read_text(encoding="utf-8"))
+    assert status["state"] == "stopped"
+
+
+def test_the_status_folder_must_exist(engine: dict, tmp_path: Path) -> None:
+    result = runner.invoke(
+        app,
+        ["addons", "install", "kitten2", "--yes", "--json", "--status-dir", str(tmp_path / "no")],
+    )
+    assert result.exit_code != 0
+    assert str(tmp_path) not in result.stdout + result.stderr
+
+
+def test_stopping_an_install_stops_pip_too(tmp_path: Path) -> None:
+    # A stand-in for pip: announces one requirement, then would run for a minute.
+    marker = tmp_path / "pid"
+    script = (
+        "import os, sys, time\n"
+        f"open({str(marker)!r}, 'w').write(str(os.getpid()))\n"
+        "print('Collecting alpha-pkg==1.0', flush=True)\n"
+        "time.sleep(60)\n"
+    )
+
+    def stop(*_: object) -> None:
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        addons._pip([sys.executable, "-c", script], stop)
+    pid = int(marker.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(pid, 0)

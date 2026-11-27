@@ -32,8 +32,11 @@ from typing import Any
 from pdf2audiobook import __version__
 from pdf2audiobook.bundle import bundle_root
 from pdf2audiobook.errors import AudioError, ConfigError, InputError
+from pdf2audiobook.progress_display import NullReporter, ProgressHandle, ProgressReporter
 
 COMPLETE = ".complete.json"
+# A line pip prints as it starts on each requirement (a download, or a wheel shipped here).
+_PIP_STARTS = re.compile(r"^(Collecting|Processing) ")
 # Extra pip options, for tests and for a local package mirror; never needed by users.
 PIP_OPTIONS_ENV = "PDF2AUDIOBOOK_ADDON_PIP_OPTIONS"
 # Where OCR language files are downloaded from, as a template with {language}; for tests.
@@ -160,7 +163,36 @@ def _requirements(entries: Iterable[dict[str, Any]], wheels: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _install_component(name: str, entries: list[dict[str, Any]], pip_options: list[str]) -> None:
+def _pip(command: list[str], on_package: Any) -> int:
+    """Run pip, calling `on_package` as it starts each requirement; return its exit status.
+
+    pip's output names paths and URLs, so it is only counted, never shown. If this is
+    interrupted (the app's Cancel sends SIGTERM, which the CLI turns into KeyboardInterrupt),
+    pip is stopped before the interruption goes on.
+    """
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        errors="replace",
+    )
+    try:
+        assert process.stdout is not None
+        for line in process.stdout:
+            if _PIP_STARTS.match(line):
+                on_package()
+        return process.wait()
+    except BaseException:
+        process.kill()
+        process.wait()
+        raise
+
+
+def _install_component(
+    name: str, entries: list[dict[str, Any]], pip_options: list[str], packages: ProgressHandle
+) -> None:
     root = addons_root()
     root.mkdir(parents=True, exist_ok=True)
     staging = root / f".{name}.partial"
@@ -168,59 +200,131 @@ def _install_component(name: str, entries: list[dict[str, Any]], pip_options: li
     shutil.rmtree(staging, ignore_errors=True)
     share = _share()
     assert share is not None
-    with tempfile.TemporaryDirectory() as temp:
-        requirements = Path(temp) / "requirements.txt"
-        requirements.write_text(_requirements(entries, share / "wheels"), encoding="utf-8")
-        command = [
-            sys.executable, "-m", "pip", "install", "--no-deps", "--require-hashes",
-            "--only-binary", ":all:", "--no-input", "--disable-pip-version-check",
-            "--no-warn-script-location", "--quiet", "--target", str(staging),
-            "-r", str(requirements), *pip_options,
-        ]  # fmt: skip
-        try:
-            done = subprocess.run(
-                command, capture_output=True, text=True, check=False, timeout=3600
-            )
-        except (OSError, subprocess.TimeoutExpired):
-            done = None
-    if done is None or done.returncode != 0:
+    started = 0
+
+    def on_package() -> None:
+        nonlocal started
+        # pip names each requirement once; never count past this component's own.
+        if started < len(entries):
+            started += 1
+            packages.advance()
+
+    try:
+        with tempfile.TemporaryDirectory() as temp:
+            requirements = Path(temp) / "requirements.txt"
+            requirements.write_text(_requirements(entries, share / "wheels"), encoding="utf-8")
+            command = [
+                sys.executable, "-m", "pip", "install", "--no-deps", "--require-hashes",
+                "--only-binary", ":all:", "--no-input", "--disable-pip-version-check",
+                "--no-warn-script-location", "--progress-bar", "off", "--target", str(staging),
+                "-r", str(requirements), *pip_options,
+            ]  # fmt: skip
+            try:
+                status: int | None = _pip(command, on_package)
+            except OSError:
+                status = None
+    except BaseException:
+        # Stopped partway: nothing half-installed is left behind.
         shutil.rmtree(staging, ignore_errors=True)
-        # pip's output names paths and URLs; none of it is shown.
+        raise
+    if status != 0:
+        shutil.rmtree(staging, ignore_errors=True)
         raise AudioError(
             "The add-on could not be installed. Check the network connection and try again",
             error_reason="addon_install_failed",
         )
+    # Requirements pip didn't announce (rare) still count once the component is in.
+    if started < len(entries):
+        packages.advance(len(entries) - started)
     record = {"engine": __version__, "packages": [e["name"] for e in entries]}
     (staging / COMPLETE).write_text(json.dumps(record), encoding="utf-8")
     shutil.rmtree(final, ignore_errors=True)
     os.replace(staging, final)
 
 
-def _fetch_models(name: str) -> None:
-    """Download the add-on's pinned model files with the existing fetchers."""
-    if name == "kitten2":
-        from pdf2audiobook.tts.catalog import fetch_model
+class _FileSteps:
+    """An `on_file` callback counting finished files.
 
-        fetch_model(on_file=None)
+    The fetchers call it as each file starts, so a file counts once the next one starts, and the
+    last one when `finish` is called after the fetch returns.
+    """
+
+    def __init__(self, handle: ProgressHandle) -> None:
+        self.handle = handle
+        self.started = 0
+
+    def __call__(self, _: object) -> None:
+        if self.started:
+            self.handle.advance()
+        self.started += 1
+
+    def finish(self) -> None:
+        if self.started:
+            self.handle.advance()
+        self.started = 0
+
+
+def _fetch_models(name: str, reporter: ProgressReporter) -> None:
+    """Download the add-on's pinned model files with the existing fetchers, one step per file."""
+    if name == "kitten2":
+        from pdf2audiobook.tts import catalog
+
+        missing = catalog.missing_files()
+        if not missing:
+            return
+        files = reporter.stage("Downloading models", len(missing), "files")
+        try:
+            steps = _FileSteps(files)
+            catalog.fetch_model(on_file=steps)
+            steps.finish()
+        finally:
+            files.close()
     elif name == "audio-check":
         from pdf2audiobook.verification import models as asr
 
         # All three recognizers: a flag is confirmed only when two of them agree.
-        for model in ("whisper", "wav2vec2", "vosk"):
-            asr.fetch(model, on_file=None)
+        plan = asr.fetch_plan(["whisper", "wav2vec2", "vosk"])
+        total = sum(len(needed) for _, needed in plan)
+        if not total:
+            return
+        files = reporter.stage("Downloading models", total, "files")
+        try:
+            steps = _FileSteps(files)
+            for model, needed in plan:
+                if needed:
+                    asr.fetch(model, on_file=steps)
+            steps.finish()
+        finally:
+            files.close()
 
 
-def install(name: str, *, pip_options: list[str] | None = None) -> dict[str, Any]:
-    """Install an add-on's missing components, activate them, then fetch its models."""
+def install(
+    name: str,
+    *,
+    pip_options: list[str] | None = None,
+    reporter: ProgressReporter | None = None,
+) -> dict[str, Any]:
+    """Install an add-on's missing components, activate them, then fetch its models.
+
+    Progress goes to `reporter`: one step per package, then one per model file. Components
+    installed before an interruption stay installed, so installing again continues.
+    """
     data = _addon(name)
+    progress: ProgressReporter = reporter if reporter is not None else NullReporter()
     options = (
         pip_options if pip_options is not None else shlex.split(os.environ.get(PIP_OPTIONS_ENV, ""))
     )
-    for component in data["addons"][name]["components"]:
-        if not _complete(component):
-            _install_component(component, data["components"][component], options)
+    missing = [c for c in data["addons"][name]["components"] if not _complete(c)]
+    if missing:
+        total = sum(len(data["components"][component]) for component in missing)
+        packages = progress.stage("Installing packages", total, "packages")
+        try:
+            for component in missing:
+                _install_component(component, data["components"][component], options, packages)
+        finally:
+            packages.close()
     activate()
-    _fetch_models(name)
+    _fetch_models(name, progress)
     return next(item for item in status() if item["name"] == name)
 
 

@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
-import { errorMessage, run } from "../engine/api";
-import type { AddonLanguages, AddonName, AddonsList, Request } from "../engine/types";
+import { useEffect, useRef, useState } from "react";
+import { cancelRun, errorMessage, run, runProgress, startAddonInstall } from "../engine/api";
+import type { AddonLanguages, AddonName, AddonsList, Request, RunStatus } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { Icon } from "../ui/Icon";
 import { IconButton } from "../ui/IconButton";
+import { LinearProgress } from "../ui/Progress";
 import { Select } from "../ui/Select";
+import { duration } from "./Run";
 
 /**
  * What each add-on downloads (self-contained app spec SC3), shown before asking. Sizes are disk
@@ -44,46 +46,126 @@ async function attempt<T>(request: Request): Promise<{ ok: true; result: T } | {
   }
 }
 
-/** Asks before downloading an add-on, then installs it (the engine checks every file's hash). */
+type Install =
+  | { phase: "idle" }
+  | { phase: "starting" }
+  | { phase: "working"; id: number; status: RunStatus | null; cancelling: boolean }
+  | { phase: "stopped" }
+  | { phase: "failed"; message: string };
+
+const STOPPED =
+  "Stopped. Parts that finished installing are kept, so Download and install continues from there.";
+
+/**
+ * Asks before downloading an add-on, then installs it as a long run (the engine checks every
+ * file's hash), showing each stage's progress, with Stop.
+ */
 export function AddonDialog({
   addon,
   open,
   onClose,
   onInstalled,
+  onChanged,
+  pollMs = 1000,
 }: {
   addon: AddonName;
   open: boolean;
   onClose: () => void;
   onInstalled: () => void;
+  /** After a stopped or failed install, which may have installed some parts. */
+  onChanged?: () => void;
+  pollMs?: number;
 }) {
   const info = ADDONS[addon];
-  const [state, setState] = useState<Phase>({ phase: "idle" });
+  const [state, setState] = useState<Install>({ phase: "idle" });
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const id = state.phase === "working" ? state.id : null;
+  useEffect(() => {
+    if (id === null) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = async () => {
+      try {
+        const progress = await runProgress(id);
+        if (!mounted.current) return;
+        if (progress.state === "running") {
+          setState({ phase: "working", id, status: progress.status, cancelling: progress.cancelling });
+          timer = setTimeout(() => void poll(), pollMs);
+        } else if (progress.cancelled) {
+          setState({ phase: "stopped" });
+          onChanged?.();
+        } else if (progress.outcome.outcome === "success") {
+          setState({ phase: "idle" });
+          onInstalled();
+          onClose();
+        } else {
+          setState({
+            phase: "failed",
+            message: progress.outcome.outcome === "failed" ? progress.outcome.error.message : "The engine returned an unreadable result",
+          });
+          onChanged?.();
+        }
+      } catch (error) {
+        if (mounted.current) setState({ phase: "failed", message: errorMessage(error) });
+      }
+    };
+    timer = setTimeout(() => void poll(), 0);
+    return () => clearTimeout(timer);
+    // Polling follows the run's ID; the callbacks are read when it ends.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, pollMs]);
   const install = async () => {
-    setState({ phase: "working" });
-    const done = await attempt({ command: "addons_install", addon });
-    if (done.ok) {
-      setState({ phase: "idle" });
-      onInstalled();
-      onClose();
-    } else {
-      setState({ phase: "failed", message: done.message });
+    setState({ phase: "starting" });
+    try {
+      const started = await startAddonInstall(addon);
+      if (mounted.current) setState({ phase: "working", id: started, status: null, cancelling: false });
+    } catch (error) {
+      if (mounted.current) setState({ phase: "failed", message: errorMessage(error) });
     }
   };
-  const working = state.phase === "working";
+  const stop = async () => {
+    if (state.phase !== "working") return;
+    setState({ ...state, cancelling: true });
+    await cancelRun(state.id).catch(() => undefined);
+  };
+  const working = state.phase === "starting" || state.phase === "working";
+  const stage = state.phase === "working" ? state.status?.stage ?? null : null;
+  const fraction = stage?.total ? Math.min(1, stage.done / stage.total) : undefined;
   return (
     <Dialog
       open={open}
       headline={`Install ${info.title}?`}
       onClose={() => !working && onClose()}
       actions={
-        <>
-          <Button variant="text" onClick={onClose} disabled={working}>
-            Not now
-          </Button>
-          <Button icon="download" onClick={() => void install()} disabled={working}>
-            {working ? "Downloading and installing…" : "Download and install"}
-          </Button>
-        </>
+        working ? (
+          <>
+            <Button variant="text" disabled>
+              Not now
+            </Button>
+            <Button
+              variant="outlined"
+              icon="stop"
+              onClick={() => void stop()}
+              disabled={state.phase !== "working" || state.cancelling}
+            >
+              {state.phase === "working" && state.cancelling ? "Stopping…" : "Stop"}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="text" onClick={onClose}>
+              Not now
+            </Button>
+            <Button icon="download" onClick={() => void install()}>
+              Download and install
+            </Button>
+          </>
+        )
       }
     >
       <p className="body-medium">{info.purpose}</p>
@@ -96,7 +178,20 @@ export function AddonDialog({
           <li key={part}>{part}</li>
         ))}
       </ul>
-      {working ? <p className="body-medium" role="status">This can take several minutes on a slow connection.</p> : null}
+      {working ? (
+        <div className="addon-progress" role="status">
+          <LinearProgress value={fraction} label={stage?.name ?? "Starting"} />
+          <p className="body-medium">
+            {stage
+              ? `${stage.name}${stage.total ? `: ${stage.done.toLocaleString("en-US")} of ${stage.total.toLocaleString("en-US")} ${stage.unit}` : ""}`
+              : "Starting…"}
+          </p>
+          {state.phase === "working" && state.status ? (
+            <p className="body-small on-surface-variant">{duration(state.status.elapsed_seconds)} elapsed</p>
+          ) : null}
+        </div>
+      ) : null}
+      {state.phase === "stopped" ? <p className="body-medium" role="status">{STOPPED}</p> : null}
       {state.phase === "failed" ? (
         <p className="body-medium audio-problem" role="alert">
           {state.message}
@@ -175,7 +270,7 @@ export function AddonsPanel({ onChange }: { onChange?: () => void }) {
         </p>
       ) : null}
       {installing ? (
-        <AddonDialog addon={installing} open onClose={() => setInstalling(null)} onInstalled={changed} />
+        <AddonDialog addon={installing} open onClose={() => setInstalling(null)} onInstalled={changed} onChanged={changed} />
       ) : null}
     </div>
   );

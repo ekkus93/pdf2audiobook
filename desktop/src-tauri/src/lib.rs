@@ -97,6 +97,7 @@ pub fn run() {
             commands::start_run,
             commands::run_progress,
             commands::cancel_run,
+            commands::start_addon_install,
             commands::quit_app,
             commands::open_review,
             commands::book_audio,

@@ -1,10 +1,13 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { AddonLanguages, AddonsList, Request } from "../engine/types";
+import type { AddonLanguages, AddonsList, Progress, Request, RunStage } from "../engine/types";
 
 vi.mock("../engine/api", async (original) => ({
   ...(await original<typeof import("../engine/api")>()),
   run: vi.fn(),
+  startAddonInstall: vi.fn(),
+  runProgress: vi.fn(),
+  cancelRun: vi.fn(),
 }));
 
 import * as api from "../engine/api";
@@ -51,17 +54,44 @@ async function click(element: Element) {
   });
 }
 
+const stage = (name: string, unit: string, done: number, total: number): RunStage => ({
+  name,
+  detail: null,
+  unit,
+  done,
+  total,
+  elapsed_seconds: 3,
+  estimated_remaining_seconds: null,
+});
+const running = (current: RunStage, cancelling = false): Progress => ({
+  state: "running",
+  cancelling,
+  status: { command: "addons install", state: "running", updated_at: "", elapsed_seconds: 65, stage: current },
+});
+const finished = (outcome: Extract<Progress, { state: "finished" }>["outcome"], cancelled = false): Progress => ({
+  state: "finished",
+  status: null,
+  outcome,
+  cancelled,
+});
+const INSTALLED = finished({ outcome: "success", result: { addon: LIST.addons[0] } });
+
+/** `run_progress` answers these in turn, then the last one again. */
+function progressSequence(...steps: Progress[]) {
+  let index = 0;
+  vi.mocked(api.runProgress).mockImplementation(async () => steps[Math.min(index++, steps.length - 1)]);
+}
+
 let list: AddonsList;
 let languages: AddonLanguages;
 beforeEach(() => {
+  vi.mocked(api.startAddonInstall).mockResolvedValue(7);
+  vi.mocked(api.cancelRun).mockResolvedValue();
+  progressSequence(INSTALLED);
   list = structuredClone(LIST);
   languages = structuredClone(LANGUAGES);
   vi.mocked(api.run).mockImplementation(async (request: Request) => {
     if (request.command === "addons_list") return { outcome: "success", result: list };
-    if (request.command === "addons_install") {
-      list.addons[0].installed = true;
-      return { outcome: "success", result: { addon: list.addons[0] } };
-    }
     if (request.command === "addons_remove") {
       list.addons[1].installed = false;
       return { outcome: "success", result: { addon: list.addons[1] } };
@@ -82,29 +112,78 @@ beforeEach(() => {
 describe("AddonDialog", () => {
   it("says what is downloaded, from where and how much before asking", async () => {
     const onInstalled = vi.fn();
-    render(<AddonDialog addon="kitten2" open onClose={vi.fn()} onInstalled={onInstalled} />);
+    render(<AddonDialog addon="kitten2" open onClose={vi.fn()} onInstalled={onInstalled} pollMs={5} />);
     const dialog = document.querySelector("md-dialog[open]") as HTMLElement;
     expect(dialog).toHaveTextContent("Voice cloning and Kitten 2");
     expect(dialog).toHaveTextContent(/PyTorch/);
     expect(dialog).toHaveTextContent(/Hugging Face/);
     expect(dialog).toHaveTextContent(/about 3\.2 GB/);
-    expect(api.run).not.toHaveBeenCalledWith(expect.objectContaining({ command: "addons_install" }));
+    expect(api.startAddonInstall).not.toHaveBeenCalled();
     await click(button("Download and install", dialog));
-    expect(api.run).toHaveBeenCalledWith({ command: "addons_install", addon: "kitten2" });
+    expect(api.startAddonInstall).toHaveBeenCalledWith("kitten2");
     await waitFor(() => expect(onInstalled).toHaveBeenCalled());
   });
 
+  it("shows each stage's progress while it installs", async () => {
+    progressSequence(
+      running(stage("Installing packages", "packages", 12, 51)),
+      running(stage("Installing packages", "packages", 12, 51)),
+      running(stage("Downloading models", "files", 1, 4)),
+      running(stage("Downloading models", "files", 1, 4)),
+      INSTALLED,
+    );
+    render(<AddonDialog addon="kitten2" open onClose={vi.fn()} onInstalled={vi.fn()} pollMs={5} />);
+    const dialog = document.querySelector("md-dialog[open]") as HTMLElement;
+    await click(button("Download and install", dialog));
+    expect(await screen.findByText("Installing packages: 12 of 51 packages")).toBeInTheDocument();
+    const bar = screen.getByRole("progressbar", { name: "Installing packages" });
+    expect(bar).toHaveAttribute("aria-valuenow", "24");
+    expect(dialog).toHaveTextContent("1m 05s elapsed");
+    expect(button("Not now", dialog)).toHaveAttribute("disabled");
+    expect(await screen.findByText("Downloading models: 1 of 4 files")).toBeInTheDocument();
+  });
+
+  it("stops an install and says what is kept", async () => {
+    const onInstalled = vi.fn();
+    const onChanged = vi.fn();
+    progressSequence(running(stage("Installing packages", "packages", 3, 51)));
+    render(<AddonDialog addon="kitten2" open onClose={vi.fn()} onInstalled={onInstalled} onChanged={onChanged} pollMs={5} />);
+    const dialog = document.querySelector("md-dialog[open]") as HTMLElement;
+    await click(button("Download and install", dialog));
+    await screen.findByText(/3 of 51 packages/);
+    await click(button("Stop", dialog));
+    expect(api.cancelRun).toHaveBeenCalledWith(7);
+    progressSequence(
+      running(stage("Installing packages", "packages", 3, 51), true),
+      finished({ outcome: "failed", error: { type: "Interrupted", code: 130, message: "Interrupted" }, warnings: [] }, true),
+    );
+    expect(await screen.findByText(/Stopped\. Parts that finished installing are kept/)).toBeInTheDocument();
+    expect(onInstalled).not.toHaveBeenCalled();
+    expect(onChanged).toHaveBeenCalled();
+    expect(button("Download and install", dialog)).not.toHaveAttribute("disabled");
+  });
+
   it("shows why an install failed and lets the user try again", async () => {
-    vi.mocked(api.run).mockResolvedValueOnce({
-      outcome: "failed",
-      error: { type: "AudioError", code: 6, message: "The add-on could not be installed. Check the network connection and try again" },
-      warnings: [],
-    });
-    render(<AddonDialog addon="audio-check" open onClose={vi.fn()} onInstalled={vi.fn()} />);
+    progressSequence(
+      finished({
+        outcome: "failed",
+        error: { type: "AudioError", code: 6, message: "The add-on could not be installed. Check the network connection and try again" },
+        warnings: [],
+      }),
+    );
+    render(<AddonDialog addon="audio-check" open onClose={vi.fn()} onInstalled={vi.fn()} pollMs={5} />);
     const dialog = document.querySelector("md-dialog[open]") as HTMLElement;
     await click(button("Download and install", dialog));
     expect(await screen.findByText(/Check the network connection/)).toBeInTheDocument();
     expect(button("Download and install", dialog)).not.toHaveAttribute("disabled");
+  });
+
+  it("says when the install could not start", async () => {
+    vi.mocked(api.startAddonInstall).mockRejectedValue({ kind: "busy", message: "An add-on is already being installed" });
+    render(<AddonDialog addon="audio-check" open onClose={vi.fn()} onInstalled={vi.fn()} pollMs={5} />);
+    const dialog = document.querySelector("md-dialog[open]") as HTMLElement;
+    await click(button("Download and install", dialog));
+    expect(await screen.findByText("An add-on is already being installed")).toBeInTheDocument();
   });
 });
 

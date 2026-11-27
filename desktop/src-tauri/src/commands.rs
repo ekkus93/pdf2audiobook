@@ -631,6 +631,58 @@ pub fn start_run(
     Ok(id)
 }
 
+/// Starts installing an add-on as a long run, so the dialog can show its progress and stop it
+/// with `run_progress` and `cancel_run` (self-contained app spec SC3). One install at a time.
+#[tauri::command]
+pub fn start_addon_install(
+    app: AppHandle,
+    engine: State<'_, Engine>,
+    addon: crate::engine::request::Addon,
+) -> Result<u64, BridgeError> {
+    let folder = app
+        .path()
+        .app_cache_dir()
+        .map_err(|_| BridgeError::Start)?
+        .join("addon-install");
+    if engine.live.is_live(&folder) {
+        return Err(BridgeError::Busy {
+            message: "An add-on is already being installed".into(),
+        });
+    }
+    // A previous install's progress must not show as this one's.
+    let _ = fs::remove_file(folder.join("reports").join("run_status.json"));
+    fs::create_dir_all(&folder).map_err(|_| BridgeError::Start)?;
+    let request = Request::AddonsInstall {
+        addon,
+        status_dir: Some(folder.clone()),
+    };
+    let args = request.args().map_err(|error| BridgeError::Request {
+        message: error.to_string(),
+    })?;
+    let cli = located(&engine, &app)?;
+    let log = Arc::clone(&engine.log);
+    let id = engine
+        .live
+        .start_with_hook(
+            &cli.command,
+            &args,
+            &folder,
+            None,
+            Box::new(move |exit| {
+                log.record(
+                    Event::new("run_finished")
+                        .command("addons install")
+                        .finished(exit.code, exit.elapsed, exit.outcome, exit.cancelled),
+                );
+            }),
+        )
+        .map_err(|_| BridgeError::Start)?;
+    engine
+        .log
+        .record(Event::new("run_started").command("addons install"));
+    Ok(id)
+}
+
 #[tauri::command]
 pub fn run_progress(engine: State<'_, Engine>, id: u64) -> Result<Progress, BridgeError> {
     engine

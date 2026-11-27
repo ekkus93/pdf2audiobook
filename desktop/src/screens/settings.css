@@ -141,3 +141,13 @@
   white-space: pre-wrap;
   user-select: text;
 }
+
+.addon-progress {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.addon-progress p {
+  margin: 0;
+}

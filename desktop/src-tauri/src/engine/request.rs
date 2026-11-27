@@ -312,6 +312,10 @@ pub enum Request {
     /// Downloads and installs an add-on; the app has already shown what and asked.
     AddonsInstall {
         addon: Addon,
+        /// Where the CLI keeps its progress (`reports/run_status.json`). Chosen by the app's
+        /// backend, never by the frontend.
+        #[serde(skip)]
+        status_dir: Option<PathBuf>,
     },
     /// Removes an add-on, keeping what another installed add-on needs.
     AddonsRemove {
@@ -575,9 +579,10 @@ impl Request {
             Request::AsrList => args.command(&["asr", "list"]),
             Request::TtsModels => args.command(&["tts", "models"]),
             Request::AddonsList => args.command(&["addons", "list"]),
-            Request::AddonsInstall { addon } => {
+            Request::AddonsInstall { addon, status_dir } => {
                 args.command(&["addons", "install"]);
                 args.flag("--yes");
+                args.path("--status-dir", status_dir.as_deref(), "The status folder")?;
                 args.positional_text(addon_name(*addon), "The add-on")?;
             }
             Request::AddonsRemove { addon } => {
@@ -1601,7 +1606,8 @@ mod tests {
         );
         assert_eq!(
             args_of(Request::AddonsInstall {
-                addon: Addon::Kitten2
+                addon: Addon::Kitten2,
+                status_dir: None,
             }),
             [
                 "--no-progress",
@@ -1677,10 +1683,39 @@ mod tests {
         assert_eq!(
             request,
             Request::AddonsInstall {
-                addon: Addon::AudioCheck
+                addon: Addon::AudioCheck,
+                status_dir: None,
             }
         );
         assert!(!request.is_write());
+        // The frontend cannot choose where the CLI writes its progress.
+        let sneaky: Request = serde_json::from_str(
+            r#"{"command": "addons_install", "addon": "kitten2", "status_dir": "/etc"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            sneaky,
+            Request::AddonsInstall {
+                addon: Addon::Kitten2,
+                status_dir: None,
+            }
+        );
+        assert_eq!(
+            args_of(Request::AddonsInstall {
+                addon: Addon::AudioCheck,
+                status_dir: Some("/data/addon-install".into()),
+            }),
+            [
+                "--no-progress",
+                "addons",
+                "install",
+                "--yes",
+                "--status-dir=/data/addon-install",
+                "--json",
+                "--",
+                "audio-check"
+            ]
+        );
     }
 
     #[test]
