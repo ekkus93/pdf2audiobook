@@ -24,6 +24,7 @@ from pdf2audiobook.cli import review  # noqa: F401
 from pdf2audiobook.cli import asr  # noqa: F401
 from pdf2audiobook.cli import budget  # noqa: F401
 from pdf2audiobook.cli import edits  # noqa: F401
+from pdf2audiobook.cli import addons  # noqa: F401
 
 # isort: on
 from pdf2audiobook.cli._core import CONVERSION_STATUS_MAX_BYTES, app, fail, main

@@ -36,6 +36,9 @@ def configure_environment(environ: MutableMapping[str, str] = os.environ) -> Non
     tessdata = root / "share" / "tessdata"
     if "TESSDATA_PREFIX" not in environ and tessdata.is_dir():
         environ["TESSDATA_PREFIX"] = str(tessdata)
+    from pdf2audiobook.addons import activate
+
+    activate(environ)
 
 
 def bundled_model(model_id: str) -> Path | None:

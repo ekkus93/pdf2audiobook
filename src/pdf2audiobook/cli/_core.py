@@ -85,6 +85,13 @@ tts_app = typer.Typer(
 )
 app.add_typer(tts_app, name="tts")
 
+addons_app = typer.Typer(
+    help="List, install or remove the desktop app's optional add-ons (built-in engine only).",
+    epilog="Example: pdf2audiobook addons list --json",
+    no_args_is_help=True,
+)
+app.add_typer(addons_app, name="addons")
+
 
 audio_report_app = typer.Typer(
     help="Read a book's saved audio verification report and mark flags reviewed.",

@@ -17,7 +17,7 @@ asr-whisper = ["openai-whisper==20250625"]
 asr-wav2vec2 = ["transformers>=4.40,<6", "torch>=2.4,<3"]
 asr-vosk = ["vosk==0.3.45"]
 asr = ["pdf2audiobook[asr-whisper,asr-wav2vec2,asr-vosk]"]
-dev = ["pytest>=8,<10", "ruff>=0.8,<1", "mypy>=1.10,<2", "types-tqdm>=4.66,<5", "jsonschema>=4.23,<5"]
+dev = ["pytest>=8,<10", "ruff>=0.8,<1", "mypy>=1.10,<2", "types-tqdm>=4.66,<5", "jsonschema>=4.23,<5", "pip>=24"]
 
 [project.scripts]
 pdf2audiobook = "pdf2audiobook.cli:main"
@@ -49,6 +49,8 @@ files = [
     "src/pdf2audiobook/__init__.py",
     "src/pdf2audiobook/__main__.py",
     "src/pdf2audiobook/bundle.py",
+    "src/pdf2audiobook/addons.py",
+    "src/pdf2audiobook/cli/addons.py",
     "src/pdf2audiobook/document/__init__.py",
     "src/pdf2audiobook/llm/__init__.py",
     "src/pdf2audiobook/models.py",
