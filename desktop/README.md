@@ -1,21 +1,65 @@
 # pdf2audiobook desktop app
 
 A desktop app for [pdf2audiobook](../README.md), built with [Tauri 2](https://tauri.app), React and
-TypeScript. It is a front end only: every book operation runs the `pdf2audiobook` command-line
-tool, which must be installed separately. The design and requirements are in
-[`docs/PDF2AUDIOBOOK_TAURI_SPEC.md`](../docs/PDF2AUDIOBOOK_TAURI_SPEC.md), and progress is tracked
-in [`docs/PDF2AUDIOBOOK_TAURI_TODO.md`](../docs/PDF2AUDIOBOOK_TAURI_TODO.md).
+TypeScript. Every book operation runs the `pdf2audiobook` command-line tool, and the installers
+carry their own copy of it: a built-in engine with Python, FFmpeg, English OCR data and the default
+voice. Nothing else needs installing, and converting a book needs no network. The design and
+requirements are in [`docs/PDF2AUDIOBOOK_TAURI_SPEC.md`](../docs/PDF2AUDIOBOOK_TAURI_SPEC.md) and
+the [Self-Contained App Specification](../docs/PDF2AUDIOBOOK_SELF_CONTAINED_APP_SPEC.md); progress
+is tracked in [`docs/PDF2AUDIOBOOK_TAURI_TODO.md`](../docs/PDF2AUDIOBOOK_TAURI_TODO.md) and
+[`docs/PDF2AUDIOBOOK_SELF_CONTAINED_APP_TODO.md`](../docs/PDF2AUDIOBOOK_SELF_CONTAINED_APP_TODO.md).
 
 **Status:** in development. Linux only for now; builds are unsigned.
 
+## Installing
+
+Download the AppImage or the `.deb` from a Desktop CI run (the `pdf2audiobook-desktop-linux-unsigned`
+artifact). Both need Ubuntu 22.04 or a Linux of the same age or newer, on x86-64.
+
+- **AppImage** (about 260 MB): make it executable and run it. No installation and no FUSE
+  needed (set `APPIMAGE_EXTRACT_AND_RUN=1` where FUSE is missing).
+- **`.deb`** (about 160 MB, 470 MB installed): `sudo apt install ./pdf2audiobook_*-unsigned.deb`.
+  It uses the system's WebKitGTK, which is why it is smaller.
+
+The app needs no Python, `uv`, FFmpeg or Tesseract on the computer. Optional features are
+add-ons the app downloads when you choose them (see [Add-ons and OCR
+languages](#add-ons-and-ocr-languages)); an LLM for chapter analysis is optional too (Ollama, set
+up separately). Settings → About lists every component inside the app with its licence.
+
+## Add-ons and OCR languages
+
+Two features need large downloads, so they are add-ons rather than part of the installer. The app
+offers each one where it is needed (choosing *Clone a voice*, or the audio check), and lists both
+in **Settings → Add-ons and OCR languages** with *Install…* and *Remove*.
+
+| Add-on | For | Download |
+|---|---|---|
+| Voice cloning and Kitten 2 | Cloning a voice from a recording, and the larger Kitten 2 voices | about 3.2 GB: packages, including CPU PyTorch (no graphics card needed), and the Kitten 2 model |
+| Audio checking | The three speech recognizers the audio check uses (Whisper, Wav2Vec2, Vosk) | about 3.2 GB: packages, including CPU PyTorch, and the three models |
+
+Packages the two share, PyTorch among them, are downloaded once. Before downloading, the app says
+what it will fetch, from where and how much. While it installs, the dialog shows each stage (packages, then model
+files) with a progress bar, and **Stop** ends it: parts that finished installing are kept, so installing again
+continues from there, and nothing half-installed is left. Every package is checked against the hash pinned in
+the app (`engine/addons.lock.json`, generated from `uv.lock`), and the models keep their pinned,
+hash-checked downloads. Add-ons go in `~/.local/share/pdf2audiobook/addons/<version>/` (under
+`$XDG_DATA_HOME` when set), for that app version only; after an update the app says to install them
+again. No book text is sent anywhere.
+
+English OCR data is built in. **OCR languages** adds others (Tesseract's `tessdata_fast` files,
+1–15 MB each, checked against pinned hashes) and removes the ones you added.
+
 ## Requirements
+
+To build or develop the app (using it needs none of this):
 
 | What | Version | Notes |
 |---|---|---|
 | Rust | 1.96.0 | Pinned in `rust-toolchain.toml`; `rustup` installs it on first use, with `rustfmt` and `clippy`. |
 | Node.js | 22 or newer | `.nvmrc` pins 22, matching CI. `nvm use` picks it up. |
 | Tauri's Linux libraries | WebKitGTK 4.1 and others | See below. |
-| The pdf2audiobook CLI | 0.1.x | Its major and minor version must match the app's. |
+| uv | 0.12.9 | Builds the built-in engine (see [Building an installer](#building-an-installer)). |
+| A C compiler and `make` | | Builds FFmpeg for the engine; `build-essential` provides both, and the static C library. |
 
 On Ubuntu 22.04 or newer, install Tauri's system libraries with:
 
@@ -28,14 +72,22 @@ sudo apt install pkg-config libwebkit2gtk-4.1-dev libsoup-3.0-dev \
 The AppImage build bundles these GStreamer plugins, so they must be installed before building
 (see [Building an installer](#building-an-installer)). CI installs these GStreamer packages too.
 
-Install the CLI from a checkout of this repository (the app doesn't bundle Python):
+### A development engine
+
+`npm run tauri dev` has no built-in engine, so it runs a CLI you install, as before. Switch on
+**Settings → Engine → Use a development engine**; the app then looks for a configured path, then
+`pdf2audiobook` on `PATH`, then a `uv` checkout, then the built-in engine. Install the CLI from
+the repository root with:
 
 ```bash
-uv tool install ".[kitten]"   # run in the repository root; provides `pdf2audiobook` on PATH
+uv tool install ".[kitten]"   # provides `pdf2audiobook` on PATH
 ```
 
-For the optional audio check (below), install the speech recognizers too, with
-`uv tool install ".[kitten,asr]"`; the app offers to download their models.
+For the audio check, install the speech recognizers too, with `uv tool install ".[kitten,asr]"`.
+To try a development build with a built engine instead, set `PDF2AUDIOBOOK_ENGINE_DIR` to the
+engine folder (`PDF2AUDIOBOOK_ENGINE_DIR=$PWD/engine-dist/engine npm run tauri dev`).
+With the developer setting off, the app uses only its built-in engine; an installer whose engine
+is damaged says to reinstall the app.
 
 ## Checking the audio
 
@@ -51,7 +103,9 @@ and the [audio verification guide](../docs/guides/audio-verification.md).
 - **Speech recognizers:** the panel shows which of Whisper, Wav2Vec2 and Vosk are ready
   (`asr list`). *Download recognizers…* lists each model's size and folder and, when you agree,
   has the CLI download and check them (`asr fetch --yes`); the app itself still makes no network
-  request. Packages that aren't installed have to be installed with the CLI (above).
+  request. With the built-in engine, *Install audio checking…* installs the [audio checking
+  add-on](#add-ons-and-ocr-languages) instead; a development engine needs the `asr` extra
+  ([above](#a-development-engine)).
 - **Results** (`audio-report show`, which loads no model): chapters with no mismatch are only
   counted. For the others the panel shows the verdict, which recognizers voted and whether fewer
   than three did, and each passage the recognizers heard differently: the text around it, the
@@ -120,9 +174,16 @@ xvfb-run -s "-screen 0 1280x800x24" npm run e2e   # screenshots go to e2e/artifa
 
 `E2E_NATIVE_DRIVER`, `E2E_TAURI_DRIVER` and `E2E_APP` point it at other binaries.
 
+`E2E_BUNDLED=1`, with `E2E_APP` set to an AppImage that carries the engine, runs it as a user
+would: no CLI is configured, so the app must find its built-in engine. The stand-in recognizers
+and voice cloner can't be used then, so it converts with real speech from the bundled voice,
+checks that the audio check offers its add-on with no terminal command, and opens About's
+licence list.
+
 The "Desktop CI" workflow (`.github/workflows/desktop.yml`) runs all of the above on Ubuntu
-22.04, builds the AppImage and `.deb`, and uploads them as the `pdf2audiobook-desktop-linux-unsigned`
-artifact.
+22.04, builds the engine and the AppImage and `.deb` with it, runs the clean-machine check, walks
+through the build (with `E2E_CLONE=1`) and the AppImage (with `E2E_BUNDLED=1`), and uploads the
+installers as the `pdf2audiobook-desktop-linux-unsigned` artifact.
 
 The Python side has its own checks; see
 [development and validation](../docs/guides/development.md#linting-type-checking-and-tests).
@@ -194,17 +255,35 @@ The app uses Google's Material 3 (spec D11) with the Midnight Iris palette.
 
 ## Building an installer
 
+From the repository root:
+
 ```bash
-cd desktop
-npm run tauri build -- --bundles deb        # Debian/Ubuntu package
-npm run tauri build -- --bundles appimage   # portable AppImage
+uv run --no-project python desktop/scripts/build_engine.py desktop/engine-dist   # the built-in engine
+python3 desktop/scripts/smoke_engine.py desktop/engine-dist/engine              # offline smoke test
+(cd desktop && npm run tauri build -- --bundles appimage,deb)                   # the app, without the engine
+python3 desktop/scripts/package_engine.py desktop/engine-dist/engine            # add the engine; prints sizes
+bash desktop/scripts/clean_machine_check.sh desktop/src-tauri/target/release/bundle/appimage/*.AppImage
 ```
 
+- **The engine** (`build_engine.py`, about 470 MB in `desktop/engine-dist/engine`, ignored by
+  git): Python 3.11 (python-build-standalone, as `uv` installs it), the CLI and its locked packages, Kitten's ONNX voice path without
+  PyTorch, FFmpeg built from source with only what the engine uses, English OCR data, the default
+  voice model, the add-on lists and the licence notices. Everything is pinned in `uv.lock` and
+  `engine/pins.json` and checked by hash; downloads and the FFmpeg build are kept in
+  `tmp/engine-cache` (`--cache`). The first build takes a few minutes, later ones about a minute.
+- **The smoke test** runs the engine with an empty environment and, where `unshare` allows, no
+  network: `doctor`, a text PDF and a scanned page to MP3s, an M4B, and every other use of FFmpeg.
+- **Packaging** (`package_engine.py`): Tauri's AppImage step runs `linuxdeploy`, which rewrites the
+  library paths of every program file in the image, so the app is bundled without the engine and
+  this script adds it afterwards, unchanged, to `usr/lib/pdf2audiobook/engine` in both installers.
+  It fails if an installer is over the size budget (400 MB compressed, 1 GB installed).
+- **The clean-machine check** runs the smoke test from inside the AppImage in a stock Ubuntu 22.04
+  container with no network, so nothing from the build machine can help. It needs Docker.
+
 The installers are written to `src-tauri/target/release/bundle/deb/` and
-`src-tauri/target/release/bundle/appimage/`. A release build takes a few minutes (about 90
-seconds for the `.deb` on a 20-core machine). The first AppImage build downloads `linuxdeploy`
-from GitHub. The `.deb` is about 2 MB and the AppImage about 93 MB, since it bundles WebKitGTK
-and GStreamer (`bundleMediaFramework` in `tauri.conf.json`). Without GStreamer's audio plugins
+`src-tauri/target/release/bundle/appimage/`. The first AppImage build downloads `linuxdeploy`
+from GitHub. Without the engine the AppImage is about 95 MB in CI (more on newer distributions),
+since it bundles WebKitGTK and GStreamer (`bundleMediaFramework` in `tauri.conf.json`). Without GStreamer's audio plugins
 inside it, the AppImage's page crashed as soon as a chapter played (`autoaudiosink not found`), so
 building it needs `gstreamer1.0-plugins-base` and `gstreamer1.0-plugins-good` installed; the
 walkthrough plays a chapter in the AppImage to catch this.
@@ -218,11 +297,14 @@ Builds are unsigned for now; CI adds `-unsigned` to the installers' file names (
 | `src-tauri/src/` | Rust: the bridge that runs the CLI, and the Tauri commands the frontend calls |
 | `src-tauri/capabilities/` | Permissions the frontend gets; kept to the minimum |
 | `src-tauri/tauri.conf.json` | Window, bundle and security settings |
-| `scripts/` | Icon subsetting and the no-network launcher |
+| `scripts/` | Icon subsetting, the no-network launcher, and building, packaging and checking the built-in engine |
+| `engine/` | The engine's pins (`pins.json`), the add-on package lists (`addons.lock.json`) and the OCR language catalog (`tessdata.json`) |
+| `contracts/` | JSON schemas for the CLI results the app reads |
 
 ## Local voice cloning
 
-Book options and **Speak again** offer **Voice source → Clone a voice (KittenTTS 2)**.
+Book options and **Speak again** offer **Voice source → Clone a voice** (KittenTTS 2). With the
+built-in engine, the first time it offers the [voice cloning add-on](#add-ons-and-ocr-languages).
 Use native pickers for a 5–30 second WAV/FLAC/MP3 and an optional transcript file, or type
 its transcript. The CLI performs validation and local inference. Model setup shows pinned
 sources, size and destination before an explicit, cancelable download. Settings can apply

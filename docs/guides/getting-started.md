@@ -20,7 +20,7 @@ repository root.
 | Kitten TTS | The default voice | A Python extra: `uv sync --extra kitten`. The first conversion downloads the model. |
 | Ollama | Optional LLM assistance | Not needed with `--no-llm`. See [Using a local LLM](llm.md#using-a-local-llm-ollama). |
 | Node 22 | A few page-script tests | Those tests skip when `node` isn't installed. |
-| Desktop app | Building or running the desktop app | Rust, Node 22 and Tauri's Linux libraries. See [desktop/README.md](../../desktop/README.md). |
+| Desktop app | Building the desktop app from source | Rust, Node 22 and Tauri's Linux libraries. The installed app needs none of this table; see [desktop/README.md](../../desktop/README.md#installing). |
 
 Piper is an alternative voice that you install separately; see [Voices and
 speech](voices.md#voices-and-speech).
@@ -166,20 +166,23 @@ skip it.
 ## Desktop app
 
 The desktop app (Tauri 2, React and TypeScript) lives in [`desktop/`](../../desktop/README.md). It
-runs
-this CLI, so the CLI must be installed first. It is in development and Linux-only for now.
+is in development and Linux-only for now. Its AppImage and `.deb` carry a built-in engine (this
+CLI, with Python, FFmpeg, English OCR data and the default voice), so using the app needs nothing
+else installed: [install it](../../desktop/README.md#installing) and add a book. Voice cloning and
+the audio check are [add-ons](../../desktop/README.md#add-ons-and-ocr-languages) the app downloads
+when you choose them.
+
+To work on the app, run it against this checkout:
 
 ~~~bash
-uv tool install ".[kitten]"              # the CLI the app runs (from the repository root)
+uv tool install ".[kitten]"              # a CLI for the development build (from the repository root)
 cd desktop
 npm ci && npm run tauri dev              # start the app with hot reload
-npm run tauri build -- --bundles appimage   # AppImage; use --bundles deb for a .deb
 ~~~
 
-Install Tauri's Linux libraries, Rust, Node 22 and the GStreamer plugins before building; the
-[desktop README](../../desktop/README.md#requirements) lists the exact packages. The AppImage needs
-the
-GStreamer plugins to play audio, so [building an
-installer](../../desktop/README.md#building-an-installer)
-explains what to install first. The desktop README also covers the checks, the end-to-end
-walkthrough and the security notes.
+then switch on **Settings → Engine → Use a development engine**. Install Tauri's Linux libraries,
+Rust, Node 22 and the GStreamer plugins first; the [desktop
+README](../../desktop/README.md#requirements) lists the exact packages. [Building an
+installer](../../desktop/README.md#building-an-installer) builds the engine, the app and both
+installers, and checks them on a clean machine. The desktop README also covers the checks, the
+end-to-end walkthrough and the security notes.

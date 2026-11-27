@@ -77,9 +77,11 @@ Each command also has `--help`, for example `uv run pdf2audiobook convert --help
 
 ## Desktop app
 
-The Linux desktop app uses Tauri, React and TypeScript and runs the installed CLI.
-See the [desktop guide](desktop/README.md) for setup, screenshots and
-[AppImage or .deb builds](desktop/README.md#building-an-installer).
+The Linux desktop app uses Tauri, React and TypeScript. Its AppImage and `.deb` carry their own
+copy of the CLI, with Python, FFmpeg, English OCR data and the default voice, so it needs nothing
+else installed; voice cloning and the audio check are add-ons it downloads when you choose them.
+See the [desktop guide](desktop/README.md) for installing, add-ons and
+[building the AppImage or .deb](desktop/README.md#building-an-installer).
 
 ## Status and contributing
 

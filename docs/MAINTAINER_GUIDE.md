@@ -593,11 +593,60 @@ document environment-dependent/manual acceptance evidence.
 
 `.github/workflows/desktop.yml` ("Desktop CI") checks the Tauri app in `desktop/` on Ubuntu
 22.04: frontend lint, types, tests and build, `cargo fmt`, `clippy` and `cargo test`, a release
-build with the AppImage and `.deb` (uploaded as `pdf2audiobook-desktop-linux-unsigned`), and the
-`tauri-driver` walkthrough under Xvfb. It shares `ci.yml`'s uv pin (`tests/test_desktop_ci.py`
+build with the AppImage and `.deb` carrying the built-in engine (uploaded as
+`pdf2audiobook-desktop-linux-unsigned`), a clean-machine check, and the `tauri-driver` walkthrough
+under Xvfb, of the build and of the AppImage. It shares `ci.yml`'s uv pin (`tests/test_desktop_ci.py`
 checks both workflows together) and has its own apt cache key (`apt-…-desktop-webkit-v3`; bump
 it when that package list changes). See `desktop/README.md` for running the same checks
 locally.
+
+### The desktop app's built-in engine
+
+The AppImage and `.deb` carry their own engine (the
+[Self-Contained App Specification](PDF2AUDIOBOOK_SELF_CONTAINED_APP_SPEC.md)): Python 3.11 (python-build-standalone, as
+`uv` installs it), this CLI and its locked core packages, Kitten's ONNX voice path without PyTorch, FFmpeg,
+English OCR data, the default voice model, the add-on package lists and the licence notices.
+Desktop CI builds it (`desktop/scripts/build_engine.py`), smoke-tests it offline
+(`smoke_engine.py`), adds it to both installers after `tauri build` (`package_engine.py`, which
+writes the sizes to the run summary), and runs the smoke test from inside the AppImage in a stock
+Ubuntu 22.04 container with no network (`clean_machine_check.sh`). The AppImage walkthrough then
+runs with `E2E_BUNDLED=1`: no CLI configured, real speech from the bundled voice. The commands
+for a local build are in [desktop/README.md](../desktop/README.md#building-an-installer).
+Downloads and the FFmpeg build are cached in `~/engine-cache` in CI (`tmp/engine-cache`
+locally); every cached file is checked against its pinned hash on use.
+
+Everything the engine contains is pinned, and each pin has one place to change:
+
+| What | Where | How to update |
+|---|---|---|
+| Python packages | `uv.lock` | As for the CLI. The engine follows the lock; `tests/test_addon_lists.py` fails until the add-on lists are regenerated. |
+| Add-on package lists | `desktop/engine/addons.lock.json` | `uv run python desktop/scripts/addon_lists.py` (generated from `uv.lock`; `--check` compares). The CPU PyTorch and torchaudio wheels are pinned in `pins.json` (`addons.cpu_wheels`) at the locked versions; update their URLs and SHA-256 together with the lock. |
+| Python itself | `pins.json` `python` and `python_build`, and `ENGINE` in `addon_lists.py` | All name the same CPython version. `python_build` is the python-build-standalone `install_only_stripped` archive uv installs, pinned by URL and its release's `SHA256SUMS` entry, so the build doesn't depend on the uv version's download list (CI's uv 0.12.9 doesn't list 3.11.18). Regenerate the add-on lists after changing it. |
+| FFmpeg and LAME | `pins.json` `ffmpeg` | Download the new FFmpeg release tarball and its `.asc` from ffmpeg.org, check the signature against the FFmpeg release key (fingerprint `FCF9 86EA 15E6 E293 A564 4F10 B432 2F04 D676 58D8`), then pin its URL and SHA-256. LAME is pinned the same way. |
+| FFmpeg's features | `FFMPEG_CONFIGURE` in `build_engine.py` | Only what the engine uses is built in. FFmpeg's `configure` silently ignores a name it doesn't know (the raw PCM formats are `pcm_f32le` and `pcm_s16le`, not `f32le`), so when the engine starts using FFmpeg in a new way, add a check to `FFMPEG_USES` in `smoke_engine.py` too. The build must stay static; it stops if it isn't. |
+| English OCR data, the voice model | `pins.json` `tessdata`, `models` | URL or revision, and SHA-256 of each file. |
+| OCR languages users can add | `desktop/engine/tessdata.json` | `python3 desktop/scripts/tessdata_catalog.py` (needs `gh`); pinned by size and git blob hash. |
+| Licence texts a component doesn't ship | `pins.json` `licenses` | The Apache-2.0 text, espeak-ng's GPL-3 (at the exact espeak-ng commit `espeakng-loader` builds) and `espeakng-loader`'s MIT licence. The build stops when a bundled package has no licence text; add one here. |
+| The clean machine | `clean_machine_check.sh` | An `ubuntu:22.04` image pinned by digest. |
+
+**Size budget** (spec C8): each installer at most 400 MB compressed, the installed app at most
+1 GB, before add-ons. `package_engine.py` fails the build over either. Measured 2026-11-27 in
+Desktop CI #140: the AppImage 258 MB, the `.deb` 159 MB compressed and 469 MB installed. The
+AppImage carries the build machine's WebKitGTK and GStreamer, so a build on a newer distribution is
+larger (356 MB on Debian 13). The largest parts of the engine are ONNX Runtime, PyMuPDF,
+NumPy and the voice model.
+
+**Licences** (spec C9): the engine build writes `share/licenses/components.json`, every bundled
+component with its licence, its source and its licence texts, which Settings → About shows. Most
+are permissive; the copyleft ones are FFmpeg and LAME (LGPL, with their exact build recorded in
+`share/licenses/ffmpeg/BUILD.txt`), espeak-ng (GPL-3.0), PyMuPDF (AGPL-3.0), phonemizer (GPL-3.0)
+and mutagen (GPL-2.0). All run in the engine's own process, separate from the Apache-2.0 app.
+
+**Add-ons** install with the engine's own `pip` into
+`$XDG_DATA_HOME/pdf2audiobook/addons/<engine version>/<component>/`, one folder per group of
+packages, so packages both add-ons need are installed once. A component counts only once its
+completion record exists, so an interrupted install is ignored and cleaned up. A new engine version
+uses a new folder; the app then says the old add-ons are no longer used.
 
 The `ollama_context` pytest marker bypasses the autouse stub for Ollama served
 context discovery. Apply it only to tests intended to exercise the live local
