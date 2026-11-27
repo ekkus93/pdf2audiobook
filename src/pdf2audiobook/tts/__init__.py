@@ -67,9 +67,13 @@ class KittenProvider:
             ) from None
         model_id = KITTEN_MODEL_ALIASES.get(model, model)
         self.model_id = model_id
+        from pdf2audiobook.bundle import bundled_model
+
+        # The desktop app ships the default model, so it loads without a download.
+        source = bundled_model(model_id)
         try:
             with _quiet_stdout():
-                self.model = KittenTTS(model_id)
+                self.model = KittenTTS(str(source) if source else model_id)
         except Exception:
             # Third-party exceptions can echo model paths, credentials or
             # supplied text. Do not surface their contents or chained context.

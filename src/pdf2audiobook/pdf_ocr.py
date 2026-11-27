@@ -4,6 +4,7 @@ languages, the OCR line cache, and the fallback that replaces embedded text."""
 from __future__ import annotations
 
 import math
+import os
 import shutil
 import subprocess
 from functools import lru_cache
@@ -407,7 +408,15 @@ def _apply_ocr_fallback(
 
 
 def tesseract_languages() -> list[str] | None:
-    """List installed Tesseract language packs without opening or exporting PDF text."""
+    """List installed Tesseract language packs without opening or exporting PDF text.
+
+    PyMuPDF's built-in Tesseract reads its language data from TESSDATA_PREFIX when that is
+    set, as the desktop app's bundled engine does, so those files are what OCR can use.
+    Otherwise the Tesseract program reports its own. None means OCR is unavailable.
+    """
+    tessdata = os.environ.get("TESSDATA_PREFIX")
+    if tessdata and Path(tessdata).is_dir():
+        return sorted(path.stem for path in Path(tessdata).glob("*.traineddata") if path.is_file())
     if shutil.which("tesseract") is None:
         return None
     try:

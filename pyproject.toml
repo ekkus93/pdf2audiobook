@@ -47,6 +47,8 @@ select = ["E4", "E7", "E9", "F", "I"]
 python_version = "3.11"
 files = [
     "src/pdf2audiobook/__init__.py",
+    "src/pdf2audiobook/__main__.py",
+    "src/pdf2audiobook/bundle.py",
     "src/pdf2audiobook/document/__init__.py",
     "src/pdf2audiobook/llm/__init__.py",
     "src/pdf2audiobook/models.py",

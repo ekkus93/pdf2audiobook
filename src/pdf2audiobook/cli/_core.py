@@ -280,6 +280,9 @@ def entry(
 ) -> None:
     if verbose and quiet:
         raise typer.BadParameter("--verbose and --quiet cannot be combined")
+    from pdf2audiobook.bundle import configure_environment
+
+    configure_environment()
     ctx.obj = {"verbose": verbose, "quiet": quiet, "progress": progress, "heartbeat": heartbeat}
     _ROOT_OPTIONS.clear()
     _ROOT_OPTIONS.update(ctx.obj)

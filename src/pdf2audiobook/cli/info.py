@@ -135,7 +135,8 @@ def doctor(
                 "voice_clone": clone_diagnostics(settings),
                 "version": __version__,
                 "ffmpeg": bool(shutil.which("ffmpeg")),
-                "tesseract": bool(shutil.which("tesseract")),
+                # OCR is available from the Tesseract program or bundled language data.
+                "tesseract": languages is not None,
                 "ocr_requested_languages": settings.pdf.ocr_language,
                 "ocr_installed_languages": [] if languages is None else languages,
                 "ocr_missing_languages": missing_ocr_languages(
