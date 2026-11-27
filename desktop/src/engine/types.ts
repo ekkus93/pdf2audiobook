@@ -203,6 +203,7 @@ export type Outcome<T = Record<string, unknown>> =
 export type LocateError =
   | { kind: "not_found" }
   | { kind: "unresponsive" }
+  | { kind: "bundled_broken" }
   | { kind: "version_mismatch"; cli: string; app: string; app_series: string };
 
 export type BridgeError =

@@ -99,3 +99,40 @@ describe("setupChecks", () => {
     expect(check.detail).toContain("ollama serve");
   });
 });
+
+describe("with the engine built into the app", () => {
+  const BUNDLED: EngineInfo = { version: "0.1.0", source: "bundled", command: "python3 -I -m pdf2audiobook" };
+  const COMMAND = /sudo|apt |uv |ollama (pull|create|serve)|printf|Modelfile|pip /;
+  const states: Array<[string, Partial<Doctor>]> = [
+    ["no ffmpeg", { ffmpeg: false }],
+    ["no OCR", { tesseract: false, ocr_installed_languages: [], ocr_missing_languages: ["eng"] }],
+    ["a missing OCR language", { ocr_requested_languages: "eng+deu", ocr_missing_languages: ["deu"] }],
+    ["no Kitten", { kitten_installed: false }],
+    ["Ollama unreachable", { llm_check: { ...OLLAMA, reachable: false, served_context: null, enough: false } }],
+    ["too little context served", { llm_check: { ...OLLAMA, served_context: 4096, enough: false } }],
+    ["the configuration set lower", { llm_check: { ...OLLAMA, configured_context: 4096, estimated_tokens_needed: 9248, served_context: 262144, enough: false } }],
+  ];
+
+  it.each(states)("shows no command for %s", (_name, doctor) => {
+    for (const check of setupChecks(BUNDLED, { ...DOCTOR, ...doctor })) {
+      expect(check.fix).toBeUndefined();
+      expect(check.detail).not.toMatch(COMMAND);
+    }
+  });
+
+  it("offers to download missing OCR languages in the app", () => {
+    const check = byId({ ocr_requested_languages: "eng+deu", ocr_missing_languages: ["deu"] }, BUNDLED).tesseract;
+    expect(check.state).toBe("attention");
+    expect(check.action).toEqual({ kind: "add_languages", languages: ["deu"] });
+  });
+
+  it("treats an unreachable Ollama as optional", () => {
+    const check = byId({ llm_check: { ...OLLAMA, reachable: false, served_context: null, enough: false } }, BUNDLED).llm;
+    expect(check.state).toBe("optional");
+    expect(check.detail).toMatch(/without an LLM/);
+  });
+
+  it("asks for a reinstall when a built-in part is missing", () => {
+    expect(byId({ ffmpeg: false }, BUNDLED).ffmpeg.detail).toMatch(/Reinstall the app/);
+  });
+});

@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { InspectManifest, LibraryBook, Request } from "../engine/types";
@@ -374,5 +374,44 @@ describe("the Kitten 2 temperature", () => {
       field?.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(converted(onStart).temperature).toBe(0.2);
+  });
+});
+
+describe("a new book when Ollama isn't running", () => {
+  const NEW_BOOK: LibraryBook = { ...BOOK, analyzed: false, inspect: null, source: "/books/new.pdf" };
+  const llmSwitch = () =>
+    screen.getByText("Use an LLM to find chapters and clean the text").closest("label")?.querySelector("md-switch") as HTMLElement & {
+      selected: boolean;
+    };
+  const serve = (reachable: boolean) =>
+    vi.mocked(api.run).mockImplementation(async (request: Request) => {
+      if (request.command === "config_show") return { outcome: "success", result: CONFIG };
+      if (request.command === "edits_list") return { outcome: "success", result: { edits: [] } };
+      if (request.command === "doctor") {
+        return { outcome: "success", result: { version: "0.1.0", llm_provider: "ollama", llm_check: { provider: "ollama", checked: true, model: "qwen3.5:9b", reachable } } };
+      }
+      return { outcome: "success", result: { provider: "kitten", voices: ["Jasper"], listable: true, default_voice: "Jasper" } };
+    });
+
+  it("starts with the LLM off and says why", async () => {
+    serve(false);
+    await renderPage(vi.fn(), NEW_BOOK);
+    expect(await screen.findByText(/Ollama isn't running on this computer/)).toBeInTheDocument();
+    expect(llmSwitch().selected).toBeFalsy();
+    expect(api.run).toHaveBeenCalledWith({ command: "doctor", check_llm: true });
+  });
+
+  it("keeps the LLM on when Ollama answers", async () => {
+    serve(true);
+    await renderPage(vi.fn(), NEW_BOOK);
+    await waitFor(() => expect(api.run).toHaveBeenCalledWith({ command: "doctor", check_llm: true }));
+    expect(llmSwitch().selected).toBeTruthy();
+    expect(screen.queryByText(/Ollama isn't running/)).toBeNull();
+  });
+
+  it("doesn't check for a book already analyzed", async () => {
+    serve(false);
+    await renderPage();
+    expect(api.run).not.toHaveBeenCalledWith({ command: "doctor", check_llm: true });
   });
 });

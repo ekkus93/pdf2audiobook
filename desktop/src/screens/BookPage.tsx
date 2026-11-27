@@ -1,7 +1,7 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { describe, errorMessage, getSettings, openReview, run } from "../engine/api";
-import type { AudioFile, CliConfig, LibraryBook, LlmProvider, Request, Voices } from "../engine/types";
+import type { AudioFile, CliConfig, Doctor, LibraryBook, LlmProvider, Request, Voices } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { IconButton } from "../ui/IconButton";
@@ -75,8 +75,15 @@ export function BookPage({ draft, onDraftChange, book, reviewing = false, onRevi
   const source = book.inspect?.source_path ?? book.source ?? "";
   const [loaded, setLoaded] = useState<Loaded>({ phase: "loading" });
   const [form, setLocalForm] = useState<OptionsForm | null>(draft ?? null);
-  const setForm = (next: OptionsForm) => { setLocalForm(next); onDraftChange?.(next); };
+  // Whether the user has chosen the LLM setting themselves; a later check never overrides it.
+  const llmChosen = useRef(draft != null);
+  const setForm = (next: OptionsForm) => {
+    if (form && next.llm !== form.llm) llmChosen.current = true;
+    setLocalForm(next);
+    onDraftChange?.(next);
+  };
   const analyzedWithLlm = book.inspect?.analyzed_with_llm ?? null;
+  const [ollamaOffline, setOllamaOffline] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -86,12 +93,23 @@ export function BookPage({ draft, onDraftChange, book, reviewing = false, onRevi
       if (next.phase === "ready") {
         const initial = defaults(next.config, summary.chapters, next.preferences, analyzedWithLlm, source);
         setLocalForm((current) => current ? { ...current, llm: analyzedWithLlm ?? current.llm, inheritedClone: initial.inheritedClone, inheritedReference: initial.inheritedReference, inheritedTranscript: initial.inheritedTranscript } : initial);
+        // A book never analyzed starts without the LLM when Ollama isn't running (spec SC5):
+        // the LLM is optional, and a run that needs an unreachable Ollama would only fail.
+        if (!book.analyzed && initial.llm && initial.provider === "ollama") {
+          void run<Doctor>({ command: "doctor", check_llm: true })
+            .then((outcome) => {
+              if (!current || outcome.outcome !== "success" || outcome.result.llm_check?.reachable !== false) return;
+              setOllamaOffline(true);
+              if (!llmChosen.current) setLocalForm((form) => (form ? { ...form, llm: false } : form));
+            })
+            .catch(() => undefined);
+        }
       }
     });
     return () => {
       current = false;
     };
-  }, [summary.chapters, analyzedWithLlm, source]);
+  }, [summary.chapters, analyzedWithLlm, source, book.analyzed]);
 
   return (
     <div className="screen book-page">
@@ -168,6 +186,7 @@ export function BookPage({ draft, onDraftChange, book, reviewing = false, onRevi
         <OptionsEditor
           form={form}
           onChange={setForm}
+          ollamaOffline={ollamaOffline}
           config={loaded.config}
           voices={loaded.voices}
           chapters={summary.chapters}
@@ -191,9 +210,11 @@ interface EditorProps {
   book: string;
   outputDir: string;
   onStart: (request: Request) => void;
+  /** Ollama didn't answer when the book was opened. */
+  ollamaOffline?: boolean;
 }
 
-function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, book, outputDir, onStart }: EditorProps) {
+function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, book, outputDir, onStart, ollamaOffline }: EditorProps) {
   const errors = validate(form, chapters);
   const valid = Object.keys(errors).length === 0;
   const built = useMemo(() => requests(book, form, outputDir), [book, form, outputDir]);
@@ -224,6 +245,12 @@ function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, boo
         <section className="options-group" aria-labelledby="options-analysis">
           <h3 id="options-analysis" className="title-medium">Analysis</h3>
           <Switch label="Use an LLM to find chapters and clean the text" selected={form.llm} onChange={(value) => set("llm", value)} />
+          {ollamaOffline && form.provider === "ollama" ? (
+            <p className="body-medium on-surface-variant" role="status">
+              Ollama isn't running on this computer, so this book starts without LLM help. The LLM is optional; turn it on once Ollama
+              is running.
+            </p>
+          ) : null}
           {form.llm ? (
             <>
               <Select

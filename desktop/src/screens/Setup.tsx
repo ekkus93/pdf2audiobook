@@ -85,8 +85,9 @@ export function Setup() {
     <div className="screen setup">
       <div className="screen-intro">
         <p className="body-medium on-surface-variant">
-          pdf2audiobook needs a few programs on this computer. Anything missing shows the exact
-          command that installs it.
+          {state.phase === "ready" && state.engine.source === "bundled"
+            ? "Everything pdf2audiobook needs is built into this app. Optional add-ons are below."
+            : "pdf2audiobook needs a few programs on this computer. Anything missing shows the exact command that installs it."}
         </p>
         <IconButton icon="refresh" label="Check again" onClick={recheck} disabled={state.phase === "loading"} />
       </div>
@@ -117,7 +118,9 @@ export function Setup() {
                 key={check.id}
                 check={check}
                 action={
-                  check.id === "llm" && state.doctor.llm_provider === "ollama" ? (
+                  check.action?.kind === "add_languages" ? (
+                    <AddLanguages languages={check.action.languages} onDone={recheck} />
+                  ) : check.id === "llm" && state.doctor.llm_provider === "ollama" ? (
                     <Button variant="tonal" icon="sync" onClick={checkLlm} disabled={checkingLlm}>
                       {checkingLlm ? "Checking…" : "Check context"}
                     </Button>
@@ -204,7 +207,54 @@ function CopyCommand({ command }: { command: string }) {
   );
 }
 
+/** Downloads missing OCR language data in place (self-contained app spec SC5). */
+function AddLanguages({ languages, onDone }: { languages: string[]; onDone: () => void }) {
+  const [state, setState] = useState<{ phase: "idle" } | { phase: "working" } | { phase: "failed"; message: string }>({ phase: "idle" });
+  const download = async () => {
+    setState({ phase: "working" });
+    try {
+      const outcome = await run({ command: "addon_add_languages", languages });
+      if (outcome.outcome === "success") {
+        setState({ phase: "idle" });
+        onDone();
+        return;
+      }
+      setState({ phase: "failed", message: outcome.outcome === "failed" ? outcome.error.message : "The engine returned an unreadable result" });
+    } catch (error) {
+      setState({ phase: "failed", message: errorMessage(error) });
+    }
+  };
+  return (
+    <>
+      <Button variant="tonal" icon="download" onClick={() => void download()} disabled={state.phase === "working"}>
+        {state.phase === "working" ? "Downloading…" : "Download language data"}
+      </Button>
+      {state.phase === "failed" ? (
+        <p className="body-small audio-problem" role="alert">
+          {state.message}
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 function NoEngine({ error }: { error: BridgeError }) {
+  if (error.kind === "locate" && error.error.kind === "bundled_broken") {
+    return (
+      <Card variant="outlined" label="The built-in engine could not start">
+        <div className="notice notice-error">
+          <Icon name="error" />
+          <div>
+            <div className="title-medium">The app's built-in engine could not start</div>
+            <p className="body-medium">Reinstall the app to repair it. Your books and settings are kept.</p>
+            <p className="body-medium on-surface-variant">
+              Developers can run another engine instead: turn on Use a development engine in Settings.
+            </p>
+          </div>
+        </div>
+      </Card>
+    );
+  }
   const mismatch = error.kind === "locate" && error.error.kind === "version_mismatch";
   return (
     <Card variant="outlined" label="pdf2audiobook was not found">

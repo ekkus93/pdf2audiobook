@@ -164,3 +164,40 @@ describe("Setup", () => {
     expect(document.querySelector('[aria-label="Copied"]')).not.toBeNull();
   });
 });
+
+describe("Setup with the engine built into the app", () => {
+  const bundled = { version: "0.1.0", source: "bundled" as const, command: "python3 -I -m pdf2audiobook" };
+
+  it("says nothing needs installing and downloads a missing OCR language in place", async () => {
+    vi.mocked(api.locateEngine).mockResolvedValue(bundled);
+    const missing = { ...DOCTOR, ffmpeg: true, ocr_requested_languages: "eng+deu", ocr_missing_languages: ["deu"] };
+    vi.mocked(api.run).mockImplementation(async (request) =>
+      request.command === "addon_add_languages"
+        ? { outcome: "success", result: { available: ["deu", "eng"], installed: ["deu", "eng"], bundled: ["eng"] } }
+        : { outcome: "success", result: missing },
+    );
+    render(<Setup />);
+    expect(await screen.findByText(/Everything pdf2audiobook needs is built into this app/)).toBeInTheDocument();
+    const list = await screen.findByRole("list", { name: "Setup checks" });
+    expect(list.querySelector("pre.command")).toBeNull();
+    const download = Array.from(list.querySelectorAll("md-filled-tonal-button")).find((element) =>
+      element.textContent?.includes("Download language data"),
+    ) as HTMLElement;
+    await act(async () => {
+      download.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(api.run).toHaveBeenCalledWith({ command: "addon_add_languages", languages: ["deu"] });
+    expect(vi.mocked(api.run).mock.calls.filter(([request]) => request.command === "doctor").length).toBeGreaterThan(1);
+  });
+
+  it("asks for a reinstall, with no command, when the built-in engine can't start", async () => {
+    vi.mocked(api.locateEngine).mockRejectedValue({
+      kind: "locate",
+      error: { kind: "bundled_broken" },
+      message: "The app's built-in engine could not be started",
+    });
+    render(<Setup />);
+    expect(await screen.findByText(/Reinstall the app/)).toBeInTheDocument();
+    expect(document.querySelector("pre.command")).toBeNull();
+  });
+});

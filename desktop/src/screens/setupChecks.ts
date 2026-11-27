@@ -8,8 +8,10 @@ export interface Check {
   title: string;
   state: CheckState;
   detail: string;
-  /** An exact command that fixes the problem, when there is one. */
+  /** An exact command that fixes the problem, when there is one (developer engines only). */
   fix?: string;
+  /** Something the app can do about it itself (the built-in engine). */
+  action?: { kind: "add_languages"; languages: string[] };
   icon: IconName;
 }
 
@@ -91,7 +93,54 @@ export function setupChecks(engine: EngineInfo, doctor: Doctor): Check[] {
         },
   );
   checks.push(llmCheck(doctor));
-  return checks;
+  return engine.source === "bundled" ? checks.map((check) => builtIn(check, doctor)) : checks;
+}
+
+/**
+ * The same rows for the engine built into the app (self-contained app spec SC5): no terminal
+ * commands. Built-in parts that are missing mean a damaged install; OCR languages download in
+ * the app; LLM help is optional, so an unreachable Ollama is not a problem to fix.
+ */
+function builtIn(check: Check, doctor: Doctor): Check {
+  const { fix: _command, ...row } = check;
+  void _command;
+  if (check.state !== "attention" && !(check.id === "llm" && doctor.llm_check && !doctor.llm_check.reachable)) return row;
+  switch (check.id) {
+    case "ffmpeg":
+      return { ...row, detail: "The app's built-in FFmpeg is missing. Reinstall the app." };
+    case "kitten":
+      return { ...row, detail: "The app's built-in voices are missing. Reinstall the app." };
+    case "tesseract":
+      if (!doctor.tesseract) return { ...row, detail: "The app's built-in OCR data is missing. Reinstall the app." };
+      return {
+        ...row,
+        detail: `OCR data for ${doctor.ocr_missing_languages.join(", ")} isn't downloaded yet. Each language is a small download.`,
+        action: { kind: "add_languages", languages: doctor.ocr_missing_languages },
+      };
+    case "llm": {
+      const report = doctor.llm_check;
+      const model = report?.model ?? "the model";
+      if (report && !report.reachable) {
+        return {
+          ...row,
+          state: "optional",
+          detail: `Ollama isn't running, so books are analyzed without an LLM, from their layout alone. LLM help is optional: to use it, install Ollama from ollama.com, start it with ${model}, then check again.`,
+        };
+      }
+      if (report && (report.served_context ?? 0) < (report.estimated_tokens_needed ?? 0)) {
+        return {
+          ...row,
+          detail: `Ollama serves ${model} with only ${(report.served_context ?? 0).toLocaleString("en-US")} tokens; analysis needs about ${(report.estimated_tokens_needed ?? 0).toLocaleString("en-US")}. Give the model a larger context in Ollama, or choose another model in the book options.`,
+        };
+      }
+      return {
+        ...row,
+        detail: `Ollama serves enough, but pdf2audiobook is set to use only ${report?.configured_context?.toLocaleString("en-US")} tokens. Raise llm.max_context_tokens in Settings → CLI configuration.`,
+      };
+    }
+    default:
+      return row;
+  }
 }
 
 function llmCheck(doctor: Doctor): Check {

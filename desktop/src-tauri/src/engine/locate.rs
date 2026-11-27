@@ -36,6 +36,9 @@ pub enum LocateError {
     NotFound,
     #[error("The pdf2audiobook command-line tool did not respond as expected")]
     Unresponsive,
+    /// The engine shipped with the app is there but would not start: a damaged install.
+    #[error("The app's built-in engine could not be started; reinstall the app")]
+    BundledBroken,
     #[error(
         "pdf2audiobook {cli} can't be used with this app ({app}); install a {app_series}.x version"
     )]
@@ -53,6 +56,7 @@ impl LocateError {
             LocateError::NotFound => 0,
             LocateError::Unresponsive => 1,
             LocateError::VersionMismatch { .. } => 2,
+            LocateError::BundledBroken => 3,
         }
     }
 }
@@ -81,7 +85,8 @@ pub fn locate(options: &LocateOptions<'_>, runner: &dyn Runner) -> Result<Locate
     let mut candidates: Vec<(CliSource, CliCommand)> = Vec::new();
     if let (Some(command), false) = (&bundled, options.developer) {
         candidates.push((CliSource::Bundled, command.clone()));
-        return first_confirmed(candidates, runner, options.app_version);
+        return first_confirmed(candidates, runner, options.app_version)
+            .map_err(|_| LocateError::BundledBroken);
     }
     if let Some(path) = options.configured.filter(|path| is_executable(path)) {
         candidates.push((CliSource::Configured, CliCommand::direct(path)));
@@ -285,6 +290,29 @@ mod tests {
         assert_eq!(
             locate(&opts, &TestRunner).unwrap().source,
             CliSource::Bundled
+        );
+    }
+
+    #[test]
+    fn a_built_in_engine_that_cannot_start_asks_for_a_reinstall() {
+        let temp = TempDir::new().unwrap();
+        let engine = temp.path().join("engine");
+        fake_bundle(&engine, "0.9.0", true);
+        fake_cli(&temp.path().join("bin"), "pdf2audiobook", "0.1.0", "0.1.0");
+        let path_env = temp.path().join("bin").into_os_string();
+        let mut opts = options(None, None, Some(&path_env));
+        opts.bundled = Some(&engine);
+
+        assert_eq!(locate(&opts, &TestRunner), Err(LocateError::BundledBroken));
+        assert_eq!(
+            LocateError::BundledBroken.to_string(),
+            "The app's built-in engine could not be started; reinstall the app"
+        );
+        // A developer engine still works with the setting on.
+        opts.developer = true;
+        assert_eq!(
+            locate(&opts, &TestRunner).unwrap().source,
+            CliSource::OnPath
         );
     }
 
