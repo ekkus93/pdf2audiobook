@@ -21,7 +21,8 @@ artifact). Both need Ubuntu 22.04 or a Linux of the same age or newer, on x86-64
 - **`.deb`** (about 160 MB, 470 MB installed): `sudo apt install ./pdf2audiobook_*-unsigned.deb`.
   It uses the system's WebKitGTK, which is why it is smaller.
 
-The app needs no Python, `uv`, FFmpeg or Tesseract on the computer. Optional features are
+Books go to `audiobooks` in your home folder unless you choose another folder in Settings. The app
+needs no Python, `uv`, FFmpeg or Tesseract on the computer. Optional features are
 add-ons the app downloads when you choose them (see [Add-ons and OCR
 languages](#add-ons-and-ocr-languages)); an LLM for chapter analysis is optional too (Ollama, set
 up separately). Settings → About lists every component inside the app with its licence.
