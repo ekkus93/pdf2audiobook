@@ -515,8 +515,11 @@ def test_worker_dies_if_cli_parent_is_force_killed(tmp_path):
         parent.wait(timeout=3)
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
-            status = Path(f"/proc/{worker_pid}/stat")
-            if not status.exists() or status.read_text().split()[2] == "Z":
+            try:
+                state = Path(f"/proc/{worker_pid}/stat").read_text().split()[2]
+            except (FileNotFoundError, ProcessLookupError):
+                break  # Gone, including between finding and reading its /proc entry.
+            if state == "Z":
                 break
             time.sleep(0.05)
         else:
