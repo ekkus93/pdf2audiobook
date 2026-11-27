@@ -25,7 +25,14 @@ Books go to `audiobooks` in your home folder unless you choose another folder in
 needs no Python, `uv`, FFmpeg or Tesseract on the computer. Optional features are
 add-ons the app downloads when you choose them (see [Add-ons and OCR
 languages](#add-ons-and-ocr-languages)); an LLM for chapter analysis is optional too (Ollama, set
-up separately). Settings → About lists every component inside the app with its licence.
+up separately).
+
+**Licence.** pdf2audiobook's own code is Apache-2.0. The installers also carry PyMuPDF (AGPL-3.0)
+and GPL components such as espeak-ng in the built-in engine, so the app as distributed is under
+the GNU AGPL 3.0 ([text](licenses/AGPL-3.0.txt)). Settings → About says so and lists every
+component inside the app with its licence: the engine's, and the Rust crates and npm packages
+compiled into the app. Each Desktop CI build uploads `pdf2audiobook-<version>-source.tar` with
+its installers: this repository at that commit and the source of every copyleft component.
 
 ## Add-ons and OCR languages
 
@@ -179,7 +186,7 @@ xvfb-run -s "-screen 0 1280x800x24" npm run e2e   # screenshots go to e2e/artifa
 would: no CLI is configured, so the app must find its built-in engine. The stand-in recognizers
 and voice cloner can't be used then, so it converts with real speech from the bundled voice,
 checks that the audio check offers its add-on with no terminal command, and opens About's
-licence list.
+licence lists, the AGPL statement and the app's own libraries.
 
 The "Desktop CI" workflow (`.github/workflows/desktop.yml`) runs all of the above on Ubuntu
 22.04, builds the engine and the AppImage and `.deb` with it, runs the clean-machine check, walks
@@ -264,6 +271,8 @@ python3 desktop/scripts/smoke_engine.py desktop/engine-dist/engine              
 (cd desktop && npm run tauri build -- --bundles appimage,deb)                   # the app, without the engine
 python3 desktop/scripts/package_engine.py desktop/engine-dist/engine            # add the engine; prints sizes
 bash desktop/scripts/clean_machine_check.sh desktop/src-tauri/target/release/bundle/appimage/*.AppImage
+uv run --no-project python desktop/scripts/source_archive.py desktop/engine-dist/engine \
+  --output desktop/src-tauri/target/release/bundle/source                        # the source archive
 ```
 
 - **The engine** (`build_engine.py`, about 470 MB in `desktop/engine-dist/engine`, ignored by
@@ -277,9 +286,17 @@ bash desktop/scripts/clean_machine_check.sh desktop/src-tauri/target/release/bun
 - **Packaging** (`package_engine.py`): Tauri's AppImage step runs `linuxdeploy`, which rewrites the
   library paths of every program file in the image, so the app is bundled without the engine and
   this script adds it afterwards, unchanged, to `usr/lib/pdf2audiobook/engine` in both installers.
-  It fails if an installer is over the size budget (400 MB compressed, 1 GB installed).
+  It also adds the app's own licence notices (`app_notices.py`: the app as distributed, then every
+  crate `cargo tree` links into the Linux build and every non-development npm package, with their
+  licence texts) at `usr/lib/pdf2audiobook/licenses`. It fails if an installer is over the size
+  budget (400 MB compressed, 1 GB installed).
 - **The clean-machine check** runs the smoke test from inside the AppImage in a stock Ubuntu 22.04
   container with no network, so nothing from the build machine can help. It needs Docker.
+- **The source archive** (`source_archive.py`, about 130 MB): `git archive HEAD` plus the source
+  of every copyleft component in the engine and the app (FFmpeg, LAME, espeak-ng, the GPL, AGPL
+  and MPL Python packages as their `uv.lock` sdists, and the MPL crates), each checked by hash,
+  and `SOURCES.json` listing them. It stops if a copyleft component has no pinned source, or if
+  tracked files have uncommitted changes, since the archive would not match the build.
 
 The installers are written to `src-tauri/target/release/bundle/deb/` and
 `src-tauri/target/release/bundle/appimage/`. The first AppImage build downloads `linuxdeploy`

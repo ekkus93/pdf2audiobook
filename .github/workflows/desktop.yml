@@ -2,7 +2,8 @@ name: Desktop CI
 # The Tauri desktop app in desktop/ (spec D10.c): frontend and Rust checks, a Linux build with
 # AppImage and .deb artifacts (D10.b, unsigned per D10.d), and the end-to-end walkthrough (D9.d).
 # The installers carry the built-in engine (self-contained app spec SC7), checked on a clean
-# machine with no network.
+# machine with no network, and are uploaded with the source archive they need as an AGPL-3.0
+# whole (C9).
 on:
   push:
     branches: [master]
@@ -117,12 +118,18 @@ jobs:
             mv "$file" "${file%.*}-unsigned.${file##*.}"
           done
           ls -l appimage deb
+      - name: Source archive for the installers (AGPL-3.0 as distributed, spec C9)
+        working-directory: .
+        run: |
+          uv run --no-project python desktop/scripts/source_archive.py desktop/engine-dist/engine \
+            --cache ~/engine-cache --output desktop/src-tauri/target/release/bundle/source
       - uses: actions/upload-artifact@v4
         with:
           name: pdf2audiobook-desktop-linux-unsigned
           path: |
             desktop/src-tauri/target/release/bundle/appimage/*-unsigned.AppImage
             desktop/src-tauri/target/release/bundle/deb/*-unsigned.deb
+            desktop/src-tauri/target/release/bundle/source/*-source.tar
           if-no-files-found: error
       - name: Install tauri-driver
         run: cargo install tauri-driver --locked

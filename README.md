@@ -83,6 +83,14 @@ else installed; voice cloning and the audio check are add-ons it downloads when 
 See the [desktop guide](desktop/README.md) for installing, add-ons and
 [building the AppImage or .deb](desktop/README.md#building-an-installer).
 
+## Licence
+
+The source code is under the [Apache License 2.0](LICENSE). The desktop installers bundle
+components under other licences, among them PyMuPDF (AGPL-3.0) and espeak-ng (GPL-3.0), so the
+desktop app as distributed is under the [GNU AGPL 3.0](desktop/licenses/AGPL-3.0.txt); see
+[the desktop guide](desktop/README.md) for its source archive. The CLI installed from source with
+`uv` uses PyMuPDF too, so the same applies if you distribute it together with its dependencies.
+
 ## Status and contributing
 
 The CLI has offline end-to-end fixture coverage. Real Kitten synthesis is an opt-in smoke test;

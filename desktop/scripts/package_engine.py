@@ -7,7 +7,8 @@ their library search paths, which would change the engine's Python packages. So 
 bundled without the engine, and this script adds the engine afterwards, unchanged: it unpacks
 each AppImage, copies the engine to `usr/lib/pdf2audiobook/engine` (where the app's resource
 folder is) and packs it again with the same runtime; each .deb gets the engine at
-`/usr/lib/pdf2audiobook/engine`, with its control and checksum files updated. It prints the
+`/usr/lib/pdf2audiobook/engine`, with its control and checksum files updated. Both also get the
+app's own licence notices (`app_notices.py`) at `usr/lib/pdf2audiobook/licenses`. It prints the
 sizes as JSON, for the ledger, and fails if a package is over the size budget (spec C8).
 
 appimagetool comes from the linuxdeploy AppImage plugin that `tauri build` downloads, unless
@@ -26,10 +27,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+import app_notices
+
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = ROOT / "desktop" / "src-tauri" / "target" / "release" / "bundle"
 # Tauri's resource folder on Linux: /usr/lib/<productName>, also inside the AppImage.
-TARGET = Path("usr") / "lib" / "pdf2audiobook" / "engine"
+RESOURCES = Path("usr") / "lib" / "pdf2audiobook"
+TARGET = RESOURCES / "engine"
+NOTICES = RESOURCES / "licenses"
 PLUGIN = Path.home() / ".cache" / "tauri" / "linuxdeploy-plugin-appimage.AppImage"
 MARKER = "pdf2audiobook-bundle.json"
 # Spec C8: the compressed installer and the installed app, before add-ons.
@@ -60,15 +65,21 @@ def appimagetool(given: Path | None, work: Path) -> Path:
     return work / "squashfs-root" / "usr" / "bin" / "appimagetool"
 
 
-def package_appimage(image: Path, engine: Path, tool: Path, work: Path) -> None:
+def add_payload(root: Path, engine: Path, notices: Path, name: str) -> None:
+    for target in (TARGET, NOTICES):
+        if (root / target).exists():
+            sys.exit(f"{name} already has {target.name}; build it again without them")
+    shutil.copytree(engine, root / TARGET, symlinks=True)
+    shutil.copytree(notices, root / NOTICES)
+
+
+def package_appimage(image: Path, engine: Path, notices: Path, tool: Path, work: Path) -> None:
     folder = work / "image"
     folder.mkdir()
     offset = int(run(image, "--appimage-offset", capture_output=True).stdout.strip())
     run(image, "--appimage-extract", cwd=folder, capture_output=True)
     root = folder / "squashfs-root"
-    if (root / TARGET).exists():
-        sys.exit(f"{image.name} already has an engine; build it again without one")
-    shutil.copytree(engine, root / TARGET, symlinks=True)
+    add_payload(root, engine, notices, image.name)
     runtime = work / "runtime"
     with image.open("rb") as source:
         runtime.write_bytes(source.read(offset))
@@ -83,15 +94,14 @@ def package_appimage(image: Path, engine: Path, tool: Path, work: Path) -> None:
     os.replace(packed, image)
 
 
-def package_deb(deb: Path, engine: Path, work: Path) -> int:
+def package_deb(deb: Path, engine: Path, notices: Path, work: Path) -> int:
     root = work / "deb"
     run("dpkg-deb", "-R", deb, root)
-    if (root / TARGET).exists():
-        sys.exit(f"{deb.name} already has an engine; build it again without one")
-    shutil.copytree(engine, root / TARGET, symlinks=True)
+    add_payload(root, engine, notices, deb.name)
     sums = root / "DEBIAN" / "md5sums"
     with sums.open("a", encoding="utf-8") as stream:
-        for path in sorted((root / TARGET).rglob("*")):
+        added = [*(root / TARGET).rglob("*"), *(root / NOTICES).rglob("*")]
+        for path in sorted(added):
             if path.is_file() and not path.is_symlink():
                 digest = hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
                 stream.write(f"{digest}  {path.relative_to(root)}\n")
@@ -128,15 +138,18 @@ def main() -> None:
         sys.exit("No AppImage or .deb to add the engine to; run `tauri build` first")
     sizes: dict[str, dict[str, int]] = {"engine": {"installed": tree_size(engine)}}
     scratch = os.environ.get("TMPDIR")
-    for image in images:
-        with tempfile.TemporaryDirectory(dir=scratch) as temp:
-            tool = appimagetool(args.appimagetool, Path(temp))
-            package_appimage(image, engine, tool, Path(temp))
-        sizes["appimage"] = {"compressed": image.stat().st_size}
-    for deb in debs:
-        with tempfile.TemporaryDirectory(dir=scratch) as temp:
-            installed = package_deb(deb, engine, Path(temp))
-        sizes["deb"] = {"compressed": deb.stat().st_size, "installed": installed}
+    with tempfile.TemporaryDirectory(dir=scratch) as temp:
+        notices = Path(temp) / "licenses"
+        app_notices.write(notices)
+        for image in images:
+            with tempfile.TemporaryDirectory(dir=scratch) as work:
+                tool = appimagetool(args.appimagetool, Path(work))
+                package_appimage(image, engine, notices, tool, Path(work))
+            sizes["appimage"] = {"compressed": image.stat().st_size}
+        for deb in debs:
+            with tempfile.TemporaryDirectory(dir=scratch) as work:
+                installed = package_deb(deb, engine, notices, Path(work))
+            sizes["deb"] = {"compressed": deb.stat().st_size, "installed": installed}
     print(json.dumps(sizes, indent=2))
     over = [
         f"{kind} {what} is {value / 1e6:.0f} MB, over {BUDGET[what] / 1e6:.0f} MB"

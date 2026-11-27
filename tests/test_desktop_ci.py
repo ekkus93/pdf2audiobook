@@ -84,3 +84,14 @@ def test_installers_are_uploaded_and_named_unsigned() -> None:
     assert "bundle/appimage/*-unsigned.AppImage" in workflow
     assert "bundle/deb/*-unsigned.deb" in workflow
     assert "if-no-files-found: error" in workflow
+
+
+def test_the_source_archive_is_built_and_uploaded_with_the_installers() -> None:
+    # As distributed the installers are AGPL-3.0, so their source travels with them (spec C9).
+    workflow = _desktop()
+    step = _step(workflow, "Source archive for the installers")
+    assert "desktop/scripts/source_archive.py desktop/engine-dist/engine" in step
+    assert "--output desktop/src-tauri/target/release/bundle/source" in step
+    upload = workflow.index("name: pdf2audiobook-desktop-linux-unsigned")
+    assert workflow.index("desktop/scripts/source_archive.py") < upload
+    assert "bundle/source/*-source.tar" in workflow[upload:]

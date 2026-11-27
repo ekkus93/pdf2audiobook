@@ -127,6 +127,21 @@
   margin: 2px 0 0;
 }
 
+.about-actions {
+  display: flex;
+  margin: 4px 0 8px;
+}
+
+.notice-group summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.notice-group summary:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
 .notice-source {
   overflow-wrap: anywhere;
   user-select: text;

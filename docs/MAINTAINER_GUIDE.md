@@ -626,6 +626,8 @@ Everything the engine contains is pinned, and each pin has one place to change:
 | FFmpeg's features | `FFMPEG_CONFIGURE` in `build_engine.py` | Only what the engine uses is built in. FFmpeg's `configure` silently ignores a name it doesn't know (the raw PCM formats are `pcm_f32le` and `pcm_s16le`, not `f32le`), so when the engine starts using FFmpeg in a new way, add a check to `FFMPEG_USES` in `smoke_engine.py` too. The build must stay static; it stops if it isn't. |
 | English OCR data, the voice model | `pins.json` `tessdata`, `models` | URL or revision, and SHA-256 of each file. |
 | OCR languages users can add | `desktop/engine/tessdata.json` | `python3 desktop/scripts/tessdata_catalog.py` (needs `gh`); pinned by size and git blob hash. |
+| Copyleft source for the source archive | `pins.json` `sources`, `uv.lock`, `Cargo.lock` | `source_archive.py` takes FFmpeg and LAME from `ffmpeg`, Python packages from their `uv.lock` sdists and crates from `Cargo.lock`. `sources` pins what has neither: espeak-ng and `espeakng-loader` as GitHub archives of the commits under `licenses` (keep them in step). The archive build stops when a copyleft component has no source; add it here. |
+| Licence texts the app's crates and npm packages don't ship | `desktop/licenses/` | The SPDX MIT, BSD-3-Clause and MPL-2.0 texts (license-list-data v3.27.0) and the AGPL-3.0 text; `app_notices.py` stops when a package ships no text and its licence has none here. |
 | Licence texts a component doesn't ship | `pins.json` `licenses` | The Apache-2.0 text, espeak-ng's GPL-3 (at the exact espeak-ng commit `espeakng-loader` builds) and `espeakng-loader`'s MIT licence. The build stops when a bundled package has no licence text; add one here. |
 | The clean machine | `clean_machine_check.sh` | An `ubuntu:22.04` image pinned by digest. |
 
@@ -636,11 +638,23 @@ AppImage carries the build machine's WebKitGTK and GStreamer, so a build on a ne
 larger (356 MB on Debian 13). The largest parts of the engine are ONNX Runtime, PyMuPDF,
 NumPy and the voice model.
 
-**Licences** (spec C9): the engine build writes `share/licenses/components.json`, every bundled
-component with its licence, its source and its licence texts, which Settings → About shows. Most
-are permissive; the copyleft ones are FFmpeg and LAME (LGPL, with their exact build recorded in
-`share/licenses/ffmpeg/BUILD.txt`), espeak-ng (GPL-3.0), PyMuPDF (AGPL-3.0), phonemizer (GPL-3.0)
-and mutagen (GPL-2.0). All run in the engine's own process, separate from the Apache-2.0 app.
+**Licences** (spec C9): the repository's code is Apache-2.0, but the installers combine it with
+copyleft components in the engine: FFmpeg and LAME (LGPL, with their exact build recorded in
+`share/licenses/ffmpeg/BUILD.txt`), espeak-ng (GPL-3.0), PyMuPDF (AGPL-3.0), phonemizer (GPL-3.0),
+mutagen (GPL-2.0), and certifi and tqdm (MPL-2.0); the app links five MPL-2.0 crates. So the
+installers, as a whole, are distributed under the GNU AGPL 3.0, and each one's complete source goes
+with it:
+
+- The engine build writes `share/licenses/components.json`, every engine component with its
+  licence, source and licence texts. `package_engine.py` adds the app's own list
+  (`app_notices.py`) at `usr/lib/pdf2audiobook/licenses`, the app as distributed first. Settings
+  → About shows the AGPL statement, both lists and every text.
+- Desktop CI builds the source archive (`source_archive.py`) and uploads it in the same artifact as
+  the installers. Publish it next to them wherever they go: an installer handed out without its
+  source archive is not licence-compliant.
+- A new dependency under GPL, LGPL, AGPL or MPL needs its source pinned (an sdist in `uv.lock`
+  does it for Python packages); one under a licence that is not compatible with the AGPL 3.0
+  (GPL-2.0-only, for example) cannot ship in the installers.
 
 **Add-ons** install with the engine's own `pip` into
 `$XDG_DATA_HOME/pdf2audiobook/addons/<engine version>/<component>/`, one folder per group of

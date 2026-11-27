@@ -117,20 +117,47 @@ fn bundled_engine(app: &AppHandle) -> Option<PathBuf> {
         .or_else(|| app.path().resource_dir().ok().map(|dir| dir.join("engine")))
 }
 
+fn unreadable_notice() -> BridgeError {
+    BridgeError::Request {
+        message: "The licence text could not be read; reinstall the app".into(),
+    }
+}
+
 /// The built-in engine's licence notices for About; None in a development build (spec C9).
 #[tauri::command]
 pub fn engine_notices(app: AppHandle) -> Option<Vec<crate::notices::Notice>> {
-    crate::notices::notices(&bundled_engine(&app)?)
+    crate::notices::notices(&bundled_engine(&app)?, crate::notices::ENGINE_LIST)
 }
 
 /// One component's licence texts, by its place in `engine_notices`.
 #[tauri::command]
 pub fn engine_notice_text(app: AppHandle, index: usize) -> Result<String, BridgeError> {
     bundled_engine(&app)
-        .and_then(|engine| crate::notices::notice_text(&engine, index))
-        .ok_or(BridgeError::Request {
-            message: "The licence text could not be read; reinstall the app".into(),
-        })
+        .and_then(|engine| crate::notices::notice_text(&engine, crate::notices::ENGINE_LIST, index))
+        .ok_or_else(unreadable_notice)
+}
+
+/// Where an installed app's own notices are: `licenses/` in its resources.
+fn app_licenses(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .resource_dir()
+        .ok()
+        .map(|dir| dir.join("licenses"))
+}
+
+/// The app's own licence notices (the app as distributed, its crates and npm packages); None
+/// in a development build, which `package_engine.py` has not packaged.
+#[tauri::command]
+pub fn app_notices(app: AppHandle) -> Option<Vec<crate::notices::Notice>> {
+    crate::notices::notices(&app_licenses(&app)?, crate::notices::APP_LIST)
+}
+
+/// One of the app's components' licence texts, by its place in `app_notices`.
+#[tauri::command]
+pub fn app_notice_text(app: AppHandle, index: usize) -> Result<String, BridgeError> {
+    app_licenses(&app)
+        .and_then(|root| crate::notices::notice_text(&root, crate::notices::APP_LIST, index))
+        .ok_or_else(unreadable_notice)
 }
 
 /// A readable command line for "Details". Display only: commands never run through a shell.

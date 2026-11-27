@@ -348,7 +348,7 @@ async function main() {
   }
   if (BUNDLED) {
     await addonOffer();
-    step("passed: with its built-in engine, the app added, analyzed, reviewed and converted the book with real speech, and offered the audio check add-on and its licences");
+    step("passed: with its built-in engine, the app added, analyzed, reviewed and converted the book with real speech, and offered the audio check add-on, and showed its licences and the app's");
     return;
   }
   await audioCheck(workspace, manifest.chapters.length);
@@ -377,6 +377,17 @@ async function addonOffer() {
   await click(await find(`//li[contains(@class, 'notice-row')][contains(., 'espeak-ng 1.52.0')]${button("Licence")}`));
   await find("//md-dialog[@open]//pre[contains(., 'GNU GENERAL PUBLIC LICENSE')]", 30);
   await screenshot("7-about");
+  await click(await find(`//md-dialog[@open]${button("Close")}`));
+
+  step("about: the installed app is under the GNU AGPL 3.0 and lists its own libraries");
+  await find("//*[contains(@class, 'about')]//p[contains(., 'as distributed is under the GNU Affero General Public License 3.0')]", 30);
+  await click(await find(button("GNU AGPL 3.0 and Apache 2.0")));
+  await find("//md-dialog[@open]//pre[contains(., 'GNU AFFERO GENERAL PUBLIC LICENSE')][contains(., 'Apache License')]", 30);
+  await click(await find(`//md-dialog[@open]${button("Close")}`));
+  await click(await find("//details[contains(@class, 'notice-group')]/summary[contains(., 'libraries')]"));
+  await click(await find(`//ul[@aria-label='App libraries']/li[contains(., 'tauri ')][contains(., 'crates.io')]${button("Licence")}`, 30));
+  await find("//md-dialog[@open]//pre[contains(., 'MIT')]", 30);
+  await screenshot("7-about-app");
   await click(await find(`//md-dialog[@open]${button("Close")}`));
 }
 

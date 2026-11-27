@@ -53,6 +53,16 @@ export function engineNoticeText(index: number): Promise<string> {
   return invoke<string>("engine_notice_text", { index });
 }
 
+/** The installed app's own components and licences, the app itself first; null in a build that was not packaged. */
+export function appNotices(): Promise<Notice[] | null> {
+  return invoke<Notice[] | null>("app_notices");
+}
+
+/** One of the app's components' licence texts, by its place in `appNotices`. */
+export function appNoticeText(index: number): Promise<string> {
+  return invoke<string>("app_notice_text", { index });
+}
+
 /** A user-facing sentence for anything `invoke` rejects with. */
 export function errorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {

@@ -83,5 +83,16 @@
       "url": "https://raw.githubusercontent.com/thewh1teagle/espeakng-loader/0ddc87adf77e5850d7eeb542ac8a87d421b64daa/LICENSE",
       "sha256": "b05c73bb1335b4320ec97edff106b3991c12d0acdc6e899c96f061a15039119f"
     }
+  },
+  "sources": {
+    "comment": "Source archives for the copyleft components that are neither pinned above nor an sdist in uv.lock, for the source archive published with the installers (spec C9). espeakng-loader ships wheels only; it builds espeak-ng from its submodule at the commit under licenses.",
+    "espeak-ng": {
+      "url": "https://github.com/espeak-ng/espeak-ng/archive/4870adfa25b1a32b4361592f1be8a40337c58d6c.tar.gz",
+      "sha256": "cd83f84c4e495f281ac14e919aecf2834306ec1ea1b498de8ef6000f3a0f90de"
+    },
+    "espeakng-loader": {
+      "url": "https://github.com/thewh1teagle/espeakng-loader/archive/146599e29be31bf17d99f0bcb7dbb2f92aef3d95.tar.gz",
+      "sha256": "d6496114cd0608988f5291f54d2d15b50cb37b7f007af00bb62cf93be1b3ceca"
+    }
   }
 }

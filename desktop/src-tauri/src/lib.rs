@@ -106,6 +106,8 @@ pub fn run() {
             commands::export_zip,
             commands::engine_notices,
             commands::engine_notice_text,
+            commands::app_notices,
+            commands::app_notice_text,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

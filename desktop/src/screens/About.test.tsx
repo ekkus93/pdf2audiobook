@@ -6,6 +6,8 @@ vi.mock("../engine/api", async (original) => ({
   ...(await original<typeof import("../engine/api")>()),
   engineNotices: vi.fn(),
   engineNoticeText: vi.fn(),
+  appNotices: vi.fn(),
+  appNoticeText: vi.fn(),
 }));
 
 import * as api from "../engine/api";
@@ -28,6 +30,30 @@ const NOTICES: Notice[] = [
   },
 ];
 
+const APP: Notice[] = [
+  {
+    name: "pdf2audiobook (this app)",
+    version: "0.1.0",
+    license: "AGPL-3.0-only as distributed",
+    source: "https://github.com/ekkus93/pdf2audiobook",
+    files: ["AGPL-3.0.txt", "Apache-2.0.txt"],
+  },
+  {
+    name: "serde",
+    version: "1.0.228",
+    license: "MIT OR Apache-2.0",
+    source: "https://github.com/serde-rs/serde (crate serde 1.0.228 on crates.io)",
+    files: ["texts/0123456789abcdef.txt"],
+  },
+  {
+    name: "react",
+    version: "19.2.0",
+    license: "MIT",
+    source: "https://github.com/facebook/react (npm react 19.2.0)",
+    files: ["texts/fedcba9876543210.txt"],
+  },
+];
+
 function button(text: string): HTMLElement {
   const found = Array.from(document.querySelectorAll("md-text-button")).filter((element) => element.textContent?.includes(text));
   if (!found.length) throw new Error(`no button labelled ${text}`);
@@ -41,6 +67,8 @@ async function click(element: Element) {
 }
 
 beforeEach(() => {
+  vi.mocked(api.appNotices).mockResolvedValue(null);
+  vi.mocked(api.appNoticeText).mockResolvedValue("==> AGPL-3.0.txt <==\nGNU AFFERO GENERAL PUBLIC LICENSE");
   vi.mocked(api.engineNotices).mockResolvedValue(NOTICES);
   vi.mocked(api.engineNoticeText).mockResolvedValue("==> share/licenses/espeak-ng/COPYING <==\nGNU GENERAL PUBLIC LICENSE");
 });
@@ -80,5 +108,32 @@ describe("About", () => {
     expect(await screen.findByText(/Apache License 2\.0/)).toBeInTheDocument();
     await act(async () => undefined);
     expect(document.querySelector(".notice-list")).toBeNull();
+    expect(document.body).not.toHaveTextContent("Affero");
+  });
+
+  it("says an installed app is under the GNU AGPL 3.0 and where its source is", async () => {
+    vi.mocked(api.appNotices).mockResolvedValue(APP);
+    render(<About />);
+    expect(await screen.findByText(/as distributed is under the GNU Affero General Public License 3\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/published next to its installers/)).toBeInTheDocument();
+    await click(button("GNU AGPL 3.0 and Apache 2.0"));
+    expect(api.appNoticeText).toHaveBeenCalledWith(0);
+    expect(await screen.findByText(/GNU AFFERO GENERAL PUBLIC LICENSE/)).toBeInTheDocument();
+    expect(document.querySelector("md-dialog[open]")).toHaveTextContent("pdf2audiobook (this app) licence");
+  });
+
+  it("lists the app's own libraries apart from the engine's components", async () => {
+    vi.mocked(api.appNotices).mockResolvedValue(APP);
+    render(<About />);
+    expect(await screen.findByText("The app's 2 libraries")).toBeInTheDocument();
+    const libraries = screen.getByRole("list", { name: "App libraries" });
+    expect(libraries).toHaveTextContent("serde 1.0.228");
+    expect(libraries).toHaveTextContent("npm react 19.2.0");
+    expect(libraries).not.toHaveTextContent("this app");
+    expect(screen.getByRole("list", { name: "Components" })).not.toHaveTextContent("serde");
+    const licence = Array.from(libraries.querySelectorAll("md-text-button"))[1];
+    await click(licence);
+    expect(api.appNoticeText).toHaveBeenCalledWith(2);
+    expect(api.engineNoticeText).not.toHaveBeenCalled();
   });
 });
