@@ -73,6 +73,39 @@ describe("@material/web wrappers", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it("a Button that changes variant in place still reports clicks", () => {
+    // React keeps the component but swaps the element (md-filled-button for md-outlined-button).
+    const first = vi.fn();
+    const second = vi.fn();
+    const { container, rerender } = render(
+      <Button variant="filled" onClick={first}>
+        Download
+      </Button>,
+    );
+    rerender(
+      <Button variant="outlined" onClick={second}>
+        Stop
+      </Button>,
+    );
+    expect(container.querySelector("md-filled-button")).toBeNull();
+    fire(element(container, "md-outlined-button"), "click");
+    expect(second).toHaveBeenCalledOnce();
+    expect(first).not.toHaveBeenCalled();
+  });
+
+  it("a Button listens once, however often it renders, and stops when it unmounts", () => {
+    const onClick = vi.fn();
+    const { container, rerender, unmount } = render(<Button onClick={onClick}>Convert</Button>);
+    rerender(<Button onClick={onClick}>Convert</Button>);
+    rerender(<Button onClick={onClick}>Convert again</Button>);
+    const button = element(container, "md-filled-button");
+    fire(button, "click");
+    expect(onClick).toHaveBeenCalledOnce();
+    unmount();
+    fire(button, "click");
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
   it("IconButton has an accessible name", () => {
     const onClick = vi.fn();
     const { container } = render(<IconButton icon="close" label="Close" onClick={onClick} />);
