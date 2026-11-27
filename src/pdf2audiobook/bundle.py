@@ -33,11 +33,12 @@ def configure_environment(environ: MutableMapping[str, str] = os.environ) -> Non
     path = environ.get("PATH", "")
     if tools not in path.split(os.pathsep):
         environ["PATH"] = f"{tools}{os.pathsep}{path}" if path else tools
-    tessdata = root / "share" / "tessdata"
+    from pdf2audiobook.addons import activate, tessdata_folder
+
+    # Added OCR languages live in a writable folder with copies of the bundled ones.
+    tessdata = tessdata_folder() or root / "share" / "tessdata"
     if "TESSDATA_PREFIX" not in environ and tessdata.is_dir():
         environ["TESSDATA_PREFIX"] = str(tessdata)
-    from pdf2audiobook.addons import activate
-
     activate(environ)
 
 

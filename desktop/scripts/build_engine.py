@@ -155,6 +155,7 @@ def add_addon_lists(engine: Path, cache: Path) -> None:
             named.unlink()
             entry["wheel"] = built.name
             entry["hashes"] = [f"sha256:{sha256(wheels / built.name)}"]
+    shutil.copyfile(ROOT / "desktop" / "engine" / "tessdata.json", share / "tessdata.json")
     (share / "addons.lock.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 

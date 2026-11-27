@@ -44,10 +44,11 @@ ADDONS = {
         "roots": ["kittenml"],
         "models": "tts fetch kitten2",
     },
+    # All three recognizers: a flag is confirmed only when two of them agree.
     "audio-check": {
-        "title": "Audio checking (Whisper)",
-        "roots": ["openai-whisper"],
-        "models": "asr fetch whisper",
+        "title": "Audio checking (speech recognizers)",
+        "roots": ["openai-whisper", "transformers", "torch", "vosk"],
+        "models": "asr fetch whisper wav2vec2 vosk",
     },
 }
 

@@ -294,5 +294,7 @@ def test_every_contract_has_a_test() -> None:
         "audio-report", "audio-dismiss",
         # Tested in test_voice_cloning_conversion.py.
         "tts-models", "tts-fetch", "voice-clone",
+        # Tested in test_addons.py and test_addon_languages.py.
+        "addons-list", "addon", "addon-languages",
     }  # fmt: skip
     assert contracts == tested

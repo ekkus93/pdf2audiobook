@@ -76,3 +76,73 @@ def addons_remove(
         raise
     except Exception as exc:
         fail(exc, json_output=json_output)
+
+
+@addons_app.command("languages", epilog="Example: pdf2audiobook addons languages --json")
+def addons_languages(json_output: bool = typer.Option(False, "--json")) -> None:
+    """List OCR languages that are ready and those that can be added."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook import addons
+
+        report = addons.languages()
+        if json_output:
+            emit(report, json_output)
+        else:
+            console.print("Ready: " + (", ".join(report["installed"]) or "none"))
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
+@addons_app.command(
+    "add-language", epilog="Example: pdf2audiobook addons add-language deu --yes --json"
+)
+def addons_add_language(
+    codes: list[str] = typer.Argument(..., help="Tesseract language codes, such as deu or fra."),
+    yes: bool = typer.Option(False, "--yes", help="Download without asking first."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Download OCR languages, checking each file against its pinned size and hash."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook import addons
+
+        if not yes:
+            if json_output:
+                raise ConfigError("Review 'addons languages --json', then pass --yes to download")
+            if not typer.confirm(
+                f"Download OCR data for {', '.join(codes)}?", default=False, err=True
+            ):
+                raise typer.Exit(1)
+        emit(addons.add_languages(codes), json_output)
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)
+
+
+@addons_app.command(
+    "remove-language", epilog="Example: pdf2audiobook addons remove-language deu --json"
+)
+def addons_remove_language(
+    code: str = typer.Argument(..., help="An added OCR language code."),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Remove an added OCR language; the built-in ones stay."""
+    set_output_mode(json_output)
+    try:
+        from pdf2audiobook import addons
+
+        emit(addons.remove_language(code), json_output)
+    except KeyboardInterrupt:
+        fail_interrupted(json_output=json_output)
+    except (typer.Exit, ClickExit):
+        raise
+    except Exception as exc:
+        fail(exc, json_output=json_output)

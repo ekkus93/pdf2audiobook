@@ -15,24 +15,30 @@ Outside a bundled engine there are no add-ons, and nothing here applies.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from pdf2audiobook import __version__
 from pdf2audiobook.bundle import bundle_root
-from pdf2audiobook.errors import AudioError, ConfigError
+from pdf2audiobook.errors import AudioError, ConfigError, InputError
 
 COMPLETE = ".complete.json"
 # Extra pip options, for tests and for a local package mirror; never needed by users.
 PIP_OPTIONS_ENV = "PDF2AUDIOBOOK_ADDON_PIP_OPTIONS"
+# Where OCR language files are downloaded from, as a template with {language}; for tests.
+TESSDATA_URL_ENV = "PDF2AUDIOBOOK_TESSDATA_URL"
+_LANGUAGE = re.compile(r"^[a-z][a-z0-9_]{1,31}$")
 
 
 def _share() -> Path | None:
@@ -199,7 +205,9 @@ def _fetch_models(name: str) -> None:
     elif name == "audio-check":
         from pdf2audiobook.verification import models as asr
 
-        asr.fetch("whisper", on_file=None)
+        # All three recognizers: a flag is confirmed only when two of them agree.
+        for model in ("whisper", "wav2vec2", "vosk"):
+            asr.fetch(model, on_file=None)
 
 
 def install(name: str, *, pip_options: list[str] | None = None) -> dict[str, Any]:
@@ -230,3 +238,100 @@ def remove(name: str) -> dict[str, Any]:
     for leftover in root.glob(".*.partial") if root.is_dir() else ():
         shutil.rmtree(leftover, ignore_errors=True)
     return next(item for item in status() if item["name"] == name)
+
+
+# OCR languages (spec SC4). PyMuPDF reads every language from one folder, and the bundled one is
+# read-only in an AppImage, so added languages go in a writable folder that also holds copies of
+# the bundled ones. TESSDATA_PREFIX points there once it exists (see bundle.configure_environment).
+
+
+def _catalog() -> dict[str, Any] | None:
+    share = _share()
+    path = None if share is None else share / "tessdata.json"
+    if path is None or not path.is_file():
+        return None
+    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return data
+
+
+def _bundled_tessdata() -> Path | None:
+    root = bundle_root()
+    folder = None if root is None else root / "share" / "tessdata"
+    return folder if folder is not None and folder.is_dir() else None
+
+
+def tessdata_folder() -> Path | None:
+    """The writable OCR language folder, once a language has been added."""
+    folder = addons_root() / "tessdata"
+    return folder if (folder / COMPLETE).is_file() else None
+
+
+def languages() -> dict[str, list[str]]:
+    """OCR languages that can be added, and those ready to use (bundled or added)."""
+    catalog = _catalog()
+    folder = tessdata_folder() or _bundled_tessdata()
+    installed = [] if folder is None else sorted(p.stem for p in folder.glob("*.traineddata"))
+    available = [] if catalog is None else sorted(catalog["languages"])
+    bundled = _bundled_tessdata()
+    shipped = [] if bundled is None else sorted(p.stem for p in bundled.glob("*.traineddata"))
+    return {"available": available, "installed": installed, "bundled": shipped}
+
+
+def _git_blob(data: bytes) -> str:
+    return hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False).hexdigest()
+
+
+def _language_folder() -> Path:
+    folder = addons_root() / "tessdata"
+    if not (folder / COMPLETE).is_file():
+        folder.mkdir(parents=True, exist_ok=True)
+        bundled = _bundled_tessdata()
+        for source in [] if bundled is None else bundled.glob("*.traineddata"):
+            shutil.copyfile(source, folder / source.name)
+        (folder / COMPLETE).write_text(json.dumps({"engine": __version__}), encoding="utf-8")
+    return folder
+
+
+def add_languages(codes: list[str]) -> dict[str, list[str]]:
+    """Download OCR languages, each checked against the pinned size and git blob hash."""
+    catalog = _catalog()
+    if catalog is None:
+        raise ConfigError(
+            "Adding OCR languages is available only in the desktop app's built-in engine"
+        )
+    for code in codes:
+        if not _LANGUAGE.match(code) or code not in catalog["languages"]:
+            raise ConfigError("Unknown OCR language; see 'addons languages --json'")
+    folder = _language_folder()
+    template = os.environ.get(TESSDATA_URL_ENV) or catalog["url"]
+    for code in codes:
+        target = folder / f"{code}.traineddata"
+        if target.is_file():
+            continue
+        pinned = catalog["languages"][code]
+        partial = folder / f".{code}.partial"
+        try:
+            with urllib.request.urlopen(template.format(language=code), timeout=120) as response:
+                data = response.read(pinned["size"] + 1)
+        except OSError:
+            raise InputError(
+                "The OCR language could not be downloaded. Check the network connection and try again"
+            ) from None
+        if len(data) != pinned["size"] or _git_blob(data) != pinned["git_blob"]:
+            raise InputError("The downloaded OCR language did not match its pinned checksum")
+        partial.write_bytes(data)
+        os.replace(partial, target)
+    return languages()
+
+
+def remove_language(code: str) -> dict[str, list[str]]:
+    """Remove an added OCR language; the bundled ones stay."""
+    bundled = _bundled_tessdata()
+    if not _LANGUAGE.match(code) or (
+        bundled is not None and (bundled / f"{code}.traineddata").is_file()
+    ):
+        raise ConfigError("Only added OCR languages can be removed")
+    folder = tessdata_folder()
+    if folder is not None:
+        (folder / f"{code}.traineddata").unlink(missing_ok=True)
+    return languages()

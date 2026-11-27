@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addons languages|add-language|remove-language --json",
+  "description": "OCR languages ready to use (bundled or added) and those that can be added (spec SC4).",
+  "type": "object",
+  "required": [
+    "available",
+    "installed",
+    "bundled"
+  ],
+  "properties": {
+    "available": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,31}$"
+      }
+    },
+    "installed": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,31}$"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "bundled": {
+      "description": "Languages shipped with the engine; they cannot be removed.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,31}$"
+      }
+    }
+  }
+}

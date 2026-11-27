@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "addons install|remove NAME --json",
+  "description": "One add-on's state after installing or removing it.",
+  "type": "object",
+  "required": [
+    "addon"
+  ],
+  "properties": {
+    "addon": {
+      "type": "object",
+      "required": [
+        "name",
+        "title",
+        "installed",
+        "components",
+        "older_version_installed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "kitten2",
+            "audio-check"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean"
+        },
+        "older_version_installed": {
+          "type": "boolean",
+          "description": "Add-ons for another engine version are present; they are not used."
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "installed",
+              "packages"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9+-]+$"
+              },
+              "installed": {
+                "type": "boolean"
+              },
+              "packages": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

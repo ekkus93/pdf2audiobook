@@ -64,7 +64,7 @@ def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
         "addons": {
             "kitten2": {"title": "Voice cloning and Kitten 2", "models": "tts fetch kitten2",
                         "components": ["audio-check+kitten2", "kitten2"]},
-            "audio-check": {"title": "Audio checking (Whisper)", "models": "asr fetch whisper",
+            "audio-check": {"title": "Audio checking (speech recognizers)", "models": "asr fetch whisper wav2vec2 vosk",
                             "components": ["audio-check", "audio-check+kitten2"]},
         },
         "components": {
@@ -76,6 +76,10 @@ def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     (share / "addons.lock.json").write_text(json.dumps(lock), encoding="utf-8")
     monkeypatch.setattr(sys, "prefix", str(root))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    # The CLI sets up a bundled engine's environment in os.environ; restore it afterwards.
+    for name in ("PATH", "TESSDATA_PREFIX", "PYTHONPATH"):
+        monkeypatch.setenv(name, os.environ.get(name, ""))
+    monkeypatch.delenv("TESSDATA_PREFIX")
     monkeypatch.setenv("PYTHONPATH", "")
     monkeypatch.setattr(sys, "path", list(sys.path))
     fetched: list[str] = []
@@ -84,6 +88,15 @@ def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
         "root": root, "index": index, "fetched": fetched, "lock": lock,
         "pip": ["--no-index", "--find-links", str(index)], "data": tmp_path / "data",
     }  # fmt: skip
+
+
+def _contract(schema: str, payload: object) -> None:
+    import jsonschema
+
+    path = Path(__file__).resolve().parents[1] / "desktop" / "contracts" / f"{schema}.schema.json"
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    jsonschema.Draft202012Validator.check_schema(contract)
+    jsonschema.Draft202012Validator(contract).validate(payload)
 
 
 def _status(name: str) -> dict:
@@ -99,6 +112,7 @@ def test_outside_a_bundle_there_are_no_addons(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
     assert (payload["available"], payload["addons"]) == (False, [])
+    _contract("addons-list", payload)
 
 
 def test_installing_an_addon_installs_its_components_and_fetches_its_models(engine: dict) -> None:
@@ -188,3 +202,6 @@ def test_the_cli_lists_installs_and_removes(engine: dict, monkeypatch: pytest.Mo
     assert json.loads(removed.stdout)["addon"]["installed"] is False
     for result in (listed, installed, removed):
         assert str(engine["data"]) not in result.stdout + result.stderr
+    _contract("addons-list", payload)
+    _contract("addon", json.loads(installed.stdout))
+    _contract("addon", json.loads(removed.stdout))
