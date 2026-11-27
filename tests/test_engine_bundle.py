@@ -132,3 +132,18 @@ def test_the_engine_runs_as_a_module() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip()
+
+
+def test_a_missing_kitten_2_addon_is_named_without_a_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pdf2audiobook.errors import AudioError
+    from pdf2audiobook.tts import catalog
+
+    monkeypatch.setattr(sys, "prefix", str(_bundle(tmp_path)))
+    monkeypatch.setattr(catalog, "model_readiness", lambda: {"reason": None, "ready": False})
+    with pytest.raises(AudioError) as raised:
+        catalog.require_model()
+    assert "Voice cloning and Kitten 2 add-on" in str(raised.value)
+    assert "pdf2audiobook" not in str(raised.value) and "kittenml" not in str(raised.value)
+    assert raised.value.error_reason == "voice_clone_unavailable"

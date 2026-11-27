@@ -151,6 +151,15 @@ def require_model() -> None:
             error_reason="voice_clone_unsupported",
         )
     if not state["ready"]:
+        from pdf2audiobook.bundle import bundle_root
+
+        if bundle_root() is not None:
+            # The desktop app installs these as an add-on; no terminal step (spec SC5).
+            raise AudioError(
+                "Voice cloning and Kitten 2 need the Voice cloning and Kitten 2 add-on. "
+                "Install it from the app's Setup or Settings screen",
+                error_reason="voice_clone_unavailable",
+            )
         raise AudioError(
             "Voice cloning needs kittenml 0.9.6 and its optional dependencies, then "
             "'pdf2audiobook tts fetch kitten2'; no model was downloaded",
