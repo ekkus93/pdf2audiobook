@@ -20,8 +20,11 @@ docker run --rm --network none \
     for tool in python3 uv ffmpeg tesseract; do
       if command -v "$tool" >/dev/null; then echo "not a clean machine: $tool is installed" >&2; exit 1; fi
     done
-    cd /tmp
+    # Unpacked under a long folder, as an AppImage running without FUSE under a long $TMPDIR
+    # is: espeak-ng cuts off a data path over 160 bytes and speech then fails.
+    long=/tmp/an-unpacked-appimage-under-a-long-temporary-folder/one-level-deeper-still/and-another
+    mkdir -p "$long" && cd "$long"
     /check/app.AppImage --appimage-extract >/dev/null
-    engine=/tmp/squashfs-root/usr/lib/pdf2audiobook/engine
+    engine=$long/squashfs-root/usr/lib/pdf2audiobook/engine
     "$engine/bin/python3" -I /check/smoke_engine.py "$engine" --offline
   '

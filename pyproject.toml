@@ -77,6 +77,7 @@ files = [
     "src/pdf2audiobook/llm/cache_budget.py",
     "src/pdf2audiobook/llm/cache_request.py",
     "src/pdf2audiobook/tts/__init__.py",
+    "src/pdf2audiobook/tts/espeak_path.py",
     "src/pdf2audiobook/tts/selection.py",
     "src/pdf2audiobook/tts/catalog.py",
     "src/pdf2audiobook/tts/cloning.py",

@@ -68,9 +68,12 @@ class KittenProvider:
         model_id = KITTEN_MODEL_ALIASES.get(model, model)
         self.model_id = model_id
         from pdf2audiobook.bundle import bundled_model
+        from pdf2audiobook.tts.espeak_path import shorten_espeak_data_path
 
         # The desktop app ships the default model, so it loads without a download.
         source = bundled_model(model_id)
+        # Before the model loads: kittenml reads espeak's data path once, at that point.
+        shorten_espeak_data_path()
         try:
             with _quiet_stdout():
                 self.model = KittenTTS(str(source) if source else model_id)
