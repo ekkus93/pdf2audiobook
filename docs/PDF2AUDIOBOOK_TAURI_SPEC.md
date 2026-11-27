@@ -256,7 +256,7 @@ terminal.
 
 ## 12. D10 — Packaging and CI
 
-- **D10.a** The first release requires the CLI to be installed separately (owner decision O1).
+- **D10.a** (Superseded 2026-11-26 by the [Self-Contained App Specification](PDF2AUDIOBOOK_SELF_CONTAINED_APP_SPEC.md).) The first release requires the CLI to be installed separately (owner decision O1).
   The installer is the Tauri app only; the Setup screen explains how to install the CLI with
   `uv tool install` from a source checkout (`uv tool install ".[kitten]"`, run in the checkout)
   or how to point the app at a checkout run with `uv run`.
@@ -354,7 +354,7 @@ The app should look polished, modern and professional, built on Google's
 
 All five were decided by the owner on 2026-11-14:
 
-- **O1 Python runtime: require an installed CLI.** The installer is the Tauri app only.
+- **O1 Python runtime: require an installed CLI.** (Reversed 2026-11-26: the app is to be self-contained; see the [Self-Contained App Specification](PDF2AUDIOBOOK_SELF_CONTAINED_APP_SPEC.md).) The installer is the Tauri app only.
   Bundling Python was ruled out for now by size: with the `kitten` extra the environment is
   6.1 GB (PyTorch 1.1 GB, NVIDIA libraries 3.2 GB, Triton 0.9 GB), although the default
   `mini` voice is an ONNX model that needs only `onnxruntime` (63 MB). Bundling would first
