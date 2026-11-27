@@ -295,7 +295,7 @@ it("speaks again with the book's Kitten 2 temperature, or none for another model
   expect(slider()?.value).toBe(0.45);
   act(() => {
     const control = slider();
-    Object.defineProperty(control, "value", { value: 0.3, writable: true, configurable: true });
+    if (control) control.value = 0.3;
     control?.dispatchEvent(new Event("change", { bubbles: true }));
   });
   click(button("Speak again", document.querySelector("md-dialog[open]") as HTMLElement));

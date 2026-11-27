@@ -353,7 +353,7 @@ describe("the Kitten 2 temperature", () => {
     expect(screen.getByText(/Lower keeps the narration closer to the text/)).toBeInTheDocument();
     expect(converted(onStart).temperature).toBe(0.4);
     act(() => {
-      Object.defineProperty(control, "value", { value: 0.6, writable: true, configurable: true });
+      if (control) control.value = 0.6;
       control?.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(converted(onStart).temperature).toBe(0.6);
@@ -370,7 +370,7 @@ describe("the Kitten 2 temperature", () => {
     expect(slider()?.value).toBe(0.2);
     const field = Array.from(document.querySelectorAll("md-outlined-text-field")).find((element) => (element as HTMLElement & { label: string }).label === "Reference recording");
     act(() => {
-      Object.defineProperty(field, "value", { value: "/clips/a.wav", writable: true, configurable: true });
+      if (field) (field as HTMLElement & { value: string }).value = "/clips/a.wav";
       field?.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(converted(onStart).temperature).toBe(0.2);
