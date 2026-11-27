@@ -114,12 +114,48 @@ def install_packages(python: Path, work: Path, pins: dict) -> None:
     if missing:
         sys.exit(f"Not in the locked export: {', '.join(missing)}")
     requirements = work / "requirements.txt"
-    requirements.write_text("\n".join(entry for name in sorted(wanted) for entry in blocks[name]) + "\n")
+    requirements.write_text(
+        "\n".join(entry for name in sorted(wanted) for entry in blocks[name]) + "\n"
+    )
     run("uv", "pip", "install", "--python", python, "--break-system-packages",
         "--require-hashes", "--no-deps", "-r", requirements)  # fmt: skip
     run("uv", "build", "--wheel", "--out-dir", work / "wheel", cwd=ROOT, capture_output=True)
     wheel = next((work / "wheel").glob("pdf2audiobook-*.whl"))
     run("uv", "pip", "install", "--python", python, "--break-system-packages", "--no-deps", wheel)
+
+
+def add_addon_lists(engine: Path, cache: Path) -> None:
+    """Ship the add-on lists, with wheels built here for the packages that publish only source.
+
+    Users never build anything: each source archive is checked by hash, built once into a wheel
+    inside the engine, and its entry then names that wheel and the wheel's own hash.
+    """
+    data = json.loads(
+        (ROOT / "desktop" / "engine" / "addons.lock.json").read_text(encoding="utf-8")
+    )
+    share = engine / "share" / "pdf2audiobook"
+    wheels = share / "wheels"
+    wheels.mkdir(parents=True, exist_ok=True)
+    python = engine / "bin" / "python3"
+    for entries in data["components"].values():
+        for entry in entries:
+            sdist = entry.pop("sdist", None)
+            if sdist is None:
+                continue
+            algorithm, digest = sdist["hash"].split(":", 1)
+            assert algorithm == "sha256", sdist["hash"]
+            archive = fetch(sdist["url"], digest, cache)
+            named = archive.with_name(sdist["url"].rsplit("/", 1)[-1])
+            shutil.copyfile(archive, named)
+            with tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR")) as temp:
+                run(python, "-m", "pip", "wheel", "--quiet", "--no-deps", "--wheel-dir", temp, named,
+                    capture_output=True)  # fmt: skip
+                built = next(Path(temp).glob("*.whl"))
+                shutil.copyfile(built, wheels / built.name)
+            named.unlink()
+            entry["wheel"] = built.name
+            entry["hashes"] = [f"sha256:{sha256(wheels / built.name)}"]
+    (share / "addons.lock.json").write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
 def build(output: Path, cache: Path, with_ffmpeg: bool) -> None:
@@ -143,10 +179,11 @@ def build(output: Path, cache: Path, with_ffmpeg: bool) -> None:
             first = script.read_bytes()[:256]
             if first.startswith(b"#!") and str(engine).encode() in first:
                 script.unlink()
-    # Parts of CPython the engine never uses: pip, the Tk GUI toolkit, IDLE and build headers.
+    # Parts of CPython the engine never uses: the Tk GUI toolkit, IDLE and build headers.
+    # pip stays: it installs the add-ons (spec SC3); its console scripts go.
     unused = [
         "include", "bin/pip*", "bin/idle*", "bin/2to3*", "bin/pydoc*", "bin/python*-config",
-        "lib/tcl*", "lib/tk*", "lib/itcl*", "lib/thread*", "lib/python3*/site-packages/pip*",
+        "lib/tcl*", "lib/tk*", "lib/itcl*", "lib/thread*",
         "lib/python3*/idlelib", "lib/python3*/tkinter", "lib/python3*/turtledemo",
         "lib/python3*/ensurepip", "lib/python3*/lib2to3", "lib/python3*/lib-dynload/_tkinter*",
     ]  # fmt: skip
@@ -187,6 +224,8 @@ def build(output: Path, cache: Path, with_ffmpeg: bool) -> None:
                 with tar.extractfile(member) as stream, target.open("wb") as out:  # type: ignore[union-attr]
                     shutil.copyfileobj(stream, out)
                 target.chmod(0o755 if target.name == "ffmpeg" else 0o644)
+
+    add_addon_lists(engine, cache)
 
     # Precompiled bytecode: an AppImage is read-only, so Python cannot cache it at run time.
     run(python, "-m", "compileall", "-q", "-j", "0", engine / "lib", capture_output=True)
