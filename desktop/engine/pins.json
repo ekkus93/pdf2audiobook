@@ -1,0 +1,35 @@
+{
+  "python": "3.11.18",
+  "packages": {
+    "comment": "Locked versions come from uv.lock. kittenml is installed without its declared dependencies (it declares PyTorch, which only Kitten 2 needs); these are the packages its ONNX path imports.",
+    "kittenml_onnx": ["kittenml", "onnxruntime", "phonemizer", "espeakng-loader", "soundfile", "huggingface-hub"]
+  },
+  "ffmpeg": {
+    "version": "n8.1.3-41-ga8029b6528",
+    "license": "LGPL-2.1-or-later",
+    "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-11-26-12-56/ffmpeg-n8.1.3-41-ga8029b6528-linux64-lgpl-8.1.tar.xz",
+    "sha256": "313b6e52c31a7ce5db69fabe8fa04f6ef4b83d8c9cb365a0c8ed2a0349016948",
+    "size": 56383096
+  },
+  "tessdata": [
+    {
+      "language": "eng",
+      "license": "Apache-2.0",
+      "url": "https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/4.1.0/eng.traineddata",
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "size": 4113088
+    }
+  ],
+  "models": [
+    {
+      "repo": "KittenML/kitten-tts-mini-0.8",
+      "license": "Apache-2.0",
+      "revision": "c02725660cea441db4c383af69f1f26f5cd00947",
+      "files": {
+        "config.json": "6b160bc9b19e24ecb21e84bc14f8a7da21fdf47ec72d42450bc5cf514b61804a",
+        "kitten_tts_mini_v0_8.onnx": "0f5bbae4fc4800c98dbc544a87ecfa79510de2fb8222db30d12e5bfe9177df91",
+        "voices.npz": "40ad2638952b77b7b2f30127e2608e169fc69dd256b53bd8aaa3409a33193c42"
+      }
+    }
+  ]
+}
