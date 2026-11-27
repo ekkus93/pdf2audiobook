@@ -39,10 +39,10 @@ These were settled with the decision, so the work can proceed. Each can be revis
 | C3 | Bundle the `mini` model files, so the first conversion works offline. | Today `kittenml` downloads them from Hugging Face on first use. |
 | C4 | Heavy features are **add-ons**, installed on demand into the user's data directory, never into the app image (an AppImage is read-only). Add-on packages are pinned and hash-checked from the lock file; model files keep their existing pinned, hash-checked fetches. | Matches how `tts fetch kitten2` and `asr fetch` already work, and keeps the base download small. |
 | C5 | Add-ons use CPU PyTorch. | The CUDA build is about 3 GB more. GPU support is a later add-on option. |
-| C6 | Bundle FFmpeg (an LGPL static build) and English OCR data. Other OCR languages are add-ons (plain data files). (Amended 2026-11-26: OCR runs through PyMuPDF's built-in Tesseract, which needs only the language data, so the Tesseract program is not bundled.) | Both are needed for the default path. |
+| C6 | Bundle FFmpeg (an LGPL static build) and English OCR data. Other OCR languages are add-ons (plain data files). (Amended 2026-11-26: OCR runs through PyMuPDF's built-in Tesseract, which needs only the language data, so the Tesseract program is not bundled.) (Amended 2026-11-27: FFmpeg is built from the signed FFmpeg source with LAME, configured with only the formats, codecs and filters the engine uses and linked fully statically. The BtbN static build was 136 MB and put the AppImage at 405 MB, over C8; the minimal build is 4.3 MB. Official release tarballs also stay published, where BtbN's builds expire.) | Both are needed for the default path. |
 | C7 | The app prefers its bundled engine. Today's discovery (a configured path, `PATH`, a `uv` checkout) stays available behind a developer setting. | Developers keep working against a checkout; users never see version mismatches. |
-| C8 | Size budget: the compressed installer at most 400 MB, the installed app at most 1 GB, before add-ons. Measured in task 1; going over needs a dated note here. | A reasonable desktop download that the measured parts fit inside. |
-| C9 | Licences: the app stays Apache-2.0. Bundled third-party components (CPython, FFmpeg LGPL, Tesseract, espeak-ng through `espeakng-loader`, ONNX Runtime, the model files) ship unmodified, as separate programs and data, with their licence texts and source offers in the app's About screen and package. | espeak-ng is GPL-3; shipping it alongside, not linked into the Rust app, keeps the app's licence. |
+| C8 | Size budget: the compressed installer at most 400 MB, the installed app at most 1 GB, before add-ons. Measured in task 1; going over needs a dated note here. (2026-11-27, measured: AppImage 356 MB compressed, of which 188 MB is the app without the engine (WebKitGTK and GStreamer); `.deb` 159 MB compressed, 469 MB installed. `package_engine.py` fails the build over budget.) | A reasonable desktop download that the measured parts fit inside. |
+| C9 | Licences: the app stays Apache-2.0. Bundled third-party components (CPython, FFmpeg LGPL, Tesseract, espeak-ng through `espeakng-loader`, ONNX Runtime, the model files) ship unmodified, as separate programs and data, with their licence texts and source offers in the app's About screen and package. (Amended 2026-11-27: the engine build lists every component, each Python package included, in `share/licenses/components.json` with its licence texts and source; Settings → About shows it. Besides espeak-ng, three bundled Python packages that the CLI already depends on are copyleft: PyMuPDF (AGPL-3.0, or a commercial licence), phonemizer (GPL-3.0-or-later) and mutagen (GPL-2.0-or-later). They ship unmodified, as Python source and their own compiled libraries inside the separate engine process.) | espeak-ng is GPL-3; shipping it alongside, not linked into the Rust app, keeps the app's licence. |
 | C10 | Linux only (AppImage and `.deb`), as now. | Platform scope is unchanged (O2). |
 
 ## 4. Requirements
@@ -79,7 +79,7 @@ These were settled with the decision, so the work can proceed. Each can be revis
 
 ### SC4: FFmpeg and Tesseract
 
-- A pinned FFmpeg static build (LGPL) and Tesseract with `eng` data ship in the app, checked by hash at build time.
+- A pinned FFmpeg static build (LGPL) and Tesseract with `eng` data ship in the app, checked by hash at build time. (Amended 2026-11-27: FFmpeg 8.1.3 and LAME 3.100 are built from their source tarballs, pinned by SHA-256; the FFmpeg tarball's signature was checked against the FFmpeg release key when pinned. See C6.)
 - The OCR language setting lists bundled and installed languages. Another language's `.traineddata` is an add-on download (pinned, hash-checked) into the add-on directory. (Amended 2026-11-26: the catalog pins tessdata_fast 4.1.0's files by size and git blob SHA-1, the hash GitHub's tree API reports, since no SHA-256 list is published; a writable folder holds the added languages and copies of the bundled ones, because PyMuPDF reads all languages from one folder.)
 
 **Acceptance:** The SC1 container test converts a scanned (image-only) synthetic page with OCR. A test installs a fake language file and `doctor` reports it.
@@ -107,6 +107,8 @@ These were settled with the decision, so the work can proceed. Each can be revis
 - A CI job runs the SC1 acceptance in a clean container with networking disabled, against the built AppImage's engine.
 - The end-to-end walkthrough runs against the bundled engine instead of the checkout.
 - Licence texts and source offers for every bundled component are included and shown in the app (C9).
+
+(Amended 2026-11-27: Tauri's AppImage step runs linuxdeploy, which rewrites the library search paths of every program file in the image, so the app is bundled without the engine and `desktop/scripts/package_engine.py` adds the engine to the AppImage and `.deb` afterwards, unchanged. The clean machine is a stock Ubuntu 22.04 container, pinned by digest, run with `--network none` (`desktop/scripts/clean_machine_check.sh`). The bundled walkthrough cannot use the walkthrough's stand-in recognizers and voice cloner, so it converts with real speech from the bundled voice and checks that the add-ons are offered.)
 
 **Acceptance:** Green Desktop CI with the clean-container job; sizes in the ledger against C8.
 
