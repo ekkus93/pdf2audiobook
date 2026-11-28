@@ -400,10 +400,13 @@ async function addonOffer() {
   // The tauri crate's own row (its title "tauri 2.x"), not another tauri-apps crate's source line.
   const tauri = "//ul[@aria-label='App libraries']/li[.//div[contains(@class, 'title-small')][starts-with(normalize-space(.), 'tauri 2')]]";
   const tauriLicence = "//md-dialog[@open][.//*[@slot='headline'][normalize-space(.)='tauri licence']]//pre[contains(., 'MIT')]";
-  // The 272-row list is still laying out just after it opens, and a click then can land on a
-  // neighbouring row's button; check whose licence opened, and try again if it was another's.
+  // The page above the list can still change height after scrolling (the Model field turns
+  // into a text box when no LLM server answers), so a click at the button's old position can
+  // miss or hit a neighbouring row. Click the button element itself, and check whose licence
+  // opened; try again if it was another's.
   for (let attempt = 1; ; attempt++) {
-    await click(await find(`${tauri}${button("Licence")}`, 30));
+    const licence = await find(`${tauri}${button("Licence")}`, 30);
+    await run("arguments[0].scrollIntoView({block:'center',inline:'center',behavior:'instant'}); arguments[0].click();", [{ [ELEMENT]: licence }]);
     await find("//md-dialog[@open]//pre", 30);
     if (await findOptional(tauriLicence, 5)) break;
     if (attempt === 3) throw new Error(`not found: ${tauriLicence}`);
