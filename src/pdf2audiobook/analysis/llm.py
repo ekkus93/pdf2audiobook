@@ -9,6 +9,7 @@ from pdf2audiobook.analysis.state import _AnalysisRun, _AnalysisState
 from pdf2audiobook.config import Settings
 from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm import (
+    NarrationSuggestion,
     propose_llm_classification,
     propose_llm_contents_boundaries,
     propose_llm_narration,
@@ -56,6 +57,41 @@ def _cached_llm_worker(run: _AnalysisRun, provider: Any) -> CachedLLMProvider:
     )
 
 
+def _cleanup_and_narration(
+    run: _AnalysisRun,
+    worker: CachedLLMProvider,
+    source_blocks: list[DocumentBlock],
+    state: _AnalysisState,
+) -> list[NarrationSuggestion] | None:
+    """Run cleanup and narration, sharing each window's request when both are on (F.07).
+
+    Cleanup edits go into the state; narration suggestions are returned, or None when
+    narration is off.
+    """
+    settings = run.settings
+    chunk_tokens = settings.llm.chunk_tokens
+    if settings.llm.cleanup and settings.llm.narration:
+        edits, spoken, step_warnings = run.services.propose_llm_cleanup_and_narration(
+            source_blocks, worker, decisions=state.llm_decisions, chunk_tokens=chunk_tokens
+        )
+        state.edits.extend(edits)
+        state.warnings.extend(step_warnings)
+        return list(spoken)
+    if settings.llm.cleanup:
+        edits, edit_warnings = run.services.propose_llm_cleanup(
+            source_blocks, worker, decisions=state.llm_decisions, chunk_tokens=chunk_tokens
+        )
+        state.edits.extend(edits)
+        state.warnings.extend(edit_warnings)
+    if not settings.llm.narration:
+        return None
+    spoken, spoken_warnings = propose_llm_narration(
+        source_blocks, worker, chunk_tokens=chunk_tokens, decisions=state.llm_decisions
+    )
+    state.warnings.extend(spoken_warnings)
+    return list(spoken)
+
+
 def _run_llm_tasks(
     run: _AnalysisRun,
     worker: CachedLLMProvider,
@@ -92,15 +128,7 @@ def _run_llm_tasks(
         )
         state.llm_ids.update(content_heading_ids)
         warnings.extend(content_warnings)
-    if settings.llm.cleanup:
-        suggestions, edit_warnings = run.services.propose_llm_cleanup(
-            source_blocks,
-            worker,
-            decisions=state.llm_decisions,
-            chunk_tokens=settings.llm.chunk_tokens,
-        )
-        state.edits.extend(suggestions)
-        warnings.extend(edit_warnings)
+    spoken_suggestions = _cleanup_and_narration(run, worker, source_blocks, state)
     if settings.llm.classification:
         classified, class_warnings = propose_llm_classification(
             source_blocks,
@@ -117,14 +145,7 @@ def _run_llm_tasks(
                 "labels": [item.model_dump() for item in classified],
             },
         )
-    if settings.llm.narration:
-        spoken_suggestions, spoken_warnings = propose_llm_narration(
-            source_blocks,
-            worker,
-            chunk_tokens=settings.llm.chunk_tokens,
-            decisions=state.llm_decisions,
-        )
-        warnings.extend(spoken_warnings)
+    if spoken_suggestions is not None:
         # Deliberately separate from approved CleanupEdits and chapter
         # texts. This report is advisory and never changes audio.
         run.services.write_json(

@@ -61,7 +61,8 @@ is never overwritten. See [configuration setup](configuration.md#create-your-con
 
 `analyze` extracts text, applies conservative pagination cleanup, and writes chapter text and
 a manifest. With an LLM, each step sends the book in bounded windows (at most
-`llm.chunk_tokens` of text each), never the whole book. When one window's answer is cut off at
+`llm.chunk_tokens` of text each), never the whole book. OCR cleanup and narration suggestions share
+one request per window when both are on. When one window's answer is cut off at
 `llm.max_output_tokens`, that window gets no LLM suggestions and analysis carries on with a
 warning; only when every window of a step is cut off does it stop with `llm_output_cap`. A step
 that lost windows adds one manifest warning saying how many (`LLM answers cut off: classification

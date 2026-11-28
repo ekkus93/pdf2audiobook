@@ -64,6 +64,8 @@ def _analyze_with_stubbed_llm(monkeypatch, tmp_path, policy, *, fail_cleanup=Fal
             raise LLMError("Synthetic provider failure")
 
         monkeypatch.setattr(pipeline, "propose_llm_cleanup", fail)
+        # With narration on too, cleanup runs in the request it shares with narration.
+        monkeypatch.setattr(pipeline, "propose_llm_cleanup_and_narration", fail)
 
     monkeypatch.setattr(
         pipeline,

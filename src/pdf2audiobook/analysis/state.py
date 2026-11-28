@@ -36,6 +36,7 @@ class AnalysisServices:
     pagination_cleanup: Callable[..., Any]
     propose_chapters: Callable[..., Any]
     propose_llm_cleanup: Callable[..., Any]
+    propose_llm_cleanup_and_narration: Callable[..., Any]
     read_manifest: Callable[..., Any]
     render_chapter_texts: Callable[..., Any]
     write_json: Callable[..., Any]

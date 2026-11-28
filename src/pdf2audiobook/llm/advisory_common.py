@@ -115,7 +115,7 @@ class WindowAnswers:
     def __init__(
         self,
         provider: Any,
-        task: DecisionTask | None = None,
+        task: DecisionTask | tuple[DecisionTask, ...] | None = None,
         label: str = "",
         warnings: list[str] | None = None,
         decisions: list[LLMDecision] | None = None,
@@ -123,7 +123,10 @@ class WindowAnswers:
     ) -> None:
         self.provider = provider
         self.unit = unit
-        self.task = task
+        # One step, or several sharing each request (cleanup and narration).
+        self.tasks: tuple[DecisionTask, ...] = (
+            () if task is None else task if isinstance(task, tuple) else (task,)
+        )
         self.label = label
         self.warnings = warnings
         self.decisions = decisions
@@ -181,17 +184,17 @@ class WindowAnswers:
             log_event(
                 "llm_answers_cut_off",
                 level=logging.WARNING,
-                stage=self.task or "llm",
+                stage="_".join(self.tasks) or "llm",
                 count=self.cut_off,
             )
 
     def _reject(self, start: int, reason_code: str, warning: str) -> None:
         if self.warnings is not None:
             self.warnings.append(warning)
-        if self.task is not None:
+        for task in self.tasks:
             _record_decision(
                 self.decisions,
-                task=self.task,
+                task=task,
                 block_id=f"window:{start}",
                 status="rejected",
                 reason_code=reason_code,

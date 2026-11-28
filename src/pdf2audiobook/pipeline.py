@@ -69,6 +69,7 @@ from pdf2audiobook.llm import (
     create_provider,
     detect_llm_headings,
     propose_llm_cleanup,
+    propose_llm_cleanup_and_narration,
 )
 from pdf2audiobook.llm import (
     propose_llm_classification as propose_llm_classification,
@@ -294,6 +295,7 @@ def _analysis_services() -> AnalysisServices:
         pagination_cleanup=pagination_cleanup,
         propose_chapters=propose_chapters,
         propose_llm_cleanup=propose_llm_cleanup,
+        propose_llm_cleanup_and_narration=propose_llm_cleanup_and_narration,
         read_manifest=read_manifest,
         render_chapter_texts=render_chapter_texts,
         write_json=write_json,
@@ -356,8 +358,9 @@ def prepare_chapter_selection(
 # Chunk WAV keys carry the spoken chunk text itself and need no bump.
 # The LLM steps' prompts and window sizes, as part of the LLM analysis identity. v2: cleanup and
 # classification ask only for lines that change or aren't body text, and equation windows are
-# sized from the output cap; books analyzed before are analyzed again.
-LLM_ANALYSIS_VERSION = "llm-analysis-v2"
+# sized from the output cap; books analyzed before are analyzed again. v3: cleanup and
+# narration share one request per window when both are on (TODO F.07).
+LLM_ANALYSIS_VERSION = "llm-analysis-v3"
 CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION = "narration-normalization-v3"
 
 

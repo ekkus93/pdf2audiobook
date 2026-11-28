@@ -441,6 +441,11 @@ outputs, so treat their shapes as contracts: add fields, never rename or remove 
   after the run. The cleanup and classification prompts ask only for lines that change or that
   aren't body text, so their answers don't grow with the window, and equation reading sizes its
   windows from the cap (`equations.equation_window_bytes`), since each reading repeats its record.
+- Cleanup and narration plan identical windows, so when both are on they share one request per
+  window (`propose_llm_cleanup_and_narration`, `llm-analysis-v3`): the answer holds `edits` and
+  `suggestions`, and each half goes through its own step's checks (`_check_cleanup_window`,
+  `_check_narration_window`). A missing half is no proposals; any other key rejects both. This
+  cut a 63-page paper's requests from 525 to 401.
 - `llm models --json` prints `{"provider", "configured", "models", "warnings"}` from the
   server's `/models` list (contracts/llm-models.schema.json); the desktop app's Model fields
   offer that list.
