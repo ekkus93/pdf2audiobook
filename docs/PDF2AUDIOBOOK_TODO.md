@@ -153,7 +153,15 @@
 - [x] F.06 Multi-speaker narration and pronunciation dictionaries (review-fixes FX6.05–FX6.06; Piper-specific speaker-count validation deferred under FX8.14c).
   - [x] Add a validated pronunciation dictionary that supports punctuation keys, applied to TTS chunks while preserving original chapter text and source ranges (review-fixes FX6.05).
   - [x] Add explicit per-chapter voice assignments through the review UI; voice choice participates in audio cache identity and survives review saves, including omitted fields in partial clients.
-  - [x] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and trusted only after manual approval (review-fixes FX6.06).
+  - [x] Add within-chapter dialogue speaker changes using explicit `[[voice:VOICE_ID]]` paragraph markers, excluded from speech, preserved in source ranges, and
+- [ ] F.07 Fewer LLM requests per book. A 63-page research paper took about 360 requests with an LLM (2026-11-28, `qwen35-256k`, roughly 6 per page), because each analysis step (headings, contents, cleanup, classification, narration, equations) windows the whole text separately; a 300-page book would be about 1,700 requests, hours with a local model. Each request stays bounded; the count is the problem.
+  - [ ] F.07a Measure requests, tokens and time per step on the paper and on a long fixture book, and record them as the baseline.
+  - [ ] F.07b Decide which steps can share a window (one request returning headings, classification and cleanup together, say) or skip text (cleanup only on OCR pages, equations only on candidate blocks), keeping every answer verified against the source as now.
+  - [ ] F.07c Implement it behind the LLM analysis identity (`llm-analysis-v3`), with tests that the window plan and the verified proposals are unchanged where the steps are, and record the measured reduction.
+- [ ] F.08 Figure and table text in the audio. Diagram labels, table cells and boxed examples are narrated as they appear (the paper's "Input", "Output", "4B Chooses an edit"), which breaks up the listening. Skipping them must stay visible and reversible: no text is silently dropped.
+  - [ ] F.08a Decide how such lines are recognised (layout: small type inside a figure or table region, captions; the LLM's classification labels as advice only) and what the listener hears instead (nothing, or a short "Figure 3" notice).
+  - [ ] F.08b Show the skipped lines in review, where a person can restore them, and record them in the manifest and coverage report like other omissions.
+  - [ ] F.08c Tests on synthetic figure and table pages, plus a check on the paper that its body text is all still narrated. trusted only after manual approval (review-fixes FX6.06).
 
 ## Progress ledger
 
