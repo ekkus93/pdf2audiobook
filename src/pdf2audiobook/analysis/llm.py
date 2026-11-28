@@ -13,7 +13,7 @@ from pdf2audiobook.llm import (
     propose_llm_contents_boundaries,
     propose_llm_narration,
 )
-from pdf2audiobook.llm.equations import propose_llm_equation_readings
+from pdf2audiobook.llm.equations import equation_window_bytes, propose_llm_equation_readings
 from pdf2audiobook.models import (
     DocumentBlock,
 )
@@ -141,7 +141,9 @@ def _run_llm_tasks(
         equation_edits, equation_warnings = propose_llm_equation_readings(
             source_blocks,
             worker,
-            chunk_tokens=settings.llm.chunk_tokens,
+            chunk_tokens=equation_window_bytes(
+                settings.llm.chunk_tokens, settings.llm.max_output_tokens
+            ),
             decisions=state.llm_decisions,
         )
         state.edits.extend(equation_edits)

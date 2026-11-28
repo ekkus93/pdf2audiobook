@@ -1,6 +1,10 @@
 {
   "manifest": "/home/user/books/audiobooks/lighthouse-2b79af3fb1/manifest.json",
+  "notices": [
+    "LLM answers cut off: classification got no answer for 2 of 4 windows; raise llm.max_output_tokens to include them"
+  ],
   "warnings": [
-    "review_warning"
+    "review_warning",
+    "llm_answers_cut_off"
   ]
 }

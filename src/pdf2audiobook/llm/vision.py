@@ -116,7 +116,7 @@ def review_visual_pages(
     pages: list[dict[str, Any]] = []
     skipped = 0
     warnings: list[str] = []
-    answers = WindowAnswers(provider)
+    answers = WindowAnswers(provider, None, "visual review", warnings, unit="pages")
     try:
         for index, page in enumerate(document.pages()):
             if not _has_visual_content(page):

@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from typing import Any, Callable, Iterable, Iterator, Literal, Protocol, TypeVar, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from pdf2audiobook.errors import LLMAnswerCutOff, LLMError
+from pdf2audiobook.logging import log_event
 from pdf2audiobook.models import DocumentBlock
 
 LLM_PROMPT_SCHEMA_VERSION = "llm-advisory-v3"
+# The start of the one line per LLM step that says how many windows got no answer.
+CUT_OFF_SUMMARY = "LLM answers cut off:"
 DecisionTask = Literal["heading", "contents", "cleanup", "classification", "narration", "equation"]
 _Window = TypeVar("_Window", bound=tuple[Any, ...])
 
@@ -103,7 +107,9 @@ class WindowAnswers:
     proposals. Both record why (a warning, and a rejected decision for `task`). When no window
     got an answer and at least one was cut off, the cap is too small for the step, and
     `finish` raises the error. `ask` is the same request without recording, for callers that
-    record their own way.
+    record their own way. When any window was cut off, `finish` also adds one summary line
+    starting with `CUT_OFF_SUMMARY` (counts only) and logs `llm_answers_cut_off`, so the result
+    says how much of the step got no answer.
     """
 
     def __init__(
@@ -113,8 +119,10 @@ class WindowAnswers:
         label: str = "",
         warnings: list[str] | None = None,
         decisions: list[LLMDecision] | None = None,
+        unit: str = "windows",
     ) -> None:
         self.provider = provider
+        self.unit = unit
         self.task = task
         self.label = label
         self.warnings = warnings
@@ -163,6 +171,19 @@ class WindowAnswers:
     def finish(self) -> None:
         if self.cut_off and not self.answered:
             raise LLMAnswerCutOff()
+        if self.cut_off:
+            asked = self.cut_off + self.answered
+            if self.warnings is not None:
+                self.warnings.append(
+                    f"{CUT_OFF_SUMMARY} {self.label} got no answer for {self.cut_off} of {asked} "
+                    f"{self.unit}; raise llm.max_output_tokens to include them"
+                )
+            log_event(
+                "llm_answers_cut_off",
+                level=logging.WARNING,
+                stage=self.task or "llm",
+                count=self.cut_off,
+            )
 
     def _reject(self, start: int, reason_code: str, warning: str) -> None:
         if self.warnings is not None:

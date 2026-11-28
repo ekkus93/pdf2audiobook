@@ -305,6 +305,8 @@ is now read as an interval instead of being skipped. Audio made with citation sk
 once on the next `convert`; chapter text, analysis and audio made with the setting off are
 unchanged. `tests/test_citation_identity.py` pins the old on-state values to prove the change.
 
+Upgrade note (LLM prompts): the LLM analysis identity carries `llm-analysis-v2` (cleanup and classification ask only for lines that change or aren't body text, equation windows are sized from the output cap), so books analyzed with the LLM before it are analyzed again; analyses without the LLM are unaffected.
+
 Upgrade note (bullet lists): analysis uses `analysis-v24`. A line starting with `•` or `*`
 next to a line with the same bullet is now a `list` block (before, the bullet rule never
 matched and such lines were `unknown`), which changes reflow around bulleted lists.
@@ -432,6 +434,11 @@ outputs, so treat their shapes as contracts: add fields, never rename or remove 
   window of the step got an answer. A cap spent before any answer (hidden reasoning) still
   stops the run at once. Found on a research paper where `qwen35-256k` echoed every line back
   as a no-op OCR edit, and lines full of invisible direction marks became long escapes.
+  A step that lost windows adds a `CUT_OFF_SUMMARY` manifest warning with the counts and logs
+  `llm_answers_cut_off`; `analyze --json` returns those lines as `notices`, which the app shows
+  after the run. The cleanup and classification prompts ask only for lines that change or that
+  aren't body text, so their answers don't grow with the window, and equation reading sizes its
+  windows from the cap (`equations.equation_window_bytes`), since each reading repeats its record.
 - `llm models --json` prints `{"provider", "configured", "models", "warnings"}` from the
   server's `/models` list (contracts/llm-models.schema.json); the desktop app's Model fields
   offer that list.

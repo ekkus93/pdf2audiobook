@@ -1,15 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "analyze --json",
-  "description": "Path of the written manifest.",
+  "description": "Path of the written manifest, and one notice per LLM step whose answers were cut off at the output cap (how many windows got no answer).",
   "type": "object",
   "required": [
     "manifest",
+    "notices",
     "warnings"
   ],
   "properties": {
     "manifest": {
       "type": "string"
+    },
+    "notices": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^LLM answers cut off: "
+      }
     },
     "warnings": {
       "type": "array",

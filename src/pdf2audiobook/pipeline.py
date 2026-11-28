@@ -213,6 +213,7 @@ def _analysis_stage_fingerprints(
     if settings.llm.enabled:
         selected = getattr(settings.llm, settings.llm.provider.replace("-", "_"))
         llm_fingerprint = fingerprint(
+            LLM_ANALYSIS_VERSION,
             llm_settings,
             settings.llm.provider,
             selected.model,
@@ -353,6 +354,10 @@ def prepare_chapter_selection(
 # Bump when spoken text changes for unchanged chapter text (alignment, dashes,
 # invisible characters, pronunciation punctuation) so chapter MP3s regenerate.
 # Chunk WAV keys carry the spoken chunk text itself and need no bump.
+# The LLM steps' prompts and window sizes, as part of the LLM analysis identity. v2: cleanup and
+# classification ask only for lines that change or aren't body text, and equation windows are
+# sized from the output cap; books analyzed before are analyzed again.
+LLM_ANALYSIS_VERSION = "llm-analysis-v2"
 CHAPTER_AUDIO_FINGERPRINT_NORMALIZATION_VERSION = "narration-normalization-v3"
 
 

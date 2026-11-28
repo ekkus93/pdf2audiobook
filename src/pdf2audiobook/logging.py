@@ -146,6 +146,10 @@ def _dispatch(event: str, level: int, fields: dict[str, object]) -> None:
                     "Could not update reports/edit_decisions.json; the decision itself was saved"
                 ),
                 "llm_slow_request": "An LLM request was much slower or longer than usual",
+                "llm_answers_cut_off": (
+                    "Some LLM answers were cut off at the output cap, so parts of the book got"
+                    " no LLM suggestions; see warnings in manifest.json"
+                ),
             }.get(event, event.replace("_", " "))
             count = fields.get("count")
             if (

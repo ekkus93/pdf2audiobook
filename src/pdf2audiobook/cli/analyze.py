@@ -19,6 +19,7 @@ from pdf2audiobook.cli._core import (
 from pdf2audiobook.cli.options import _overrides
 from pdf2audiobook.config import load_settings
 from pdf2audiobook.errors import (
+    AudiobookError,
     WorkspaceError,
 )
 from pdf2audiobook.logging import (
@@ -28,6 +29,18 @@ from pdf2audiobook.progress_display import (
     format_elapsed,
     use_reporter,
 )
+
+
+def llm_notices(manifest_path: Path) -> list[str]:
+    """The manifest's per-step lines saying how many LLM windows got no answer (counts only)."""
+    from pdf2audiobook.llm.advisory_common import CUT_OFF_SUMMARY
+    from pdf2audiobook.workspace import read_manifest
+
+    try:
+        warnings = read_manifest(manifest_path).warnings
+    except AudiobookError:
+        return []
+    return [warning for warning in warnings if warning.startswith(CUT_OFF_SUMMARY)]
 
 
 @app.command(epilog="Example: pdf2audiobook analyze ./book.pdf --no-llm --output ./audiobooks")
@@ -127,7 +140,7 @@ def analyze(
             raise WorkspaceError("Cannot create the output workspace") from None
         finally:
             reporter.close()
-        emit({"manifest": str(manifest_path)}, json_output)
+        emit({"manifest": str(manifest_path), "notices": llm_notices(manifest_path)}, json_output)
         reporter.summary(f"Analysis finished in {format_elapsed(time.monotonic() - started)}")
     except KeyboardInterrupt:
         fail_interrupted(json_output=json_output)

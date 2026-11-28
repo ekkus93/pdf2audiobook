@@ -404,7 +404,7 @@ def propose_llm_contents_boundaries(
         known_ids={block.id for block in blocks},
         by_id={block.id: block for block in blocks},
     )
-    answers = WindowAnswers(provider)
+    answers = WindowAnswers(provider, None, "contents", review.warnings)
     for start, window, snippet in planned_windows(
         provider,
         "contents",

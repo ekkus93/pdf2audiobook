@@ -51,3 +51,18 @@ def test_extraction_fingerprint_is_the_bullet_list_generation():
         "chapter-detection-v5",
         Settings().chapters.model_dump(exclude={"allow_single_chapter", "min_boundary_confidence"}),
     )
+
+
+def test_llm_analysis_identity_carries_its_prompt_version(monkeypatch):
+    # The cleanup and classification prompts and the equation window sizes changed what the
+    # LLM steps produce, so earlier LLM analyses must not be reused.
+    assert pipeline.LLM_ANALYSIS_VERSION == "llm-analysis-v2"
+    before = _analysis_stage_fingerprints("a" * 64, Settings(), None)["llm-analysis"]
+    monkeypatch.setattr(pipeline, "LLM_ANALYSIS_VERSION", "test-different-version")
+    after = _analysis_stage_fingerprints("a" * 64, Settings(), None)["llm-analysis"]
+    assert after != before
+    disabled = Settings()
+    disabled.llm.enabled = False
+    assert _analysis_stage_fingerprints("a" * 64, disabled, None)["llm-analysis"] == (
+        pipeline.fingerprint("disabled")
+    )

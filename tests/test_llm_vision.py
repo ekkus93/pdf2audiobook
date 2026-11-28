@@ -446,7 +446,11 @@ def test_a_cut_off_page_answer_skips_only_that_page(tmp_path):
     provider = _CutOffOnPage({1})
     report = review_visual_pages(_book_with(tmp_path, [_image, _image]), provider)
     assert [page["page"] for page in report["pages"]] == [2]
-    assert report["warnings"] == ["Visual review answer cut off at the output cap for page 1"]
+    assert report["warnings"] == [
+        "Visual review answer cut off at the output cap for page 1",
+        "LLM answers cut off: visual review got no answer for 1 of 2 pages; "
+        "raise llm.max_output_tokens to include them",
+    ]
 
 
 def test_when_every_page_answer_is_cut_off_the_error_stands(tmp_path):

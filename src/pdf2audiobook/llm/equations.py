@@ -150,6 +150,23 @@ def verify_reading(source: str, spoken: str) -> str | None:
     return None
 
 
+# The smallest window worth asking about; a record bigger than its window is skipped.
+MIN_EQUATION_WINDOW_BYTES = 256
+
+
+def equation_window_bytes(chunk_bytes: int, max_output_tokens: int) -> int:
+    """How much text one equation-reading window may hold, so its answer fits the output cap.
+
+    A reading returns each record twice (the original and the spoken form) inside JSON, so an
+    answer runs to about twice its window's bytes, and notation costs more tokens per byte than
+    prose (symbols, and escapes for non-ASCII ones). The window holds half a byte per token of
+    the cap. On a real paper with the default 1024-token cap, 4000-byte windows overflowed in 10
+    of 11 windows and 1024-byte windows in 5 of 19, the formula-heavy ones. Never more than
+    `chunk_bytes`.
+    """
+    return max(MIN_EQUATION_WINDOW_BYTES, min(chunk_bytes, max_output_tokens // 2))
+
+
 def propose_llm_equation_readings(
     blocks: list[DocumentBlock],
     provider: LLMProvider,

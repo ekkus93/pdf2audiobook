@@ -63,7 +63,12 @@ is never overwritten. See [configuration setup](configuration.md#create-your-con
 a manifest. With an LLM, each step sends the book in bounded windows (at most
 `llm.chunk_tokens` of text each), never the whole book. When one window's answer is cut off at
 `llm.max_output_tokens`, that window gets no LLM suggestions and analysis carries on with a
-warning; only when every window of a step is cut off does it stop with `llm_output_cap`. `convert` also creates tagged chapter MP3s with the selected TTS provider.
+warning; only when every window of a step is cut off does it stop with `llm_output_cap`. A step
+that lost windows adds one manifest warning saying how many (`LLM answers cut off: classification
+got no answer for 67 of 69 windows; …`), `analyze --json` lists those lines in `notices`, and
+`warnings` gains the code `llm_answers_cut_off`. Raising `llm.max_output_tokens` (or the app's
+*Output cap*) and analyzing again includes them. Equation reading sizes its windows from the cap (half a
+byte per token of it), since each answer repeats its text twice. `convert` also creates tagged chapter MP3s with the selected TTS provider.
 TTS retries default to two and apply only to transient failures. Failed chapters are visible
 with `inspect`; conversion continues through other chapters before reporting partial failures.
 
