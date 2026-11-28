@@ -233,6 +233,17 @@ function diagnose() {
   }
 }
 
+/** Waits until nothing matches, such as a dialog that is closing and still covers the page. */
+async function gone(xpath, seconds = 30) {
+  const deadline = Date.now() + seconds * 1000;
+  for (;;) {
+    const found = await call("POST", s("/elements"), { using: "xpath", value: xpath });
+    if (!found.length) return;
+    if (Date.now() > deadline) throw new Error(`still there: ${xpath}`);
+    await sleep(250);
+  }
+}
+
 async function findOptional(xpath, seconds) {
   try {
     return await find(xpath, seconds);
@@ -384,11 +395,24 @@ async function addonOffer() {
   await click(await find(button("GNU AGPL 3.0 and Apache 2.0")));
   await find("//md-dialog[@open]//pre[contains(., 'GNU AFFERO GENERAL PUBLIC LICENSE')][contains(., 'Apache License')]", 30);
   await click(await find(`//md-dialog[@open]${button("Close")}`));
+  await gone("//md-dialog[@open]");
   await click(await find("//details[contains(@class, 'notice-group')]/summary[contains(., 'libraries')]"));
-  await click(await find(`//ul[@aria-label='App libraries']/li[contains(., 'tauri ')][contains(., 'crates.io')]${button("Licence")}`, 30));
-  await find("//md-dialog[@open]//pre[contains(., 'MIT')]", 30);
+  // The tauri crate's own row (its title "tauri 2.x"), not another tauri-apps crate's source line.
+  const tauri = "//ul[@aria-label='App libraries']/li[.//div[contains(@class, 'title-small')][starts-with(normalize-space(.), 'tauri 2')]]";
+  const tauriLicence = "//md-dialog[@open][.//*[@slot='headline'][normalize-space(.)='tauri licence']]//pre[contains(., 'MIT')]";
+  // The 272-row list is still laying out just after it opens, and a click then can land on a
+  // neighbouring row's button; check whose licence opened, and try again if it was another's.
+  for (let attempt = 1; ; attempt++) {
+    await click(await find(`${tauri}${button("Licence")}`, 30));
+    await find("//md-dialog[@open]//pre", 30);
+    if (await findOptional(tauriLicence, 5)) break;
+    if (attempt === 3) throw new Error(`not found: ${tauriLicence}`);
+    await click(await find(`//md-dialog[@open]${button("Close")}`));
+    await gone("//md-dialog[@open]");
+  }
   await screenshot("7-about-app");
   await click(await find(`//md-dialog[@open]${button("Close")}`));
+  await gone("//md-dialog[@open]");
 }
 
 /** Checks the audio, listens at the flagged passage, marks it reviewed and speaks it again. */
