@@ -17,7 +17,10 @@ Download the AppImage or the `.deb` from a Desktop CI run (the `pdf2audiobook-de
 artifact). Both need Ubuntu 22.04 or a Linux of the same age or newer, on x86-64.
 
 - **AppImage** (about 260 MB): make it executable and run it. No installation and no FUSE
-  needed (set `APPIMAGE_EXTRACT_AND_RUN=1` where FUSE is missing).
+  needed (set `APPIMAGE_EXTRACT_AND_RUN=1` where FUSE is missing). It carries the GTK of the
+  system it was built on, which aborts on Wayland when GNOME's cursor size is 0 or no cursor
+  theme is named; the AppImage then restarts itself on X11 through Xwayland (it says so on the
+  terminal). `GDK_BACKEND` or `GSETTINGS_BACKEND` set by you is left alone.
 - **`.deb`** (about 160 MB, 470 MB installed): `sudo apt install ./pdf2audiobook_*-unsigned.deb`.
   It uses the system's WebKitGTK, which is why it is smaller.
 

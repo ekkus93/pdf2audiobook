@@ -30,6 +30,11 @@ libc = "0.2"
 percent-encoding = "2"
 zip = { version = "8", default-features = false, features = ["deflate"] }
 
+# Reads the desktop's cursor setting before GTK starts (src/cursor_setting.rs); already in the
+# build through GTK, at the same version.
+[target.'cfg(target_os = "linux")'.dependencies]
+gio = "0.18"
+
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

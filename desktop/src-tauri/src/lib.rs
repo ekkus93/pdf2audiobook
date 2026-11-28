@@ -2,6 +2,7 @@ pub mod applog;
 pub mod audio;
 pub mod commands;
 pub mod config;
+pub mod cursor_setting;
 pub mod engine;
 pub mod library;
 pub mod notices;
@@ -24,6 +25,7 @@ const APP_ORIGINS: [&str; 3] = [
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    cursor_setting::restart_if_needed();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(commands::Engine::default())
