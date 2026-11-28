@@ -6,6 +6,10 @@
 //! cursor theme", then `cursor_theme_name` in `gdkdisplay-wayland.c`). Newer GTK falls back to
 //! defaults, so the `.deb`, which uses the system's GTK, is not affected.
 //!
+//! GTK is on Wayland when `WAYLAND_DISPLAY` names a socket or, with it unset, when the default
+//! socket `$XDG_RUNTIME_DIR/wayland-0` exists: a terminal started outside the desktop session
+//! has no `WAYLAND_DISPLAY` (nor `DISPLAY`), yet GTK still reaches the desktop through it.
+//!
 //! When the AppImage starts on Wayland with such a setting, it starts again in place with
 //! `GDK_BACKEND=x11`, through Xwayland, where the same settings arrive by XSETTINGS and the
 //! cursor loads; without an X server it uses the settings' defaults instead
@@ -34,12 +38,26 @@ pub struct Cursor {
     pub size: i32,
 }
 
-/// What to change, if anything, given the environment and the desktop's cursor setting. Only
-/// an AppImage on Wayland is affected, and a variable already chosen (by the user, or by an
-/// earlier start) is left alone, so the restart happens at most once.
-pub fn choose(var: impl Fn(&str) -> Option<OsString>, cursor: Option<&Cursor>) -> Option<Fix> {
+/// Whether GTK will connect to Wayland: a socket named in the environment, or the default one.
+pub fn on_wayland(var: &impl Fn(&str) -> Option<OsString>, default_socket: bool) -> bool {
     let set = |name: &str| var(name).is_some_and(|value| !value.is_empty());
-    if !set("APPIMAGE") || !set("WAYLAND_DISPLAY") || set("GDK_BACKEND") || set("GSETTINGS_BACKEND")
+    set("WAYLAND_DISPLAY") || set("WAYLAND_SOCKET") || default_socket
+}
+
+/// What to change, if anything, given the environment, whether the default Wayland socket
+/// exists, and the desktop's cursor setting. Only an AppImage on Wayland is affected, and a
+/// variable already chosen (by the user, or by an earlier start) is left alone, so the restart
+/// happens at most once.
+pub fn choose(
+    var: impl Fn(&str) -> Option<OsString>,
+    default_socket: bool,
+    cursor: Option<&Cursor>,
+) -> Option<Fix> {
+    let set = |name: &str| var(name).is_some_and(|value| !value.is_empty());
+    if !set("APPIMAGE")
+        || !on_wayland(&var, default_socket)
+        || set("GDK_BACKEND")
+        || set("GSETTINGS_BACKEND")
     {
         return None;
     }
@@ -75,10 +93,13 @@ fn read_cursor() -> Option<Cursor> {
 pub fn restart_if_needed() {
     use std::os::unix::process::CommandExt;
     let var = |name: &str| std::env::var_os(name);
-    if !(var("APPIMAGE").is_some() && var("WAYLAND_DISPLAY").is_some()) {
+    let default_socket = var("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .is_some_and(|dir| dir.is_absolute() && dir.join("wayland-0").exists());
+    if var("APPIMAGE").is_none() || !on_wayland(&var, default_socket) {
         return; // the common case: no settings to read
     }
-    let Some(fix) = choose(var, read_cursor().as_ref()) else {
+    let Some(fix) = choose(var, default_socket, read_cursor().as_ref()) else {
         return;
     };
     let Ok(program) = std::env::current_exe() else {
@@ -126,11 +147,15 @@ mod tests {
 
     #[test]
     fn a_zero_cursor_size_moves_the_appimage_to_x11() {
-        let fix = choose(env(&APPIMAGE_ON_WAYLAND), Some(&cursor("", 0)));
+        let fix = choose(env(&APPIMAGE_ON_WAYLAND), false, Some(&cursor("", 0)));
         assert_eq!(fix, Some(Fix::X11));
-        let fix = choose(env(&APPIMAGE_ON_WAYLAND), Some(&cursor("Adwaita", 0)));
+        let fix = choose(
+            env(&APPIMAGE_ON_WAYLAND),
+            false,
+            Some(&cursor("Adwaita", 0)),
+        );
         assert_eq!(fix, Some(Fix::X11));
-        let fix = choose(env(&APPIMAGE_ON_WAYLAND), Some(&cursor("", 24)));
+        let fix = choose(env(&APPIMAGE_ON_WAYLAND), false, Some(&cursor("", 24)));
         assert_eq!(fix, Some(Fix::X11));
     }
 
@@ -138,24 +163,40 @@ mod tests {
     fn without_an_x_server_the_settings_defaults_are_used() {
         let vars = env(&APPIMAGE_ON_WAYLAND[..2]);
         assert_eq!(
-            choose(vars, Some(&cursor("", 0))),
+            choose(vars, false, Some(&cursor("", 0))),
             Some(Fix::DefaultSettings)
         );
     }
 
     #[test]
     fn a_usable_cursor_setting_changes_nothing() {
-        let fix = choose(env(&APPIMAGE_ON_WAYLAND), Some(&cursor("Adwaita", 24)));
+        let fix = choose(
+            env(&APPIMAGE_ON_WAYLAND),
+            false,
+            Some(&cursor("Adwaita", 24)),
+        );
         assert_eq!(fix, None);
-        assert_eq!(choose(env(&APPIMAGE_ON_WAYLAND), None), None);
+        assert_eq!(choose(env(&APPIMAGE_ON_WAYLAND), false, None), None);
     }
 
     #[test]
     fn only_the_appimage_on_wayland_is_restarted() {
         let deb = env(&[("WAYLAND_DISPLAY", "wayland-0"), ("DISPLAY", ":0")]);
-        assert_eq!(choose(deb, Some(&cursor("", 0))), None);
+        assert_eq!(choose(deb, false, Some(&cursor("", 0))), None);
         let x11 = env(&[("APPIMAGE", "/a.AppImage"), ("DISPLAY", ":0")]);
-        assert_eq!(choose(x11, Some(&cursor("", 0))), None);
+        assert_eq!(choose(x11, false, Some(&cursor("", 0))), None);
+    }
+
+    #[test]
+    fn the_default_wayland_socket_counts_when_wayland_display_is_unset() {
+        // A terminal started outside the desktop session: no WAYLAND_DISPLAY and no DISPLAY.
+        let tty = env(&[
+            ("APPIMAGE", "/a.AppImage"),
+            ("XDG_RUNTIME_DIR", "/run/user/1000"),
+        ]);
+        let fix = choose(&tty, true, Some(&cursor("", 0)));
+        assert_eq!(fix, Some(Fix::DefaultSettings));
+        assert_eq!(choose(&tty, false, Some(&cursor("", 0))), None);
     }
 
     #[test]
@@ -163,7 +204,7 @@ mod tests {
         for chosen in [("GDK_BACKEND", "wayland"), ("GSETTINGS_BACKEND", "memory")] {
             let mut pairs = APPIMAGE_ON_WAYLAND.to_vec();
             pairs.push(chosen);
-            assert_eq!(choose(env(&pairs), Some(&cursor("", 0))), None);
+            assert_eq!(choose(env(&pairs), false, Some(&cursor("", 0))), None);
         }
     }
 }
