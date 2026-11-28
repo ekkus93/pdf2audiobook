@@ -4,7 +4,7 @@ import type { Progress, Request, RunStatus } from "../engine/types";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { LinearProgress } from "../ui/Progress";
-import { ReasonAction, isActionReason, type ReasonContext } from "./reasons";
+import { CutOffNotices, ReasonAction, isActionReason, type ReasonContext } from "./reasons";
 import "./screens.css";
 import "./run.css";
 
@@ -82,6 +82,13 @@ interface RunProps {
 /** Run (spec D4.4, D5): live progress for analyze or convert, with cancel. */
 const REVIEW_REASONS = new Set(["review_required", "review_acknowledgement_required"]);
 
+/** The engine's notices about LLM answers cut off at the output cap, from a finished analysis. */
+function cutOffNotices(progress: Progress | null): string[] {
+  if (progress?.state !== "finished" || progress.cancelled || progress.outcome.outcome !== "success") return [];
+  const notices = progress.outcome.result.notices;
+  return Array.isArray(notices) ? notices.filter((notice): notice is string => typeof notice === "string") : [];
+}
+
 /** The review reason a finished run stopped with, if any. */
 function reviewReason(progress: Progress | null): string | null {
   if (progress?.state !== "finished" || progress.outcome.outcome !== "failed") return null;
@@ -93,6 +100,7 @@ export function Run({ run, onDone, onReview, pollMs = 1000, onRestart, onOpenSet
   const [progress, setProgress] = useState<Progress | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const needsReview = reviewReason(progress) !== null;
+  const notices = cutOffNotices(progress);
 
   // A run that stops for review opens the review page once, by itself (spec D4.5).
   useEffect(() => {
@@ -152,6 +160,7 @@ export function Run({ run, onDone, onReview, pollMs = 1000, onRestart, onOpenSet
         <Running status={status} cancelling={progress.cancelling} onCancel={() => void cancelRun(run.id)} />
       ) : null}
       {progress?.state === "finished" ? <Finished progress={progress} command={run.command} onDone={onDone} /> : null}
+      {notices.length ? <CutOffNotices notices={notices} onOpenBook={onDone} /> : null}
       {needsReview && onReview ? (
         <section className="recover" aria-label="Review">
           <div className="title-medium">This book's chapters need your review</div>

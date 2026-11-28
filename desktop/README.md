@@ -30,7 +30,9 @@ needs no Python, `uv`, FFmpeg or Tesseract on the computer. Optional features ar
 add-ons the app downloads when you choose them (see [Add-ons and OCR
 languages](#add-ons-and-ocr-languages)); an LLM for chapter analysis is optional too (Ollama, set
 up separately). Where the app asks for an LLM model, it lists the models your Ollama (or
-llama-server) serves, newest list each time; *Another model…* takes a typed name.
+llama-server) serves, newest list each time; *Another model…* takes a typed name. When an
+analysis finishes with some LLM answers cut off at the output cap, the run screen says which steps
+lost how many windows and offers to change the cap.
 
 **Licence.** pdf2audiobook's own code is Apache-2.0. The installers also carry PyMuPDF (AGPL-3.0)
 and GPL components such as espeak-ng in the built-in engine, so the app as distributed is under

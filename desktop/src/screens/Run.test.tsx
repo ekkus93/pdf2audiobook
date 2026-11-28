@@ -212,6 +212,34 @@ describe("Run", () => {
     expect(await screen.findByText("The engine returned an unreadable result")).toBeInTheDocument();
   });
 
+  it("says which LLM steps lost windows to the output cap after a finished analysis", async () => {
+    const notice = "LLM answers cut off: classification got no answer for 67 of 69 windows; raise llm.max_output_tokens to include them";
+    sequence({
+      state: "finished",
+      status: null,
+      outcome: { outcome: "success", result: { manifest: "/m.json", notices: [notice], warnings: ["llm_answers_cut_off"] } },
+      cancelled: false,
+    });
+    const onDone = vi.fn();
+    render(<Run run={{ ...RUN, command: "analyze" }} pollMs={5} onDone={onDone} />);
+    const panel = await screen.findByRole("region", { name: "LLM answers cut off" });
+    expect(screen.getByText(/^Analysis finished/)).toBeInTheDocument();
+    expect(panel).toHaveTextContent("classification got no answer for 67 of 69 windows");
+    expect(panel).not.toHaveTextContent("llm.max_output_tokens");
+    const change = Array.from(panel.querySelectorAll("md-filled-button")).find((b) => b.textContent?.includes("Change the output cap"));
+    await act(async () => {
+      change?.dispatchEvent(new Event("click", { bubbles: true }));
+    });
+    expect(onDone).toHaveBeenCalled();
+  });
+
+  it("shows no cut-off panel when every answer fitted", async () => {
+    sequence({ state: "finished", status: null, outcome: { outcome: "success", result: { manifest: "/m.json", notices: [], warnings: [] } }, cancelled: false });
+    render(<Run run={{ ...RUN, command: "analyze" }} pollMs={5} />);
+    await screen.findByText(/^Analysis finished/);
+    expect(screen.queryByRole("region", { name: "LLM answers cut off" })).toBeNull();
+  });
+
   it("offers recovery after a pending_recovery error, then the backup option if refused", async () => {
     sequence({
       state: "finished",

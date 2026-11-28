@@ -130,3 +130,8 @@
   color: inherit;
   opacity: 0.85;
 }
+
+.cut-off-notices {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}

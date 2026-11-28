@@ -86,8 +86,9 @@ export function ReasonAction({ reason, context }: { reason: ActionReason; contex
       return (
         <Panel label="LLM output cap" title="An answer was cut off at the output cap">
           <p className="body-medium on-surface-variant">
-            Raise <strong>Output cap (tokens)</strong> in the book's options. Thinking models spend
-            output on reasoning before they answer; 32768 is a good start for them.
+            Raise <strong>Output cap (tokens)</strong> in the book's options. Some models answer at
+            length, and 4096 is a good start; thinking models spend output on reasoning before they
+            answer, and need about 32768.
           </p>
           <div className="button-row">
             <Button icon="tune" onClick={() => context.onOpenBook?.()} disabled={!context.onOpenBook}>
@@ -109,6 +110,31 @@ export function ReasonAction({ reason, context }: { reason: ActionReason; contex
     case "budget_exhausted":
       return <Budget context={context} />;
   }
+}
+
+/**
+ * After an analysis that finished with some LLM answers cut off at the output cap: which steps
+ * lost how many windows (the engine's `notices`, counts only), and where to raise the cap.
+ */
+export function CutOffNotices({ notices, onOpenBook }: { notices: readonly string[]; onOpenBook?: () => void }) {
+  return (
+    <Panel label="LLM answers cut off" title="Some LLM answers were cut off at the output cap">
+      <p className="body-medium on-surface-variant">
+        The analysis finished, but these parts of the book got no LLM suggestions. Raise <strong>Output cap (tokens)</strong> in
+        the book's options and analyze again to include them.
+      </p>
+      <ul className="body-medium cut-off-notices">
+        {notices.map((notice) => (
+          <li key={notice}>{notice.replace(/^LLM answers cut off: /, "").replace(/; raise llm\.max_output_tokens to include them$/, "")}</li>
+        ))}
+      </ul>
+      <div className="button-row">
+        <Button icon="tune" onClick={() => onOpenBook?.()} disabled={!onOpenBook}>
+          Change the output cap
+        </Button>
+      </div>
+    </Panel>
+  );
 }
 
 function Panel({ label, title, children }: { label: string; title: string; children: React.ReactNode }) {
