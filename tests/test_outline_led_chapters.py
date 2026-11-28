@@ -101,7 +101,7 @@ def test_llm_only_headings_ignored_when_outline_matches():
     blocks = [
         block(0, 0, "The Opening", 18),
         *body(1, 0),
-        block(5, 0, "***"),
+        block(5, 0, "***", 13),
         *body(6, 0),
         block(10, 1, "The Ending", 18),
         *body(11, 1),
@@ -116,10 +116,29 @@ def test_llm_only_heading_is_labelled_advisory_without_outline():
     blocks = [
         block(0, 0, "Chapter 1"),
         *body(1, 0),
-        block(5, 1, "The Quiet Interlude"),
+        # Larger than the body (13 against 11), not large enough to be a heading by size alone.
+        block(5, 1, "The Quiet Interlude", 13),
         *body(6, 1),
     ]
     chapters, _ = propose_chapters(blocks, set(), [], Chapters(), extra_heading_ids={"b5"})
     assert [c.title for c in chapters] == ["Chapter 1", "The Quiet Interlude"]
     assert chapters[1].confidence == 0.8
     assert chapters[1].evidence == ["LLM structure classification (advisory)", "opens a new page"]
+
+
+def test_an_llm_heading_set_no_larger_than_the_body_is_not_a_chapter():
+    # Figure labels, table cells and boxed examples, which a model reading the text alone
+    # takes for headings: one paper's 38 LLM-only "chapters" were nearly all of them.
+    blocks = [
+        block(0, 0, "Chapter 1"),
+        *body(1, 0),
+        block(5, 1, "Input", 8),
+        block(6, 1, "What it found"),
+        *body(7, 1),
+    ]
+    table = block(11, 1, "Answer settings", 13).model_copy(update={"kind": "table"})
+    blocks.append(table)
+    chapters, _ = propose_chapters(
+        blocks, set(), [], Chapters(), extra_heading_ids={"b5", "b6", "b11"}
+    )
+    assert [c.title for c in chapters] == ["Chapter 1"]

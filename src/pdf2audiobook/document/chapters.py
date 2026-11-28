@@ -13,6 +13,7 @@ from pdf2audiobook.document.candidates import (
     _drop_listed_labels,
     _drop_subtitles,
     _drop_weak_candidates,
+    _nest_numbered_subsections,
 )
 from pdf2audiobook.document.contents import (
     _continued_contents_page,
@@ -176,7 +177,8 @@ def propose_chapters(
 
     Steps, in order: typography evidence, the printed contents, text headings,
     contents-run pages, bookmark anchors, crowded large type, numerals named by
-    the contents, listed labels, weak candidates, subtitles, then the chapters.
+    the contents, listed labels, weak candidates, subtitles, numbered subsections,
+    then the chapters.
     """
     typical_size = _typical_body_size(blocks, omitted)
     contents_lines, contents_titles = _printed_contents(blocks, omitted, typical_size)
@@ -199,6 +201,7 @@ def propose_chapters(
     _drop_listed_labels(evidence, anchored_keys)
     _drop_weak_candidates(evidence, extra_heading_ids)
     _drop_subtitles(evidence)
+    _nest_numbered_subsections(evidence)
     starts = _chapter_starts(evidence, settings)
     chapters = _build_chapters(evidence, starts)
     empty_chapter = any(

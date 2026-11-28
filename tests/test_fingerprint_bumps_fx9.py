@@ -45,10 +45,12 @@ def test_extraction_fingerprint_is_the_bullet_list_generation():
     assert stages["extraction"] == fingerprint(
         "analysis-v24", "a" * 64, Settings().pdf.model_dump()
     )
-    # chapter-detection-v5: a contents list continued on the next page no longer
-    # opens chapters, so older chapter boundaries are re-planned.
+    # chapter-detection-v6: numbered subsections stay in their section's chapter, the
+    # body size is weighed by characters, LLM headings must be larger than the body, and
+    # a line beside a heading (a margin stamp, the other column) is not above it.
+    # (v5: a contents list continued on the next page no longer opens chapters.)
     assert stages["chapter-boundaries"] == fingerprint(
-        "chapter-detection-v5",
+        "chapter-detection-v6",
         Settings().chapters.model_dump(exclude={"allow_single_chapter", "min_boundary_confidence"}),
     )
 

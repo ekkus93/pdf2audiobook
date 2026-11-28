@@ -25,6 +25,11 @@ def _space_above(blocks: list[DocumentBlock], index: int, omitted: set[str]) -> 
     Returns "page" when it is the first retained line of its page, "gap"
     when at least half its own line height of space precedes it, "tight"
     when it is packed against the line above, and None without geometry.
+
+    The line above is the nearest earlier line on the page that overlaps this one
+    horizontally. A line beside it (the foot of the other column, or a stamp set
+    vertically in the margin, such as arXiv's) is not above it; with no line above,
+    the line starts its column or area, which counts as a gap.
     """
     block = blocks[index]
     previous = next(
@@ -36,8 +41,31 @@ def _space_above(blocks: list[DocumentBlock], index: int, omitted: set[str]) -> 
         return None
     if not _valid_bbox(block.bbox) or not _valid_bbox(previous.bbox):
         return None
+    above_bottom = _bottom_of_line_above(blocks, index, block.bbox, omitted)
+    if above_bottom is None:
+        return "gap"
     height = block.bbox[3] - block.bbox[1]
-    return "gap" if block.bbox[1] - previous.bbox[3] >= 0.5 * height else "tight"
+    return "gap" if block.bbox[1] - above_bottom >= 0.5 * height else "tight"
+
+
+def _bottom_of_line_above(
+    blocks: list[DocumentBlock], index: int, bbox: tuple[float, ...], omitted: set[str]
+) -> float | None:
+    """The bottom edge of the nearest earlier line on the page that overlaps `bbox` sideways."""
+    page = blocks[index].page_index
+    for j in range(index - 1, -1, -1):
+        other = blocks[j]
+        if other.page_index != page:
+            return None
+        if other.id in omitted or not other.bbox or not _valid_bbox(other.bbox):
+            continue
+        if _overlaps_horizontally(bbox, other.bbox):
+            return other.bbox[3]
+    return None
+
+
+def _overlaps_horizontally(first: tuple[float, ...], second: tuple[float, ...]) -> bool:
+    return min(first[2], second[2]) > max(first[0], second[0])
 
 
 @dataclass
@@ -64,17 +92,30 @@ class _HeadingEvidence:
 
 
 def _typical_body_size(blocks: list[DocumentBlock], omitted: set[str]) -> float | None:
-    """The median plausible font size, or None with fewer than three sizes."""
+    """The body text's font size: the median by characters, or None with fewer than three lines.
+
+    Weighted by characters, so the many short lines of figures and tables (a paper's diagram
+    labels, table cells) cannot outvote the body's long ones: on a figure-heavy paper the
+    median line was 8 pt against a 10 pt body.
+    """
     # Typography is supporting evidence for unlabeled prose headings. Require
     # substantial size contrast with the body and reject sentence-like prose.
-    body_sizes = sorted(
-        float(block.font_size)
+    sized = sorted(
+        (float(block.font_size), max(1, len(block.text.strip())))
         for block in blocks
         if block.id not in omitted
         and block.font_size is not None
         and 5 <= float(block.font_size) <= 40
     )
-    return body_sizes[(len(body_sizes) - 1) // 2] if len(body_sizes) >= 3 else None
+    if len(sized) < 3:
+        return None
+    half = sum(weight for _size, weight in sized) / 2
+    running = 0
+    for size, weight in sized:
+        running += weight
+        if running >= half:
+            return size
+    return sized[-1][0]
 
 
 def _is_typographic_heading(
@@ -104,6 +145,24 @@ def _is_typographic_heading(
         and _space_above(blocks, i, omitted) != "tight"
         and block.kind not in {"table", "footnote", "caption", "equation", "list"}
     )
+
+
+# An LLM-proposed heading must be set at least this much larger than the body text.
+LLM_HEADING_SIZE_RATIO = 1.1
+
+
+def _llm_heading_plausible(block: DocumentBlock, typical_size: float | None) -> bool:
+    """Whether a line the LLM calls a heading could be one, judged by its type.
+
+    A heading is never set smaller than the body text; smaller lines are figure labels,
+    table cells and boxed examples, which a model reading the text alone takes for
+    headings (on one paper, 36 of the 38 it proposed). Without sizes (a scan) it is kept.
+    """
+    if block.kind in {"table", "footnote", "caption", "equation", "list"}:
+        return False
+    if typical_size is None or block.font_size is None or not math.isfinite(block.font_size):
+        return True
+    return float(block.font_size) >= typical_size * LLM_HEADING_SIZE_RATIO
 
 
 def _text_headings(
@@ -136,7 +195,10 @@ def _text_headings(
         if (
             is_heading_line(text)
             or i in roman_sequence
-            or block.id in (extra_heading_ids or set())
+            or (
+                block.id in (extra_heading_ids or set())
+                and _llm_heading_plausible(block, typical_size)
+            )
             or is_typographic_heading
             or i in contents_titles
         ):

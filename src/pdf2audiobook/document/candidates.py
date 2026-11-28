@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 
 from pdf2audiobook.document.headings import _HeadingEvidence
@@ -179,3 +180,37 @@ def _drop_subtitles(evidence: _HeadingEvidence) -> None:
             subtitles.add(i)
     heading_indices = [i for i in evidence.heading_indices if i not in subtitles]
     evidence.heading_indices = sorted(set(heading_indices))
+
+
+# "2.1 The Session", "D.3 Seeds", "3.2.1 Detail": a subsection's number, and its top-level part.
+SUBSECTION_NUMBER = re.compile(r"^(\d{1,3}|[A-Z])(?:\.\d{1,3})+\.?\s+\S")
+# "2 Self-Rewriting", "2. Methods", "D Experimental Details": a numbered section's label.
+SECTION_NUMBER = re.compile(r"^(\d{1,3}|[A-Z])\.?\s+\S")
+
+
+def _nest_numbered_subsections(evidence: _HeadingEvidence) -> None:
+    """Keep numbered subsections ("2.1", "D.3") in the chapter of their section ("2", "D").
+
+    A paper or report numbers its sections and subsections, and only the sections are its
+    chapters: one paper's "2 Self-Rewriting" and its "2.1" to "2.4" had each become a
+    chapter. A subsection stays a chapter when its section is not itself a heading, so a
+    book whose chapters are numbered "1.1", "1.2" with no "1" heading keeps them.
+    """
+    blocks = evidence.blocks
+    sections: set[str] = set()
+    nested = set()
+    for i in evidence.heading_indices:
+        text = blocks[i].text.strip()
+        subsection = SUBSECTION_NUMBER.match(text)
+        if subsection:
+            if subsection.group(1) in sections:
+                nested.add(i)
+            continue
+        section = SECTION_NUMBER.match(text)
+        if section:
+            sections.add(section.group(1))
+    if nested:
+        evidence.heading_indices = [i for i in evidence.heading_indices if i not in nested]
+        evidence.warnings.append(
+            f"Kept {len(nested)} numbered subsection heading(s) inside their sections' chapters"
+        )
