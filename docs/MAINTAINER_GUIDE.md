@@ -307,7 +307,7 @@ unchanged. `tests/test_citation_identity.py` pins the old on-state values to pro
 
 Upgrade note (LLM prompts): the LLM analysis identity carries `llm-analysis-v2` (cleanup and classification ask only for lines that change or aren't body text, equation windows are sized from the output cap), so books analyzed with the LLM before it are analyzed again; analyses without the LLM are unaffected.
 
-Upgrade note (bullet lists): analysis uses `analysis-v24`. A line starting with `•` or `*`
+Upgrade note (numbered running heads): analysis uses `analysis-v25`. A repeated margin line with a number is removed as a running head only when its number follows the page sequence, as a bare page number must; labels at the top of a figure that starts a page ("turn 1" on three pages of a paper) were being removed. (v24, bullet lists:) A line starting with `•` or `*`
 next to a line with the same bullet is now a `list` block (before, the bullet rule never
 matched and such lines were `unknown`), which changes reflow around bulleted lists.
 Workspaces without approvals re-run analysis; approved workspaces stay protected as before.

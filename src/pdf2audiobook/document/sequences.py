@@ -210,16 +210,20 @@ def _flag_ambiguity(
 
 def _confirmed_number(block: DocumentBlock, band: str, pagination: _Pagination) -> bool:
     """Whether a numeral is part of the page's selected, unambiguous sequence."""
-    parsed = _number_value(block.text.strip())
+    return _confirmed_folio(block.text.strip(), block.page_index, band, pagination)
+
+
+def _confirmed_folio(text: str, page: int, band: str, pagination: _Pagination) -> bool:
+    """Whether `text`, a numeral on `page`, is part of that page's selected, unambiguous sequence."""
+    parsed = _number_value(text)
     return (
         parsed is not None
-        and (band, block.page_index) not in pagination.ambiguous_numeric_bands
-        and block.page_index not in pagination.ambiguous_sequence_pages
-        and block.page_index in pagination.sequential_pages[band]
+        and (band, page) not in pagination.ambiguous_numeric_bands
+        and page not in pagination.ambiguous_sequence_pages
+        and page in pagination.sequential_pages[band]
         and (
-            not pagination.series_at_page.get(block.page_index)
-            or (band, parsed[0] - block.page_index, parsed[1])
-            in pagination.selected_sequences[block.page_index]
+            not pagination.series_at_page.get(page)
+            or (band, parsed[0] - page, parsed[1]) in pagination.selected_sequences[page]
         )
     )
 
@@ -260,6 +264,13 @@ def _removal_reason(
     value, embedded_folio = _running_parts(block.text)
     if _confirmed_number(block, band, pagination) and settings.remove_page_numbers:
         return "sequential/repeated page number"
+    # A running head's page number follows the pages. A number that doesn't ("turn 1" on
+    # three pages, "turn 9" beside "turn 22") belongs to something else: labels at the top
+    # of a figure that starts a page fell in the header band and repeated in place.
+    if embedded_folio is not None and not _confirmed_folio(
+        embedded_folio, block.page_index, band, pagination
+    ):
+        return None
     if (
         not PAGE_NUMBER.fullmatch(block.text.strip())
         and _titled(value)

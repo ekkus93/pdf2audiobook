@@ -15,10 +15,10 @@ from pdf2audiobook.workspace import read_manifest, write_manifest
 
 # Computed from the code as it was before equation processing existed; the
 # chapter-boundaries value was recomputed for the chapter-detection-v6 bump and the
-# extraction value for the analysis-v24 (bullet list) bump, and the llm-analysis value for
+# extraction value for the analysis-v25 (numbered running heads) bump, and the llm-analysis value for
 # llm-analysis-v2 (cleanup and classification prompts, equation window sizes).
 GOLDEN = {
-    "extraction": "78a506c8257ca1d97daf4ac3c2bbf286c914a92411856ca0449fb83aef6a00ae",
+    "extraction": "6157486e7f93075e4790c178b9e7928edb64e83d8b65d176f4e2101086e7aab7",
     "chapter-boundaries": "e60acd5cf970901b13d73108223d93114ae714010e72f3513ebdaaf4e77ffb4c",
     "llm-analysis": "372bc3ccbee881cb3a6b5ba981a34dff0d6f31af43f698b22edbab41601e9785",
 }

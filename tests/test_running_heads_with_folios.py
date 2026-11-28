@@ -101,3 +101,21 @@ def test_chapter_label_in_header_keeps_its_numeral():
             body(page),
         ]
     assert removed(blocks, 3) == {}
+
+
+def test_repeated_labels_whose_numbers_do_not_follow_the_pages_are_kept():
+    # Modelled on a research paper: figures starting at the top of pages put labels such as
+    # "turn 1" just inside the header band, at the same spot on several pages. Their numbers
+    # do not follow the pages, so they are figure text, not running heads.
+    blocks = []
+    for page in range(6):
+        label = ["turn 22", "turn 1", "turn 1", "turn 12", "turn 1", "turn 9"][page]
+        blocks += [block(page, "label", label, 120, 40, 140, 48), body(page, y=70)]
+    assert removed(blocks, 6) == {}
+
+
+def test_a_running_head_whose_numbers_follow_the_pages_is_still_removed():
+    blocks = []
+    for page in range(6):
+        blocks += [block(page, "head", f"turn {page + 3}", 120, 20, 140, 28), body(page, y=70)]
+    assert set(removed(blocks, 6).values()) == {"repeated running header with page number"}
