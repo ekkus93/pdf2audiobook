@@ -31,11 +31,14 @@
 
 ## 3. Caching and model fetch (W4)
 
-- [ ] 3.1 Add `actions/cache` steps for the Kitten 2 directory, the Whisper directory, the wav2vec2 directory and the vosk directory. Key each cache by the pinned revision recorded in the project's manifests.
+- [x] 3.1 Add `actions/cache` steps for the Kitten 2 directory, the Whisper directory, the wav2vec2 directory and the vosk directory. Key each cache by the pinned revision recorded in the project's manifests.
+  Evidence: keys read by `.github/scripts/pinned-revision.sh` from `tts/catalog.MODEL_REVISION` and `verification/models.SPECS[...].revision`; `tests/test_real_models_ci.py` (local, offline; the keys have not run on GitHub yet). The Kitten `mini` smoke cache still follows `uv.lock`, because the kittenml package pins no revision.
 - [x] 3.2 Fetch with the project's commands only (`tts fetch kitten2`, `asr fetch <models> --yes`). Do not add custom download steps.
   Evidence: run logs show `tts fetch kitten2` and `asr fetch` for each model via project commands
-- [ ] 3.3 Test: a corrupted cached file is rejected and re-fetched. Run this locally with a truncated file before the workflow relies on it.
-- [ ] 3.4 Record the cache-hit status of every download step in the job summary.
+- [x] 3.3 Test: a corrupted cached file is rejected and re-fetched. Run this locally with a truncated file before the workflow relies on it.
+  Evidence: `tests/test_model_cache_corruption.py` truncates a cached ASR file and a cached Kitten 2 file (and alters a Kitten 2 file at the same size); the project code rejects each and downloads it again. Local, offline evidence only. Note: the ASR check trusts size plus stamp and does not rehash, so a same-size alteration is not caught there.
+- [x] 3.4 Record the cache-hit status of every download step in the job summary.
+  Evidence: each download job runs `.github/scripts/record-cache-status.sh` with `steps.cache.outputs.cache-hit`; script and workflow checks in `tests/test_real_models_ci.py` (local; not yet seen in a run summary)
 
 ## 4. Suites (W1, W2)
 
@@ -47,7 +50,8 @@
   Evidence: clone-short job: `1 passed in 80.15s`
 - [x] 4.4 Job `clone-long`: the long-form test, which runs after `clone-short`. Timeout 180 minutes.
   Evidence: clone-long job: `1 passed in 666.95s` (11 min); every generation request stayed under the 300-second deadline, since a timeout would have failed the job
-- [ ] 4.5 Each job runs only when its name is in `suites`, so a partial run is possible.
+- [x] 4.5 Each job runs only when its name is in `suites`, so a partial run is possible.
+  Evidence: the `plan` job turns `suites` into exact-name switches (unknown names fail); jobs test `needs.plan.outputs.run_*`; the plan script is run under bash in `tests/test_real_models_ci.py` (local; not yet run on GitHub)
 
 ## 5. Privacy and artifacts (W5)
 
@@ -61,7 +65,8 @@
 
 ## 6. Timing evidence (W6)
 
-- [ ] 6.1 Record wall time and peak RSS per test in the summary (`/usr/bin/time -v` or equivalent).
+- [x] 6.1 Record wall time and peak RSS per test in the summary (`/usr/bin/time -v` or equivalent).
+  Evidence: `.github/scripts/run-timed.sh` wraps every test step with `/usr/bin/time -f '%e %M'` and appends a row to the job summary; exit status and row format tested locally (this machine has no `/usr/bin/time`, so the RSS path is exercised only on a runner)
 - [x] 6.2 Confirm on the first run that the clone jobs pass with the 300-second deadline on runners. A pass shows every request stayed under it. This answers the open question from the 2026-11-20 host run.
   Evidence: run 44748362864: clone-long passed with no deadline failure; the 300-second deadline held on runner speed
 
@@ -76,7 +81,8 @@
 
 ## 8. First runs and evidence
 
-- [ ] 8.1 Run `actionlint` on the workflow locally, and fix any findings.
+- [x] 8.1 Run `actionlint` on the workflow locally, and fix any findings.
+  Evidence: local `actionlint` 1.7.12 (with shellcheck) on `real-models.yml`: no findings; shellcheck clean on the helper scripts. Local evidence only
 - [x] 8.2 Run the workflow by hand from `master` with all suites. Record the run ID, the timings and each suite's result in the ledger, including failed suites.
   Evidence: run 44748362864 on `b7e2366`: all six jobs and the summary succeeded (ledger row below)
 - [ ] 8.3 Run it again to confirm the cache hit and the reduced time (W4).

@@ -26,13 +26,30 @@ jobs:
     timeout-minutes: 5
     outputs:
       asr_matrix: ${{ steps.plan.outputs.asr_matrix }}
+      run_kitten: ${{ steps.plan.outputs.run_kitten }}
+      run_asr: ${{ steps.plan.outputs.run_asr }}
+      run_clone_short: ${{ steps.plan.outputs.run_clone_short }}
+      run_clone_long: ${{ steps.plan.outputs.run_clone_long }}
     steps:
-      - name: Turn the ASR model input into a matrix
+      - name: Turn the suite and ASR model inputs into job switches and a matrix
         id: plan
         env:
+          SUITES: ${{ inputs.suites }}
           ASR_MODELS: ${{ inputs.asr_models }}
         run: |
           set -euo pipefail
+          # A job runs only when its exact name is listed in `suites`.
+          suites=$(echo "$SUITES" | tr ',' '\n' | tr -d ' ' | sed '/^$/d')
+          for suite in $suites; do
+            case "$suite" in
+              kitten|asr|clone-short|clone-long) ;;
+              *) echo "Unknown suite: $suite" >&2; exit 1 ;;
+            esac
+          done
+          for suite in kitten asr clone-short clone-long; do
+            if echo "$suites" | grep -qx "$suite"; then selected=true; else selected=false; fi
+            echo "run_${suite//-/_}=$selected" >> "$GITHUB_OUTPUT"
+          done
           allowed="wav2vec2 vosk whisper"
           models=$(echo "$ASR_MODELS" | tr ',' '\n' | tr -d ' ' | sed '/^$/d')
           for model in $models; do
@@ -44,7 +61,7 @@ jobs:
           echo "asr_matrix=$(echo "$models" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   kitten:
-    if: contains(inputs.suites, 'kitten')
+    if: needs.plan.outputs.run_kitten == 'true'
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -64,18 +81,27 @@ jobs:
       - name: Install the CPU build of torch at the locked versions
         run: ./.github/scripts/install-cpu-torch.sh
       - name: Restore model cache
+        id: cache
         uses: actions/cache@v4
         with:
+          # The Kitten "mini" model comes from the kittenml package, which pins no model revision
+          # of its own, so this cache follows the locked package versions in uv.lock.
           path: |
             ~/.cache/huggingface
           key: real-kitten-${{ hashFiles('uv.lock') }}
+      - name: Record the cache status
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: ./.github/scripts/record-cache-status.sh "kitten mini" "$CACHE_HIT"
       - name: Kitten real-model smoke test
         env:
           PDF2AUDIOBOOK_KITTEN_SMOKE: "1"
-        run: uv run --no-sync pytest -q -ra -p no:cacheprovider tests/test_kitten_real_smoke.py | tee kitten.log
+        run: |
+          ./.github/scripts/run-timed.sh "tests/test_kitten_real_smoke.py" kitten.log \
+            uv run --no-sync pytest -q -ra -p no:cacheprovider tests/test_kitten_real_smoke.py
 
   asr:
-    if: contains(inputs.suites, 'asr')
+    if: needs.plan.outputs.run_asr == 'true'
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -116,22 +142,32 @@ jobs:
           esac
       - name: Install the CPU build of torch at the locked versions
         run: ./.github/scripts/install-cpu-torch.sh
+      - name: Read the pinned model revision
+        id: pin
+        run: ./.github/scripts/pinned-revision.sh "${{ matrix.model }}"
       - name: Restore model cache
+        id: cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/pdf2audiobook/asr
-          key: real-asr-${{ matrix.model }}-${{ hashFiles('src/pdf2audiobook/verification/models.py') }}
+          path: ~/.cache/pdf2audiobook/asr/${{ matrix.model }}
+          key: real-asr-${{ matrix.model }}-${{ steps.pin.outputs.revision }}
+      - name: Record the cache status
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: ./.github/scripts/record-cache-status.sh "${{ matrix.model }}" "$CACHE_HIT"
       - name: Fetch the pinned model
+        # A cached file is checked against its pinned size and SHA-256; a bad one is downloaded again.
         run: uv run --no-sync pdf2audiobook asr fetch "${{ matrix.model }}" --yes
       - name: Real ASR smoke test
         env:
           PDF2AUDIOBOOK_ASR_SMOKE: "1"
         run: |
-          uv run --no-sync pytest -q -ra -p no:cacheprovider tests/test_verification_backends.py \
-            -k "real_backend and ${{ matrix.model }}" | tee "asr-${{ matrix.model }}.log"
+          ./.github/scripts/run-timed.sh "asr ${{ matrix.model }} real backend" "asr-${{ matrix.model }}.log" \
+            uv run --no-sync pytest -q -ra -p no:cacheprovider tests/test_verification_backends.py \
+            -k "real_backend and ${{ matrix.model }}"
 
   clone-short:
-    if: contains(inputs.suites, 'clone-short')
+    if: needs.plan.outputs.run_clone_short == 'true'
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -155,25 +191,34 @@ jobs:
         run: uv sync --locked --extra kitten --extra dev
       - name: Install the CPU build of torch at the locked versions
         run: ./.github/scripts/install-cpu-torch.sh
+      - name: Read the pinned Kitten 2 revision
+        id: pin
+        run: ./.github/scripts/pinned-revision.sh kitten2
       - name: Restore Kitten 2 model cache
+        id: cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/pdf2audiobook/tts
-          key: real-kitten2-${{ hashFiles('src/pdf2audiobook/tts/kitten2_manifest.json') }}
+          key: real-kitten2-${{ steps.pin.outputs.revision }}
+      - name: Record the cache status
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: ./.github/scripts/record-cache-status.sh kitten2 "$CACHE_HIT"
       - name: Fetch the pinned Kitten 2 model
         run: uv run --no-sync pdf2audiobook tts fetch kitten2 --yes
       - name: Stage the public reference and its transcript
         run: ./.github/scripts/stage-reference.sh
       - name: Short real clone test
         run: |
-          uv run --no-sync pytest -q -ra -p no:cacheprovider \
-            "tests/test_voice_cloning_real.py::test_real_local_clone_and_warm_resume" | tee clone-short.log
+          ./.github/scripts/run-timed.sh "clone short" clone-short.log \
+            uv run --no-sync pytest -q -ra -p no:cacheprovider \
+            "tests/test_voice_cloning_real.py::test_real_local_clone_and_warm_resume"
       - name: Clean up staged reference
         if: always()
         run: rm -rf "$RUNNER_TEMP/reference"
 
   clone-long:
-    if: ${{ always() && contains(inputs.suites, 'clone-long') && needs.plan.result == 'success' }}
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.run_clone_long == 'true' }}
     needs: [plan, clone-short]
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -197,11 +242,19 @@ jobs:
         run: uv sync --locked --extra kitten --extra dev
       - name: Install the CPU build of torch at the locked versions
         run: ./.github/scripts/install-cpu-torch.sh
+      - name: Read the pinned Kitten 2 revision
+        id: pin
+        run: ./.github/scripts/pinned-revision.sh kitten2
       - name: Restore Kitten 2 model cache
+        id: cache
         uses: actions/cache@v4
         with:
           path: ~/.cache/pdf2audiobook/tts
-          key: real-kitten2-${{ hashFiles('src/pdf2audiobook/tts/kitten2_manifest.json') }}
+          key: real-kitten2-${{ steps.pin.outputs.revision }}
+      - name: Record the cache status
+        env:
+          CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        run: ./.github/scripts/record-cache-status.sh kitten2 "$CACHE_HIT"
       - name: Fetch the pinned Kitten 2 model
         run: uv run --no-sync pdf2audiobook tts fetch kitten2 --yes
       - name: Stage the public reference and its transcript
@@ -210,9 +263,9 @@ jobs:
         env:
           PDF2AUDIOBOOK_TEST_CLONE_LONG_FORM: "1"
         run: |
-          /usr/bin/time -v uv run --no-sync pytest -q -ra -p no:cacheprovider \
-            "tests/test_voice_cloning_real.py::test_real_local_clone_multiple_chunks" \
-            2> clone-long.time | tee clone-long.log
+          ./.github/scripts/run-timed.sh "clone long" clone-long.log \
+            uv run --no-sync pytest -q -ra -p no:cacheprovider \
+            "tests/test_voice_cloning_real.py::test_real_local_clone_multiple_chunks"
       - name: Clean up staged reference
         if: always()
         run: rm -rf "$RUNNER_TEMP/reference"

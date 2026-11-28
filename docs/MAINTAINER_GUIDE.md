@@ -717,7 +717,12 @@ folder that is deleted afterwards. Nothing is uploaded as an artifact.
 
 Torch is replaced by its CPU build at the locked versions after `uv sync --locked`
 (`.github/scripts/install-cpu-torch.sh`); the job fails if a CUDA build remains. `uv.lock` is
-not changed. Model caches are keyed by the pinned manifests.
+not changed. Model caches are keyed by the pinned revisions (`.github/scripts/pinned-revision.sh`
+reads them from `tts/catalog.py` and `verification/models.py`): `real-kitten2-<revision>` and
+`real-asr-<model>-<revision>`; the Kitten `mini` cache follows `uv.lock`. A restored file is
+still checked against its pinned size and SHA-256 and downloaded again if it fails. Each job
+summary lists its cache hit or miss and, per test, wall time and peak RSS. `suites` takes exact
+names; a job whose name is not listed is skipped.
 
 A green run shows that the real models load and produce output on a clean runner. It does
 not show speaker similarity, pacing or audible quality; those need a person listening. The
