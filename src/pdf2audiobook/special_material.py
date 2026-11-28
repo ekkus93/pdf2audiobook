@@ -14,7 +14,7 @@ from typing import cast
 
 _CAPTION = re.compile(
     r"^\s*(?P<kind>fig(?:ure)?\.?|table)\s+"
-    r"\d{1,3}[a-z]?[\s]*[:.\u2014\u2013-]\s+\S",
+    r"\d{1,3}[a-z]?(?:[\s]*[:.\u2014\u2013-]\s+\S|\s+(?-i:[A-Z]))",
     re.IGNORECASE,
 )
 

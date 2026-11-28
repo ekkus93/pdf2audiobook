@@ -62,7 +62,7 @@ def _protected_kind(block: DocumentBlock, *, running_title: bool) -> bool:
     # Fail closed on standalone quotations, numbered list markers and
     # headings. These can legitimately occur in a page's margin band.
     # A heading-styled line repeated as a running head is the exception.
-    if block.kind in {"list", "table", "footnote", "caption", "equation"}:
+    if block.kind in {"list", "table", "footnote", "caption", "equation", "figure_text"}:
         return True
     return block.kind == "heading" and not running_title
 

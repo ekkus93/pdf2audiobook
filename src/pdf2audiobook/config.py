@@ -47,6 +47,9 @@ class Pdf(ConfigModel):
     remove_headers: bool = True
     remove_footers: bool = True
     footnotes: Literal["warn", "inline", "end", "omit"] = "warn"
+    # Text inside figures and tables (diagram labels, chart axes, table cells): "warn" narrates
+    # it and lists it for review; "omit" leaves it out as audited, reversible cleanup edits.
+    figure_text: Literal["warn", "omit"] = "warn"
 
 
 class Chapters(ConfigModel):

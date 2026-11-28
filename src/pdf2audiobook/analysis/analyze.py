@@ -11,6 +11,7 @@ from pdf2audiobook.analysis.review import _chapter_review, _write_analysis
 from pdf2audiobook.analysis.start import _extract, _reuse_existing_analysis, _start_analysis
 from pdf2audiobook.analysis.state import AnalysisServices
 from pdf2audiobook.config import Settings
+from pdf2audiobook.document.narration import FIGURE_TEXT_OMIT_REASON
 from pdf2audiobook.pdf import DocumentExtractor
 from pdf2audiobook.progress_display import ProgressReporter
 
@@ -35,9 +36,15 @@ def _analyze_book_locked(
     extracted = _extract(run)
     state = _deterministic_cleanup(run, extracted)
     _llm_proposals(run, extracted, state)
+    # Whether figure text is narrated must not move chapter boundaries: under
+    # pdf.figure_text = omit the paper's 12 chapters became 1, because leaving its
+    # figure labels out shifted the body size the heading test compares against.
+    figure_omitted = {
+        edit.block_id for edit in state.edits if edit.reason == FIGURE_TEXT_OMIT_REASON
+    }
     chapter_proposal = services.propose_chapters(
         extracted.blocks,
-        state.omitted,
+        state.omitted - figure_omitted,
         extracted.toc,
         run.settings.chapters,
         extra_heading_ids=state.llm_ids,

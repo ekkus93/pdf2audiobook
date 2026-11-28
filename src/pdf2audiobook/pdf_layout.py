@@ -219,7 +219,18 @@ def _classify_block_kind(
     previous_text: str | None,
     next_text: str | None,
     display_heading: bool,
-) -> Literal["heading", "paragraph", "list", "table", "footnote", "caption", "equation", "unknown"]:
+    figure_indices: frozenset[int] = frozenset(),
+) -> Literal[
+    "heading",
+    "paragraph",
+    "list",
+    "table",
+    "footnote",
+    "caption",
+    "equation",
+    "figure_text",
+    "unknown",
+]:
     """Assign one explicit structural kind after page-level detectors run."""
     if display_heading:
         return "heading"
@@ -231,6 +242,8 @@ def _classify_block_kind(
         return "caption"
     if line_index in equation_indices:
         return "equation"
+    if line_index in figure_indices:
+        return "figure_text"
     if is_heading_line(text):
         return "heading"
     if is_list_line(text, previous_text=previous_text, next_text=next_text):

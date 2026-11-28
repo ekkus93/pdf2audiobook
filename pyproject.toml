@@ -101,6 +101,7 @@ files = [
     "src/pdf2audiobook/document/coverage.py",
     "src/pdf2audiobook/document/narration.py",
     "src/pdf2audiobook/special_material.py",
+    "src/pdf2audiobook/figure_text.py",
     "src/pdf2audiobook/narration.py",
     "src/pdf2audiobook/audio/__init__.py",
     "src/pdf2audiobook/audio/wav.py",

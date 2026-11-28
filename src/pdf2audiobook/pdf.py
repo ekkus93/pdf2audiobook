@@ -15,6 +15,7 @@ import pymupdf
 
 from pdf2audiobook.config import Pdf as PdfSettings
 from pdf2audiobook.errors import ConfigError, ExtractionError, InputError, WorkspaceError
+from pdf2audiobook.figure_text import figure_line_indices
 from pdf2audiobook.models import DocumentBlock, SourceSpan
 from pdf2audiobook.pdf_layout import (
     _background_only,
@@ -239,6 +240,7 @@ def _build_page_blocks(
     footnote_indices: set[int],
     caption_indices: set[int],
     equation_indices: set[int],
+    figure_indices: set[int] | None = None,
 ) -> tuple[list[SourceSpan], list[DocumentBlock]]:
     """Build source-aligned spans and classified blocks for one extracted page."""
     spans: list[SourceSpan] = []
@@ -287,6 +289,7 @@ def _build_page_blocks(
                 str(lines[line_index + 1].get("text", "")) if line_index + 1 < len(lines) else None
             ),
             display_heading=display_heading,
+            figure_indices=frozenset(figure_indices or ()),
         )
         blocks.append(
             DocumentBlock(
@@ -338,6 +341,7 @@ class _PageAnnotations:
     caption_indices: set[int]
     footnote_indices: set[int]
     equation_indices: set[int]
+    figure_indices: set[int] = field(default_factory=set)
 
 
 def _start_extraction(
@@ -547,8 +551,18 @@ def _annotate_page(
             f"Page {page_number}: {len(footnote_indices)} "
             "likely footnote anchor(s)/continuation line(s) classified; verify against PDF"
         )
+    # Figure and table text, for the pdf.figure_text policy; captions, notes and formulas
+    # keep their own kinds, and the text itself is kept either way.
+    figure_indices, figure_warnings = figure_line_indices(
+        page,
+        page_lines,
+        visuals.drawings,
+        exclude=caption_indices | footnote_indices | equation_indices,
+        page_number=page_number,
+    )
+    warnings.extend(figure_warnings)
     return page_lines, _PageAnnotations(
-        table_regions, caption_indices, footnote_indices, equation_indices
+        table_regions, caption_indices, footnote_indices, equation_indices, figure_indices
     )
 
 
@@ -604,6 +618,7 @@ def _extract_page(run: _ExtractionRun, document: Any, page_index: int) -> None:
         footnote_indices=annotations.footnote_indices,
         caption_indices=annotations.caption_indices,
         equation_indices=annotations.equation_indices,
+        figure_indices=annotations.figure_indices,
     )
     run.spans.extend(page_spans)
     run.blocks.extend(page_blocks)

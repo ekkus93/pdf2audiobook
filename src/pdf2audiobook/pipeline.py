@@ -221,7 +221,7 @@ def _analysis_stage_fingerprints(
         )
     return {
         "extraction": fingerprint(
-            "analysis-v25",
+            "analysis-v26",
             book_hash,
             settings.pdf.model_dump(),
             *(() if extractor is None else ("extractor", extractor.name)),

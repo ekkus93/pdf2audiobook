@@ -31,7 +31,15 @@ class DocumentBlock(StrictModel):
     text: str
     page_index: int = Field(ge=0)
     kind: Literal[
-        "heading", "paragraph", "list", "table", "footnote", "caption", "equation", "unknown"
+        "heading",
+        "paragraph",
+        "list",
+        "table",
+        "footnote",
+        "caption",
+        "equation",
+        "figure_text",
+        "unknown",
     ] = "unknown"
     bbox: tuple[float, float, float, float] | None = None
     font_size: float | None = None

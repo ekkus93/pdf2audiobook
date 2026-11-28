@@ -83,6 +83,29 @@ def footnote_anchor_edits(blocks: list[DocumentBlock], edited: set[str]) -> list
 
 
 FOOTNOTE_OMIT_REASON = "explicit footnotes=omit policy (conservative classification)"
+FIGURE_TEXT_OMIT_REASON = "explicit figure_text=omit policy (text inside a figure or table)"
+# Table cells found by PDF table detection are table text too.
+FIGURE_TEXT_KINDS = frozenset({"figure_text", "table"})
+
+
+def figure_text_omit_edits(blocks: list[DocumentBlock]) -> list[CleanupEdit]:
+    """Accepted, reversible empty edits leaving figure and table text out of narration.
+
+    Like omitted footnotes, the source text stays in the manifest; review lists every edit,
+    and a person can reject one to have that line read again.
+    """
+    return [
+        CleanupEdit(
+            block_id=block.id,
+            original=block.text,
+            replacement="",
+            reason=FIGURE_TEXT_OMIT_REASON,
+            confidence=0.9,
+            accepted=True,
+        )
+        for block in blocks
+        if block.kind in FIGURE_TEXT_KINDS and block.text.strip()
+    ]
 
 
 def footnote_omit_edits(blocks: list[DocumentBlock]) -> list[CleanupEdit]:
@@ -197,9 +220,9 @@ def _is_wrapped_line(
     line_pitch: float | None = None,
 ) -> bool:
     """Join nearby consecutive body lines only when geometry supports a soft wrap."""
-    if before.kind in {"heading", "table", "footnote", "caption", "equation"}:
+    if before.kind in {"heading", "table", "footnote", "caption", "equation", "figure_text"}:
         return False
-    if after.kind in {"heading", "list", "table", "footnote", "caption", "equation"}:
+    if after.kind in {"heading", "list", "table", "footnote", "caption", "equation", "figure_text"}:
         return False
     if not before.text.strip() or not after.text.strip():
         return False

@@ -6,6 +6,7 @@ from pdf2audiobook.analysis.state import _AnalysisRun, _AnalysisState
 from pdf2audiobook.analysis_state import (
     _preserve_rejected_deterministic_edits,
 )
+from pdf2audiobook.document.narration import FIGURE_TEXT_KINDS, figure_text_omit_edits
 from pdf2audiobook.document.structure import (
     footnote_anchor_edits,
     footnote_omit_edits,
@@ -31,6 +32,14 @@ def _deterministic_cleanup(run: _AnalysisRun, extracted: ExtractedDocument) -> _
     footnotes = [block for block in extracted.blocks if block.kind == "footnote"]
     if settings.pdf.footnotes == "omit":
         edits.extend(footnote_omit_edits(extracted.blocks))
+    figure_text = [block for block in extracted.blocks if block.kind in FIGURE_TEXT_KINDS]
+    if settings.pdf.figure_text == "omit":
+        already = {edit.block_id for edit in edits}
+        edits.extend(
+            edit
+            for edit in figure_text_omit_edits(extracted.blocks)
+            if edit.block_id not in already
+        )
     if footnotes and settings.pdf.footnotes in {"inline", "end", "omit"}:
         # Once notes are handled, their anchor digits ("world.5") would only
         # be read aloud as numbers. Removal is per anchor, audited, reversible.
@@ -46,6 +55,14 @@ def _deterministic_cleanup(run: _AnalysisRun, extracted: ExtractedDocument) -> _
         warnings.append(
             f"Excluded {len(footnotes)} conservatively classified footnote "
             "block(s) under explicit omit policy; inspect audited cleanup edits"
+        )
+    if figure_text:
+        warnings.append(
+            f"Left {len(figure_text)} line(s) of figure or table text out of narration under "
+            "pdf.figure_text = omit; inspect audited cleanup edits"
+            if settings.pdf.figure_text == "omit"
+            else f"Narrating {len(figure_text)} line(s) of figure or table text; set "
+            "pdf.figure_text = omit to leave them out"
         )
     return _AnalysisState(
         edits=edits,

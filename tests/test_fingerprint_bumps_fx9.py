@@ -39,13 +39,14 @@ def test_extraction_fingerprint_is_the_bullet_list_generation():
     # Supersedes analysis-v23 (EPUB chapters): bulleted lines next to a matching
     # bullet are now classified as list blocks, so older extraction results are
     # not reused.
-    # analysis-v25: a repeated margin line counts as a running head with a page number only
-    # when its number follows the pages, so figure labels at the top of a page are kept.
+    # analysis-v26: lines inside figures and rule-bounded tables are classified figure_text,
+    # and "Figure 3 A model" (no punctuation) counts as a caption. (v25: a repeated margin
+    # line counts as a running head with a page number only when its number follows the pages.)
     stages = _analysis_stage_fingerprints("a" * 64, Settings(), None)
     from pdf2audiobook.workspace import fingerprint
 
     assert stages["extraction"] == fingerprint(
-        "analysis-v25", "a" * 64, Settings().pdf.model_dump()
+        "analysis-v26", "a" * 64, Settings().pdf.model_dump()
     )
     # chapter-detection-v6: numbered subsections stay in their section's chapter, the
     # body size is weighed by characters, LLM headings must be larger than the body, and

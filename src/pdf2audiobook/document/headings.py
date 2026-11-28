@@ -143,7 +143,7 @@ def _is_typographic_heading(
         # a drop-cap line) does not open a chapter; whitespace or a new
         # page does.
         and _space_above(blocks, i, omitted) != "tight"
-        and block.kind not in {"table", "footnote", "caption", "equation", "list"}
+        and block.kind not in {"table", "footnote", "caption", "equation", "list", "figure_text"}
     )
 
 
@@ -158,7 +158,7 @@ def _llm_heading_plausible(block: DocumentBlock, typical_size: float | None) -> 
     table cells and boxed examples, which a model reading the text alone takes for
     headings (on one paper, 36 of the 38 it proposed). Without sizes (a scan) it is kept.
     """
-    if block.kind in {"table", "footnote", "caption", "equation", "list"}:
+    if block.kind in {"table", "footnote", "caption", "equation", "list", "figure_text"}:
         return False
     if typical_size is None or block.font_size is None or not math.isfinite(block.font_size):
         return True

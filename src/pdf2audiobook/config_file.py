@@ -14,7 +14,7 @@ from pdf2audiobook.errors import ConfigError
 # process_equations (the latter must remain inactive with --no-llm).
 _DEFAULT_FIELDS = {
     "general": ("output_dir", "resume", "progress"),
-    "pdf": ("ocr", "ocr_language", "footnotes"),
+    "pdf": ("ocr", "ocr_language", "footnotes", "figure_text"),
     "llm": ("enabled", "provider", "allow_remote_content"),
     "llm.ollama": ("model", "base_url"),
     "tts": ("provider", "bitrate", "sample_rate"),
