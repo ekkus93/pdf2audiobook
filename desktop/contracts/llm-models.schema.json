@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "llm models --json",
+  "description": "The models the LLM server serves, in the server's order, and the one the configuration names (the Model field). No book content is sent to list them.",
+  "type": "object",
+  "required": [
+    "configured",
+    "models",
+    "provider",
+    "warnings"
+  ],
+  "properties": {
+    "provider": {
+      "enum": [
+        "ollama",
+        "llama-server",
+        "openai"
+      ]
+    },
+    "configured": {
+      "type": "string"
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

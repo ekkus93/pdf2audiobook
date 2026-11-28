@@ -307,6 +307,10 @@ pub enum Request {
     AsrList,
     TtsModels,
     TtsFetch,
+    /// The models the LLM server serves, for the Model field; sends no book content.
+    LlmModels {
+        llm_provider: Option<LlmProvider>,
+    },
     /// The built-in engine's add-ons and whether each is installed; installs nothing.
     AddonsList,
     /// Downloads and installs an add-on; the app has already shown what and asked.
@@ -395,6 +399,7 @@ impl Request {
             Request::AsrList => "asr list",
             Request::TtsModels => "tts models",
             Request::TtsFetch => "tts fetch",
+            Request::LlmModels { .. } => "llm models",
             Request::AddonsList => "addons list",
             Request::AddonsInstall { .. } => "addons install",
             Request::AddonsRemove { .. } => "addons remove",
@@ -578,6 +583,12 @@ impl Request {
             }
             Request::AsrList => args.command(&["asr", "list"]),
             Request::TtsModels => args.command(&["tts", "models"]),
+            Request::LlmModels { llm_provider } => {
+                args.command(&["llm", "models"]);
+                if let Some(provider) = llm_provider {
+                    args.value("--llm-provider", llm_name(*provider));
+                }
+            }
             Request::AddonsList => args.command(&["addons", "list"]),
             Request::AddonsInstall { addon, status_dir } => {
                 args.command(&["addons", "install"]);
@@ -1493,6 +1504,22 @@ mod tests {
         assert_eq!(
             args_of(Request::AsrList),
             ["--no-progress", "asr", "list", "--json"]
+        );
+        assert_eq!(
+            args_of(Request::LlmModels { llm_provider: None }),
+            ["--no-progress", "llm", "models", "--json"]
+        );
+        assert_eq!(
+            args_of(Request::LlmModels {
+                llm_provider: Some(LlmProvider::LlamaServer)
+            }),
+            [
+                "--no-progress",
+                "llm",
+                "models",
+                "--llm-provider=llama-server",
+                "--json"
+            ]
         );
         assert_eq!(
             args_of(Request::AsrFetch {

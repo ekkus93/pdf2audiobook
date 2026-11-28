@@ -123,6 +123,18 @@ def test_workspace(book: dict[str, Path]) -> None:
     assert payload["exists"] is True
 
 
+def test_llm_models(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pdf2audiobook.llm.provider import OpenAICompatibleProvider
+
+    monkeypatch.setattr(
+        OpenAICompatibleProvider, "list_models", lambda self: ["qwen3.5:9b", "qwen35-32k:latest"]
+    )
+    payload = _ok("llm", "models", "--no-config", "--json")
+    _check("llm-models", payload)
+    assert payload["provider"] == "ollama"
+    assert payload["models"] == ["qwen3.5:9b", "qwen35-32k:latest"]
+
+
 def test_voices(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = types.ModuleType("kittenml")
     fake.KittenTTS = type(  # type: ignore[attr-defined]
@@ -287,7 +299,7 @@ def test_every_contract_has_a_test() -> None:
     tested = {
         "doctor", "config-show", "inspect-book", "inspect-manifest", "workspace", "voices",
         "thumbnail", "analyze", "run-status", "convert-dry-run", "convert", "pack-m4b",
-        "edits-list", "review-address", "error", "budget-show",
+        "edits-list", "review-address", "error", "budget-show", "llm-models",
         # Tested in test_verification_contracts.py.
         "asr-models", "audio-verification",
         # Tested in test_verify_audio_cli.py.

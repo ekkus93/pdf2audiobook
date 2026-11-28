@@ -176,3 +176,20 @@
 .details .command {
   margin-top: 8px;
 }
+
+/* The LLM model: the server's list (or a name) and a button beside it. */
+.model-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.model-field > md-outlined-select,
+.model-field > md-outlined-text-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.model-field > md-icon-button {
+  margin-top: 4px;
+}

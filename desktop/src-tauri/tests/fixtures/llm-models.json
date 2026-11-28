@@ -1,0 +1,9 @@
+{
+  "provider": "ollama",
+  "configured": "qwen3.5:9b",
+  "models": [
+    "qwen3.5:9b",
+    "qwen35-32k:latest"
+  ],
+  "warnings": []
+}

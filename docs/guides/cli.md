@@ -31,6 +31,7 @@ uv run pdf2audiobook budget show --output ./audiobooks/BOOK
 uv run pdf2audiobook convert path/to/book.pdf --llm-provider openai --allow-remote-content
 uv run pdf2audiobook workspace path/to/book.pdf --json
 uv run pdf2audiobook voices --json
+uv run pdf2audiobook llm models --json
 uv run pdf2audiobook thumbnail path/to/book.pdf --output cover.png --width 320 --json
 uv run pdf2audiobook asr list
 uv run pdf2audiobook verify-audio ./audiobooks/BOOK/manifest.json --chapter 3
@@ -42,7 +43,10 @@ uv run pdf2audiobook --version
 
 `workspace` prints the folder a book's analysis uses, without creating it. `voices` lists the
 voices the selected TTS provider accepts (Piper reports that its numbered speakers can't be
-listed). `thumbnail` writes a PNG of a PDF's first page or an EPUB's cover into an existing
+listed). `llm models` lists the models the configured LLM server serves (Ollama's own
+names, such as `qwen3.5:9b`) and the one the configuration names, without sending any book
+content; `--llm-provider` and `--llm-url` ask another server, and OpenAI needs
+`--allow-remote-content` as for analysis. `thumbnail` writes a PNG of a PDF's first page or an EPUB's cover into an existing
 folder. `review --json` prints its address as one JSON line, `{"url", "port"}`, as soon as the
 server is listening. These and the error `reason` codes below exist so that other programs,
 such as the desktop app, can drive the CLI.
@@ -56,7 +60,10 @@ is never overwritten. See [configuration setup](configuration.md#create-your-con
 ### Analysis and audio
 
 `analyze` extracts text, applies conservative pagination cleanup, and writes chapter text and
-a manifest. `convert` also creates tagged chapter MP3s with the selected TTS provider.
+a manifest. With an LLM, each step sends the book in bounded windows (at most
+`llm.chunk_tokens` of text each), never the whole book. When one window's answer is cut off at
+`llm.max_output_tokens`, that window gets no LLM suggestions and analysis carries on with a
+warning; only when every window of a step is cut off does it stop with `llm_output_cap`. `convert` also creates tagged chapter MP3s with the selected TTS provider.
 TTS retries default to two and apply only to transient failures. Failed chapters are visible
 with `inspect`; conversion continues through other chapters before reporting partial failures.
 

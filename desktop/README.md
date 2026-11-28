@@ -29,7 +29,8 @@ Books go to `audiobooks` in your home folder unless you choose another folder in
 needs no Python, `uv`, FFmpeg or Tesseract on the computer. Optional features are
 add-ons the app downloads when you choose them (see [Add-ons and OCR
 languages](#add-ons-and-ocr-languages)); an LLM for chapter analysis is optional too (Ollama, set
-up separately).
+up separately). Where the app asks for an LLM model, it lists the models your Ollama (or
+llama-server) serves, newest list each time; *Another model…* takes a typed name.
 
 **Licence.** pdf2audiobook's own code is Apache-2.0. The installers also carry PyMuPDF (AGPL-3.0)
 and GPL components such as espeak-ng in the built-in engine, so the app as distributed is under

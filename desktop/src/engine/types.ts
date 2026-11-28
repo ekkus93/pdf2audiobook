@@ -42,6 +42,13 @@ export interface TtsReadiness {
   transcription_ready: boolean; detected_device: string; reason: string | null;
   files: Array<{ name: string; source: string; size_bytes: number; sha256: string; cached: boolean }>;
 }
+/** The models the LLM server serves (`llm models --json`, contracts/llm-models.schema.json). */
+export interface LlmModels {
+  provider: LlmProvider;
+  configured: string;
+  models: string[];
+}
+
 export interface TtsModels { models: Array<Partial<TtsReadiness> & { name: string }> }
 
 /** Options only convert takes; mirrors `ConvertOptions` in request.rs. */
@@ -117,6 +124,7 @@ export type Request =
   | { command: "workspace"; book: string; output?: string | null }
   | { command: "voices"; tts_provider?: "kitten" | "piper" | null; tts_model?: string | null }
   | { command: "tts_models" }
+  | { command: "llm_models"; llm_provider?: LlmProvider | null }
   | { command: "tts_fetch" }
   | { command: "addons_list" }
   | { command: "addons_install"; addon: AddonName }

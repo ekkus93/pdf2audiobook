@@ -426,6 +426,15 @@ outputs, so treat their shapes as contracts: add fields, never rename or remove 
   `workspace_locked`, `pending_recovery`, `chapter_conflict`, `llm_unreachable` (connection
   refused, or Ollama's served context can't be read), `llm_context_too_small`,
   `llm_output_cap` and `budget_exhausted`. A timeout is not `llm_unreachable`.
+- An answer cut off at the output cap part way (`LLMAnswerCutOff`) fails only its window: every
+  window-by-window LLM step asks through `advisory_common.WindowAnswers`, which skips that
+  window (a warning, and an `answer_cut_off` decision) and raises `llm_output_cap` only when no
+  window of the step got an answer. A cap spent before any answer (hidden reasoning) still
+  stops the run at once. Found on a research paper where `qwen35-256k` echoed every line back
+  as a no-op OCR edit, and lines full of invisible direction marks became long escapes.
+- `llm models --json` prints `{"provider", "configured", "models", "warnings"}` from the
+  server's `/models` list (contracts/llm-models.schema.json); the desktop app's Model fields
+  offer that list.
 - `review --json` prints one flushed stdout line, `{"url": "http://127.0.0.1:<port>/",
   "port": <port>}`, once the server listens, and nothing else; `--port 0` picks a free port.
 - SIGTERM stops any command like Ctrl+C (see the entry point below).

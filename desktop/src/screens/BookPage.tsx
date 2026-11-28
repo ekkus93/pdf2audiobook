@@ -11,6 +11,7 @@ import { Slider } from "../ui/Slider";
 import { Switch } from "../ui/Switch";
 import { TextField } from "../ui/TextField";
 import { defaults, modelFor, requests, TEMPERATURE, usesKitten2, validate, type OptionsForm, type Preferences } from "./bookOptions";
+import { ModelField } from "./ModelField";
 import { TemperatureControl } from "./TemperatureControl";
 import { CloneControls } from "./CloneControls";
 import { isCloning } from "./bookOptions";
@@ -259,7 +260,7 @@ function OptionsEditor({ form, onChange, config, voices, chapters, analyzed, boo
                 options={PROVIDERS}
                 onChange={(value) => onChange({ ...form, provider: value as LlmProvider, model: modelFor(config, value as LlmProvider) })}
               />
-              <TextField label="Model" value={form.model} onChange={(value) => set("model", value)} errorText={errors.model} />
+              <ModelField provider={form.provider} value={form.model} onChange={(value) => set("model", value)} errorText={errors.model} />
               <div className="field-pair">
                 <TextField
                   label="Context (tokens)"

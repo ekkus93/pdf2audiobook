@@ -13,6 +13,7 @@ renamed, removed or change type without updating these files and both sides' tes
 | `config-show` | `config show --sources --json` |
 | `inspect-book`, `inspect-manifest` | `inspect BOOK --json`, `inspect MANIFEST --json` |
 | `workspace`, `voices`, `thumbnail` | the commands of the same name with `--json` |
+| `llm-models` | `llm models --json` |
 | `analyze`, `convert`, `convert-dry-run` | `analyze --json`, `convert --json`, `convert --dry-run --json` |
 | `edits-list`, `pack-m4b` | `edits list --json [--with-text]`, `pack-m4b --json` |
 | `budget-show` | `budget show --output WORKSPACE --json` (after a `budget_exhausted` error) |

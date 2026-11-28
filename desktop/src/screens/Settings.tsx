@@ -10,6 +10,7 @@ import { blobUrl } from "./Player";
 import { Setup } from "./Setup";
 import { CliConfigEditor } from "./CliConfigEditor";
 import { About } from "./About";
+import { ModelField } from "./ModelField";
 import { AddonsPanel, OcrLanguages } from "./Addons";
 import "./settings.css";
 
@@ -292,11 +293,11 @@ export function Settings() {
           ]}
           onChange={(value) => set("llm_provider", (blank(value) as LlmProvider | null) ?? null)}
         />
-        <TextField
-          label="Model"
+        <ModelField
+          provider={draft.llm_provider ?? null}
           value={draft.llm_model ?? ""}
           onChange={(value) => set("llm_model", blank(value))}
-          supportingText="Empty uses the CLI's model for the provider."
+          emptyLabel="The CLI's model for the provider"
         />
       </section>
 

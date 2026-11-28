@@ -15,6 +15,7 @@ from pdf2audiobook.cli import verify  # noqa: F401  (registration order, see abo
 from pdf2audiobook.cli import info  # noqa: F401
 from pdf2audiobook.cli import configuration  # noqa: F401
 from pdf2audiobook.cli import tts_models  # noqa: F401
+from pdf2audiobook.cli import llm_models  # noqa: F401
 from pdf2audiobook.cli import analyze  # noqa: F401
 from pdf2audiobook.cli import convert  # noqa: F401
 from pdf2audiobook.cli import batch  # noqa: F401

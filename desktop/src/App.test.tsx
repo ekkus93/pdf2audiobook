@@ -36,6 +36,8 @@ beforeEach(() => {
   });
   vi.mocked(api.library).mockResolvedValue({ output_dir: "/out", min_boundary_confidence: 0.75, books: [], commands: [] });
   vi.mocked(api.locateEngine).mockReturnValue(new Promise(() => {}));
+  // Requests a test does not answer stay pending, as an engine that has not replied yet.
+  vi.mocked(api.run).mockReturnValue(new Promise(() => {}));
   vi.mocked(api.onCloseRequested).mockImplementation(async (handler) => {
     closeRequested = handler;
     return () => undefined;
