@@ -8,10 +8,11 @@ from typing import Any, Callable, Iterable, Iterator, Literal, Protocol, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from pdf2audiobook.errors import LLMError
+from pdf2audiobook.errors import LLMAnswerCutOff, LLMError
 from pdf2audiobook.models import DocumentBlock
 
 LLM_PROMPT_SCHEMA_VERSION = "llm-advisory-v3"
+DecisionTask = Literal["heading", "contents", "cleanup", "classification", "narration", "equation"]
 _Window = TypeVar("_Window", bound=tuple[Any, ...])
 
 
@@ -66,7 +67,7 @@ class LLMDecision(BaseModel):
     """Privacy-preserving audit of one task's verifier decision on an LLM proposal."""
 
     model_config = ConfigDict(extra="forbid")
-    task: Literal["heading", "contents", "cleanup", "classification", "narration", "equation"]
+    task: DecisionTask
     block_id: str
     proposal_summary: str = Field(max_length=80)
     status: Literal["accepted", "rejected"]
@@ -91,6 +92,89 @@ class LLMProvider(Protocol):
 
     def complete_json(self, *, instructions: str, document_text: str) -> dict[str, Any]:
         """Return parsed JSON from the provider, or raise a sanitized LLMError."""
+
+
+class WindowAnswers:
+    """One LLM step's requests, one per window, where a window's failure stays its own.
+
+    `plan` walks the step's windows: an oversized one is skipped, and once the last window is
+    done, `finish` runs. `ask_window` asks about one window: an answer cut off at the output
+    cap part way through is that window's failure alone, so the step carries on without its
+    proposals. Both record why (a warning, and a rejected decision for `task`). When no window
+    got an answer and at least one was cut off, the cap is too small for the step, and
+    `finish` raises the error. `ask` is the same request without recording, for callers that
+    record their own way.
+    """
+
+    def __init__(
+        self,
+        provider: Any,
+        task: DecisionTask | None = None,
+        label: str = "",
+        warnings: list[str] | None = None,
+        decisions: list[LLMDecision] | None = None,
+    ) -> None:
+        self.provider = provider
+        self.task = task
+        self.label = label
+        self.warnings = warnings
+        self.decisions = decisions
+        self.answered = 0
+        self.cut_off = 0
+
+    def plan(self, stage: str, windows: Iterable[_Window]) -> Iterator[_Window]:
+        for start, window, snippet in planned_windows(self.provider, stage, windows):
+            if not window:
+                warning = f"LLM {self.label} skipped oversized block at index {start}"
+                self._reject(start, "oversized_source_block", warning)
+                continue
+            yield start, window, snippet  # type: ignore[misc]
+        self.finish()
+
+    def ask(
+        self, *, instructions: str, document_text: str, image_data: bytes | None = None
+    ) -> dict[str, Any] | None:
+        """The answer, or None when it was cut off at the output cap."""
+        try:
+            if image_data is None:
+                raw = self.provider.complete_json(
+                    instructions=instructions, document_text=document_text
+                )
+            else:
+                raw = self.provider.complete_json_with_image(
+                    instructions=instructions, document_text=document_text, image_data=image_data
+                )
+        except LLMAnswerCutOff:
+            self.cut_off += 1
+            return None
+        self.answered += 1
+        return raw
+
+    def ask_window(
+        self, start: int, instructions: str, document_text: str
+    ) -> dict[str, Any] | None:
+        """One window's answer, or None (recorded) when it was cut off at the output cap."""
+        raw = self.ask(instructions=instructions, document_text=document_text)
+        if raw is None:
+            warning = f"LLM {self.label} answer cut off at the output cap at block window {start}"
+            self._reject(start, "answer_cut_off", warning)
+        return raw
+
+    def finish(self) -> None:
+        if self.cut_off and not self.answered:
+            raise LLMAnswerCutOff()
+
+    def _reject(self, start: int, reason_code: str, warning: str) -> None:
+        if self.warnings is not None:
+            self.warnings.append(warning)
+        if self.task is not None:
+            _record_decision(
+                self.decisions,
+                task=self.task,
+                block_id=f"window:{start}",
+                status="rejected",
+                reason_code=reason_code,
+            )
 
 
 def _bounded_block_windows(
@@ -168,7 +252,7 @@ def _diagnostic_block_id(candidate: str, known_ids: set[str]) -> str:
 def _record_decision(
     records: list[LLMDecision] | None,
     *,
-    task: Literal["heading", "contents", "cleanup", "classification", "narration", "equation"],
+    task: DecisionTask,
     block_id: str,
     status: Literal["accepted", "rejected"],
     reason_code: str,

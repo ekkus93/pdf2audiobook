@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from pdf2audiobook.errors import LLMError
 from pdf2audiobook.llm import MAX_VISUAL_REVIEW_PAGES
+from pdf2audiobook.llm.advisory_common import WindowAnswers
 
 _MAX_RENDER_PIXELS = 1_500_000
 _VISION_PROMPT_VERSION = "visual-review-v1"
@@ -115,6 +116,7 @@ def review_visual_pages(
     pages: list[dict[str, Any]] = []
     skipped = 0
     warnings: list[str] = []
+    answers = WindowAnswers(provider)
     try:
         for index, page in enumerate(document.pages()):
             if not _has_visual_content(page):
@@ -132,12 +134,17 @@ def review_visual_pages(
                 '[{"kind":"figure|diagram|equation|table|layout|other", '
                 '"description":"uncertainty-aware note"}]}. Keep descriptions concise.'
             )
-            try:
-                raw = provider.complete_json_with_image(
-                    instructions=prompt,
-                    document_text=f"Visual review for source page {index + 1}.",
-                    image_data=image,
+            raw = answers.ask(
+                instructions=prompt,
+                document_text=f"Visual review for source page {index + 1}.",
+                image_data=image,
+            )
+            if raw is None:
+                warnings.append(
+                    f"Visual review answer cut off at the output cap for page {index + 1}"
                 )
+                continue
+            try:
                 result = VisualPageResponse.model_validate(raw)
             except ValidationError:
                 warnings.append(f"Visual review response rejected for page {index + 1}")
@@ -151,6 +158,7 @@ def review_visual_pages(
             )
     finally:
         document.close()
+    answers.finish()
     if skipped:
         warnings.append(f"Visual review page limit reached; {skipped} candidate page(s) skipped")
     return {

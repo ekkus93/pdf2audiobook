@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from pdf2audiobook.errors import LLMError
+from pdf2audiobook.errors import LLMAnswerCutOff, LLMError
 from pdf2audiobook.llm.provider_base import (
     MAX_VISUAL_REVIEW_PAGES,
     ProviderState,
@@ -254,11 +254,7 @@ class RequestMixin(ProviderState):
             decoded = json.loads(message)
         except ValueError:
             if truncated:
-                raise LLMError(
-                    "LLM answer was cut off at the output cap; raise llm.max_output_tokens",
-                    reason="output_cap",
-                    error_reason="llm_output_cap",
-                ) from None
+                raise LLMAnswerCutOff() from None
             raise
         if not isinstance(decoded, dict):
             raise LLMError("Model response must be a JSON object")

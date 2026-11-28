@@ -83,6 +83,25 @@ class LLMError(AudiobookError):
         self.unbilled = unbilled
 
 
+class LLMAnswerCutOff(LLMError):
+    """An answer the model started but that was cut off at the output cap.
+
+    Unlike a cap spent before any answer (hidden reasoning, which fails every request), this
+    is one request's failure: a long window, or a model repeating lines it was told to leave
+    out. Window-by-window tasks skip that window (`advisory_common.WindowAnswers`).
+    """
+
+    # `--json` errors name it as before: callers know a cut-off answer as an LLMError.
+    public_type = "LLMError"
+
+    def __init__(self) -> None:
+        super().__init__(
+            "LLM answer was cut off at the output cap; raise llm.max_output_tokens",
+            reason="output_cap",
+            error_reason="llm_output_cap",
+        )
+
+
 class AudioError(AudiobookError):
     exit_code = 6
 

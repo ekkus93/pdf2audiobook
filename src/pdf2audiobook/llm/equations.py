@@ -16,10 +16,10 @@ from pdf2audiobook.llm.advisory_common import (
     LLM_PROMPT_SCHEMA_VERSION,
     LLMDecision,
     LLMProvider,
+    WindowAnswers,
     _bounded_block_windows,
     _diagnostic_block_id,
     _record_decision,
-    planned_windows,
 )
 from pdf2audiobook.models import CleanupEdit, DocumentBlock
 
@@ -187,8 +187,8 @@ def propose_llm_equation_readings(
             source=source,
         )
 
-    for start, window, snippet in planned_windows(
-        provider,
+    answers = WindowAnswers(provider, "equation", "equation reading", warnings, decisions)
+    for start, window, snippet in answers.plan(
         "equations",
         _bounded_block_windows(
             candidates,
@@ -197,10 +197,6 @@ def propose_llm_equation_readings(
             record=lambda block: {"id": block.id, "text": block.text},
         ),
     ):
-        if not window:
-            warnings.append(f"LLM equation reading skipped oversized block at index {start}")
-            audit(f"window:{start}", "rejected", "oversized_source_block")
-            continue
         valid = {block.id: block for block in window}
         prompt = (
             f"Schema version: {LLM_PROMPT_SCHEMA_VERSION}. "
@@ -215,7 +211,9 @@ def propose_llm_equation_readings(
             "Only use primary records included in the supplied data. Records marked "
             "context_only are read-only. An empty readings array is preferred if uncertain."
         )
-        raw = provider.complete_json(instructions=prompt, document_text=snippet)
+        raw = answers.ask_window(start, prompt, snippet)
+        if raw is None:
+            continue
         try:
             batch = EquationReadings.model_validate(raw)
         except ValidationError:

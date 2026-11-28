@@ -7,7 +7,7 @@ import pymupdf
 import pytest
 
 from pdf2audiobook.config import Settings
-from pdf2audiobook.errors import LLMError
+from pdf2audiobook.errors import LLMAnswerCutOff, LLMError
 from pdf2audiobook.llm import OpenAICompatibleProvider, vision
 from pdf2audiobook.llm.cache import CachedLLMProvider
 from pdf2audiobook.llm.vision import review_visual_pages
@@ -424,3 +424,32 @@ def test_render_that_stays_too_large_is_never_sent():
         vision._render_png(page)
 
     assert len(page.scales) == 4
+
+
+class _CutOffOnPage(_RecordingVisionProvider):
+    """Cuts off the answer for the given pages' images."""
+
+    def __init__(self, pages):
+        super().__init__()
+        self.cut = {f"Visual review for source page {page}." for page in pages}
+
+    def complete_json_with_image(self, *, instructions, document_text, image_data):
+        if document_text in self.cut:
+            self.pages.append(document_text)
+            raise LLMAnswerCutOff()
+        return super().complete_json_with_image(
+            instructions=instructions, document_text=document_text, image_data=image_data
+        )
+
+
+def test_a_cut_off_page_answer_skips_only_that_page(tmp_path):
+    provider = _CutOffOnPage({1})
+    report = review_visual_pages(_book_with(tmp_path, [_image, _image]), provider)
+    assert [page["page"] for page in report["pages"]] == [2]
+    assert report["warnings"] == ["Visual review answer cut off at the output cap for page 1"]
+
+
+def test_when_every_page_answer_is_cut_off_the_error_stands(tmp_path):
+    provider = _CutOffOnPage({1, 2})
+    with pytest.raises(LLMAnswerCutOff):
+        review_visual_pages(_book_with(tmp_path, [_image, _image]), provider)

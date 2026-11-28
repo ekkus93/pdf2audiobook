@@ -85,6 +85,13 @@ tts_app = typer.Typer(
 )
 app.add_typer(tts_app, name="tts")
 
+llm_app = typer.Typer(
+    help="Ask the configured LLM server which models it serves.",
+    epilog="Example: pdf2audiobook llm models --json",
+    no_args_is_help=True,
+)
+app.add_typer(llm_app, name="llm")
+
 addons_app = typer.Typer(
     help="List, install or remove the desktop app's optional add-ons (built-in engine only).",
     epilog="Example: pdf2audiobook addons list --json",
@@ -130,7 +137,7 @@ def fail(exc: Exception, *, json_output: bool = False) -> None:
                 {
                     "ok": False,
                     "error": {
-                        "type": type(exc).__name__,
+                        "type": getattr(exc, "public_type", None) or type(exc).__name__,
                         "code": code,
                         "message": message,
                         **({"reason": reason} if reason is not None else {}),
