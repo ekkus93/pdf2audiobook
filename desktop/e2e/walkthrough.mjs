@@ -132,6 +132,14 @@ const click = async (id) => {
 const run = (script, args = []) => call("POST", s("/execute/sync"), { script, args });
 
 /**
+ * Clicks the element itself rather than the screen point where it was. On Settings the page can
+ * still change height after a scroll (the Model field becomes a text box with a note when no
+ * LLM server answers, as in CI), and a WebDriver click at the old point then misses.
+ */
+const press = (id) =>
+  run("arguments[0].scrollIntoView({block:'center',inline:'center',behavior:'instant'}); arguments[0].click();", [{ [ELEMENT]: id }]);
+
+/**
  * Saves the screen to the artifacts folder with ImageMagick, if it's installed. (WebKitWebDriver's
  * own screenshot command doesn't answer under Xvfb.)
  */
@@ -385,28 +393,24 @@ async function addonOffer() {
   await click(await find("//nav[@aria-label='Main']//button[contains(., 'Settings')]"));
   const ffmpeg = await find("//li[contains(@class, 'notice-row')][contains(., 'FFmpeg')][contains(., 'LGPL')]", 60);
   await run("arguments[0].scrollIntoView({ block: 'center', behavior: 'instant' });", [{ [ELEMENT]: ffmpeg }]);
-  await click(await find(`//li[contains(@class, 'notice-row')][contains(., 'espeak-ng 1.52.0')]${button("Licence")}`));
+  await press(await find(`//li[contains(@class, 'notice-row')][contains(., 'espeak-ng 1.52.0')]${button("Licence")}`));
   await find("//md-dialog[@open]//pre[contains(., 'GNU GENERAL PUBLIC LICENSE')]", 30);
   await screenshot("7-about");
   await click(await find(`//md-dialog[@open]${button("Close")}`));
 
   step("about: the installed app is under the GNU AGPL 3.0 and lists its own libraries");
   await find("//*[contains(@class, 'about')]//p[contains(., 'as distributed is under the GNU Affero General Public License 3.0')]", 30);
-  await click(await find(button("GNU AGPL 3.0 and Apache 2.0")));
+  await press(await find(button("GNU AGPL 3.0 and Apache 2.0")));
   await find("//md-dialog[@open]//pre[contains(., 'GNU AFFERO GENERAL PUBLIC LICENSE')][contains(., 'Apache License')]", 30);
   await click(await find(`//md-dialog[@open]${button("Close")}`));
   await gone("//md-dialog[@open]");
-  await click(await find("//details[contains(@class, 'notice-group')]/summary[contains(., 'libraries')]"));
+  await press(await find("//details[contains(@class, 'notice-group')]/summary[contains(., 'libraries')]"));
   // The tauri crate's own row (its title "tauri 2.x"), not another tauri-apps crate's source line.
   const tauri = "//ul[@aria-label='App libraries']/li[.//div[contains(@class, 'title-small')][starts-with(normalize-space(.), 'tauri 2')]]";
   const tauriLicence = "//md-dialog[@open][.//*[@slot='headline'][normalize-space(.)='tauri licence']]//pre[contains(., 'MIT')]";
-  // The page above the list can still change height after scrolling (the Model field turns
-  // into a text box when no LLM server answers), so a click at the button's old position can
-  // miss or hit a neighbouring row. Click the button element itself, and check whose licence
-  // opened; try again if it was another's.
+  // Check whose licence opened, and try again if it was another's.
   for (let attempt = 1; ; attempt++) {
-    const licence = await find(`${tauri}${button("Licence")}`, 30);
-    await run("arguments[0].scrollIntoView({block:'center',inline:'center',behavior:'instant'}); arguments[0].click();", [{ [ELEMENT]: licence }]);
+    await press(await find(`${tauri}${button("Licence")}`, 30));
     await find("//md-dialog[@open]//pre", 30);
     if (await findOptional(tauriLicence, 5)) break;
     if (attempt === 3) throw new Error(`not found: ${tauriLicence}`);
